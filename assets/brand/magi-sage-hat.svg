@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Magi Sage Hat</title>
+  <desc id="desc">A tall archmage sage hat brand mark for Magi Next.</desc>
+  <defs>
+    <linearGradient id="hat" x1="312" y1="120" x2="760" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a2b57"/>
+      <stop offset="0.46" stop-color="#263f7b"/>
+      <stop offset="1" stop-color="#141827"/>
+    </linearGradient>
+    <linearGradient id="brim" x1="176" y1="664" x2="856" y2="848" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="0.5" stop-color="#334b87"/>
+      <stop offset="1" stop-color="#0b1020"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="340" y1="548" x2="710" y2="740" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff2a8"/>
+      <stop offset="0.45" stop-color="#d9a23a"/>
+      <stop offset="1" stop-color="#8c5a16"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="24" flood-color="#050816" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="220" fill="#f7f7f8"/>
+  <g filter="url(#shadow)">
+    <path
+      d="M334 688c33-128 62-250 86-366 15-73 47-137 95-194 13-15 37-12 44 7 31 80 63 144 98 193 45 63 90 115 135 156 18 16 12 47-11 55-63 23-123 56-180 100-53 41-108 70-167 86-57 15-113 1-100-37Z"
+      fill="url(#hat)"
+      stroke="#0b1020"
+      stroke-width="24"
+      stroke-linejoin="round"/>
+    <path
+      d="M485 156c-23 83-34 172-33 268 1 70-19 146-60 228"
+      fill="none"
+      stroke="#6f86c8"
+      stroke-width="18"
+      stroke-linecap="round"
+      opacity="0.42"/>
+    <path
+      d="M338 672c91 38 194 35 307-9"
+      fill="none"
+      stroke="#0d1324"
+      stroke-width="28"
+      stroke-linecap="round"
+      opacity="0.72"/>
+
+    <path
+      d="M156 748c85-68 199-103 342-104 139-1 261 26 366 81 25 13 24 49-2 60-107 46-232 67-375 61-137-5-247-27-330-65-14-6-15-24-1-33Z"
+      fill="url(#brim)"
+      stroke="#0b1020"
+      stroke-width="24"
+      stroke-linejoin="round"/>
+    <path
+      d="M263 753c92-31 195-45 310-39 83 4 150 18 201 40"
+      fill="none"
+      stroke="#7893d8"
+      stroke-width="16"
+      stroke-linecap="round"
+      opacity="0.38"/>
+
+    <path
+      d="M380 608c73 25 150 28 232 7l18 68c-91 24-181 20-270-10l20-65Z"
+      fill="url(#gold)"
+      stroke="#704713"
+      stroke-width="12"
+      stroke-linejoin="round"/>
+    <path
+      d="M462 625h76l28 44 28-44h28v91h-34v-42l-22 34h-2l-23-34v42h-79v-91Z"
+      fill="#111827"
+      opacity="0.92"/>
+  </g>
+
+  <g fill="#f7d66b" stroke="#8c5a16" stroke-width="8" stroke-linejoin="round">
+    <path d="M607 262l14 35 38 3-29 24 9 37-32-20-32 20 9-37-29-24 38-3 14-35Z"/>
+    <path d="M482 378l10 25 27 2-21 17 7 27-23-15-23 15 7-27-21-17 27-2 10-25Z"/>
+    <path d="M675 454l9 22 24 2-18 15 5 23-20-12-20 12 5-23-18-15 24-2 9-22Z"/>
+  </g>
+
+  <path
+    d="M702 204c-38 35-44 91-13 133 21 28 52 41 83 37-41 42-110 39-147-10-39-53-16-130 77-160Z"
+    fill="#e8edf8"
+    stroke="#7b8aad"
+    stroke-width="10"
+    stroke-linejoin="round"/>
+</svg>

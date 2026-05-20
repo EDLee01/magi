@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+runner/target/
+*.log
+.DS_Store
+.claude/

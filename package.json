@@ -1,0 +1,42 @@
+{
+  "name": "@magi/cli",
+  "version": "0.1.0-alpha.0",
+  "description": "Magi Next clean-room CLI bootstrap.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "magi": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:runner": "cargo build --manifest-path runner/Cargo.toml",
+    "type": "tsc --noEmit",
+    "lint": "node scripts/lint-clean-room.mjs && tsc --noEmit",
+    "test": "vitest run",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "scan:licenses": "node scripts/scan-licenses.mjs",
+    "sbom": "node scripts/generate-sbom.mjs",
+    "verify": "npm run lint && npm run test && npm run build && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "ws": "^8.20.1",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.13.10",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

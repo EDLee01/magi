@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magi Text Hat Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1117;
+      --panel: #171a23;
+      --panel-2: #10131b;
+      --ink: #e9edf7;
+      --muted: #9aa4b2;
+      --line: #2a3142;
+      --gold: #d7ae4f;
+      --blue: #91a7ff;
+      --violet: #b69bff;
+      --green: #8dd7b8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    header {
+      padding: 28px 28px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #11141c;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 14px;
+    }
+
+    main {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .terminal {
+      background: var(--panel-2);
+      border-bottom: 1px solid var(--line);
+      padding: 14px;
+      min-height: 170px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    pre {
+      margin: 0;
+      color: var(--ink);
+      font: 700 20px/1.08 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      letter-spacing: 0;
+      white-space: pre;
+      text-align: left;
+    }
+
+    .small pre {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .prompt pre {
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .gold {
+      color: var(--gold);
+    }
+
+    .blue {
+      color: var(--blue);
+    }
+
+    .violet {
+      color: var(--violet);
+    }
+
+    .green {
+      color: var(--green);
+    }
+
+    .meta {
+      padding: 12px 14px 14px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      color: var(--gold);
+      background: #222637;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Magi 文字小帽子候选</h1>
+    <p class="sub">目标是终端里能当“小宠物/身份符号”的文字版贤者帽：一眼像大法师，但不占太多空间。</p>
+  </header>
+
+  <main>
+    <section>
+      <div class="terminal small">
+        <pre class="gold">  /\
+ /✦ \
+/___\
+  M</pre>
+      </div>
+      <div class="meta">
+        <h2>01 Compact Hat</h2>
+        <p>最适合放在启动页或 prompt 前。清晰、短、终端友好。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="terminal">
+        <pre class="blue">    /\
+   /  \
+  / ✦  \
+ /______\
+   /MM\</pre>
+      </div>
+      <div class="meta">
+        <h2>02 Archmage</h2>
+        <p>更像大法师帽，帽檐和 <code>M</code> 帽扣更明确。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="terminal">
+        <pre class="violet">     /\
+    /  *
+   / ✦  \
+  /______\
+     Magi</pre>
+      </div>
+      <div class="meta">
+        <h2>03 Named Hat</h2>
+        <p>适合欢迎页：帽子加名字，品牌感强，但比纯符号更占空间。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="terminal prompt">
+        <pre><span class="gold">  /\
+ /✦ \
+/___\</span>
+<span class="green">magi</span> › ready</pre>
+      </div>
+      <div class="meta">
+        <h2>04 Prompt Pet</h2>
+        <p>实际 CLI prompt 形态，像“小帽子坐在 magi 前面”。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="terminal small">
+        <pre class="gold"> /\_
+/✦  )
+\__/</pre>
+      </div>
+      <div class="meta">
+        <h2>05 Tilted Hat</h2>
+        <p>有一点宠物感和姿态，但可读性弱于直立帽。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="terminal prompt">
+        <pre><span class="blue">  △
+ /✦\
+▔▔▔</span> <span class="green">Magi</span>
+Ask anything...</pre>
+      </div>
+      <div class="meta">
+        <h2>06 Minimal Glyph</h2>
+        <p>最像产品符号，适合 TUI 左上角、状态栏和窄屏。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

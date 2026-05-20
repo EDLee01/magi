@@ -1,0 +1,84 @@
+{
+  "name": "magi-next-vscode",
+  "displayName": "Magi Next",
+  "description": "Send code, files, and selections to Magi Next from VS Code.",
+  "version": "0.1.0-alpha.0",
+  "publisher": "magi-next",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "magi-next.askWithSelection",
+        "title": "Magi: Ask with Selection",
+        "icon": "$(send)"
+      },
+      {
+        "command": "magi-next.askWithFile",
+        "title": "Magi: Ask with Current File"
+      },
+      {
+        "command": "magi-next.openSession",
+        "title": "Magi: Open Session"
+      },
+      {
+        "command": "magi-next.setControlEndpoint",
+        "title": "Magi: Configure Control API Endpoint"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "magi-next.askWithSelection",
+          "when": "editorHasSelection",
+          "group": "magi"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "magi-next.askWithFile",
+          "group": "magi"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Magi Next",
+      "properties": {
+        "magiNext.controlEndpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:8765",
+          "description": "URL of the Magi Next control API. Run `magi control start` to launch the server."
+        },
+        "magiNext.controlToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token for the control API."
+        },
+        "magiNext.modelAlias": {
+          "type": "string",
+          "default": "auto",
+          "description": "Default model alias for queries from VS Code."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -p . --watch",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
