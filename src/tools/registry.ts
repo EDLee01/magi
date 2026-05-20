@@ -147,6 +147,7 @@ import {
   UserQuestionResolver
 } from "./user-question.js";
 import { readWebFetchAllowlist, webFetch, webFetchHostAllowed } from "./web-fetch.js";
+import { BrowserActionInputSchema, executeBrowserAction, formatBrowserActionResult } from "./browser.js";
 import {
   executeWebBrowser,
   formatWebBrowserResult,
@@ -2274,6 +2275,20 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         for (const i of issues) lines.push(`  - ${i}`);
       }
       return lines.join("\n");
+    },
+    isReadOnly: () => false,
+    isDestructive: () => false,
+    isConcurrencySafe: () => false
+  },
+  {
+    name: "Browser",
+    description: "Control a real Chromium browser. Actions: navigate, click, type, scroll, screenshot, extract_text, wait, evaluate, close. Use navigate to open URLs, click to interact, screenshot to see the page (vision), evaluate to run JS. Browser stays open between calls so you can do multiple actions in sequence.",
+    category: "web",
+    tags: ["browser", "web", "automation", "playwright"],
+    inputSchema: BrowserActionInputSchema,
+    call: async (input) => {
+      const result = await executeBrowserAction(input);
+      return formatBrowserActionResult(result);
     },
     isReadOnly: () => false,
     isDestructive: () => false,
