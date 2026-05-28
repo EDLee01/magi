@@ -4,6 +4,7 @@ import {
   executeRegisteredTool,
   executeRegisteredTools,
   getBuiltinToolDefinitions,
+  getCoreToolDefinitions,
   SubAgentRequest,
   SubAgentResult,
   ToolPermissionMode
@@ -23,6 +24,7 @@ export interface AgentToolResult {
 export type { ToolPermissionMode };
 
 export const BUILTIN_AGENT_TOOLS: MagiToolDefinition[] = getBuiltinToolDefinitions();
+export const CORE_AGENT_TOOLS: MagiToolDefinition[] = getCoreToolDefinitions();
 
 export async function executeBuiltinAgentTool(input: {
   cwd: string;

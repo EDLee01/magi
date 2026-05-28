@@ -10,5 +10,7 @@ describe("system prompt", () => {
     expect(prompt).toContain("call read-only inspection tools in the same turn before replying");
     expect(prompt).toContain("Do not end a turn with promises");
     expect(prompt).toContain("Read-only discovery does not require confirmation");
+    expect(prompt).toContain("Only core tool schemas are loaded initially");
+    expect(prompt).toContain("select:<tool_name>");
   });
 });

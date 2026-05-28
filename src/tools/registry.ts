@@ -198,6 +198,8 @@ export interface RegisteredTool {
   checkPermissions?(input: Record<string, unknown>, context: ToolExecutionContext): ToolPermissionResult | undefined;
 }
 
+export type ToolExposure = "core" | "deferred";
+
 export interface SubAgentRequest {
   prompt: string;
   description: string;
@@ -245,11 +247,41 @@ export function getBuiltinToolRegistry(): Map<string, RegisteredTool> {
 }
 
 export function getBuiltinToolDefinitions(): MagiToolDefinition[] {
-  return BUILTIN_TOOLS.map((tool) => ({
+  return BUILTIN_TOOLS.map(toToolDefinition);
+}
+
+export function getCoreToolDefinitions(): MagiToolDefinition[] {
+  return builtinToolDefinitionsFor(CORE_TOOL_NAMES);
+}
+
+export function getDeferredToolDefinitions(): MagiToolDefinition[] {
+  const core = new Set<string>(CORE_TOOL_NAMES);
+  return getBuiltinToolDefinitions().filter((tool) => !core.has(tool.name));
+}
+
+export function getBuiltinToolDefinitionByName(name: string): MagiToolDefinition | undefined {
+  const tool = getBuiltinToolRegistry().get(name);
+  return tool ? toToolDefinition(tool) : undefined;
+}
+
+export function isCoreToolName(name: string): boolean {
+  return (CORE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+function builtinToolDefinitionsFor(names: readonly string[]): MagiToolDefinition[] {
+  const registry = getBuiltinToolRegistry();
+  return names.flatMap((name) => {
+    const tool = registry.get(name);
+    return tool ? [toToolDefinition(tool)] : [];
+  });
+}
+
+function toToolDefinition(tool: RegisteredTool): MagiToolDefinition {
+  return {
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema
-  }));
+  };
 }
 
 export async function executeRegisteredTool(input: {
@@ -457,6 +489,39 @@ export function formatToolResult(input: {
   writeFileSync(file, input.content, "utf8");
   return `${input.content.slice(0, input.previewChars ?? 2_000)}\n...[truncated]...\n\nFull output saved to: ${file}`;
 }
+
+const CORE_TOOL_NAMES = [
+  "FileRead",
+  "FileWrite",
+  "FileEdit",
+  "Glob",
+  "Grep",
+  "Bash",
+  "GitSummary",
+  "GitStatus",
+  "GitDiff",
+  "GitLog",
+  "GitShow",
+  "WebFetch",
+  "WebSearch",
+  "AskUserQuestion",
+  "SendUserMessage",
+  "Brief",
+  "TodoWrite",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskList",
+  "TaskGet",
+  "TaskOutput",
+  "TaskStop",
+  "ToolSearch",
+  "WorkspaceDiagnostics",
+  "Config",
+  "Skill",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "Agent"
+] as const;
 
 const BUILTIN_TOOLS: RegisteredTool[] = [
   {

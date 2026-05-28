@@ -11,8 +11,8 @@ import {
 import { ProviderError } from "../providers/errors.js";
 import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
-import { AgentToolResult, BUILTIN_AGENT_TOOLS, executeBuiltinAgentTools, ToolPermissionMode } from "./tools.js";
-import { SubAgentRequest, SubAgentResult } from "../tools/registry.js";
+import { AgentToolResult, CORE_AGENT_TOOLS, executeBuiltinAgentTools, ToolPermissionMode } from "./tools.js";
+import { getBuiltinToolDefinitionByName, isCoreToolName, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { McpToolRegistry } from "../mcp/tool-registry.js";
 import { AskUserQuestionRequest, AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-question.js";
 import { SendUserMessageRequest, SendUserMessageResult, UserMessageSink } from "../tools/user-message.js";
@@ -112,11 +112,12 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
   const mcpTools = input.mcp ? new McpToolRegistry({ servers: input.mcp.servers, env: input.env, tokenLookup: input.mcp.tokenLookup, tokenRefresh: input.mcp.tokenRefresh }) : undefined;
 
   try {
-    const toolDefinitions = await getAgentToolDefinitions(mcpTools);
+    const toolCatalog = await createAgentToolCatalog(mcpTools);
     yield { type: "request_start" };
 
     for (let turn = 0; turn < maxTurns; turn++) {
       throwIfCancelled(input.signal);
+      const toolDefinitions = toolCatalog.definitions();
       let response: ProviderResponse;
       let streamedTextThisTurn = "";
       while (true) {
@@ -283,6 +284,7 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
         yield event;
       }
       const toolResults = executed.results;
+      toolCatalog.revealFromResults(toolResults);
       const toolResultMessages: MagiMessage[] = [];
       const hookMessages: MagiMessage[] = [];
       for (const result of toolResults) {
@@ -584,16 +586,49 @@ async function executePreparedToolUses(
   };
 }
 
-async function getAgentToolDefinitions(mcpTools: McpToolRegistry | undefined): Promise<MagiToolDefinition[]> {
-  if (!mcpTools) {
-    return BUILTIN_AGENT_TOOLS;
+interface AgentToolCatalog {
+  definitions(): MagiToolDefinition[];
+  revealFromResults(results: AgentToolResult[]): void;
+}
+
+async function createAgentToolCatalog(mcpTools: McpToolRegistry | undefined): Promise<AgentToolCatalog> {
+  const dynamic = mcpTools ? await mcpTools.getToolDefinitions() : [];
+  const dynamicNames = new Set(dynamic.map((tool) => tool.name));
+  const exposedBuiltIns = new Set(CORE_AGENT_TOOLS.map((tool) => tool.name));
+
+  return {
+    definitions() {
+      const builtIns = CORE_AGENT_TOOLS.slice();
+      for (const name of exposedBuiltIns) {
+        if (isCoreToolName(name)) continue;
+        const definition = getBuiltinToolDefinitionByName(name);
+        if (definition) builtIns.push(definition);
+      }
+      return [
+        ...builtIns,
+        ...dynamic.filter((tool) => !exposedBuiltIns.has(tool.name))
+      ];
+    },
+    revealFromResults(results) {
+      for (const result of results) {
+        const selected = readSelectedToolName(result);
+        if (!selected || dynamicNames.has(selected)) {
+          continue;
+        }
+        if (getBuiltinToolDefinitionByName(selected)) {
+          exposedBuiltIns.add(selected);
+        }
+      }
+    }
+  };
+}
+
+function readSelectedToolName(result: AgentToolResult): string | undefined {
+  if (result.toolName !== "ToolSearch" || result.isError) {
+    return undefined;
   }
-  const dynamic = await mcpTools.getToolDefinitions();
-  const builtInNames = new Set(BUILTIN_AGENT_TOOLS.map((tool) => tool.name));
-  return [
-    ...BUILTIN_AGENT_TOOLS,
-    ...dynamic.filter((tool) => !builtInNames.has(tool.name))
-  ];
+  const match = /^Tool:\s*([A-Za-z0-9_]+)\s*$/m.exec(result.content);
+  return match?.[1];
 }
 
 export async function collectAgentQuery(input: AgentQueryInput): Promise<AgentQueryResult> {

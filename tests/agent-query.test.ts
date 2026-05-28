@@ -902,6 +902,52 @@ describe("agent query loop", () => {
     expect(result.final.text).toBe("tool discovery done");
   });
 
+  it("loads deferred built-in tool schemas after ToolSearch selection", async () => {
+    const seenToolSets: string[][] = [];
+    const adapter: ProviderAdapter = {
+      name: "deferred-tools-provider",
+      complete: async (request) => {
+        seenToolSets.push((request.tools ?? []).map((tool) => tool.name));
+        const toolResults = request.messages.flatMap((message) => message.content).filter((part) => part.type === "tool-result");
+        if (toolResults.some((part) => part.type === "tool-result" && part.toolCallId === "monitor")) {
+          return { text: "monitor done" };
+        }
+        if (toolResults.some((part) => part.type === "tool-result" && part.toolCallId === "tool-select")) {
+          return {
+            text: "",
+            toolUses: [{
+              type: "tool-use",
+              id: "monitor",
+              name: "Monitor",
+              input: { scope: "quick" }
+            }]
+          };
+        }
+        return {
+          text: "",
+          toolUses: [{
+            type: "tool-use",
+            id: "tool-select",
+            name: "ToolSearch",
+            input: { query: "select:Monitor" }
+          }]
+        };
+      }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      routes: [{ providerName: "deferred", model: "explicit", adapter }],
+      messages: [textMessage("user", "check resources")],
+      cwd: process.cwd()
+    }));
+
+    expect(seenToolSets[0]).toContain("ToolSearch");
+    expect(seenToolSets[0]).not.toContain("Monitor");
+    expect(seenToolSets[1]).toContain("Monitor");
+    expect(result.events).toContainEqual(expect.objectContaining({ type: "tool_result", toolName: "Monitor" }));
+    expect(result.final.text).toBe("monitor done");
+  });
+
   it("returns a tool error when AskUserQuestion has no resolver", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const adapter: ProviderAdapter = {

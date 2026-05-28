@@ -13,6 +13,8 @@ import {
   formatToolResult,
   getBuiltinToolDefinitions,
   getBuiltinToolRegistry,
+  getCoreToolDefinitions,
+  getDeferredToolDefinitions,
   checkToolPermission
 } from "../src/tools/registry.js";
 import { cronStorePathFromRoot } from "../src/tools/cron.js";
@@ -69,6 +71,32 @@ describe("tool registry", () => {
     ]));
     expect(getBuiltinToolRegistry().get("FileRead")?.isConcurrencySafe({})).toBe(true);
     expect(getBuiltinToolRegistry().get("FileWrite")?.isReadOnly({})).toBe(false);
+  });
+
+  it("splits core and deferred tool definitions for compact agent context", () => {
+    const core = getCoreToolDefinitions().map((tool) => tool.name);
+    const deferred = getDeferredToolDefinitions().map((tool) => tool.name);
+
+    expect(core).toEqual(expect.arrayContaining([
+      "FileRead",
+      "FileWrite",
+      "FileEdit",
+      "Glob",
+      "Grep",
+      "Bash",
+      "ToolSearch",
+      "WorkspaceDiagnostics",
+      "Agent"
+    ]));
+    expect(deferred).toEqual(expect.arrayContaining([
+      "Browser",
+      "GitBranchCreate",
+      "LSP",
+      "Monitor"
+    ]));
+    expect(core).not.toContain("Browser");
+    expect(core).not.toContain("GitBranchCreate");
+    expect(new Set([...core, ...deferred]).size).toBe(getBuiltinToolDefinitions().length);
   });
 
   it("edits files with old_string uniqueness checks", async () => {
