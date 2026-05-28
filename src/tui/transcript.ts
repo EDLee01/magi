@@ -139,6 +139,10 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
     const scope = readString(event.metadata.scope);
     return transcriptEntry(event, "memory", "wrote", scope);
   }
+  if (event.action === "agent.memory.draft.created") {
+    const scope = readString(event.metadata.scope);
+    return transcriptEntry(event, "memory", "draft created", scope);
+  }
   if (event.action === "agent.memory.duplicate") {
     const scope = readString(event.metadata.scope);
     return transcriptEntry(event, "memory", "duplicate skipped", scope);

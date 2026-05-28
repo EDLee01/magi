@@ -14,6 +14,7 @@ import { ProviderAdapter, textMessage } from "../src/providers/ir.js";
 import { ProviderError } from "../src/providers/errors.js";
 import { SessionStore } from "../src/session-store.js";
 import { appendMemory, readMemory } from "../src/memory.js";
+import { listDrafts, showDraft } from "../src/memory-draft.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
 
@@ -107,6 +108,160 @@ describe("agent query loop", () => {
     }));
     expect(result.final.text).toBe("write was denied");
     await expect(readFile(path.join(workspace, "denied.txt"), "utf8")).rejects.toThrow();
+  });
+
+  it("recovers when a provider returns output tokens but no visible text or tools", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    let calls = 0;
+    const adapter: ProviderAdapter = {
+      name: "empty-output-provider",
+      complete: async (request) => {
+        calls++;
+        if (calls === 1) {
+          return { text: "", usage: { inputTokens: 10, outputTokens: 12 } };
+        }
+        expect(request.messages.at(-1)?.role).toBe("user");
+        expect(request.messages.at(-1)?.content[0]).toMatchObject({
+          type: "text",
+          text: expect.stringContaining("visible final answer")
+        });
+        return { text: "visible recovery", usage: { inputTokens: 8, outputTokens: 2 } };
+      }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      adapter,
+      model: "explicit-test-model",
+      messages: [textMessage("user", "answer me")],
+      cwd: workspace
+    }));
+
+    expect(calls).toBe(2);
+    expect(result.final.text).toBe("visible recovery");
+    expect(result.events).toContainEqual({ type: "text_delta", text: "visible recovery" });
+    expect(result.final.usage).toEqual({ inputTokens: 18, outputTokens: 14 });
+  });
+
+  it("executes text-form tool_use blocks from OpenAI-compatible proxies", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    writeFileSync(path.join(workspace, "README.md"), "project notes", "utf8");
+    const calls: string[] = [];
+    const adapter: ProviderAdapter = {
+      name: "text-tool-provider",
+      complete: async (request) => {
+        calls.push(request.messages.map((message) => message.role).join(","));
+        if (calls.length === 1) {
+          return {
+            text: [
+              "<tool_use tool_name=\"FileRead\">",
+              "  <arg name=\"path\">README.md</arg>",
+              "</tool_use>"
+            ].join("\n"),
+            usage: { inputTokens: 5, outputTokens: 6 }
+          };
+        }
+        expect(request.messages.at(-1)).toMatchObject({
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "text-tool-1" }]
+        });
+        return { text: "read complete", usage: { inputTokens: 7, outputTokens: 2 } };
+      }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      adapter,
+      model: "explicit-test-model",
+      messages: [textMessage("user", "read README")],
+      cwd: workspace
+    }));
+
+    expect(calls).toHaveLength(2);
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "tool_use",
+      toolUse: expect.objectContaining({
+        id: "text-tool-1",
+        name: "FileRead",
+        input: expect.objectContaining({ file_path: "README.md" })
+      })
+    }));
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "tool_result",
+      toolName: "FileRead",
+      content: expect.stringContaining("project notes")
+    }));
+    expect(result.events).not.toContainEqual({ type: "text_delta", text: expect.stringContaining("<tool_use") });
+    expect(result.final.text).toBe("read complete");
+  });
+
+  it("executes direct XML child args in text-form tool_use blocks", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    writeFileSync(path.join(workspace, "package.json"), "{\"name\":\"demo\"}", "utf8");
+    let calls = 0;
+    const adapter: ProviderAdapter = {
+      name: "direct-xml-tool-provider",
+      complete: async (request) => {
+        calls++;
+        if (calls === 1) {
+          return {
+            text: "<tool_use tool_name=\"FileRead\"><path>package.json</path></tool_use>",
+            usage: { inputTokens: 5, outputTokens: 6 }
+          };
+        }
+        expect(request.messages.at(-1)).toMatchObject({
+          role: "tool",
+          content: [{ type: "tool-result", toolCallId: "text-tool-1" }]
+        });
+        return { text: "done" };
+      }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      adapter,
+      model: "explicit-test-model",
+      messages: [textMessage("user", "read package")],
+      cwd: workspace
+    }));
+
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "tool_use",
+      toolUse: expect.objectContaining({
+        name: "FileRead",
+        input: expect.objectContaining({ file_path: "package.json" })
+      })
+    }));
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "tool_result",
+      content: expect.stringContaining("\"name\":\"demo\"")
+    }));
+    expect(result.final.text).toBe("done");
+  });
+
+  it("does not retry when the model defers an actionable project request without using tools", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    writeFileSync(path.join(workspace, "package.json"), "{\"scripts\":{\"dev\":\"vite\"}}", "utf8");
+    let calls = 0;
+    const adapter: ProviderAdapter = {
+      name: "defer-provider",
+      complete: async (request) => {
+        calls++;
+        if (calls === 1) {
+          expect(request.tools?.map((tool) => tool.name)).toContain("FileRead");
+          return { text: "我会先读取项目文件，找出启动方式。" };
+        }
+        throw new Error("deferred-action responses should not be retried automatically");
+      }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      adapter,
+      model: "explicit-test-model",
+      messages: [textMessage("user", `${workspace} 把服务拉起来`)],
+      cwd: workspace
+    }));
+
+    expect(calls).toBe(1);
+    expect(result.events).not.toContainEqual(expect.objectContaining({ type: "tool_result" }));
+    expect(result.final.text).toBe("我会先读取项目文件，找出启动方式。");
   });
 
   it("yields approval_request for default write tools and lets a resolver approve", async () => {
@@ -990,7 +1145,7 @@ describe("agent query loop", () => {
             }]
           }
       };
-      await new QueryEngine({
+      await expect(new QueryEngine({
         store,
         sessionId: timeoutSessionId,
         jobId: "job-approval-timeout",
@@ -998,7 +1153,9 @@ describe("agent query loop", () => {
         routes: [{ providerName: "timeout", model: "explicit", adapter: timeoutAdapter }],
         permissionMode: "default",
         activeInteractions: interactions
-      }).submitMessage("timeout approval");
+      }).submitMessage("timeout approval")).rejects.toMatchObject({
+        name: "ActiveInteractionTimeoutError"
+      });
 
       expect(store.listJobAuditEvents("job-approval-timeout", 30)).toContainEqual(expect.objectContaining({
         action: "agent.approval.timeout",
@@ -1042,12 +1199,64 @@ describe("agent query loop", () => {
         toolUseId: "ask-cancel"
       })?.status === "pending");
       interactions.cancelInteraction({ jobId: "job-question-cancel", toolUseId: "ask-cancel", reason: "test cancel" });
-      await running;
+      await expect(running).rejects.toMatchObject({
+        name: "ActiveInteractionCancelledError"
+      });
 
       expect(store.listJobAuditEvents("job-question-cancel", 30)).toContainEqual(expect.objectContaining({
         action: "agent.user_question.cancelled",
         metadata: expect.objectContaining({ toolUseId: "ask-cancel", status: "cancelled" })
       }));
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
+  it("cancels active approval waits when the request is aborted", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const controller = new AbortController();
+    try {
+      const sessionId = store.createSession({ title: "approval abort", cwd: workspace });
+      const adapter: ProviderAdapter = {
+        name: "abort-provider",
+        complete: async () => ({
+          text: "",
+          toolUses: [{
+            type: "tool-use",
+            id: "approve-abort",
+            name: "FileWrite",
+            input: { file_path: "abort.txt", content: "no" }
+          }]
+        })
+      };
+      const running = new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-approval-abort",
+        cwd: workspace,
+        routes: [{ providerName: "abort", model: "explicit", adapter }],
+        permissionMode: "default",
+        activeInteractions: interactions,
+        signal: controller.signal
+      }).submitMessage("abort approval");
+      await waitFor(() => interactions.getInteraction({
+        jobId: "job-approval-abort",
+        toolUseId: "approve-abort"
+      })?.status === "pending");
+
+      controller.abort();
+
+      await expect(running).rejects.toMatchObject({
+        name: "ActiveInteractionCancelledError"
+      });
+      expect(store.listJobAuditEvents("job-approval-abort", 30)).toContainEqual(expect.objectContaining({
+        action: "agent.approval.cancelled",
+        metadata: expect.objectContaining({ toolUseId: "approve-abort", status: "cancelled" })
+      }));
+      expect(store.getJob("job-approval-abort")?.status).toBe("cancelled");
     } finally {
       interactions.close();
       store.close();
@@ -1220,6 +1429,51 @@ describe("agent query loop", () => {
     }
   });
 
+  it("recovers historical tool results as text context instead of orphan tool messages", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "tool history", cwd: workspace });
+      store.appendMessage({ sessionId, role: "user", content: "old task" });
+      store.appendMessage({
+        sessionId,
+        role: "tool",
+        content: "Command exited 0\nstdout:\nold output",
+        metadata: { toolCallId: "bash-old", toolName: "Bash" }
+      });
+      store.appendMessage({ sessionId, role: "assistant", content: "old final" });
+      const adapter: ProviderAdapter = {
+        name: "context-provider",
+        complete: async (request) => {
+          seen.push(request.messages.map((message) => `${message.role}:${message.content.map((part) => {
+            if (part.type === "text") return part.text;
+            if (part.type === "tool-result") return part.content;
+            return "";
+          }).join("")}`).join("\n"));
+          expect(request.messages.some((message) => message.role === "tool")).toBe(false);
+          return { text: "context ok" };
+        }
+      };
+      const engine = new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-tool-history",
+        cwd: workspace,
+        routes: [{ providerName: "context", model: "explicit", adapter }]
+      });
+
+      await engine.submitMessage("new prompt");
+
+      expect(seen[0]).toContain("[Prior tool results]");
+      expect(seen[0]).toContain("Bash (bash-old) completed");
+      expect(seen[0]).toContain("old output");
+      expect(seen[0]).toContain("user:new prompt");
+    } finally {
+      store.close();
+    }
+  });
+
   it("injects relevant layered memory into QueryEngine context", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
@@ -1260,19 +1514,23 @@ describe("agent query loop", () => {
 
       await engine.submitMessage("continue api event streaming work");
 
-      expect(seen[0]).toContain("[Relevant memory]");
+      expect(seen[0]).toContain("[Relevant Memory]");
       expect(seen[0]).toContain("session: api current task: event streaming");
       expect(seen[0]).toContain("project: api style: explicit routes");
       expect(store.listAuditEvents(20)).toContainEqual(expect.objectContaining({
         action: "agent.memory.retrieved",
-        metadata: expect.objectContaining({ resultCount: 2 })
+        metadata: expect.objectContaining({
+          resultCount: 2,
+          method: "wiki-search",
+          sources: ["legacy"]
+        })
       }));
     } finally {
       store.close();
     }
   });
 
-  it("writes explicit memory prompts without inferring ordinary chat", async () => {
+  it("creates memory drafts for explicit memory prompts without inferring ordinary chat", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
     ensureMagiHome(paths);
@@ -1300,10 +1558,19 @@ describe("agent query loop", () => {
 
       await engine.submitMessage("remember session: handoff: finish memory tests");
 
-      expect(readMemory({ paths, scope: "session", cwd: workspace, sessionId })).toContain("handoff: finish memory tests");
+      expect(readMemory({ paths, scope: "session", cwd: workspace, sessionId })).not.toContain("handoff: finish memory tests");
+      const drafts = listDrafts({ appRoot: paths.root });
+      expect(drafts).toHaveLength(1);
+      const draft = showDraft({ appRoot: paths.root, id: drafts[0].id });
+      expect(draft).toMatchObject({
+        status: "pending",
+        targetFile: "sessions/README.md",
+        content: "handoff: finish memory tests"
+      });
       expect(store.listAuditEvents(20)).toContainEqual(expect.objectContaining({
-        action: "agent.memory.written",
-        target: expect.stringContaining("session-memory")
+        action: "agent.memory.draft.created",
+        target: "sessions/README.md",
+        metadata: expect.objectContaining({ draftId: draft.id })
       }));
 
       const second = new QueryEngine({
@@ -1321,7 +1588,7 @@ describe("agent query loop", () => {
         }
       });
       await second.submitMessage("handoff should finish memory tests");
-      expect(readMemory({ paths, scope: "session", cwd: workspace, sessionId }).match(/handoff:/g)).toHaveLength(1);
+      expect(listDrafts({ appRoot: paths.root })).toHaveLength(1);
     } finally {
       store.close();
     }

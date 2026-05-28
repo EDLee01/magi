@@ -14,7 +14,7 @@ import {
   TuiTranscriptEntry,
   TuiTranscriptState
 } from "./tui/transcript.js";
-import { installPasteHandler } from "./tui/paste.js";
+import { readTuiPrompt, TuiPromptAbortError } from "./tui/prompt-reader.js";
 import {
   colorizeDiffLine,
   createTerminalUserQuestionResolver,
@@ -27,18 +27,24 @@ import { MagiPaths } from "./paths.js";
 import { resolveModelPickerSelection, resolveSessionPickerSelection } from "./slash.js";
 import { parseCommandLine, registry } from "./commands/registry.js";
 import { isVimModeEnabled } from "./commands/vim.js";
+import { formatPermissionMode, parsePermissionMode, PERMISSION_MODES } from "./commands/permissions.js";
 import { readLineWithVim } from "./vim/lineEditor.js";
 import { startSpinner } from "./spinner.js";
 import { createStreamingMarkdown } from "./markdown.js";
 import { isToolAlwaysAllowed, addPermissionRule } from "./permissions.js";
 import { loadHistory, appendHistory, decodeHistoryEntry } from "./history.js";
 import { showSlashMenu } from "./slash-menu.js";
+import { showTuiPicker, TuiPickerItem } from "./tui/picker.js";
+import { buildTuiRenderState } from "./tui/render-state.js";
+import { renderTuiState } from "./tui/renderer.js";
 import { takePendingImages } from "./commands/image.js";
 import { encodePromptWithImages } from "./providers/ir.js";
 import { findSkill, listSkills } from "./skills/loader.js";
 import { getProactiveSuggestions, isProactiveEnabled, setProactiveEnabled } from "./proactive.js";
 import { SessionStore } from "./session-store.js";
-import { getBuiltinToolDefinitions } from "./tools/registry.js";
+import { getBuiltinToolDefinitions, ToolPermissionMode } from "./tools/registry.js";
+import { createGoal, formatGoalBadge, getGoal, isGoalCreationArgs } from "./goal.js";
+import { VERSION } from "./version.js";
 import {
   AskUserQuestionAnswer,
   AskUserQuestionRequest,
@@ -54,6 +60,24 @@ export const MAGI_TEXT_HAT = [
   "▔▔▔"
 ].join("\n");
 
+export function formatTuiStartupBanner(input: {
+  cwd: string;
+  modelDisplay: string;
+  toolCount: number;
+  version?: string;
+}): string {
+  const version = input.version ?? VERSION;
+  return [
+    "",
+    `\x1b[36m  △\x1b[39m   \x1b[1mMagi\x1b[22m \x1b[90mv${version} · ${input.toolCount} tools\x1b[39m`,
+    `\x1b[36m /✦\\\x1b[39m  \x1b[90mcwd:\x1b[39m ${input.cwd}`,
+    `\x1b[36m▔▔▔\x1b[39m   \x1b[90mmodel:\x1b[39m ${input.modelDisplay}`,
+    "",
+    "  \x1b[90m/help for commands · Esc/Ctrl+C to interrupt · /exit to quit\x1b[39m",
+    ""
+  ].join("\n");
+}
+
 export interface TuiLiveEventWriter {
   stop: () => void;
   getSessionId: () => string | undefined;
@@ -62,6 +86,28 @@ export interface TuiLiveEventWriter {
 export type { TuiTranscriptEntry, TuiTranscriptState } from "./tui/transcript.js";
 export { buildTuiTranscriptState, formatTuiLiveEvent, formatTuiTranscriptEntry, formatTuiTranscriptStatus } from "./tui/transcript.js";
 export { colorizeDiffLine, createTerminalUserQuestionResolver } from "./tui/interactions.js";
+
+function installRunningInterruptKeys(controller: AbortController): () => void {
+  const wasRaw = input.isRaw;
+  let interrupted = false;
+  const interrupt = () => {
+    if (interrupted || controller.signal.aborted) return;
+    interrupted = true;
+    output.write("\n\x1b[33mInterrupting...\x1b[39m\n");
+    controller.abort();
+  };
+  const onData = (chunk: Buffer | string) => {
+    const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
+    if (text === "\x1b" || text === "\x03") interrupt();
+  };
+  input.setRawMode(true);
+  input.resume();
+  input.on("data", onData);
+  return () => {
+    input.off("data", onData);
+    input.setRawMode(Boolean(wasRaw));
+  };
+}
 
 export async function runInteractiveTerminal(inputConfig: {
   cwd: string;
@@ -107,18 +153,13 @@ export async function runInteractiveTerminal(inputConfig: {
   });
   let currentModel = inputConfig.modelAlias ?? "main";
   let currentSessionId = inputConfig.sessionId;
+  let currentPermissionMode: ToolPermissionMode = "default";
   let running = false;
+  let abortController: AbortController | null = null;
   const modelDisplay = inputConfig.config.models.aliases[currentModel] ?? currentModel;
   const toolCount = getBuiltinToolDefinitions().length;
-  output.write([
-    "",
-    `\x1b[36m  △\x1b[39m   \x1b[1mMagi\x1b[22m \x1b[90m· ${toolCount} tools\x1b[39m`,
-    `\x1b[36m /✦\\\x1b[39m  \x1b[90mcwd:\x1b[39m ${inputConfig.cwd}`,
-    `\x1b[36m▔▔▔\x1b[39m   \x1b[90mmodel:\x1b[39m ${modelDisplay}`,
-    "",
-    "  \x1b[90m/help for commands · Ctrl+C to interrupt · /exit to quit\x1b[39m",
-    ""
-  ].join("\n"));
+  output.write(formatTuiStartupBanner({ cwd: inputConfig.cwd, modelDisplay, toolCount }));
+  writeGoalBadge(output, inputConfig.paths, currentSessionId);
   // Show a setup hint if no provider is configured
   const aliasCount = Object.keys(inputConfig.config.models?.aliases ?? {}).length;
   const providerCount = Object.keys(inputConfig.config.providers ?? {}).length;
@@ -147,13 +188,34 @@ export async function runInteractiveTerminal(inputConfig: {
       rl.prompt(true);
       return;
     }
-    output.write("\n\x1b[33mInterrupting...\x1b[39m\n");
+    // Running: abort the request. The catch block handles the error and
+    // returns to the prompt.
+    if (!abortController?.signal.aborted) {
+      output.write("\n\x1b[33mInterrupting...\x1b[39m\n");
+    }
+    abortController?.abort();
   };
   rl.on("SIGINT", onSigint);
   const inputHistory: string[] = loadHistory().map(decodeHistoryEntry);
-
-  // Bracketed paste handling — see src/tui/paste.ts.
-  const paste = installPasteHandler({ rl, stdin: input, stdout: output });
+  const slashSuggestionCommands = () => {
+    const skillItems = inputConfig.paths
+      ? listSkills(inputConfig.paths).map(skill => ({
+        name: skill.name,
+        usage: `/${skill.name}`,
+        description: `[skill] ${skill.summary}`
+      }))
+      : [];
+    return [
+      ...registry.getAll().map(cmd => ({
+        name: cmd.name,
+        usage: cmd.usage,
+        description: cmd.description
+      })),
+      ...skillItems,
+      { name: "continue", usage: "/continue", description: "Continue last response" },
+      { name: "exit", usage: "/exit", description: "Quit Magi" }
+    ];
+  };
 
   try {
     while (true) {
@@ -166,7 +228,8 @@ export async function runInteractiveTerminal(inputConfig: {
             input,
             output,
             prompt: "> ",
-            history: inputHistory
+            history: inputHistory,
+            slashCommands: slashSuggestionCommands()
           });
         } catch (err) {
           if ((err as Error).message === "SIGINT" || (err as Error).message === "EOF") {
@@ -176,35 +239,22 @@ export async function runInteractiveTerminal(inputConfig: {
         }
         rl.resume();
       } else {
-        line = await rl.question("> ");
-      }
-      // Substitute paste placeholders back to real content before processing
-      line = paste.restorePastes(line);
-      let trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-
-      // Multi-line input: backslash continuation or unclosed code fences
-      if (trimmed.endsWith("\\") || hasUnclosedFence(trimmed)) {
-        const multiLines: string[] = [trimmed.endsWith("\\") ? trimmed.slice(0, -1) : trimmed];
-        while (true) {
-          const cont = await rl.question("\x1b[90m... \x1b[39m");
-          if (cont.trim() === "" && !hasUnclosedFence(multiLines.join("\n"))) {
-            break; // Empty line ends multi-line (unless inside code fence)
+        try {
+          line = await readTuiPrompt({
+            input,
+            output,
+            prompt: "> ",
+            history: inputHistory,
+            slashCommands: slashSuggestionCommands()
+          });
+        } catch (err) {
+          if (err instanceof TuiPromptAbortError) {
+            return 0;
           }
-          if (cont.trim().endsWith("\\")) {
-            multiLines.push(cont.trim().slice(0, -1));
-          } else {
-            multiLines.push(cont);
-            if (!hasUnclosedFence(multiLines.join("\n"))) {
-              break;
-            }
-          }
+          throw err;
         }
-        trimmed = multiLines.join("\n").trim();
       }
-
+      let trimmed = line.trim();
       if (!trimmed) {
         continue;
       }
@@ -233,15 +283,14 @@ export async function runInteractiveTerminal(inputConfig: {
           const rlDataListeners = input.rawListeners("data").slice();
           input.removeAllListeners("data");
           input.resume();
-          const skillItems = inputConfig.paths
-            ? listSkills(inputConfig.paths).map(s => ({ name: s.name, description: `[skill] ${s.summary}` }))
-            : [];
           const picked = await showSlashMenu({
             stdin: input,
             stdout: output,
             items: [
               ...registry.getAll().map(cmd => ({ name: cmd.name, description: cmd.description })),
-              ...skillItems,
+              ...slashSuggestionCommands()
+                .filter(item => item.description.startsWith("[skill]"))
+                .map(item => ({ name: item.name, description: item.description })),
               { name: "exit", description: "Quit Magi" },
               { name: "continue", description: "Continue last response" }
             ]
@@ -276,7 +325,8 @@ export async function runInteractiveTerminal(inputConfig: {
             store: inputConfig.store,
             paths: inputConfig.paths,
             sessionId: currentSessionId,
-            currentModel
+            currentModel,
+            permissionMode: currentPermissionMode
           });
           if (result) {
             output.write(result + "\n");
@@ -286,17 +336,77 @@ export async function runInteractiveTerminal(inputConfig: {
           continue;
         }
 
+        if (parsed.name === "model" && parsed.args.length === 0) {
+          const selected = await pickInteractiveModel({
+            input,
+            output,
+            config: inputConfig.config,
+            currentModel
+          });
+          if (!selected) {
+            continue;
+          }
+          currentModel = selected;
+          const target = inputConfig.config.models.aliases[selected] ?? selected;
+          output.write(`Selected model ${selected}: ${target}\n`);
+          continue;
+        }
+
+        if ((parsed.name === "resume" || parsed.name === "sessions") && parsed.args.length === 0) {
+          const selected = await pickInteractiveSession({
+            input,
+            output,
+            store: inputConfig.store
+          });
+          if (!selected) {
+            continue;
+          }
+          currentSessionId = selected;
+          output.write(formatSessionResume(inputConfig.store, selected) + "\n");
+          writeGoalBadge(output, inputConfig.paths, currentSessionId);
+          continue;
+        }
+
+        if ((parsed.name === "permissions" || parsed.name === "perms") && parsed.args[0] === "mode" && parsed.args.length <= 1) {
+          const selected = await pickInteractivePermissionMode({
+            input,
+            output,
+            currentMode: currentPermissionMode
+          });
+          if (!selected) {
+            continue;
+          }
+          currentPermissionMode = selected;
+          output.write(`Permission mode: ${formatPermissionMode(currentPermissionMode)}\n`);
+          continue;
+        }
+
         // State-updating commands
         if (parsed.name === "model" && parsed.args[0]) {
           const selected = resolveModelPickerSelection(inputConfig.config, parsed.args[0]);
           if (selected) currentModel = selected;
+        }
+        if ((parsed.name === "permissions" || parsed.name === "perms") && parsed.args[0] === "mode" && parsed.args[1]) {
+          const selected = parsePermissionMode(parsed.args[1]);
+          if (selected) {
+            currentPermissionMode = selected;
+          }
         }
         if (parsed.name === "resume" && parsed.args[0]) {
           const selected = resolveSessionPickerSelection(inputConfig.store, parsed.args[0]);
           if (selected) {
             currentSessionId = selected.id;
             output.write(formatSessionResume(inputConfig.store, selected.id) + "\n");
+            writeGoalBadge(output, inputConfig.paths, currentSessionId);
           }
+        }
+        const isGoalStartCommand = parsed.name === "goal" && isGoalCreationArgs(parsed.args);
+        if (isGoalStartCommand && !currentSessionId) {
+          currentSessionId = inputConfig.store.createSession({
+            title: parsed.args.join(" ").slice(0, 80) || "goal",
+            cwd: inputConfig.cwd,
+            metadata: { mode: "interactive", command: "goal" }
+          });
         }
         if (parsed.name === "clear") {
           currentSessionId = inputConfig.store.createSession({
@@ -306,20 +416,34 @@ export async function runInteractiveTerminal(inputConfig: {
           });
         }
 
-        const result = await registry.dispatch(parsed.name, parsed.args, {
-          cwd: inputConfig.cwd,
-          config: inputConfig.config,
-          store: inputConfig.store,
-          paths: inputConfig.paths,
-          sessionId: currentSessionId,
-          currentModel
-        });
+        const result = isGoalStartCommand
+          ? startInteractiveGoal(inputConfig.paths, currentSessionId, parsed.args)
+          : await registry.dispatch(parsed.name, parsed.args, {
+            cwd: inputConfig.cwd,
+            config: inputConfig.config,
+            store: inputConfig.store,
+            paths: inputConfig.paths,
+            sessionId: currentSessionId,
+            currentModel,
+            permissionMode: currentPermissionMode
+          });
         if (result !== undefined) {
           output.write(`${result}\n`);
-          continue;
+          if (parsed.name === "goal") {
+            writeGoalBadge(output, inputConfig.paths, currentSessionId);
+          }
+          if (isGoalStartCommand) {
+            trimmed = parsed.args.join(" ");
+            // Continue into the normal prompt flow so /goal <objective>
+            // both starts the goal and immediately asks the agent to work it.
+          } else {
+            continue;
+          }
         }
         // Check if this is a user-installed skill (e.g., /commit, /review-pr)
-        if (inputConfig.paths) {
+        if (isGoalStartCommand) {
+          // Already converted to a normal prompt above.
+        } else if (inputConfig.paths) {
           const skill = findSkill(inputConfig.paths, parsed.name);
           if (skill) {
             // Inject skill body as the prompt; let the model handle it
@@ -360,23 +484,28 @@ export async function runInteractiveTerminal(inputConfig: {
       const activeInteractions = new ActiveInteractionRegistry({
         timeoutMs: parseTuiInteractionTimeoutMs(inputConfig.env?.MAGI_INTERACTION_TIMEOUT_MS)
       });
+      const modelDisplayInline = inputConfig.config.models?.aliases?.[currentModel] ?? currentModel;
+      const spinner = startSpinner(output, { model: modelDisplayInline });
+      const controller = new AbortController();
+      abortController = controller;
       const liveEvents = startTuiLiveEventWriter({
         store: inputConfig.store,
         output,
+        stdin: input,
         sessionId: currentSessionId,
         interactions: activeInteractions,
-        rl
+        rl,
+        spinner,
+        signal: controller.signal
       });
       running = true;
       const startedAt = Date.now();
       let streamedAny = false;
       const usedTools = new Set<string>();
       let hadErrors = false;
-      let lastEventText = "";
+      const lastEventTextParts: string[] = [];
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
-      const modelDisplayInline = inputConfig.config.models?.aliases?.[currentModel] ?? currentModel;
-      const spinner = startSpinner(output, { model: modelDisplayInline });
       const md = createStreamingMarkdown();
       // Attach any images queued by /image. encodePromptWithImages adds a
       // sentinel-prefixed block that the agent loop parses back into multi-part
@@ -389,7 +518,9 @@ export async function runInteractiveTerminal(inputConfig: {
         output.write(`\x1b[90m[attaching ${pendingImages.length} image${pendingImages.length === 1 ? "" : "s"}]\x1b[39m\n`);
       }
       let result: Awaited<ReturnType<typeof runHeadlessPrompt>> | undefined;
+      let stopInterruptKeys: (() => void) | undefined;
       try {
+        stopInterruptKeys = installRunningInterruptKeys(controller);
         result = await runHeadlessPrompt({
           prompt: promptWithImages,
           cwd: inputConfig.cwd,
@@ -401,14 +532,15 @@ export async function runInteractiveTerminal(inputConfig: {
           modelAlias: currentModel,
           sessionId: currentSessionId,
           activeInteractions,
-          permissionMode: "default",
+          permissionMode: currentPermissionMode,
+          signal: controller.signal,
           onStreamEvent: (event: AgentQueryEvent) => {
             if (event.type === "text_delta") {
               if (!streamedAny) spinner.stop();
               streamedAny = true;
               const rendered = md.push(event.text);
               if (rendered) output.write(rendered);
-              lastEventText += event.text;
+              lastEventTextParts.push(event.text);
             }
             if (event.type === "tool_use") {
               // Update spinner to show which tool is running, then keep spinning
@@ -446,6 +578,8 @@ export async function runInteractiveTerminal(inputConfig: {
         hadErrors = true;
         continue;
       } finally {
+        stopInterruptKeys?.();
+        abortController = null;
         spinner.stop();
         const remaining = md.flush();
         if (remaining) output.write(remaining);
@@ -454,6 +588,7 @@ export async function runInteractiveTerminal(inputConfig: {
       }
       running = false;
       currentSessionId = result.sessionId;
+      writeGoalBadge(output, inputConfig.paths, currentSessionId);
       if (!streamedAny && result.message) {
         output.write(`${result.message}\n`);
       } else if (streamedAny) {
@@ -469,7 +604,7 @@ export async function runInteractiveTerminal(inputConfig: {
       // Proactive suggestions
       const suggestions = getProactiveSuggestions({
         toolNames: [...usedTools],
-        lastMessage: lastEventText || result.message,
+        lastMessage: lastEventTextParts.join("") || result.message,
         hadErrors
       });
       if (suggestions.length > 0) {
@@ -485,10 +620,13 @@ export async function runInteractiveTerminal(inputConfig: {
 export function startTuiLiveEventWriter(input: {
   store: SessionStore;
   output?: Pick<Writable, "write">;
+  stdin?: NodeJS.ReadStream;
   sessionId?: string;
   afterEventId?: number;
   interactions?: ActiveInteractionRegistry;
   rl?: Pick<ReadlinePromisesInterface, "question">;
+  spinner?: { pause(): void; resume(): void };
+  signal?: AbortSignal;
 }): TuiLiveEventWriter {
   const terminalOutput = input.output ?? output;
   let liveSessionId = input.sessionId;
@@ -510,12 +648,19 @@ export function startTuiLiveEventWriter(input: {
       terminalOutput.write(`${line}\n`);
     }
     if (input.interactions && input.rl) {
+      // Pause the spinner so the approval prompt isn't clobbered by the
+      // animation. Resume after the user resolves it.
+      input.spinner?.pause();
       void handleTuiPendingInteraction({
         event: toEventView(event),
         interactions: input.interactions,
         rl: input.rl,
+        stdin: input.stdin,
         output: terminalOutput,
-        handled: handledInteractions
+        handled: handledInteractions,
+        signal: input.signal
+      }).finally(() => {
+        input.spinner?.resume();
       });
     }
   });
@@ -555,12 +700,19 @@ export function formatSessionResume(store: SessionStore, sessionId: string): str
     sessionId,
     limit: 8
   });
+  const renderState = buildTuiRenderState({
+    events: store.listSessionAuditEvents(sessionId, 50).map(toEventView),
+    sessionId,
+    cwd: session.cwd,
+    limit: 8
+  });
   return [
     `sessionId: ${session.id}`,
     `title: ${session.title ?? "(untitled)"}`,
     `cwd: ${session.cwd}`,
     `messages: ${session.messages.length}`,
     ...session.messages.map((message) => `${message.role}: ${message.content}`),
+    renderTuiState(renderState, { color: false, width: 100, maxBlocks: 8 }),
     formatPendingResumeInteractions(pending),
     formatTuiTranscriptStatus(transcript),
     formatEventList(events),
@@ -626,13 +778,153 @@ function formatUnknownCommand(name: string): string {
   return `\x1b[33mUnknown slash command:\x1b[39m /${name}\n  Run \x1b[36m/help\x1b[39m to see available commands.\n`;
 }
 
-function hasUnclosedFence(text: string): boolean {
-  const fences = text.split("\n").filter((l) => l.trimStart().startsWith("```"));
-  return fences.length % 2 !== 0;
-}
-
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
+}
+
+function writeGoalBadge(
+  terminalOutput: Pick<Writable, "write">,
+  paths: MagiPaths | undefined,
+  sessionId: string | undefined
+): void {
+  if (!paths || !sessionId) {
+    return;
+  }
+  const badge = formatGoalBadge(getGoal(paths, sessionId));
+  if (badge) {
+    terminalOutput.write(`\x1b[90m${badge}\x1b[39m\n`);
+  }
+}
+
+function startInteractiveGoal(paths: MagiPaths | undefined, sessionId: string | undefined, args: string[]): string {
+  if (!paths) return "Goal requires a configured paths root.";
+  if (!sessionId) return "No active session. Send a message first or resume a session, then use /goal.";
+  const objective = args.join(" ").trim();
+  const goal = createGoal(paths, { sessionId, objective });
+  return `Goal started: ${goal.objective}`;
+}
+
+async function pickInteractiveModel(input: {
+  input: NodeJS.ReadStream;
+  output: NodeJS.WriteStream;
+  config: MagiConfig;
+  currentModel: string;
+}): Promise<string | undefined> {
+  const items: TuiPickerItem[] = buildModelPickerItems(input.config, input.currentModel);
+  if (items.length === 0) {
+    input.output.write("No model aliases configured.\nUse /model <provider:model> after configuring the provider.\n");
+    return undefined;
+  }
+  return showTuiPicker({
+    stdin: input.input,
+    stdout: input.output,
+    title: "models",
+    items,
+    emptyMessage: "No matching models",
+    footer: "↑↓ select · Tab complete · Enter switch · Esc cancel",
+    maxVisibleItems: 10
+  });
+}
+
+export function buildModelPickerItems(config: MagiConfig, currentModel: string): TuiPickerItem[] {
+  const items: TuiPickerItem[] = [];
+  const routerConfigured = config.models.router && Object.keys(config.models.router).length > 0;
+  if (routerConfigured) {
+    items.push({
+      label: "auto",
+      value: "auto",
+      description: "smart routing",
+      detail: currentModel === "auto" ? "current" : undefined
+    });
+  }
+  for (const [alias, target] of Object.entries(config.models.aliases)) {
+    items.push({
+      label: alias,
+      value: alias,
+      description: target,
+      detail: alias === currentModel ? "current" : undefined
+    });
+  }
+  return items;
+}
+
+async function pickInteractivePermissionMode(input: {
+  input: NodeJS.ReadStream;
+  output: NodeJS.WriteStream;
+  currentMode: ToolPermissionMode;
+}): Promise<ToolPermissionMode | undefined> {
+  const selected = await showTuiPicker({
+    stdin: input.input,
+    stdout: input.output,
+    title: "permission modes",
+    items: buildPermissionModePickerItems(input.currentMode),
+    emptyMessage: "No matching permission modes",
+    footer: "↑↓ select · Tab complete · Enter switch · Esc cancel",
+    maxVisibleItems: 4
+  });
+  return parsePermissionMode(selected);
+}
+
+export function buildPermissionModePickerItems(currentMode: ToolPermissionMode): TuiPickerItem[] {
+  return PERMISSION_MODES.map(mode => ({
+    label: mode,
+    value: mode,
+    description: permissionModePickerDescription(mode),
+    detail: mode === currentMode ? "current" : undefined
+  }));
+}
+
+function permissionModePickerDescription(mode: ToolPermissionMode): string {
+  switch (mode) {
+    case "default":
+      return "ask before non-read-only tools";
+    case "acceptEdits":
+      return "allow tool edits without approval";
+    case "bypassPermissions":
+      return "skip approval prompts";
+    case "plan":
+      return "deny write tools";
+  }
+}
+
+async function pickInteractiveSession(input: {
+  input: NodeJS.ReadStream;
+  output: NodeJS.WriteStream;
+  store: SessionStore;
+}): Promise<string | undefined> {
+  const sessions = input.store.listSessions(50);
+  if (sessions.length === 0) {
+    input.output.write("No sessions\n");
+    return undefined;
+  }
+  return showTuiPicker({
+    stdin: input.input,
+    stdout: input.output,
+    title: "resume sessions",
+    items: buildSessionPickerItems(input.store),
+    emptyMessage: "No matching sessions",
+    footer: "↑↓ select · Tab complete · Enter resume · Esc cancel",
+    maxVisibleItems: 10
+  });
+}
+
+export function buildSessionPickerItems(store: SessionStore): TuiPickerItem[] {
+  return store.listSessions(50).map(session => ({
+    label: session.title ? formatSessionTitle(session.title) : shortSessionId(session.id),
+    value: session.id,
+    description: `${session.messageCount} msg`,
+    detail: `${session.updatedAt} ${session.cwd} ${session.title ? shortSessionId(session.id) : ""}`.trim()
+  }));
+}
+
+function formatSessionTitle(title: string): string {
+  const singleLine = title.replace(/\s+/g, " ").trim();
+  if (!singleLine) return "(untitled)";
+  return singleLine.length <= 48 ? singleLine : `${singleLine.slice(0, 47)}…`;
+}
+
+function shortSessionId(id: string): string {
+  return id.length <= 12 ? id : id.slice(0, 8);
 }

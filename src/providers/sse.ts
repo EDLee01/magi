@@ -4,6 +4,8 @@ export interface SseEvent {
   data: string;
 }
 
+const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
+
 export async function* readSseEvents(body: ReadableStream<Uint8Array> | null): AsyncGenerator<SseEvent> {
   if (!body) {
     throw new Error("Provider returned no event stream body");
@@ -12,6 +14,7 @@ export async function* readSseEvents(body: ReadableStream<Uint8Array> | null): A
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let offset = 0;
   try {
     while (true) {
       const chunk = await reader.read();
@@ -19,30 +22,56 @@ export async function* readSseEvents(body: ReadableStream<Uint8Array> | null): A
         break;
       }
       buffer += decoder.decode(chunk.value, { stream: true });
-      yield* drainSseBuffer(buffer, (remaining) => {
-        buffer = remaining;
-      });
+      const offsetRef = { offset };
+      yield* drainSseBuffer(buffer, offsetRef);
+      offset = offsetRef.offset;
+
+      // Compact buffer: copy only the trailing unconsumed bytes to a fresh string.
+      // This breaks V8's retained-string chain where slice() keeps reference to parent.
+      if (offset > 0) {
+        if (buffer.length === offset) {
+          buffer = "";
+        } else {
+          // Round-trip via Buffer to force fresh allocation (slice returns a sliced
+          // string in V8 that retains the entire parent string, causing OOM).
+          buffer = Buffer.from(buffer.substring(offset), "utf8").toString("utf8");
+        }
+        offset = 0;
+      }
+
+      // Hard guard: if buffer grows past the cap (event larger than 1MB), drop it.
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        buffer = "";
+        offset = 0;
+      }
     }
     buffer += decoder.decode();
-    yield* drainSseBuffer(`${buffer}\n\n`, (remaining) => {
-      buffer = remaining;
-    });
+    const finalRef = { offset };
+    yield* drainSseBuffer(`${buffer.substring(offset)}\n\n`, finalRef);
   } finally {
     reader.releaseLock();
   }
 }
 
-function* drainSseBuffer(buffer: string, update: (remaining: string) => void): Generator<SseEvent> {
-  let current = buffer;
+function* drainSseBuffer(buffer: string, offsetRef: { offset: number }): Generator<SseEvent> {
   while (true) {
-    const separator = current.search(/\r?\n\r?\n/);
-    if (separator < 0) {
-      update(current);
+    const searchStart = offsetRef.offset;
+    const separator = buffer.indexOf("\n\n", searchStart);
+    const sepCR = buffer.indexOf("\r\n\r\n", searchStart);
+    let sepIdx = -1;
+    let sepLen = 0;
+    if (separator >= 0 && (sepCR < 0 || separator < sepCR)) {
+      sepIdx = separator;
+      sepLen = 2;
+    } else if (sepCR >= 0) {
+      sepIdx = sepCR;
+      sepLen = 4;
+    }
+    if (sepIdx < 0) {
       return;
     }
-    const rawEvent = current.slice(0, separator);
-    const separatorLength = current[separator] === "\r" ? 4 : 2;
-    current = current.slice(separator + separatorLength);
+    const rawEvent = buffer.substring(offsetRef.offset, sepIdx);
+    offsetRef.offset = sepIdx + sepLen;
     const event = parseSseEvent(rawEvent);
     if (event) {
       yield event;
@@ -58,7 +87,10 @@ function parseSseEvent(raw: string): SseEvent | undefined {
     }
     const colon = line.indexOf(":");
     const field = colon >= 0 ? line.slice(0, colon) : line;
-    const value = colon >= 0 ? line.slice(colon + 1).replace(/^ /, "") : "";
+    let value = colon >= 0 ? line.slice(colon + 1) : "";
+    if (value.charCodeAt(0) === 32) {
+      value = value.slice(1);
+    }
     if (field === "event") {
       event.event = value;
     } else if (field === "id") {

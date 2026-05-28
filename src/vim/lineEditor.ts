@@ -1,8 +1,9 @@
 // Vim mode line editor — raw stdin line input with INSERT and NORMAL modes.
 // Adapted in spirit from magi's full vim state machine, but simplified for
-// single-line CLI input (no multi-line text, no Ink integration).
+// prompt-line editing (no Ink integration).
 
 import { emitKeypressEvents } from "node:readline";
+import { buildPromptDisplayForTest, TuiPromptSlashCommand } from "../tui/prompt-reader.js";
 
 export type VimMode = "INSERT" | "NORMAL";
 
@@ -12,6 +13,7 @@ export interface VimReadLineOptions {
   prompt: string;
   initialMode?: VimMode;
   history?: string[];
+  slashCommands?: TuiPromptSlashCommand[];
   onModeChange?: (mode: VimMode) => void;
 }
 
@@ -44,17 +46,34 @@ export async function readLineWithVim(opts: VimReadLineOptions): Promise<string>
       savedBuffer: ""
     };
 
-    // Render the initial prompt
+    let renderedLines = 0;
+    let renderedCursorLine = 0;
+
     const render = () => {
-      output.write("\r\x1b[K"); // clear line
       const modeIndicator = state.mode === "NORMAL" ? "\x1b[33m[N]\x1b[39m " : "\x1b[36m[I]\x1b[39m ";
-      output.write(modeIndicator + prompt + state.buffer);
-      // Move cursor to correct position
-      const totalChars = stripAnsi(modeIndicator + prompt).length + state.buffer.length;
-      const target = stripAnsi(modeIndicator + prompt).length + state.cursor;
-      if (totalChars > target) {
-        output.write(`\x1b[${totalChars - target}D`);
+      const display = buildPromptDisplayForTest({
+        prompt: modeIndicator + prompt,
+        text: state.buffer,
+        cursor: state.cursor,
+        safeColumns: Math.max(20, (output.columns || 80) - 6),
+        maxVisibleLines: 6,
+        slashCommands: opts.slashCommands
+      });
+
+      if (renderedLines > 0) {
+        if (renderedCursorLine > 0) {
+          output.write(`\x1b[${renderedCursorLine}A`);
+        }
+        output.write("\r\x1b[J");
       }
+
+      output.write(display.lines.join("\n"));
+      const up = display.lines.length - 1 - display.cursorLine;
+      if (up > 0) output.write(`\x1b[${up}A`);
+      output.write("\r");
+      if (display.cursorColumn > 0) output.write(`\x1b[${display.cursorColumn}C`);
+      renderedLines = display.lines.length;
+      renderedCursorLine = display.cursorLine;
     };
 
     const setMode = (mode: VimMode) => {
@@ -75,7 +94,9 @@ export async function readLineWithVim(opts: VimReadLineOptions): Promise<string>
         input.setRawMode(false);
       }
       input.removeListener("keypress", onKey);
-      output.write("\n");
+      const down = Math.max(0, renderedLines - 1 - renderedCursorLine);
+      if (down > 0) output.write(`\x1b[${down}B`);
+      output.write("\r\n");
     };
 
     const onKey = (str: string | undefined, key: { name?: string; ctrl?: boolean; shift?: boolean; meta?: boolean; sequence?: string } | undefined) => {
@@ -364,8 +385,4 @@ function historyNext(state: State) {
     state.buffer = state.savedBuffer;
   }
   state.cursor = state.buffer.length;
-}
-
-function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
 }

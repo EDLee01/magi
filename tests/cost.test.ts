@@ -8,6 +8,7 @@ describe("cost calculation", () => {
       expect(getModelPricing("claude-sonnet-4-6").outputPerMillion).toBe(15);
       expect(getModelPricing("claude-haiku-4-5-20251001").inputPerMillion).toBe(1);
       expect(getModelPricing("claude-opus-4-7").outputPerMillion).toBe(75);
+      expect(getModelPricing("gpt-5.5")).toEqual({ inputPerMillion: 5, outputPerMillion: 30 });
     });
 
     it("falls back to family heuristics for unknown variants", () => {

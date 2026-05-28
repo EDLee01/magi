@@ -1,6 +1,7 @@
 import { MagiConfig } from "../config.js";
 import { MagiPaths } from "../paths.js";
 import { SessionStore, SessionSummary } from "../session-store.js";
+import { ToolPermissionMode } from "../tools/registry.js";
 
 export interface SlashCommandInput {
   cwd: string;
@@ -9,6 +10,7 @@ export interface SlashCommandInput {
   paths?: MagiPaths;
   sessionId?: string;
   currentModel?: string;
+  permissionMode?: ToolPermissionMode;
   env?: NodeJS.ProcessEnv;
 }
 

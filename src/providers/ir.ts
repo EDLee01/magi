@@ -52,6 +52,7 @@ export interface ProviderRequest {
   temperature?: number;
   maxOutputTokens?: number;
   signal?: AbortSignal;
+  stream?: boolean;
 }
 
 export interface ProviderUsage {

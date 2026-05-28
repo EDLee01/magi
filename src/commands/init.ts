@@ -60,10 +60,10 @@ const PRESETS: Record<string, ProviderPreset> = {
     name: "openai",
     envVars: ["OPENAI_API_KEY"],
     type: "openai",
-    defaultBaseUrl: "https://api.openai.com",
-    fastModel: "gpt-4o-mini",
-    mainModel: "gpt-4o",
-    deepModel: "o1-preview",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    fastModel: "gpt-5.5",
+    mainModel: "gpt-5.5",
+    deepModel: "gpt-5.5",
     family: "gpt"
   },
   deepseek: {

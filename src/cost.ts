@@ -23,6 +23,7 @@ const PRICING: Record<string, ModelPricing> = {
   "claude-3-5-haiku": { inputPerMillion: 0.8, outputPerMillion: 4 },
 
   // OpenAI GPT family
+  "gpt-5.5": { inputPerMillion: 5, outputPerMillion: 30 },
   "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
   "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   "gpt-4-turbo": { inputPerMillion: 10, outputPerMillion: 30 },
@@ -55,6 +56,7 @@ export function getModelPricing(model: string): ModelPricing {
   if (model.includes("haiku")) return { inputPerMillion: 1, outputPerMillion: 5 };
   if (model.includes("opus")) return { inputPerMillion: 15, outputPerMillion: 75 };
   if (model.includes("sonnet")) return { inputPerMillion: 3, outputPerMillion: 15 };
+  if (model.includes("gpt-5.5")) return PRICING["gpt-5.5"];
   if (model.includes("gpt-4o-mini")) return { inputPerMillion: 0.15, outputPerMillion: 0.6 };
   if (model.includes("gpt-4")) return { inputPerMillion: 2.5, outputPerMillion: 10 };
   if (model.includes("deepseek-r")) return { inputPerMillion: 0.55, outputPerMillion: 2.19 };

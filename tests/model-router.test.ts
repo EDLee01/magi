@@ -72,6 +72,20 @@ describe("ModelRouter", () => {
       const deepseekScore = scoreCandidate(deepseek, "vision");
       expect(claudeScore).toBeGreaterThan(deepseekScore);
     });
+
+    it("scores coding-specialized models higher for coding and review work", () => {
+      const generalGpt: ModelCapabilities = { family: "gpt", role: "main", contextWindow: 1_050_000, supportsVision: true };
+      const codex: ModelCapabilities = {
+        family: "gpt",
+        role: "main",
+        contextWindow: 400_000,
+        supportsVision: true,
+        specialty: "coding",
+        priority: 3
+      };
+      expect(scoreCandidate(codex, "coding")).toBeGreaterThan(scoreCandidate(generalGpt, "coding"));
+      expect(scoreCandidate(codex, "review")).toBeGreaterThan(scoreCandidate(generalGpt, "review"));
+    });
   });
 
   describe("routeAuto", () => {
@@ -228,6 +242,22 @@ describe("ModelRouter", () => {
       const config = makeFullConfig({});
       const decision = routeAutoDetailed(config, "hello");
       expect(decision).toBeUndefined();
+    });
+
+    it("routes coding work to a coding-specialized alias over a larger general model", () => {
+      const config = makeFullConfig({
+        main: { family: "gpt", role: "main", contextWindow: 1_050_000, supportsVision: true },
+        codex: {
+          family: "gpt",
+          role: "main",
+          contextWindow: 400_000,
+          supportsVision: true,
+          specialty: "coding",
+          priority: 3
+        }
+      });
+      const decision = routeAutoDetailed(config, "implement a function that parses TypeScript imports and updates every file");
+      expect(decision!.chosenAlias).toBe("codex");
     });
   });
 });

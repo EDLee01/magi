@@ -1,4 +1,6 @@
 import { formatEventList, toEventView } from "../events.js";
+import { buildTuiRenderState } from "../tui/render-state.js";
+import { renderTuiState } from "../tui/renderer.js";
 import { SlashCommandInput } from "./registry.js";
 
 export const command = {
@@ -14,12 +16,20 @@ export const command = {
     const pending = views
       .filter((event) => event.status === "pending" && (event.category === "approval" || event.category === "question"));
     const events = views.slice(0, 5);
+    const renderState = buildTuiRenderState({
+      events: views,
+      sessionId: input.sessionId,
+      model: `${input.currentModel ?? "main"} (${formatModelTarget(input.config, input.currentModel ?? "main")})`,
+      cwd: input.cwd,
+      limit: 8
+    });
     return [
       `cwd: ${input.cwd}`,
       `session: ${input.sessionId ?? "none"}`,
       `model: ${input.currentModel ?? "main"} (${formatModelTarget(input.config, input.currentModel ?? "main")})`,
       `providers: ${Object.keys(input.config.providers).join(", ") || "none"}`,
       `aliases: ${Object.keys(input.config.models.aliases).join(", ") || "none"}`,
+      renderTuiState(renderState, { color: false, width: 100, maxBlocks: 8 }),
       formatPendingInteractions(pending),
       formatEventList(events)
     ].join("\n");

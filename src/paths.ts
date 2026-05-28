@@ -91,6 +91,7 @@ export function defaultConfigYaml(): string {
     "  recentMessages: 6",
     "memory:",
     "  enabled: true",
+    "  # root: /path/to/shared/Memory",
     "  autoWrite: explicit",
     "  maxResults: 8",
     "  scopes:",

@@ -13,6 +13,8 @@ export interface ModelCapabilities {
   role?: "haiku" | "sonnet" | "opus" | "main";
   contextWindow: number;
   supportsVision: boolean;
+  specialty?: "coding" | "reasoning" | "vision" | "general";
+  priority?: number;
 }
 
 export interface RouterCandidate {
@@ -120,7 +122,7 @@ export function classifyTask(prompt: string, context: RouteContext | boolean = {
 }
 
 export function scoreCandidate(capabilities: ModelCapabilities, routeKind: RouteKind): number {
-  let score = 0;
+  let score = capabilities.priority ?? 0;
 
   // Model family × task type scoring
   switch (routeKind) {
@@ -128,11 +130,13 @@ export function scoreCandidate(capabilities: ModelCapabilities, routeKind: Route
       if (capabilities.family === "claude") score += 28;
       else if (capabilities.family === "deepseek") score += 24;
       else if (capabilities.family === "gpt") score += 20;
+      if (capabilities.specialty === "coding") score += 22;
       break;
     case "reasoning":
       if (capabilities.family === "deepseek") score += 30;
       else if (capabilities.family === "claude") score += 22;
       else if (capabilities.family === "gpt") score += 18;
+      if (capabilities.specialty === "reasoning") score += 14;
       break;
     case "planning":
       if (capabilities.role === "opus") score += 30;
@@ -143,6 +147,8 @@ export function scoreCandidate(capabilities: ModelCapabilities, routeKind: Route
       if (capabilities.role === "opus") score += 30;
       else if (capabilities.family === "claude") score += 26;
       else if (capabilities.family === "deepseek") score += 18;
+      else if (capabilities.family === "gpt") score += 20;
+      if (capabilities.specialty === "coding") score += 18;
       break;
     case "extraction":
       if (capabilities.role === "haiku") score += 20;
@@ -153,6 +159,7 @@ export function scoreCandidate(capabilities: ModelCapabilities, routeKind: Route
       if (capabilities.family === "claude") score += 28;
       else if (capabilities.family === "gpt") score += 22;
       else if (capabilities.family === "deepseek") score += 16;
+      if (capabilities.specialty === "coding") score += 18;
       break;
     case "quick":
       if (capabilities.role === "haiku") score += 18;
@@ -164,10 +171,12 @@ export function scoreCandidate(capabilities: ModelCapabilities, routeKind: Route
       break;
     case "vision":
       if (capabilities.supportsVision) score += 20;
+      if (capabilities.specialty === "vision") score += 14;
       break;
     case "review":
       if (capabilities.family === "claude") score += 24;
       else if (capabilities.family === "gpt") score += 20;
+      if (capabilities.specialty === "coding") score += 16;
       break;
   }
 

@@ -91,14 +91,14 @@ const SECTIONS: Section[] = [
   {
     title: "6. Memory",
     body: [
-      "Magi remembers durable facts across sessions in ~/.magi-next/memdir/.",
+      "Memory stores durable context across sessions after you apply a Memory Draft.",
       "",
-      "  /memory                 List your saved memories",
-      "  /memory show <name>     View a memory",
-      "  /memory delete <name>   Remove one",
+      "  /memory list            List Memory files",
+      "  /memory drafts          List pending Memory Drafts",
+      "  /memory draft apply <id> Apply a reviewed draft",
       "",
-      "The agent uses the Memorize tool to save things automatically",
-      "(user role, project decisions, your preferences)."
+      "The agent uses the Memorize tool to propose drafts.",
+      "It does not write formal Memory until you apply the draft."
     ]
   },
   {

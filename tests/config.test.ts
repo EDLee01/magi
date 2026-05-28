@@ -437,4 +437,29 @@ describe("configuration", () => {
 
     expect(() => loadConfig(paths, temp!.env)).toThrow(/models\.aliases\.fast must be a non-empty string/);
   });
+
+  it("accepts router specialty and priority metadata", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    ensureMagiHome(paths);
+    writeFileSync(
+      paths.configFile,
+      [
+        "models:",
+        "  router:",
+        "    codex:",
+        "      family: gpt",
+        "      role: main",
+        "      contextWindow: 400000",
+        "      supportsVision: true",
+        "      specialty: coding",
+        "      priority: 3",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const config = loadConfig(paths, temp.env);
+    expect(config.models.router?.codex).toMatchObject({ specialty: "coding", priority: 3 });
+  });
 });

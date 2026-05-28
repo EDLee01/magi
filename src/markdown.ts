@@ -56,19 +56,33 @@ export function createStreamingMarkdown(options?: MarkdownOptions): StreamingMar
 
   function push(delta: string): string {
     buffer += delta;
-    let out = "";
+    const outParts: string[] = [];
+    let bufOffset = 0;
 
     while (true) {
-      const nlIdx = buffer.indexOf("\n");
+      const nlIdx = buffer.indexOf("\n", bufOffset);
       if (nlIdx === -1) break;
-      const line = buffer.slice(0, nlIdx);
-      buffer = buffer.slice(nlIdx + 1);
+      const line = buffer.substring(bufOffset, nlIdx);
+      bufOffset = nlIdx + 1;
       const processed = processLine(line);
       // Suppress newline for empty processed output (e.g. table rows being collected)
-      out += processed + (processed === "" ? "" : "\n");
+      outParts.push(processed + (processed === "" ? "" : "\n"));
     }
 
-    return out;
+    // Compact buffer: drop consumed prefix, force fresh allocation to break
+    // V8's retained-string chain (sliced strings keep parent alive → unbounded growth → OOM).
+    if (bufOffset > 0) {
+      buffer = bufOffset === buffer.length
+        ? ""
+        : Buffer.from(buffer.substring(bufOffset), "utf8").toString("utf8");
+    }
+    // Hard cap: if a single line ever exceeds 1MB without newline, drop the buffer
+    // rather than letting downstream regex.replace OOM.
+    if (buffer.length > 1024 * 1024) {
+      buffer = "";
+    }
+
+    return outParts.join("");
   }
 
   function flush(): string {

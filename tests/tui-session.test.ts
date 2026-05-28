@@ -2,13 +2,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 
 import { runCli } from "../src/cli.js";
+import { registry } from "../src/commands/registry.js";
 import { formatModelPicker, formatSessionSearch, formatSlashSuggestions, parseSlashCommand, runSlashCommand } from "../src/slash.js";
 import {
   buildTuiTranscriptState,
+  buildModelPickerItems,
+  buildPermissionModePickerItems,
+  buildSessionPickerItems,
   colorizeDiffLine,
   createTerminalUserQuestionResolver,
+  formatTuiStartupBanner,
   formatSessionResume,
   formatTuiTranscriptStatus,
   formatTuiLiveEvent,
@@ -18,10 +24,19 @@ import {
 import { ActiveInteractionRegistry } from "../src/interactions.js";
 import { getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
+import { MagiConfig } from "../src/config.js";
+import { clearPermissionRules, isToolAlwaysAllowed } from "../src/permissions.js";
 
 function stripAnsi(str: string | undefined): string | undefined {
   if (str === undefined) return undefined;
   return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+function createTtyInput(): NodeJS.ReadStream {
+  const stdin = new PassThrough() as unknown as NodeJS.ReadStream;
+  stdin.isTTY = true;
+  stdin.setRawMode = () => stdin;
+  return stdin;
 }
 import { toEventView } from "../src/events.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
@@ -42,6 +57,7 @@ const WEB_SEARCH_CONFIG = {
 };
 
 afterEach(() => {
+  clearPermissionRules();
   temp?.cleanup();
   temp = undefined;
   if (workspace) {
@@ -67,6 +83,19 @@ describe("TUI, slash commands, and session resume", () => {
     expect(formatSlashSuggestions("/missing-command")).toContain("No slash commands match");
   });
 
+  it("formats startup banner with version, tools, cwd, and model", () => {
+    const banner = stripAnsi(formatTuiStartupBanner({
+      cwd: "/repo",
+      modelDisplay: "openai:gpt-5.5",
+      toolCount: 86,
+      version: "1.2.3"
+    })) ?? "";
+
+    expect(banner).toContain("Magi v1.2.3 · 86 tools");
+    expect(banner).toContain("cwd: /repo");
+    expect(banner).toContain("model: openai:gpt-5.5");
+  });
+
   it("runs slash status and session commands", () => {
     temp = makeTempRoot();
     const store = SessionStore.open(getMagiPaths(temp.env));
@@ -89,7 +118,7 @@ describe("TUI, slash commands, and session resume", () => {
           toolUseId: "approval-tui"
         }
       });
-      const config = {
+      const config: MagiConfig = {
         version: "0.1",
         control: { bind: "127.0.0.1", port: 8765 },
         providers: {},
@@ -113,10 +142,61 @@ describe("TUI, slash commands, and session resume", () => {
       expect(runSlashCommand({ command: { type: "review" }, config, store, cwd: "/repo" })).toContain("Review route");
       expect(runSlashCommand({ command: { type: "resume" }, config, store, cwd: "/repo" })).toContain("Resume sessions:");
       expect(runSlashCommand({ command: { type: "resume", sessionId: "1" }, config, store, cwd: "/repo" })).toContain("Resumed session-1");
+      expect(registry.dispatch("permissions", [], { cwd: "/repo", config, store, permissionMode: "bypassPermissions" })).toContain("Permission mode: bypassPermissions");
+      expect(registry.dispatch("permissions", ["mode"], { cwd: "/repo", config, store, permissionMode: "acceptEdits" })).toContain("> acceptEdits");
+      expect(registry.dispatch("permissions", ["mode", "plan"], { cwd: "/repo", config, store, permissionMode: "default" })).toContain("Permission mode: plan");
       expect(formatSessionSearch(store, "one")).toContain("session-");
       expect(formatSessionResume(store, "session-1")).toContain("approval approval-tui");
       expect(formatSessionResume(store, "session-1")).toContain("Transcript:");
       expect(formatModelPicker(config, "fast")).toContain(">  1 fast");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("builds interactive picker items for models and sessions", () => {
+    temp = makeTempRoot();
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    try {
+      store.createSession({ id: "session-newer", title: "newer", cwd: "/repo/new" });
+      store.createSession({ id: "session-older", title: "older", cwd: "/repo/old" });
+      const config: MagiConfig = {
+        version: "0.1",
+        control: { bind: "127.0.0.1", port: 8765 },
+        providers: {},
+        models: {
+          aliases: { fast: "main:gpt-fast", main: "main:gpt-main" },
+          fallbacks: {},
+          router: {
+            coding: {
+              family: "gpt",
+              contextWindow: 128000,
+              supportsVision: false,
+              specialty: "coding",
+              priority: 1
+            }
+          }
+        },
+        mcp: { servers: {} },
+        hooks: [],
+        context: { recentMessages: 6 },
+        memory: { enabled: true, autoWrite: "explicit" as const, maxResults: 8, scopes: ["user" as const, "project" as const, "session" as const] },
+        webSearch: WEB_SEARCH_CONFIG
+      };
+
+      expect(buildModelPickerItems(config, "fast")).toMatchObject([
+        { label: "auto", value: "auto", description: "smart routing" },
+        { label: "fast", value: "fast", description: "main:gpt-fast", detail: "current" },
+        { label: "main", value: "main", description: "main:gpt-main" }
+      ]);
+      expect(buildSessionPickerItems(store).map(item => item.value)).toEqual(["session-newer", "session-older"]);
+      expect(buildSessionPickerItems(store)[0]?.detail).toContain("/repo/new");
+      expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(expect.objectContaining({
+        label: "bypassPermissions",
+        value: "bypassPermissions",
+        description: "skip approval prompts",
+        detail: "current"
+      }));
     } finally {
       store.close();
     }
@@ -293,10 +373,10 @@ describe("TUI, slash commands, and session resume", () => {
         toolUse: {
           type: "tool-use",
           id: "approve-terminal",
-          name: "FileWrite",
+          name: "ApprovalTestTool",
           input: { file_path: "x.txt", content: "x" }
         },
-        reason: "FileWrite requires approval"
+        reason: "ApprovalTestTool requires approval"
       });
       const writer = startTuiLiveEventWriter({
         store,
@@ -320,22 +400,202 @@ describe("TUI, slash commands, and session resume", () => {
         sessionId,
         jobId: "job-approval-tui",
         action: "agent.approval.pending",
-        target: "FileWrite",
+        target: "ApprovalTestTool",
         metadata: {
           status: "pending",
           interactionKind: "approval",
           toolUseId: "approve-terminal",
-          toolUse: { id: "approve-terminal", name: "FileWrite" },
-          reason: "FileWrite requires approval"
+          toolUse: { id: "approve-terminal", name: "ApprovalTestTool" },
+          reason: "ApprovalTestTool requires approval"
         }
       });
 
       await expect(wait).resolves.toBe(true);
       writer.stop();
 
-      expect(stripAnsi(output.join(""))).toContain("[approval] waiting for FileWrite (approve-terminal)");
+      expect(stripAnsi(output.join(""))).toContain("[approval] waiting for ApprovalTestTool (approve-terminal)");
       expect(output.join("")).toContain("Approval required");
       expect(prompts).toEqual(["approve? [y/n/a] "]);
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
+  it("resolves pending approvals through the TUI approval picker hotkeys", async () => {
+    temp = makeTempRoot();
+    clearPermissionRules();
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const output: string[] = [];
+    const stdin = createTtyInput();
+    try {
+      const sessionId = store.createSession({ id: "approval-picker-session", title: "approval picker", cwd: process.cwd() });
+      const wait = interactions.waitForApproval({
+        sessionId,
+        jobId: "job-approval-picker",
+        toolUse: {
+          type: "tool-use",
+          id: "approve-picker",
+          name: "ApprovalPickerTool",
+          input: { file_path: "x.txt", content: "x" }
+        },
+        reason: "ApprovalPickerTool requires approval"
+      });
+      const writer = startTuiLiveEventWriter({
+        store,
+        sessionId,
+        interactions,
+        stdin,
+        rl: {
+          question: async () => {
+            throw new Error("approval picker should not use readline question");
+          }
+        },
+        output: {
+          write: (chunk: unknown) => {
+            output.push(String(chunk));
+            return true;
+          }
+        }
+      });
+
+      store.recordAudit({
+        sessionId,
+        jobId: "job-approval-picker",
+        action: "agent.approval.pending",
+        target: "ApprovalPickerTool",
+        metadata: {
+          status: "pending",
+          interactionKind: "approval",
+          toolUseId: "approve-picker",
+          reason: "ApprovalPickerTool requires approval",
+          diff: "--- a/x.txt\n+++ b/x.txt\n@@\n-old\n+new"
+        }
+      });
+      stdin.write("y");
+
+      await expect(wait).resolves.toBe(true);
+      writer.stop();
+
+      const visible = stripAnsi(output.join("")) ?? "";
+      expect(visible).toContain("Approval required");
+      expect(visible).toContain("Diff preview:");
+      expect(visible).toContain("approval required");
+      expect(visible).toContain("Allow");
+      expect(visible).toContain("Deny");
+      expect(visible).not.toContain("approve? [y/n/a]");
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
+  it("denies approval picker requests on Escape", async () => {
+    temp = makeTempRoot();
+    clearPermissionRules();
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const stdin = createTtyInput();
+    try {
+      const sessionId = store.createSession({ id: "approval-picker-deny-session", title: "approval picker deny", cwd: process.cwd() });
+      const wait = interactions.waitForApproval({
+        sessionId,
+        jobId: "job-approval-picker-deny",
+        toolUse: {
+          type: "tool-use",
+          id: "approve-picker-deny",
+          name: "ApprovalPickerDenyTool",
+          input: {}
+        },
+        reason: "ApprovalPickerDenyTool requires approval"
+      });
+      const writer = startTuiLiveEventWriter({
+        store,
+        sessionId,
+        interactions,
+        stdin,
+        rl: {
+          question: async () => {
+            throw new Error("approval picker should not use readline question");
+          }
+        },
+        output: {
+          write: () => true
+        }
+      });
+
+      store.recordAudit({
+        sessionId,
+        jobId: "job-approval-picker-deny",
+        action: "agent.approval.pending",
+        target: "ApprovalPickerDenyTool",
+        metadata: {
+          status: "pending",
+          interactionKind: "approval",
+          toolUseId: "approve-picker-deny"
+        }
+      });
+      stdin.write("\x1b");
+
+      await expect(wait).resolves.toBe(false);
+      writer.stop();
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
+  it("adds persistent permission rules from the approval picker", async () => {
+    temp = makeTempRoot();
+    clearPermissionRules();
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const stdin = createTtyInput();
+    try {
+      const sessionId = store.createSession({ id: "approval-picker-always-session", title: "approval picker always", cwd: process.cwd() });
+      const wait = interactions.waitForApproval({
+        sessionId,
+        jobId: "job-approval-picker-always",
+        toolUse: {
+          type: "tool-use",
+          id: "approve-picker-always",
+          name: "ApprovalPickerAlwaysTool",
+          input: {}
+        },
+        reason: "ApprovalPickerAlwaysTool requires approval"
+      });
+      const writer = startTuiLiveEventWriter({
+        store,
+        sessionId,
+        interactions,
+        stdin,
+        rl: {
+          question: async () => {
+            throw new Error("approval picker should not use readline question");
+          }
+        },
+        output: {
+          write: () => true
+        }
+      });
+
+      store.recordAudit({
+        sessionId,
+        jobId: "job-approval-picker-always",
+        action: "agent.approval.pending",
+        target: "ApprovalPickerAlwaysTool",
+        metadata: {
+          status: "pending",
+          interactionKind: "approval",
+          toolUseId: "approve-picker-always"
+        }
+      });
+      stdin.write("a");
+
+      await expect(wait).resolves.toBe(true);
+      expect(isToolAlwaysAllowed("ApprovalPickerAlwaysTool")).toBe(true);
+      writer.stop();
     } finally {
       interactions.close();
       store.close();

@@ -1,24 +1,122 @@
 import { SlashCommandInput } from "./registry.js";
 import { formatMemory } from "../memory.js";
-import { listMemdirEntries, deleteMemdirEntry, findMemdirEntry } from "../memdir.js";
+import { listMemdirEntries, findMemdirEntry } from "../memdir.js";
+import { initMemory, listMemoryFiles, readMemoryFile } from "../memory-files.js";
+import { retrieveRelevantMemory, formatMemoryContext } from "../memory-search.js";
+import { proposeMemoryDraft, listDrafts, formatDraftReview, applyDraft, rejectDraft } from "../memory-draft.js";
+import { runDream, listDreams, showDream, applyDream, rejectDream } from "../memory-dream.js";
 
 export const command = {
   name: "memory",
-  description: "View, manage, or delete persistent memories",
-  usage: "/memory [list|show <name>|delete <name>|legacy [scope]]",
+  description: "Manage Memory files, drafts, and experimental Dream runs",
+  usage: "/memory [init|list|show <path>|search <query>|drafts|draft show|apply|reject <id>|dream|dreams]",
   group: "Memory",
   handler: (args: string[], input: SlashCommandInput): string => {
     if (!input.paths) {
       return "Memory paths are unavailable";
     }
     const sub = args[0] ?? "list";
+    const memoryRoot = input.config.memory.root;
+    const rootInput = { appRoot: input.paths.root, root: memoryRoot };
+
+    if (sub === "init") {
+      const root = initMemory(rootInput);
+      return `Memory initialized: ${root}`;
+    }
+
+    if (sub === "list" || args.length === 0) {
+      const files = listMemoryFiles(rootInput);
+      if (files.length === 0) {
+        return [
+          "No Memory files.",
+          "",
+          `Memory directory: ${initMemory(rootInput)}`
+        ].join("\n");
+      }
+      return [
+        "Memory files:",
+        ...files.map((file) => `  ${file.path.padEnd(36)} ${file.size} bytes`),
+        "",
+        "Use /memory show <path> to read a file, /memory search <query> to retrieve relevant Memory."
+      ].join("\n");
+    }
+
+    if (sub === "show") {
+      const target = args[1];
+      if (!target) return "Usage: /memory show <path>";
+      return readMemoryFile({ ...rootInput, filePath: target });
+    }
+
+    if (sub === "search") {
+      const query = args.slice(1).join(" ");
+      if (!query.trim()) return "Usage: /memory search <query>";
+      const hits = retrieveRelevantMemory({
+        ...rootInput,
+        query,
+        maxResults: input.config.memory.maxResults,
+        sessionId: input.sessionId
+      });
+      return formatMemoryContext(hits) || "No matching Memory";
+    }
+
+    if (sub === "drafts") {
+      const drafts = listDrafts(rootInput);
+      if (drafts.length === 0) return "No Memory Drafts.";
+      return [
+        "Memory Drafts:",
+        ...drafts.map((draft) => `  ${draft.id}  ${draft.status.padEnd(8)}  ${draft.targetFile}`)
+      ].join("\n");
+    }
+
+    if (sub === "draft") {
+      const action = args[1];
+      const id = args[2];
+      if (!action || !id) return "Usage: /memory draft <show|apply|reject> <id>";
+      if (action === "show") return formatDraftReview({ ...rootInput, id });
+      if (action === "apply") return `Applied Memory Draft: ${applyDraft({ ...rootInput, id }).id}`;
+      if (action === "reject") return `Rejected Memory Draft: ${rejectDraft({ ...rootInput, id }).id}`;
+      return `Unknown Memory Draft action: ${action}`;
+    }
+
+    if (sub === "dream") {
+      const action = args[1];
+      const id = args[2];
+      if (!action) {
+        const dream = runDream(rootInput);
+        return [
+          `Experimental Dream created: ${dream.id}`,
+          dream.summary,
+          `Drafts: ${dream.draftIds.length}`
+        ].join("\n");
+      }
+      if (!id) return "Usage: /memory dream <show|apply|reject> <id>";
+      if (action === "show") return JSON.stringify(showDream({ ...rootInput, id }), null, 2);
+      if (action === "apply") {
+        const dream = applyDream({ ...rootInput, id, applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId }) });
+        return `Applied Dream: ${dream.id}`;
+      }
+      if (action === "reject") {
+        const dream = rejectDream({ ...rootInput, id, rejectDraft: (draftId) => rejectDraft({ ...rootInput, id: draftId }) });
+        return `Rejected Dream: ${dream.id}`;
+      }
+      return `Unknown Dream action: ${action}`;
+    }
+
+    if (sub === "dreams") {
+      const dreams = listDreams(rootInput);
+      if (dreams.length === 0) return "No experimental Dream runs.";
+      return [
+        "Experimental Dream runs:",
+        ...dreams.map((dream) => `  ${dream.id}  ${dream.status.padEnd(8)}  operations=${dream.operationCount} drafts=${dream.draftCount}`)
+      ].join("\n");
+    }
 
     // Backwards compat: /memory <scope> with scope = user|project|session
     if (sub === "user" || sub === "project" || sub === "session") {
       return formatMemory({ paths: input.paths, cwd: input.cwd, scope: sub, sessionId: input.sessionId });
     }
 
-    if (sub === "list" || args.length === 0) {
+    if (sub === "memdir") {
       const entries = listMemdirEntries(input.paths);
       if (entries.length === 0) {
         return [
@@ -26,7 +124,7 @@ export const command = {
           "",
           `Memdir directory: ${input.paths.root}/memdir/`,
           "Memories are saved here as typed markdown files (user/feedback/project/reference).",
-          "Use /memory show <name> to view one, /memory delete <name> to remove."
+          "Use /memory memdir-show <name> to view one, /memory delete <name> to propose an archive draft."
         ].join("\n");
       }
       const lines = ["Memdir entries:"];
@@ -42,13 +140,13 @@ export const command = {
         }
       }
       lines.push("");
-      lines.push("Use /memory show <filename-or-name> to view, /memory delete <filename-or-name> to remove.");
+      lines.push("Use /memory memdir-show <filename-or-name> to view, /memory delete <filename-or-name> to propose an archive draft.");
       return lines.join("\n");
     }
 
-    if (sub === "show") {
+    if (sub === "memdir-show") {
       const target = args[1];
-      if (!target) return "Usage: /memory show <filename-or-name>";
+      if (!target) return "Usage: /memory memdir-show <filename-or-name>";
       const entry = findMemdirEntry(input.paths, target);
       if (!entry) return `Memory not found: ${target}`;
       return [
@@ -66,8 +164,18 @@ export const command = {
       if (!target) return "Usage: /memory delete <filename-or-name>";
       const entry = findMemdirEntry(input.paths, target);
       if (!entry) return `Memory not found: ${target}`;
-      const ok = deleteMemdirEntry(input.paths, entry.filename);
-      return ok ? `Deleted memory: ${entry.filename}` : `Failed to delete: ${entry.filename}`;
+      const draft = proposeMemoryDraft({
+        ...rootInput,
+        targetFile: "archive/README.md",
+        content: formatArchivedMemdirEntry(entry),
+        reason: `Archive legacy memdir entry instead of deleting it: ${entry.filename}`,
+        sourceSession: input.sessionId
+      });
+      return [
+        `Created archive Memory Draft: ${draft.id} -> ${draft.targetFile}`,
+        `Legacy memdir entry left unchanged: ${entry.filename}`,
+        "Apply the draft to archive it; manual cleanup can happen after review."
+      ].join("\n");
     }
 
     if (sub === "legacy") {
@@ -78,3 +186,15 @@ export const command = {
     return `Unknown subcommand: ${sub}. Usage: ${command.usage}`;
   }
 };
+
+function formatArchivedMemdirEntry(entry: { name: string; type: string; filename: string; description: string; body: string }): string {
+  return [
+    `## Archived legacy memory: ${entry.name}`,
+    "",
+    `Source: memdir/${entry.filename}`,
+    `Type: ${entry.type}`,
+    `Description: ${entry.description}`,
+    "",
+    entry.body
+  ].join("\n");
+}

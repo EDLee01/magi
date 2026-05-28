@@ -74,6 +74,7 @@ export interface ContextConfig {
 
 export interface MemoryConfig {
   enabled: boolean;
+  root?: string;
   autoWrite: "off" | "explicit";
   maxResults: number;
   scopes: Array<"user" | "project" | "session">;
@@ -545,6 +546,7 @@ function readWebSearchConfig(
 function readMemoryConfig(value: Record<string, unknown>, configFile: string): MemoryConfig {
   return {
     enabled: readOptionalBoolean(value.enabled, "memory.enabled", configFile) ?? true,
+    root: readOptionalString(value.root, "memory.root", configFile),
     autoWrite: readMemoryAutoWrite(value.autoWrite, "memory.autoWrite", configFile),
     maxResults: readOptionalPositiveInteger(value.maxResults, "memory.maxResults", configFile) ?? 8,
     scopes: readMemoryScopes(value.scopes, "memory.scopes", configFile),
@@ -708,9 +710,35 @@ function readRouterConfig(
       | "haiku" | "sonnet" | "opus" | "main" | undefined;
     const contextWindow = readOptionalPositiveInteger(raw.contextWindow, `models.router.${alias}.contextWindow`, configFile) ?? 128_000;
     const supportsVision = raw.supportsVision === true;
-    result[alias] = { family, role, contextWindow, supportsVision };
+    const specialty = readOptionalSpecialty(raw.specialty, `models.router.${alias}.specialty`, configFile);
+    const priority = readOptionalInteger(raw.priority, `models.router.${alias}.priority`, configFile);
+    result[alias] = { family, role, contextWindow, supportsVision, specialty, priority };
   }
   return result;
+}
+
+function readOptionalSpecialty(
+  value: unknown,
+  field: string,
+  configFile: string
+): "coding" | "reasoning" | "vision" | "general" | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (value === "coding" || value === "reasoning" || value === "vision" || value === "general") {
+    return value;
+  }
+  throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be coding, reasoning, vision, or general`);
+}
+
+function readOptionalInteger(value: unknown, field: string, configFile: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be an integer`);
+  }
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

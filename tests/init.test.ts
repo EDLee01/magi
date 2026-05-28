@@ -46,7 +46,10 @@ describe("magi init", () => {
     const content = readFileSync(paths.configFile, "utf8");
     expect(content).toContain("apiKeyEnv: OPENAI_API_KEY");
     expect(content).toContain("type: openai");
-    expect(content).toContain("fast: openai:gpt-4o-mini");
+    expect(content).toContain("baseUrl: https://api.openai.com/v1");
+    expect(content).toContain("fast: openai:gpt-5.5");
+    expect(content).toContain("main: openai:gpt-5.5");
+    expect(content).toContain("deep: openai:gpt-5.5");
   });
 
   it("respects an explicit preset over auto-detection", async () => {

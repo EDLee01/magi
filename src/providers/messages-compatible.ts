@@ -104,18 +104,18 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
       return parseCompatibleResult(data);
     }
 
-    let text = "";
+    const textParts: string[] = [];
     let usage: ProviderResponse["usage"];
     const toolCalls = new Map<number, { id?: string; name?: string; arguments: string }>();
     for await (const event of readSseEvents(response.body)) {
       if (event.data === "[DONE]") {
         yield { type: "done" };
-        return { text, toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
+        return { text: textParts.join(""), toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
       }
       const parsed = JSON.parse(event.data) as unknown;
       const delta = readOpenAiStreamText(parsed);
       if (delta) {
-        text += delta;
+        textParts.push(delta);
         yield { type: "text-delta", text: delta };
       }
       mergeOpenAiToolCallDeltas(toolCalls, parsed);
@@ -127,7 +127,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
     }
 
     yield { type: "done" };
-    return { text, toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
+    return { text: textParts.join(""), toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
   }
 
   private async completeAnthropicMessages(request: ProviderRequest): Promise<ProviderResponse> {
@@ -184,8 +184,9 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
       return parseAnthropicMessagesResult(data);
     }
 
-    let text = "";
-    let thinking = "";
+    const textParts: string[] = [];
+    const thinkingParts: string[] = [];
+    let textLength = 0;
     let usage: ProviderResponse["usage"];
     const toolCalls = new Map<number, { id?: string; name?: string; input: string }>();
     for await (const event of readSseEvents(response.body)) {
@@ -204,7 +205,8 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
       }
       const delta = readAnthropicStreamText(parsed);
       if (delta) {
-        text += delta;
+        textParts.push(delta);
+        textLength += delta.length;
         yield { type: "text-delta", text: delta };
       }
       // Some upstreams (e.g. proxies that force extended thinking) may produce
@@ -213,7 +215,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
       // sees something instead of an empty response.
       const thinkingDelta = readAnthropicStreamThinking(parsed);
       if (thinkingDelta) {
-        thinking += thinkingDelta;
+        thinkingParts.push(thinkingDelta);
       }
       mergeAnthropicToolUseDeltas(toolCalls, parsed);
       const eventUsage = readAnthropicStreamUsage(parsed);
@@ -222,19 +224,23 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
         yield { type: "usage", usage: eventUsage };
       }
       if (isRecord(parsed) && parsed.type === "message_stop") {
+        const text = textParts.join("");
+        const thinking = thinkingParts.join("");
         const finalText = finalizeAnthropicText(text, thinking, toolCalls.size);
         if (finalText !== text) {
           // Surface the fallback to the live stream too so the TUI shows it.
-          yield { type: "text-delta", text: finalText.slice(text.length) };
+          yield { type: "text-delta", text: finalText.slice(textLength) };
         }
         yield { type: "done" };
         return { text: finalText, toolUses: toolUsesFromAnthropicStream(toolCalls), usage };
       }
     }
 
+    const text = textParts.join("");
+    const thinking = thinkingParts.join("");
     const finalText = finalizeAnthropicText(text, thinking, toolCalls.size);
     if (finalText !== text) {
-      yield { type: "text-delta", text: finalText.slice(text.length) };
+      yield { type: "text-delta", text: finalText.slice(textLength) };
     }
     yield { type: "done" };
     return { text: finalText, toolUses: toolUsesFromAnthropicStream(toolCalls), usage };
@@ -245,7 +251,7 @@ function isEventStreamResponse(response: Response): boolean {
   return response.headers.get("content-type")?.toLowerCase().includes("text/event-stream") === true;
 }
 
-function toMessage(message: MagiMessage): Record<string, string> {
+function toMessage(message: MagiMessage): Record<string, unknown> {
   if (message.role === "tool") {
     const first = message.content[0];
     const toolCallId = first?.type === "tool-result" ? first.toolCallId : "unknown";
@@ -254,6 +260,27 @@ function toMessage(message: MagiMessage): Record<string, string> {
       tool_call_id: toolCallId,
       content: messageText(message)
     };
+  }
+  if (message.role === "assistant") {
+    const toolUses = message.content.filter((part) => part.type === "tool-use");
+    if (toolUses.length > 0) {
+      const text = message.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.type === "text" ? part.text : "")
+        .join("");
+      return {
+        role: "assistant",
+        content: text || undefined,
+        tool_calls: toolUses.map((toolUse) => ({
+          id: toolUse.id,
+          type: "function",
+          function: {
+            name: toolUse.name,
+            arguments: JSON.stringify(toolUse.input)
+          }
+        }))
+      };
+    }
   }
   return {
     role: message.role,

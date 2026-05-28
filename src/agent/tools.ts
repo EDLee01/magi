@@ -29,6 +29,7 @@ export async function executeBuiltinAgentTool(input: {
   toolUse: MagiToolUsePart;
   env?: NodeJS.ProcessEnv;
   stateRoot?: string;
+  memoryRoot?: string;
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
@@ -37,12 +38,14 @@ export async function executeBuiltinAgentTool(input: {
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
   approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: { decision: "allow" | "ask" | "deny"; reason: string; diff?: string } }) => Promise<boolean> | boolean;
+  signal?: AbortSignal;
 }): Promise<AgentToolResult> {
   return executeRegisteredTool({
     cwd: input.cwd,
     toolUse: input.toolUse,
     env: input.env,
     stateRoot: input.stateRoot,
+    memoryRoot: input.memoryRoot,
     sessionId: input.sessionId,
     webSearchConfig: input.webSearchConfig,
     permissionMode: input.permissionMode ?? "acceptEdits",
@@ -50,7 +53,8 @@ export async function executeBuiltinAgentTool(input: {
     userQuestionResolver: input.userQuestionResolver,
     userMessageSink: input.userMessageSink,
     spawnSubAgent: input.spawnSubAgent,
-    approvalResolver: input.approvalResolver
+    approvalResolver: input.approvalResolver,
+    signal: input.signal
   });
 }
 
@@ -59,6 +63,7 @@ export async function executeBuiltinAgentTools(input: {
   toolUses: MagiToolUsePart[];
   env?: NodeJS.ProcessEnv;
   stateRoot?: string;
+  memoryRoot?: string;
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
@@ -67,12 +72,14 @@ export async function executeBuiltinAgentTools(input: {
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
   approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: { decision: "allow" | "ask" | "deny"; reason: string; diff?: string } }) => Promise<boolean> | boolean;
+  signal?: AbortSignal;
 }): Promise<AgentToolResult[]> {
   return executeRegisteredTools({
     cwd: input.cwd,
     toolUses: input.toolUses,
     env: input.env,
     stateRoot: input.stateRoot,
+    memoryRoot: input.memoryRoot,
     sessionId: input.sessionId,
     webSearchConfig: input.webSearchConfig,
     permissionMode: input.permissionMode ?? "acceptEdits",
@@ -80,6 +87,7 @@ export async function executeBuiltinAgentTools(input: {
     userQuestionResolver: input.userQuestionResolver,
     userMessageSink: input.userMessageSink,
     spawnSubAgent: input.spawnSubAgent,
-    approvalResolver: input.approvalResolver
+    approvalResolver: input.approvalResolver,
+    signal: input.signal
   });
 }

@@ -48,6 +48,10 @@ export class OpenAiAdapter implements ProviderAdapter {
   }
 
   async *stream(request: ProviderRequest): AsyncGenerator<ProviderStreamEvent, ProviderResponse> {
+    if (request.tools?.length && request.stream !== true) {
+      return await this.complete(request);
+    }
+
     const apiKey = getApiKey(this.name, this.config, this.env);
     const endpoint = this.config.endpoint ?? "chat";
     const baseUrl = normalizeBaseUrl(this.config.baseUrl ?? "https://api.openai.com/v1");
@@ -142,19 +146,22 @@ export function parseOpenAiStream(text: string): ProviderStreamEvent[] {
 }
 
 function toChatBody(request: ProviderRequest): Record<string, unknown> {
+  const tools = request.tools?.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.inputSchema
+    }
+  }));
   return {
     model: request.model,
     messages: request.messages.map(toChatMessage),
-    tools: request.tools?.map((tool) => ({
-      type: "function",
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.inputSchema
-      }
-    })),
+    tools,
+    tool_choice: tools?.length ? "auto" : undefined,
+    parallel_tool_calls: tools?.length ? true : undefined,
     temperature: request.temperature,
-    max_tokens: request.maxOutputTokens
+    max_completion_tokens: request.maxOutputTokens
   };
 }
 
@@ -201,6 +208,27 @@ function toChatMessage(message: MagiMessage): Record<string, unknown> {
       content: messageText(message)
     };
   }
+  if (message.role === "assistant") {
+    const toolUses = message.content.filter((part) => part.type === "tool-use");
+    if (toolUses.length > 0) {
+      const text = message.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.type === "text" ? part.text : "")
+        .join("");
+      return {
+        role: "assistant",
+        content: text || undefined,
+        tool_calls: toolUses.map((toolUse) => ({
+          id: toolUse.id,
+          type: "function",
+          function: {
+            name: toolUse.name,
+            arguments: JSON.stringify(toolUse.input)
+          }
+        }))
+      };
+    }
+  }
   // For user/system, support text + image content parts
   if (message.role === "user" || message.role === "system") {
     const parts: Record<string, unknown>[] = [];
@@ -229,9 +257,7 @@ function parseChatResult(data: unknown): ProviderResponse {
     throw new ProviderError("OpenAI chat response must be an object", { kind: "bad-request", retryable: false });
   }
   const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
-  const text = isRecord(choice) && isRecord(choice.message) && typeof choice.message.content === "string"
-    ? choice.message.content
-    : "";
+  const text = isRecord(choice) && isRecord(choice.message) ? readMessageText(choice.message) : "";
   const toolUses = isRecord(choice) && isRecord(choice.message) ? readOpenAiToolUses(choice.message.tool_calls) : [];
   return {
     text,
@@ -239,6 +265,47 @@ function parseChatResult(data: unknown): ProviderResponse {
     usage: readUsage(data),
     raw: data
   };
+}
+
+function readMessageText(message: Record<string, unknown>): string {
+  const contentText = readContentText(message.content);
+  if (contentText) {
+    return contentText;
+  }
+  for (const key of ["output_text", "text", "final", "answer"]) {
+    const value = message[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function readContentText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content.map((part) => {
+    if (typeof part === "string") {
+      return part;
+    }
+    if (!isRecord(part)) {
+      return "";
+    }
+    if (typeof part.text === "string") {
+      return part.text;
+    }
+    if (typeof part.content === "string") {
+      return part.content;
+    }
+    if (isRecord(part.text) && typeof part.text.value === "string") {
+      return part.text.value;
+    }
+    return "";
+  }).join("");
 }
 
 function parseResponsesResult(data: unknown): ProviderResponse {
@@ -369,8 +436,17 @@ function readStreamText(data: unknown): string | undefined {
     return data.delta;
   }
   const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
-  if (isRecord(choice) && isRecord(choice.delta) && typeof choice.delta.content === "string") {
-    return choice.delta.content;
+  if (isRecord(choice) && isRecord(choice.delta)) {
+    const contentText = readContentText(choice.delta.content);
+    if (contentText) {
+      return contentText;
+    }
+    for (const key of ["output_text", "text"]) {
+      const value = choice.delta[key];
+      if (typeof value === "string" && value) {
+        return value;
+      }
+    }
   }
   return undefined;
 }

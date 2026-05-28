@@ -56,7 +56,7 @@ export const SLASH_COMMANDS: SlashCommandSpec[] = [
   { name: "sessions", usage: "/sessions", group: "Session", description: "List recent sessions" },
   { name: "resume", usage: "/resume [query]", group: "Session", description: "Search and resume a session" },
   { name: "model", usage: "/model [alias]", group: "Model", description: "Show or switch model alias" },
-  { name: "memory", usage: "/memory [scope]", group: "Memory", description: "View memory loaded for this workspace" },
+  { name: "memory", usage: "/memory [init|list|show|search|drafts|draft|dream|dreams]", group: "Memory", description: "Manage Memory files, drafts, and Dream runs" },
   { name: "review", usage: "/review [target]", group: "Tools", description: "Switch to review-oriented route" },
   { name: "commit", usage: "/commit [-m <msg>]", group: "Git", description: "Commit staged git changes" },
   { name: "diff", usage: "/diff [path]", group: "Git", description: "Show git diff" },

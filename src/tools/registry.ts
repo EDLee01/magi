@@ -65,7 +65,8 @@ import { sshExec } from "../ssh/exec.js";
 import { sshFileRead, sshFileWrite } from "../ssh/file.js";
 import { executeSnip, formatSnipResult, parseSnipInput, SnipInputSchema } from "./snip.js";
 import { executeSkillTool, parseSkillToolInput, SkillToolInputSchema } from "./skill-tool.js";
-import { writeMemdirEntry, MemdirType } from "../memdir.js";
+import { MemdirType } from "../memdir.js";
+import { proposeMemoryDraft } from "../memory-draft.js";
 import { formatTodoWriteResult, parseTodoWriteInput, replaceTodoList, TodoWriteInputSchema } from "./todo.js";
 import { executeToolSearch, parseToolSearchInput, ToolSearchInputSchema } from "./tool-search.js";
 import {
@@ -220,6 +221,7 @@ export interface ToolExecutionContext {
   rules?: ToolPermissionRules;
   outputRoot?: string;
   stateRoot?: string;
+  memoryRoot?: string;
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   promptModel?: (request: { messages: MagiMessage[] }) => Promise<{ text: string }>;
@@ -227,6 +229,7 @@ export interface ToolExecutionContext {
   userMessageSink?: UserMessageSink;
   toolUse?: MagiToolUsePart;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
+  signal?: AbortSignal;
 }
 
 export interface RegisteredToolResult {
@@ -257,6 +260,7 @@ export async function executeRegisteredTool(input: {
   rules?: ToolPermissionRules;
   outputRoot?: string;
   stateRoot?: string;
+  memoryRoot?: string;
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   promptModel?: (request: { messages: MagiMessage[] }) => Promise<{ text: string }>;
@@ -264,6 +268,7 @@ export async function executeRegisteredTool(input: {
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
   approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: ToolPermissionResult }) => Promise<boolean> | boolean;
+  signal?: AbortSignal;
 }): Promise<RegisteredToolResult> {
   const registry = getBuiltinToolRegistry();
   const tool = registry.get(input.toolUse.name);
@@ -278,13 +283,15 @@ export async function executeRegisteredTool(input: {
       rules: input.rules,
       outputRoot: input.outputRoot,
       stateRoot: input.stateRoot,
+      memoryRoot: input.memoryRoot,
       sessionId: input.sessionId,
       webSearchConfig: input.webSearchConfig,
       promptModel: input.promptModel,
       userQuestionResolver: input.userQuestionResolver,
       userMessageSink: input.userMessageSink,
       toolUse: input.toolUse,
-      spawnSubAgent: input.spawnSubAgent
+      spawnSubAgent: input.spawnSubAgent,
+      signal: input.signal
     };
     const permission = checkToolPermission({
       toolUse: input.toolUse,
@@ -335,8 +342,23 @@ export async function executeRegisteredTool(input: {
       permission: approvalPermission
     };
   } catch (error) {
+    if (shouldRethrowToolExecutionError(error)) {
+      throw error;
+    }
     return errorResult(input.toolUse, error instanceof Error ? error.message : String(error));
   }
+}
+
+function shouldRethrowToolExecutionError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.name === "AbortError"
+    || error.name === "ActiveInteractionCancelledError"
+    || error.name === "ActiveInteractionTimeoutError";
 }
 
 export async function executeRegisteredTools(input: {
@@ -347,6 +369,7 @@ export async function executeRegisteredTools(input: {
   rules?: ToolPermissionRules;
   outputRoot?: string;
   stateRoot?: string;
+  memoryRoot?: string;
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   promptModel?: (request: { messages: MagiMessage[] }) => Promise<{ text: string }>;
@@ -354,6 +377,7 @@ export async function executeRegisteredTools(input: {
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
   approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: ToolPermissionResult }) => Promise<boolean> | boolean;
+  signal?: AbortSignal;
 }): Promise<RegisteredToolResult[]> {
   const registry = getBuiltinToolRegistry();
   const results = new Array<RegisteredToolResult>(input.toolUses.length);
@@ -615,7 +639,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         cwd: context.cwd,
         command: readString(input, "command"),
         timeoutMs: readOptionalNumber(input, "timeout_ms"),
-        approveDangerous: context.env?.MAGI_APPROVE_DANGEROUS_COMMANDS === "1"
+        approveDangerous: context.env?.MAGI_APPROVE_DANGEROUS_COMMANDS === "1",
+        signal: context.signal
       });
       return [
         `Command exited ${result.exitCode}`,
@@ -1180,7 +1205,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "Memorize",
-    description: "Save a durable memory (memdir entry) for future conversations. Use sparingly for genuine user preferences, project facts, corrections, or reference pointers — not for ephemeral conversation state.",
+    description: "Propose a Memory Draft for future conversations. Use sparingly for genuine user preferences, project facts, corrections, or reference pointers — not for ephemeral conversation state. This does not write formal Memory until the user applies the draft.",
     category: "memory",
     tags: ["memory", "memdir", "persist"],
     inputSchema: {
@@ -1212,15 +1237,16 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       if (!context.stateRoot) {
         throw new Error("Memorize requires Magi stateRoot");
       }
-      const root = path.dirname(context.stateRoot);
-      const entry = writeMemdirEntry({
-        paths: { root },
-        type,
-        name,
-        description,
-        body
+      const appRoot = path.dirname(context.stateRoot);
+      const draft = proposeMemoryDraft({
+        appRoot,
+        root: context.memoryRoot,
+        targetFile: memoryTargetFile(type),
+        content: formatProposedMemory({ name, description, body, type }),
+        reason: `Memorize tool proposed ${type} Memory: ${description}`,
+        sourceSession: context.sessionId
       });
-      return `Saved memory: ${entry.filename} (type=${entry.type})`;
+      return `Created Memory Draft: ${draft.id} -> ${draft.targetFile}. It will not change formal Memory until the user applies it.`;
     },
     isReadOnly: () => false,
     isDestructive: () => false,
@@ -2291,7 +2317,15 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       const result = await executeBrowserAction(input);
       return formatBrowserActionResult(result);
     },
-    isReadOnly: () => false,
+    // Read-only actions (navigate, scroll, screenshot, extract_text, wait,
+    // close) don't modify any third-party state. Write actions (click, type,
+    // evaluate) might submit forms / post comments / run arbitrary JS — those
+    // need approval.
+    isReadOnly: (input) => {
+      const action = (input as Record<string, unknown>).action;
+      return action === "navigate" || action === "scroll" || action === "screenshot"
+        || action === "extract_text" || action === "wait" || action === "close";
+    },
     isDestructive: () => false,
     isConcurrencySafe: () => false
   }
@@ -2460,4 +2494,27 @@ function requireSkillsRoot(context: ToolExecutionContext): string {
 
 function isValidMemdirType(value: string): value is MemdirType {
   return value === "user" || value === "feedback" || value === "project" || value === "reference";
+}
+
+function memoryTargetFile(type: MemdirType): string {
+  if (type === "user") return "user.md";
+  if (type === "feedback") return "preferences.md";
+  if (type === "project") return "projects/default.md";
+  return "workflows/README.md";
+}
+
+function formatProposedMemory(input: {
+  type: MemdirType;
+  name: string;
+  description: string;
+  body: string;
+}): string {
+  return [
+    `## ${input.name}`,
+    "",
+    `Type: ${input.type}`,
+    `Description: ${input.description}`,
+    "",
+    input.body
+  ].join("\n");
 }

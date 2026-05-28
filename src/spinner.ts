@@ -19,6 +19,11 @@ export interface SpinnerStatus {
 
 export interface Spinner {
   stop(): void;
+  /** Pause the animation (clears the line). Resume continues from where it
+   * left off. Use this when prompting the user for input — readline's
+   * question() output gets clobbered if the spinner keeps overwriting. */
+  pause(): void;
+  resume(): void;
   /** Update visible status. Safe to call frequently; renders on next tick. */
   update(status: SpinnerStatus): void;
 }
@@ -33,10 +38,11 @@ export function startSpinner(output: { write(s: string): void }, initial?: Spinn
   let frame = 0;
   const start = Date.now();
   let stopped = false;
+  let paused = false;
   let status: SpinnerStatus = initial ?? {};
 
   const interval = setInterval(() => {
-    if (stopped) return;
+    if (stopped || paused) return;
     const elapsedMs = Date.now() - start;
     const elapsed = (elapsedMs / 1000).toFixed(1);
     const char = FRAMES[frame % FRAMES.length];
@@ -62,6 +68,16 @@ export function startSpinner(output: { write(s: string): void }, initial?: Spinn
       clearInterval(interval);
       // Clear the spinner line
       output.write("\r\x1b[K");
+    },
+    pause() {
+      if (paused || stopped) return;
+      paused = true;
+      // Clear the spinner line so the next output isn't on top of it.
+      output.write("\r\x1b[K");
+    },
+    resume() {
+      if (stopped) return;
+      paused = false;
     },
     update(next: SpinnerStatus) {
       status = { ...status, ...next };

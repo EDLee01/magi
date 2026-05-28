@@ -48,6 +48,7 @@ export function runHeadlessPrompt(input: {
   interactionTimeoutMs?: number;
   signal?: AbortSignal;
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  stream?: boolean;
 }): Promise<HeadlessResult> {
   return runHeadlessPromptAsync(input);
 }
@@ -73,6 +74,7 @@ async function runHeadlessPromptAsync(input: {
   interactionTimeoutMs?: number;
   signal?: AbortSignal;
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  stream?: boolean;
 }): Promise<HeadlessResult> {
   const shouldPersist = input.persistSession ?? true;
   const sessionId = shouldPersist
@@ -110,6 +112,7 @@ async function runEphemeralHeadless(input: {
   interactionTimeoutMs?: number;
   signal?: AbortSignal;
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  stream?: boolean;
 }, sessionId: string, jobId: string): Promise<HeadlessResult> {
   const routeCtx = buildRouteContext(input);
   const resolvedAlias = resolveAutoAlias(input.modelAlias, input.config, input.prompt, routeCtx);
@@ -156,6 +159,7 @@ async function runPersistedHeadless(input: {
   interactionTimeoutMs?: number;
   signal?: AbortSignal;
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  stream?: boolean;
 }, sessionId: string, jobId: string): Promise<HeadlessResult> {
   const local = await runLocalHeadlessAgent({
     prompt: input.prompt,
@@ -234,6 +238,7 @@ async function runPersistedHeadless(input: {
       interactionTimeoutMs: input.interactionTimeoutMs,
       signal: input.signal,
       onStreamEvent: input.onStreamEvent,
+      stream: input.stream,
       mcp: input.config.mcp,
       spawnSubAgent: buildSpawnSubAgent({
         store: input.store,
@@ -253,6 +258,7 @@ async function runPersistedHeadless(input: {
       memoryOptions: {
         paths: input.paths,
         enabled: input.config.memory.enabled,
+        root: input.config.memory.root,
         autoWrite: input.config.memory.autoWrite,
         maxResults: input.config.memory.maxResults,
         scopes: input.config.memory.scopes,

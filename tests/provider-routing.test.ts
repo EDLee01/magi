@@ -41,15 +41,102 @@ describe("provider routing", () => {
       }
     });
 
-    const result = await adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] });
+    const result = await adapter.complete({
+      model: "gpt-test",
+      messages: [textMessage("user", "hello")],
+      maxOutputTokens: 123
+    });
 
     expect(calls[0].url).toBe("https://api.openai.com/v1/chat/completions");
     expect(calls[0].body).toMatchObject({
       model: "gpt-test",
-      messages: [{ role: "user", content: "hello" }]
+      messages: [{ role: "user", content: "hello" }],
+      max_completion_tokens: 123
     });
     expect(result.text).toBe("chat ok");
     expect(result.usage).toEqual({ inputTokens: 3, outputTokens: 2 });
+  });
+
+  it("sets OpenAI tool auto-selection when tools are available", async () => {
+    const calls: Array<{ body: unknown }> = [];
+    const adapter = new OpenAiAdapter({
+      name: "main",
+      config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "chat" },
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      fetchImpl: async (_url, init) => {
+        calls.push({ body: JSON.parse(String(init?.body)) });
+        return jsonResponse({
+          choices: [{ message: { content: "chat ok" } }],
+          usage: { prompt_tokens: 3, completion_tokens: 2 }
+        });
+      }
+    });
+
+    await adapter.complete({
+      model: "gpt-test",
+      messages: [textMessage("user", "inspect repo")],
+      tools: [{
+        name: "FileRead",
+        description: "Read a file",
+        inputSchema: { type: "object", properties: { file_path: { type: "string" } } }
+      }]
+    });
+
+    expect(calls[0].body).toMatchObject({
+      tool_choice: "auto",
+      parallel_tool_calls: true,
+      tools: [{
+        type: "function",
+        function: {
+          name: "FileRead",
+          description: "Read a file",
+          parameters: { type: "object", properties: { file_path: { type: "string" } } }
+        }
+      }]
+    });
+  });
+
+  it("serializes assistant tool uses as OpenAI tool_calls", async () => {
+    const calls: Array<{ body: Record<string, unknown> }> = [];
+    const adapter = new OpenAiAdapter({
+      name: "main",
+      config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "chat" },
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      fetchImpl: async (_url, init) => {
+        calls.push({ body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+        return jsonResponse({
+          choices: [{ message: { content: "chat ok" } }],
+          usage: { prompt_tokens: 3, completion_tokens: 2 }
+        });
+      }
+    });
+
+    await adapter.complete({
+      model: "gpt-test",
+      messages: [{
+        role: "assistant",
+        content: [{
+          type: "tool-use",
+          id: "call-1",
+          name: "FileRead",
+          input: { file_path: "README.md" }
+        }]
+      }]
+    });
+
+    expect(calls[0].body).toMatchObject({
+      messages: [{
+        role: "assistant",
+        tool_calls: [{
+          id: "call-1",
+          type: "function",
+          function: {
+            name: "FileRead",
+            arguments: "{\"file_path\":\"README.md\"}"
+          }
+        }]
+      }]
+    });
   });
 
   it("calls OpenAI Responses and parses output_text", async () => {
@@ -69,6 +156,29 @@ describe("provider routing", () => {
     expect(result.usage).toEqual({ inputTokens: 4, outputTokens: 5 });
   });
 
+  it("parses OpenAI-compatible array content text parts", async () => {
+    const adapter = new OpenAiAdapter({
+      name: "main",
+      config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "chat" },
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      fetchImpl: async () => jsonResponse({
+        choices: [{
+          message: {
+            content: [
+              { type: "text", text: "visible " },
+              { type: "output_text", text: { value: "answer" } }
+            ]
+          }
+        }],
+        usage: { prompt_tokens: 3, completion_tokens: 2 }
+      })
+    });
+
+    const result = await adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] });
+
+    expect(result.text).toBe("visible answer");
+  });
+
   it("parses OpenAI-compatible streaming deltas", () => {
     const events = parseOpenAiStream([
       'data: {"choices":[{"delta":{"content":"hel"}}]}',
@@ -82,6 +192,21 @@ describe("provider routing", () => {
       { type: "text-delta", text: "hel" },
       { type: "text-delta", text: "lo" },
       { type: "usage", usage: { inputTokens: 1, outputTokens: 2 } },
+      { type: "done" }
+    ]);
+  });
+
+  it("parses OpenAI-compatible streaming array content deltas", () => {
+    const events = parseOpenAiStream([
+      'data: {"choices":[{"delta":{"content":[{"type":"text","text":"hel"}]}}]}',
+      'data: {"choices":[{"delta":{"content":[{"type":"output_text","text":{"value":"lo"}}]}}]}',
+      "data: [DONE]",
+      ""
+    ].join("\n"));
+
+    expect(events).toEqual([
+      { type: "text-delta", text: "hel" },
+      { type: "text-delta", text: "lo" },
       { type: "done" }
     ]);
   });
@@ -119,6 +244,44 @@ describe("provider routing", () => {
       usage: { inputTokens: 2, outputTokens: 3 },
       toolUses: [{ id: "call-1", name: "FileRead", input: { file_path: "README.md" } }]
     });
+  });
+
+  it("uses non-streaming OpenAI completion when tools are available", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const adapter = new OpenAiAdapter({
+      name: "main",
+      config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "chat" },
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      fetchImpl: async (_url, init) => {
+        calls.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return jsonResponse({
+          choices: [{ message: { content: "complete ok" } }],
+          usage: { prompt_tokens: 2, completion_tokens: 3 }
+        });
+      }
+    });
+
+    const stream = adapter.stream!({
+      model: "gpt-test",
+      messages: [textMessage("user", "inspect")],
+      tools: [{
+        name: "FileRead",
+        description: "Read a file",
+        inputSchema: { type: "object", properties: { file_path: { type: "string" } } }
+      }]
+    });
+    const first = await stream.next();
+
+    expect(first.done).toBe(true);
+    expect(first.value).toMatchObject({
+      text: "complete ok",
+      usage: { inputTokens: 2, outputTokens: 3 }
+    });
+    expect(calls[0]).toMatchObject({
+      tool_choice: "auto",
+      parallel_tool_calls: true
+    });
+    expect(calls[0]).not.toHaveProperty("stream");
   });
 
   it("calls messages-compatible providers only from explicit MAGI_* config", async () => {

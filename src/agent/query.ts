@@ -67,6 +67,7 @@ export interface AgentQueryInput {
   cwd: string;
   env?: NodeJS.ProcessEnv;
   stateRoot?: string;
+  memoryRoot?: string;
   webSearchConfig?: WebSearchConfig;
   maxTurns?: number;
   temperature?: number;
@@ -85,6 +86,7 @@ export interface AgentQueryInput {
     tokenRefresh?: (serverName: string) => Promise<string | undefined>;
   };
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  stream?: boolean;
 }
 
 export async function* runAgentQuery(input: AgentQueryInput): AsyncGenerator<AgentQueryEvent, AgentQueryResult> {
@@ -125,7 +127,8 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
             tools: toolDefinitions,
             temperature: input.temperature,
             maxOutputTokens: input.maxOutputTokens,
-            signal: input.signal
+            signal: input.signal,
+            stream: input.stream === true
           });
           response = completed.response;
           streamedTextThisTurn = completed.streamedText;
@@ -212,13 +215,30 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
         yield { type: "usage", usage: response.usage };
       }
 
+      throwIfCancelled(input.signal);
+      let normalized = normalizeProviderResponse(response, toolDefinitions);
+      response = normalized.response;
+      let toolUses = normalized.toolUses;
+
+      if (toolUses.length === 0 && !response.text.trim() && response.usage && response.usage.outputTokens > 0) {
+        response = await recoverEmptyFinalAnswer(activeRoute, messages, input.signal);
+        if (response.usage) {
+          usage.inputTokens += response.usage.inputTokens;
+          usage.outputTokens += response.usage.outputTokens;
+          yield { type: "usage", usage: response.usage };
+        }
+        if (response.text.trim()) {
+          yield { type: "text_delta", text: response.text };
+        }
+        normalized = normalizeProviderResponse(response, toolDefinitions);
+        response = normalized.response;
+        toolUses = normalized.toolUses;
+      }
+
       if (response.text && !streamedTextThisTurn) {
         finalText += response.text;
         yield { type: "text_delta", text: response.text };
       }
-
-      throwIfCancelled(input.signal);
-      const toolUses = normalizeToolUses(response.toolUses);
       for (const toolUse of toolUses) {
         yield { type: "tool_use", toolUse };
       }
@@ -351,6 +371,26 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
 
 }
 
+async function recoverEmptyFinalAnswer(
+  route: AgentRoute,
+  messages: MagiMessage[],
+  signal: AbortSignal | undefined
+): Promise<ProviderResponse> {
+  throwIfCancelled(signal);
+  return route.adapter.complete({
+    model: route.model,
+    messages: [
+      ...messages,
+      textMessage(
+        "user",
+        "Your previous response produced no visible final answer. Reply now with a concise, user-visible final answer. Do not include hidden reasoning."
+      )
+    ],
+    maxOutputTokens: 1024,
+    signal
+  });
+}
+
 async function* completeRoute(route: AgentRoute, request: ProviderRequest): AsyncGenerator<AgentQueryEvent, {
   response: ProviderResponse;
   streamedText: string;
@@ -363,11 +403,11 @@ async function* completeRoute(route: AgentRoute, request: ProviderRequest): Asyn
     };
   }
   const stream = route.adapter.stream(request);
-  let streamedText = "";
+  const streamedTextParts: string[] = [];
   let next = await stream.next();
   while (!next.done) {
     if (next.value.type === "text-delta") {
-      streamedText += next.value.text;
+      streamedTextParts.push(next.value.text);
       yield { type: "text_delta", text: next.value.text };
     }
     throwIfCancelled(request.signal);
@@ -376,6 +416,7 @@ async function* completeRoute(route: AgentRoute, request: ProviderRequest): Asyn
   const response = next.value;
   // When the server doesn't support SSE, stream() falls back to a full response
   // with all the text in one shot — surface it as a text_delta so the TUI can display it
+  let streamedText = streamedTextParts.join("");
   if (!streamedText && response.text) {
     streamedText = response.text;
     yield { type: "text_delta", text: response.text };
@@ -474,6 +515,7 @@ async function executePreparedToolUses(
       toolUses: builtIn.map(({ toolUse }) => toolUse),
       env: input.env,
       stateRoot: input.stateRoot,
+      memoryRoot: input.memoryRoot,
       sessionId: input.sessionId,
       webSearchConfig: input.webSearchConfig,
       permissionMode: input.permissionMode,
@@ -512,7 +554,8 @@ async function executePreparedToolUses(
         }
         return input.approvalResolver?.({ toolUse, reason: permission.reason, diff: permission.diff }) ?? false;
       },
-      spawnSubAgent: input.spawnSubAgent
+      spawnSubAgent: input.spawnSubAgent,
+      signal: input.signal
     });
     for (const [resultIndex, result] of builtInResults.entries()) {
       results[builtIn[resultIndex].index] = result;
@@ -569,6 +612,119 @@ function normalizeToolUses(toolUses: MagiToolUsePart[] | undefined): MagiToolUse
     name: toolUse.name,
     input: toolUse.input ?? {}
   }));
+}
+
+function normalizeProviderResponse(
+  response: ProviderResponse,
+  toolDefinitions: MagiToolDefinition[]
+): { response: ProviderResponse; toolUses: MagiToolUsePart[] } {
+  const toolUses = normalizeToolUses(response.toolUses);
+  if (toolUses.length > 0) {
+    return { response, toolUses };
+  }
+  const textToolUses = parseTextToolUses(response.text, toolDefinitions);
+  if (textToolUses.toolUses.length === 0) {
+    return { response, toolUses: [] };
+  }
+  return {
+    response: { ...response, text: textToolUses.text, toolUses: textToolUses.toolUses },
+    toolUses: textToolUses.toolUses
+  };
+}
+
+function parseTextToolUses(
+  text: string,
+  toolDefinitions: MagiToolDefinition[]
+): { text: string; toolUses: MagiToolUsePart[] } {
+  if (!text.includes("<tool_use")) {
+    return { text, toolUses: [] };
+  }
+  const availableTools = new Set(toolDefinitions.map((tool) => tool.name));
+  const toolUses: MagiToolUsePart[] = [];
+  const blockPattern = /<tool_use\b([^>]*)>([\s\S]*?)<\/tool_use>/g;
+  const stripped = text.replace(blockPattern, (block, attrs: string, body: string) => {
+    const name = readXmlAttribute(attrs, "tool_name") ?? readXmlAttribute(attrs, "name");
+    if (!name || !availableTools.has(name)) {
+      return block;
+    }
+    toolUses.push({
+      type: "tool-use",
+      id: `text-tool-${toolUses.length + 1}`,
+      name,
+      input: normalizeTextToolInput(name, parseTextToolArgs(body))
+    });
+    return "";
+  });
+  return { text: toolUses.length > 0 ? stripped.trim() : text, toolUses };
+}
+
+function parseTextToolArgs(body: string): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  const argPattern = /<arg\b([^>]*)>([\s\S]*?)<\/arg>/g;
+  for (const match of body.matchAll(argPattern)) {
+    const name = readXmlAttribute(match[1], "name");
+    if (!name) {
+      continue;
+    }
+    input[name] = coerceTextToolValue(decodeXmlEntities(match[2].trim()));
+  }
+  const directArgPattern = /<([A-Za-z_][A-Za-z0-9_-]*)\b[^>]*>([\s\S]*?)<\/\1>/g;
+  for (const match of body.matchAll(directArgPattern)) {
+    const name = match[1];
+    if (name === "arg" || input[name] !== undefined) {
+      continue;
+    }
+    input[name] = coerceTextToolValue(decodeXmlEntities(match[2].trim()));
+  }
+  return input;
+}
+
+function normalizeTextToolInput(toolName: string, input: Record<string, unknown>): Record<string, unknown> {
+  if ((toolName === "FileRead" || toolName === "FileWrite" || toolName === "FileEdit") && input.file_path === undefined && input.path !== undefined) {
+    return { ...input, file_path: input.path };
+  }
+  if (toolName === "Bash" && input.command === undefined && input.cmd !== undefined) {
+    return { ...input, command: input.cmd };
+  }
+  return input;
+}
+
+function coerceTextToolValue(value: string): unknown {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value && /^-?\d+(?:\.\d+)?$/.test(value)) {
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) {
+      return numberValue;
+    }
+  }
+  if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function readXmlAttribute(attrs: string, name: string): string | undefined {
+  const pattern = new RegExp(`${escapeRegExp(name)}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`);
+  const match = pattern.exec(attrs);
+  return match?.[1] ?? match?.[2];
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function normalizeRoutes(input: AgentQueryInput): AgentRoute[] {

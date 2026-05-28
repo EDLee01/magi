@@ -9,11 +9,12 @@
  */
 
 import { Interface as ReadlinePromisesInterface } from "node:readline/promises";
-import { Writable } from "node:stream";
+import { Readable, Writable } from "node:stream";
 
 import { MagiEventView } from "../events.js";
 import { ActiveInteractionRegistry } from "../interactions.js";
 import { addPermissionRule, isToolAlwaysAllowed } from "../permissions.js";
+import { showTuiPicker } from "./picker.js";
 import {
   AskUserQuestionAnswer,
   AskUserQuestionRequest,
@@ -25,7 +26,8 @@ import {
 
 export function createTerminalUserQuestionResolver(
   rl: Pick<ReadlinePromisesInterface, "question">,
-  terminalOutput: Pick<Writable, "write">
+  terminalOutput: Pick<Writable, "write">,
+  signal?: AbortSignal
 ): UserQuestionResolver {
   return async ({ question }) => {
     const answers: AskUserQuestionAnswer["answers"] = [];
@@ -33,7 +35,7 @@ export function createTerminalUserQuestionResolver(
       const item = question.questions[index];
       while (true) {
         terminalOutput.write(`${formatAskUserQuestionForTerminal(question, index)}\n`);
-        const raw = await rl.question("? ");
+        const raw = await askReadlineQuestion(rl, "? ", signal);
         try {
           const selectedOptions = parseAskUserQuestionSelection(raw, item);
           answers.push({
@@ -55,8 +57,10 @@ export async function handleTuiPendingInteraction(input: {
   event: MagiEventView;
   interactions: ActiveInteractionRegistry;
   rl: Pick<ReadlinePromisesInterface, "question">;
+  stdin?: Readable & { isTTY?: boolean; setRawMode?: (mode: boolean) => void; isRaw?: boolean };
   output: Pick<Writable, "write">;
   handled: Set<string>;
+  signal?: AbortSignal;
 }): Promise<void> {
   if (input.event.status !== "pending") {
     return;
@@ -87,7 +91,9 @@ export async function handleTuiPendingInteraction(input: {
       const approved = await askTerminalApproval({
         event: input.event,
         rl: input.rl,
-        output: input.output
+        stdin: input.stdin,
+        output: input.output,
+        signal: input.signal
       });
       input.interactions.resolveApproval({
         jobId: input.event.jobId,
@@ -105,7 +111,8 @@ export async function handleTuiPendingInteraction(input: {
     const answer = await askTerminalQuestion({
       question,
       rl: input.rl,
-      output: input.output
+      output: input.output,
+      signal: input.signal
     });
     input.interactions.resolveQuestion({
       jobId: input.event.jobId,
@@ -113,6 +120,18 @@ export async function handleTuiPendingInteraction(input: {
       answer
     });
   } catch (error) {
+    if (isAbortError(error) || input.signal?.aborted) {
+      try {
+        input.interactions.cancelInteraction({
+          jobId: input.event.jobId,
+          toolUseId,
+          reason: "request aborted"
+        });
+      } catch {
+        // The interaction may already have been resolved by another control path.
+      }
+      return;
+    }
     input.output.write(`${error instanceof Error ? error.message : String(error)}\n`);
   }
 }
@@ -120,7 +139,9 @@ export async function handleTuiPendingInteraction(input: {
 async function askTerminalApproval(input: {
   event: MagiEventView;
   rl: Pick<ReadlinePromisesInterface, "question">;
+  stdin?: Readable & { isTTY?: boolean; setRawMode?: (mode: boolean) => void; isRaw?: boolean };
   output: Pick<Writable, "write">;
+  signal?: AbortSignal;
 }): Promise<boolean> {
   const toolUseId = readString(input.event.metadata.toolUseId) ?? "unknown";
   const toolName = input.event.target ?? "unknown";
@@ -141,11 +162,43 @@ async function askTerminalApproval(input: {
     }
   }
 
+  if (input.stdin?.isTTY && input.stdin.setRawMode) {
+    input.output.write(lines.join("\n") + "\n");
+    const decision = await showTuiPicker({
+      stdin: input.stdin,
+      stdout: input.output,
+      title: "approval required",
+      items: [
+        { label: "Allow", value: "allow", description: `Run ${toolName}` },
+        { label: "Deny", value: "deny", description: "Reject this tool call" },
+        { label: "Always allow", value: "always", description: `Persistently allow ${toolName}` }
+      ],
+      emptyMessage: "No matching approval actions",
+      footer: "↑↓ select · y allow · n deny · a always · Enter choose · Esc deny",
+      maxVisibleItems: 3,
+      hotkeys: {
+        y: "allow",
+        Y: "allow",
+        n: "deny",
+        N: "deny",
+        a: "always",
+        A: "always"
+      },
+      cancelValue: "deny"
+    });
+    if (decision === "always") {
+      addPermissionRule(toolName, `Always allow ${toolName}`);
+      input.output.write(`\x1b[32m✓ Added persistent rule: always allow "${toolName}"\x1b[39m\n`);
+      return true;
+    }
+    return decision === "allow";
+  }
+
   lines.push("", "Choose: [y]es / [n]o / [a]lways allow this tool");
   input.output.write(lines.join("\n") + "\n");
 
   while (true) {
-    const raw = (await input.rl.question("approve? [y/n/a] ")).trim().toLowerCase();
+    const raw = (await askReadlineQuestion(input.rl, "approve? [y/n/a] ", input.signal)).trim().toLowerCase();
     if (raw === "y" || raw === "yes" || raw === "approve" || raw === "approved" || raw === "allow") {
       return true;
     }
@@ -181,8 +234,9 @@ async function askTerminalQuestion(input: {
   question: AskUserQuestionRequest;
   rl: Pick<ReadlinePromisesInterface, "question">;
   output: Pick<Writable, "write">;
+  signal?: AbortSignal;
 }): Promise<AskUserQuestionAnswer> {
-  const resolver = createTerminalUserQuestionResolver(input.rl, input.output);
+  const resolver = createTerminalUserQuestionResolver(input.rl, input.output, input.signal);
   return normalizeAskUserQuestionAnswer(input.question, await resolver({
     toolUse: {
       type: "tool-use",
@@ -192,6 +246,22 @@ async function askTerminalQuestion(input: {
     },
     question: input.question
   }));
+}
+
+async function askReadlineQuestion(
+  rl: Pick<ReadlinePromisesInterface, "question">,
+  query: string,
+  signal?: AbortSignal
+): Promise<string> {
+  if (signal) {
+    return rl.question(query, { signal });
+  }
+  return rl.question(query);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError"
+    || error instanceof Error && error.name === "AbortError";
 }
 
 function readQuestionMetadata(value: unknown): AskUserQuestionRequest | undefined {

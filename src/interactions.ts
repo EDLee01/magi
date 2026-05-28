@@ -236,19 +236,17 @@ export class ActiveInteractionRegistry {
 
   cancelInteraction(input: { jobId: string; toolUseId: string; reason?: string }): ActiveInteractionView {
     const interaction = this.getPending(input.jobId, input.toolUseId);
-    interaction.status = "cancelled";
-    interaction.updatedAt = new Date().toISOString();
-    interaction.cancelReason = input.reason;
-    this.clearTimer(interaction);
-    interaction.reject(new ActiveInteractionCancelledError(
-      `Interaction ${input.jobId}/${input.toolUseId} was cancelled${input.reason ? `: ${input.reason}` : ""}`
-    ));
+    this.cancelPendingInteraction(interaction, input.reason);
     return toView(interaction);
   }
 
-  close(): void {
+  close(reason = "registry closed"): void {
     for (const interaction of this.interactions.values()) {
-      this.clearTimer(interaction);
+      if (interaction.status === "pending") {
+        this.cancelPendingInteraction(interaction, reason);
+      } else {
+        this.clearTimer(interaction);
+      }
     }
     this.activeJobs.clear();
     this.interactions.clear();
@@ -301,6 +299,16 @@ export class ActiveInteractionRegistry {
       clearTimeout(interaction.timer);
       interaction.timer = undefined;
     }
+  }
+
+  private cancelPendingInteraction(interaction: PendingInteraction, reason?: string): void {
+    interaction.status = "cancelled";
+    interaction.updatedAt = new Date().toISOString();
+    interaction.cancelReason = reason;
+    this.clearTimer(interaction);
+    interaction.reject(new ActiveInteractionCancelledError(
+      `Interaction ${interaction.jobId}/${interaction.toolUseId} was cancelled${reason ? `: ${reason}` : ""}`
+    ));
   }
 
   private key(jobId: string, toolUseId: string): string {

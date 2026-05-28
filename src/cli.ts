@@ -9,7 +9,11 @@ import { formatConfig, loadConfig } from "./config.js";
 import { formatDoctorReport } from "./doctor.js";
 import { loadMagiEnvFile } from "./env.js";
 import { runHeadlessPrompt } from "./headless.js";
-import { appendMemory, formatMemory, MemoryScope, searchMemory, formatMemorySearchResults } from "./memory.js";
+import { formatMemory, MemoryScope } from "./memory.js";
+import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
+import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
+import { proposeMemoryDraft, listDrafts, formatDraftReview, applyDraft, rejectDraft } from "./memory-draft.js";
+import { runDream, listDreams, showDream, applyDream, rejectDream } from "./memory-dream.js";
 import { McpConnectionManager } from "./mcp/connection-manager.js";
 import { ensureMagiHome, getMagiPaths, getRuntimeSettings } from "./paths.js";
 import { formatAgentInstructions, loadAgentInstructions } from "./rules/agents-loader.js";
@@ -412,7 +416,66 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     const paths = getMagiPaths(env);
     ensureMagiHome(paths);
     loadConfig(paths, env);
+    const config = loadConfig(paths, env);
     const subcommand = parsed.rest[0] ?? "view";
+    const rootInput = { appRoot: paths.root, root: config.memory.root };
+    if (subcommand === "init") {
+      return { exitCode: 0, stdout: `Memory initialized: ${initMemory(rootInput)}\n`, stderr: "" };
+    }
+    if (subcommand === "list") {
+      const files = listMemoryFiles(rootInput);
+      return { exitCode: 0, stdout: `${files.map((file) => `${file.path}\t${file.size}`).join("\n") || "No Memory files"}\n`, stderr: "" };
+    }
+    if (subcommand === "show") {
+      const target = parsed.rest[1];
+      if (!target) throw new MagiUsageError("magi memory show requires a path");
+      return { exitCode: 0, stdout: readMemoryFile({ ...rootInput, filePath: target }), stderr: "" };
+    }
+    if (subcommand === "search") {
+      const query = parsed.rest.slice(1).join(" ");
+      if (!query.trim()) {
+        throw new MagiUsageError("magi memory search requires a query");
+      }
+      const sessionId = parsed.resumeSessionId ?? parsed.sessionId;
+      const hits = retrieveRelevantMemory({ ...rootInput, query, maxResults: config.memory.maxResults, sessionId });
+      return { exitCode: 0, stdout: `${formatMemoryContext(hits) || "No matching Memory"}\n`, stderr: "" };
+    }
+    if (subcommand === "drafts") {
+      const drafts = listDrafts(rootInput);
+      return { exitCode: 0, stdout: `${drafts.map((draft) => `${draft.id}\t${draft.status}\t${draft.targetFile}`).join("\n") || "No Memory Drafts"}\n`, stderr: "" };
+    }
+    if (subcommand === "draft") {
+      const action = parsed.rest[1];
+      const id = parsed.rest[2];
+      if (!action || !id) throw new MagiUsageError("magi memory draft <show|apply|reject> <id>");
+      if (action === "show") return { exitCode: 0, stdout: `${formatDraftReview({ ...rootInput, id })}\n`, stderr: "" };
+      if (action === "apply") return { exitCode: 0, stdout: `Applied Memory Draft: ${applyDraft({ ...rootInput, id }).id}\n`, stderr: "" };
+      if (action === "reject") return { exitCode: 0, stdout: `Rejected Memory Draft: ${rejectDraft({ ...rootInput, id }).id}\n`, stderr: "" };
+      throw new MagiUsageError(`Unknown memory draft action: ${action}`);
+    }
+    if (subcommand === "dream") {
+      const action = parsed.rest[1];
+      const id = parsed.rest[2];
+      if (!action) {
+        const dream = runDream(rootInput);
+        return { exitCode: 0, stdout: `Experimental Dream created: ${dream.id}\n${dream.summary}\nDrafts: ${dream.draftIds.length}\n`, stderr: "" };
+      }
+      if (!id) throw new MagiUsageError("magi memory dream <show|apply|reject> <id>");
+      if (action === "show") return { exitCode: 0, stdout: `${JSON.stringify(showDream({ ...rootInput, id }), null, 2)}\n`, stderr: "" };
+      if (action === "apply") {
+        const dream = applyDream({ ...rootInput, id, applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId }) });
+        return { exitCode: 0, stdout: `Applied Dream: ${dream.id}\n`, stderr: "" };
+      }
+      if (action === "reject") {
+        const dream = rejectDream({ ...rootInput, id, rejectDraft: (draftId) => rejectDraft({ ...rootInput, id: draftId }) });
+        return { exitCode: 0, stdout: `Rejected Dream: ${dream.id}\n`, stderr: "" };
+      }
+      throw new MagiUsageError(`Unknown memory dream action: ${action}`);
+    }
+    if (subcommand === "dreams") {
+      const dreams = listDreams(rootInput);
+      return { exitCode: 0, stdout: `${dreams.map((dream) => `${dream.id}\t${dream.status}\toperations=${dream.operationCount}\tdrafts=${dream.draftCount}`).join("\n") || "No experimental Dream runs"}\n`, stderr: "" };
+    }
     if (subcommand === "view") {
       const scope = readMemoryScope(parsed.rest[1]);
       const sessionId = parsed.resumeSessionId ?? parsed.sessionId;
@@ -421,45 +484,25 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       }
       return { exitCode: 0, stdout: formatMemory({ paths, cwd, scope, sessionId }), stderr: "" };
     }
-    if (subcommand === "search") {
-      const query = parsed.rest.slice(1).join(" ");
-      if (!query.trim()) {
-        throw new MagiUsageError("magi memory search requires a query");
-      }
-      const sessionId = parsed.resumeSessionId ?? parsed.sessionId;
-      const results = searchMemory({ paths, cwd, sessionId, query });
-      return { exitCode: 0, stdout: `${formatMemorySearchResults(results) || "No matching memory"}\n`, stderr: "" };
-    }
     if (subcommand === "append") {
       const scope = readMemoryScope(parsed.rest[1]);
       const text = parsed.rest.slice(2).join(" ");
       if (!text.trim()) {
         throw new MagiUsageError("magi memory append <user|project|session> requires text");
       }
-      const store = SessionStore.open(paths);
-      try {
-        const sessionId = parsed.resumeSessionId ?? parsed.sessionId ?? store.createSession({
-          title: `memory append ${scope}`,
-          cwd,
-          metadata: { command: "memory append", scope }
-        });
-        const result = appendMemory({ paths, scope, cwd, text, store, sessionId, detailed: true });
-        const status = result.appended
-          ? `Appended ${scope} memory`
-          : result.duplicate ? `Skipped duplicate ${scope} memory` : `Skipped conflicting ${scope} memory`;
-        return {
-          exitCode: 0,
-          stdout: [
-            `${status}: ${result.file}`,
-            `sessionId: ${sessionId}`,
-            result.conflicts.length > 0 ? `conflicts: ${result.conflicts.length}` : undefined,
-            ""
-          ].filter((line): line is string => Boolean(line)).join("\n"),
-          stderr: ""
-        };
-      } finally {
-        store.close();
-      }
+      const sessionId = parsed.resumeSessionId ?? parsed.sessionId;
+      const draft = proposeMemoryDraft({
+        ...rootInput,
+        targetFile: memoryScopeTargetFile(scope),
+        content: text,
+        reason: `CLI memory append proposed ${scope} Memory`,
+        sourceSession: sessionId
+      });
+      return {
+        exitCode: 0,
+        stdout: `Created Memory Draft: ${draft.id} -> ${draft.targetFile}\nApply it with: magi memory draft apply ${draft.id}\n`,
+        stderr: ""
+      };
     }
     throw new MagiUsageError(`Unknown memory command: ${subcommand}`);
   }
@@ -1563,6 +1606,12 @@ function readMemoryScope(value: string | undefined): MemoryScope {
     return "project";
   }
   throw new MagiUsageError("memory scope must be user, project, or session");
+}
+
+function memoryScopeTargetFile(scope: MemoryScope): string {
+  if (scope === "user") return "user.md";
+  if (scope === "session") return "sessions/README.md";
+  return "projects/default.md";
 }
 
 function waitForShutdown(): Promise<void> {

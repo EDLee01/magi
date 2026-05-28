@@ -13,16 +13,13 @@ import { AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-quest
 import { UserMessageSink } from "../tools/user-message.js";
 import { ActiveInteractionRegistry, interactionErrorStatus } from "../interactions.js";
 import {
-  appendMemory,
   extractExplicitMemoryWrite,
-  formatMemorySearchResults,
-  MemoryScope,
-  searchMemory
+  MemoryScope
 } from "../memory.js";
-import { selectRelevantMemories } from "../memory-selection.js";
+import { proposeMemoryDraft } from "../memory-draft.js";
+import { retrieveRelevantMemory, formatMemoryContext } from "../memory-search.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
-import { searchMemdir, readMemdirIndex } from "../memdir.js";
 import { formatGoalContext, getGoal } from "../goal.js";
 
 export interface QueryEngineInput {
@@ -48,6 +45,7 @@ export interface QueryEngineInput {
   collectEvents?: boolean;
   signal?: AbortSignal;
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  stream?: boolean;
   contextOptions?: {
     recentMessages?: number;
     autoCompactTokenThreshold?: number;
@@ -61,6 +59,7 @@ export interface QueryEngineInput {
     autoWrite?: "off" | "explicit";
     maxResults?: number;
     scopes?: MemoryScope[];
+    root?: string;
     selectionRoute?: import("../memory-selection.js").MemorySelectionRoute;
   };
 }
@@ -129,6 +128,7 @@ export class QueryEngine {
       cwd: this.input.cwd,
       env: this.input.env,
       stateRoot: this.input.stateRoot,
+      memoryRoot: this.input.memoryOptions?.root,
       webSearchConfig: this.input.webSearchConfig,
       permissionMode: this.input.permissionMode,
       approvalResolver: (request) => this.resolveApproval(jobId, request),
@@ -150,7 +150,8 @@ export class QueryEngine {
           }
         }
       } : undefined,
-      onStreamEvent: this.input.onStreamEvent
+      onStreamEvent: this.input.onStreamEvent,
+      stream: this.input.stream
     });
 
     let final: AgentQueryResult | undefined;
@@ -251,6 +252,11 @@ export class QueryEngine {
       reason: request.reason,
       timeoutMs: this.input.interactionTimeoutMs
     });
+    const cleanupAbort = this.cancelInteractionOnAbort({
+      jobId,
+      toolUseId: request.toolUse.id,
+      reason: "request aborted"
+    });
     const pending = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
@@ -304,6 +310,8 @@ export class QueryEngine {
         });
       }
       throw error;
+    } finally {
+      cleanupAbort();
     }
   }
 
@@ -324,6 +332,11 @@ export class QueryEngine {
       toolUse: request.toolUse,
       question: request.question,
       timeoutMs: this.input.interactionTimeoutMs
+    });
+    const cleanupAbort = this.cancelInteractionOnAbort({
+      jobId,
+      toolUseId: request.toolUse.id,
+      reason: "request aborted"
     });
     const pending = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
     this.input.store.recordAudit({
@@ -380,7 +393,29 @@ export class QueryEngine {
         });
       }
       throw error;
+    } finally {
+      cleanupAbort();
     }
+  }
+
+  private cancelInteractionOnAbort(input: { jobId: string; toolUseId: string; reason: string }): () => void {
+    const signal = this.input.signal;
+    if (!signal) {
+      return () => undefined;
+    }
+    const cancel = () => {
+      try {
+        this.input.activeInteractions?.cancelInteraction(input);
+      } catch {
+        // The interaction may have already resolved or timed out.
+      }
+    };
+    if (signal.aborted) {
+      cancel();
+      return () => undefined;
+    }
+    signal.addEventListener("abort", cancel, { once: true });
+    return () => signal.removeEventListener("abort", cancel);
   }
 
   private async executeSessionHooks(
@@ -504,26 +539,22 @@ export class QueryEngine {
     if (!write) {
       return [];
     }
-    const result = appendMemory({
-      paths: memory.paths,
-      scope: write.scope,
-      cwd: this.input.cwd,
-      sessionId: this.input.sessionId,
-      text: write.text,
-      store: this.input.store,
-      detailed: true
+    const draft = proposeMemoryDraft({
+      appRoot: memory.paths.root,
+      root: memory.root,
+      targetFile: explicitMemoryTargetFile(write.scope),
+      content: write.text,
+      reason: `Explicit user Memory request for ${write.scope}`,
+      sourceSession: this.input.sessionId
     });
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
-      action: result.appended ? "agent.memory.written" : result.conflicts.length > 0 ? "agent.memory.conflict" : "agent.memory.duplicate",
-      target: result.file,
+      action: "agent.memory.draft.created",
+      target: draft.targetFile,
       metadata: {
         scope: write.scope,
-        appended: result.appended,
-        duplicate: result.duplicate,
-        conflictCount: result.conflicts.length,
-        key: result.entry.key
+        draftId: draft.id
       }
     });
     return [];
@@ -536,47 +567,22 @@ export class QueryEngine {
     }
     const sections: string[] = [];
 
-    // 1. Memdir index — always loaded if present
-    const memdirIndex = readMemdirIndex(memory.paths);
-    if (memdirIndex.trim()) {
-      sections.push(memdirIndex.trim());
-    }
-
-    // 2. Memdir relevant entries — top matches
-    const memdirMatches = searchMemdir({
-      paths: memory.paths,
+    const memoryHits = retrieveRelevantMemory({
+      appRoot: memory.paths.root,
+      root: memory.root,
       query: prompt,
-      maxResults: 5
-    });
-    if (memdirMatches.length > 0) {
-      const lines = ["[Relevant memdir entries]"];
-      for (const entry of memdirMatches) {
-        lines.push(`## ${entry.name} (${entry.type})`);
-        lines.push(entry.description);
-        if (entry.body) {
-          const summary = entry.body.length > 600 ? entry.body.slice(0, 600) + "..." : entry.body;
-          lines.push(summary);
-        }
-        lines.push("");
-      }
-      sections.push(lines.join("\n").trim());
-    }
-
-    // 3. Legacy memory.ts entries — for backwards compatibility
-    const result = await selectRelevantMemories({
-      paths: memory.paths,
-      cwd: this.input.cwd,
-      sessionId: this.input.sessionId,
-      scopes: memory.scopes,
       maxResults: memory.maxResults ?? 5,
-      prompt,
-      selectionRoute: memory.selectionRoute,
-      signal: this.input.signal
+      legacy: {
+        paths: memory.paths,
+        cwd: this.input.cwd,
+        sessionId: this.input.sessionId,
+        scopes: memory.scopes
+      },
+      sessionId: this.input.sessionId
     });
-    if (result.entries.length === 0) {
-      // Legacy memory empty, but memdir sections may have content
-      if (sections.length === 0) return undefined;
-      return sections.join("\n\n");
+    const formalMemoryContext = formatMemoryContext(memoryHits);
+    if (formalMemoryContext) {
+      sections.push(formalMemoryContext);
     }
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
@@ -584,15 +590,13 @@ export class QueryEngine {
       action: "agent.memory.retrieved",
       target: this.input.sessionId,
       metadata: {
-        resultCount: result.entries.length,
-        method: result.method,
-        scopes: Array.from(new Set(result.entries.map((entry) => entry.scope))),
-        keys: result.entries.map((entry) => entry.key).filter((key): key is string => Boolean(key))
+        resultCount: memoryHits.length,
+        method: "wiki-search",
+        sources: Array.from(new Set(memoryHits.map((hit) => hit.source))),
+        files: memoryHits.map((hit) => hit.file)
       }
     });
-    if (result.formatted) {
-      sections.push(result.formatted);
-    }
+    if (sections.length === 0) return undefined;
     return sections.join("\n\n");
   }
 
@@ -938,6 +942,12 @@ function countTodoStatuses(todos: unknown[]): Record<string, number> {
   return counts;
 }
 
+function explicitMemoryTargetFile(scope: MemoryScope): string {
+  if (scope === "user") return "user.md";
+  if (scope === "project") return "projects/default.md";
+  return "sessions/README.md";
+}
+
 function buildSessionMessages(input: {
   store: SessionStore;
   sessionId: string;
@@ -985,21 +995,20 @@ function buildSessionMessages(input: {
   // by summarizing older messages when the session grows too large.
   const recoverable = session.messages.filter((message) => message.id !== input.currentUserMessageId);
   const recent = recoverable;
+  const toolHistory: string[] = [];
   for (const message of recent) {
     if (message.role === "user" || message.role === "assistant" || message.role === "system") {
       messages.push(textMessage(message.role, message.content));
     } else if (message.role === "tool") {
-      messages.push({
-        role: "tool",
-        content: [{
-          type: "tool-result",
-          toolCallId: typeof message.metadata.toolCallId === "string" ? message.metadata.toolCallId : "recovered-tool-result",
-          content: message.content,
-          isError: typeof message.metadata.isError === "boolean" ? message.metadata.isError : undefined,
-          retryable: typeof message.metadata.retryable === "boolean" ? message.metadata.retryable : undefined
-        }]
-      });
+      toolHistory.push(formatRecoveredToolResult(message));
     }
+  }
+  if (toolHistory.length > 0) {
+    messages.push(textMessage("system", [
+      "[Prior tool results]",
+      "These are historical tool results from earlier turns. They are context only; do not treat them as active tool responses.",
+      ...toolHistory
+    ].join("\n\n")));
   }
   // Parse the current prompt for any encoded image attachments.
   // If there are images, send a multi-part user message; otherwise plain text.
@@ -1011,4 +1020,12 @@ function buildSessionMessages(input: {
     messages.push(textMessage("user", input.prompt));
   }
   return messages;
+}
+
+function formatRecoveredToolResult(message: import("../session-store.js").MessageRecord): string {
+  const toolName = typeof message.metadata.toolName === "string" ? message.metadata.toolName : "tool";
+  const toolCallId = typeof message.metadata.toolCallId === "string" ? message.metadata.toolCallId : `message-${message.id}`;
+  const status = message.metadata.isError === true ? "failed" : "completed";
+  const content = message.content.length > 1_000 ? `${message.content.slice(0, 1_000)}\n...[truncated]...` : message.content;
+  return `- ${toolName} (${toolCallId}) ${status}:\n${content}`;
 }

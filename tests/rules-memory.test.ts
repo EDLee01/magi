@@ -14,9 +14,13 @@ import {
   searchMemory,
   sessionMemoryFile
 } from "../src/memory.js";
+import { appendMemoryFile } from "../src/memory-files.js";
+import { retrieveRelevantMemory } from "../src/memory-search.js";
+import { writeMemdirEntry } from "../src/memdir.js";
 import { getMagiPaths } from "../src/paths.js";
 import { loadAgentInstructions } from "../src/rules/agents-loader.js";
 import { SessionStore } from "../src/session-store.js";
+import { listDrafts, showDraft } from "../src/memory-draft.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let workspace: string | undefined;
@@ -85,17 +89,77 @@ describe("AGENTS rules and memory", () => {
     }
   });
 
-  it("supports memory append and view through CLI", async () => {
+  it("proposes CLI memory append as a draft", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
 
     const append = await runCli(["memory", "append", "project", "cli fact"], temp.env, workspace);
     expect(append.exitCode).toBe(0);
-    const view = await runCli(["memory", "view", "project"], temp.env, workspace);
-    expect(view.stdout).toContain("cli fact");
+    expect(append.stdout).toContain("Created Memory Draft");
 
-    const file = memoryFile(getMagiPaths(temp.env), "project", workspace);
-    expect(readFileSync(file, "utf8")).toContain("cli fact");
+    const paths = getMagiPaths(temp.env);
+    const drafts = listDrafts({ appRoot: paths.root });
+    expect(drafts).toHaveLength(1);
+    const draft = showDraft({ appRoot: paths.root, id: drafts[0].id });
+    expect(draft).toMatchObject({
+      status: "pending",
+      targetFile: "projects/default.md",
+      content: "cli fact"
+    });
+
+    const view = await runCli(["memory", "show", "projects/default.md"], temp.env, workspace);
+    expect(view.stdout).not.toContain("cli fact");
+
+    const shown = await runCli(["memory", "draft", "show", draft.id], temp.env, workspace);
+    expect(shown.stdout).toContain(`Memory Draft: ${draft.id}`);
+    expect(shown.stdout).toContain("Preview:");
+    expect(shown.stdout).toContain("cli fact");
+  });
+
+  it("rejects memory drafts that look like secrets", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+
+    const result = await runCli(["memory", "append", "project", "api_key: sk-abc123456789012345"], temp.env, workspace);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("Memory Draft rejected");
+  });
+
+  it("retrieves wiki, legacy, and memdir memory through one ranked path", () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+
+    appendMemoryFile({
+      appRoot: paths.root,
+      filePath: "projects/default.md",
+      content: "api wiki fact: use explicit routes"
+    });
+    appendMemory({ paths, scope: "session", cwd: workspace, sessionId: "s-1", text: "api legacy fact: event streaming" });
+    writeMemdirEntry({
+      paths,
+      type: "project",
+      name: "API reference",
+      description: "api memdir fact",
+      body: "routing reference"
+    });
+
+    const hits = retrieveRelevantMemory({
+      appRoot: paths.root,
+      query: "api routes streaming",
+      maxResults: 6,
+      legacy: {
+        paths,
+        cwd: workspace,
+        sessionId: "s-1",
+        scopes: ["session"]
+      },
+      audit: false
+    });
+
+    expect(hits.map((hit) => hit.source)).toEqual(expect.arrayContaining(["memory", "legacy", "memdir"]));
+    expect(hits.map((hit) => hit.file)).toEqual(expect.arrayContaining(["projects/default.md", "legacy/session"]));
   });
 
   it("searches layered memory with session and project relevance", () => {
