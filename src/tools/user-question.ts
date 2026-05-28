@@ -9,6 +9,7 @@ export interface AskUserQuestionOption {
 export interface AskUserQuestionItem {
   question: string;
   header?: string;
+  preview?: string;
   options: AskUserQuestionOption[];
   multiSelect?: boolean;
 }
@@ -44,6 +45,7 @@ export const ASK_USER_QUESTION_SCHEMA = {
         properties: {
           header: { type: "string" },
           question: { type: "string" },
+          preview: { type: "string" },
           options: {
             type: "array",
             minItems: 2,
@@ -85,6 +87,7 @@ export function parseAskUserQuestionInput(input: Record<string, unknown>): AskUs
     }
     const question = readNonEmptyString(rawQuestion.question, `questions[${questionIndex}].question`);
     const header = readOptionalString(rawQuestion.header, `questions[${questionIndex}].header`);
+    const preview = readOptionalString(rawQuestion.preview, `questions[${questionIndex}].preview`);
     const rawOptions = rawQuestion.options;
     if (!Array.isArray(rawOptions)) {
       throw new Error(`AskUserQuestion questions[${questionIndex}].options must be an array`);
@@ -109,6 +112,7 @@ export function parseAskUserQuestionInput(input: Record<string, unknown>): AskUs
     return {
       question,
       header,
+      preview,
       options,
       multiSelect
     };
@@ -198,6 +202,7 @@ export function formatAskUserQuestionForTerminal(
   return [
     `Question ${questionIndex + 1}/${request.questions.length}`,
     question.header,
+    question.preview,
     question.question,
     ...question.options.map((option, index) => {
       const description = option.description ? ` - ${option.description}` : "";

@@ -1283,6 +1283,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
                 {
                   question: "Do you approve this plan and want me to proceed with implementation?",
                   header: "Plan review",
+                  preview: `Implementation plan:\n\n${parsed.plan}`,
                   options: [
                     { label: "Yes, proceed", description: "Approve the plan and start implementing" },
                     { label: "No, revise", description: "I want to give feedback or change the approach" }

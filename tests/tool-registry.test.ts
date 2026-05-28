@@ -718,6 +718,36 @@ describe("tool registry", () => {
     expect(result.content).toContain("\"selectedLabels\"");
   });
 
+  it("shows ExitPlanMode plans in the approval question before selection", async () => {
+    const plan = "1. Inspect the current plan UI\n2. Show this plan before approval\n3. Verify with tests";
+    const result = await executeRegisteredTool({
+      cwd: process.cwd(),
+      toolUse: {
+        type: "tool-use",
+        id: "exit-plan-1",
+        name: "ExitPlanMode",
+        input: { plan }
+      },
+      userQuestionResolver: ({ toolUse, question }) => {
+        expect(toolUse.id).toBe("exit-plan-1");
+        expect(question.questions[0].header).toBe("Plan review");
+        expect(question.questions[0].preview).toContain("Implementation plan:");
+        expect(question.questions[0].preview).toContain(plan);
+        return {
+          answers: [{
+            question: question.questions[0].question,
+            selectedLabels: ["Yes, proceed"],
+            selectedOptions: [question.questions[0].options[0]]
+          }]
+        };
+      }
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("Plan approved. Proceeding with implementation.");
+    expect(result.content).toContain(plan);
+  });
+
   it("rejects invalid AskUserQuestion shapes and answers", async () => {
     const invalidQuestion = await executeRegisteredTool({
       cwd: process.cwd(),

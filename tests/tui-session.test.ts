@@ -353,6 +353,7 @@ describe("TUI, slash commands, and session resume", () => {
       const question = {
         questions: [{
           question: "Choose lane",
+          preview: "Review this rollout plan before choosing.",
           options: [
             { label: "canary", description: "Small rollout" },
             { label: "stable", description: "Broad rollout" }
@@ -411,6 +412,7 @@ describe("TUI, slash commands, and session resume", () => {
 
       expect(stripAnsi(output.join(""))).toContain("[question] waiting for answer (1) (ask-terminal)");
       expect(output.join("")).toContain("Choose lane");
+      expect(output.join("")).toContain("Review this rollout plan before choosing.");
       expect(prompts).toEqual(["? "]);
     } finally {
       interactions.close();

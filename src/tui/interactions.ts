@@ -218,6 +218,7 @@ function readQuestionMetadata(value: unknown): AskUserQuestionRequest | undefine
     return {
       question: rawQuestion.question,
       header: typeof rawQuestion.header === "string" ? rawQuestion.header : undefined,
+      preview: typeof rawQuestion.preview === "string" ? rawQuestion.preview : undefined,
       options: options as AskUserQuestionRequest["questions"][number]["options"],
       multiSelect: typeof rawQuestion.multiSelect === "boolean" ? rawQuestion.multiSelect : undefined
     };
