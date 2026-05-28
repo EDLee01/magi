@@ -31,7 +31,7 @@ import {
 } from "./git.js";
 import { executeLspRequest, LSP_SCHEMA, parseLspRequest } from "./lsp.js";
 import { formatSearchMatches, globWorkspace, searchWorkspace } from "./search.js";
-import { runShellCommand } from "./shell.js";
+import { isReadOnlyShellCommand, runShellCommand } from "./shell.js";
 import { formatMonitorResult, getMonitorData, MonitorInputSchema, parseMonitorInput } from "./monitor.js";
 import { executeSleep, parseSleepInput, SleepInputSchema } from "./sleep.js";
 import { executeFileCopy, formatFileCopyResult, FileCopyInputSchema, parseFileCopyInput } from "./file-copy.js";
@@ -701,7 +701,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         result.stderr ? `stderr:\n${result.stderr.trimEnd()}` : undefined
       ].filter((line): line is string => Boolean(line)).join("\n");
     },
-    isReadOnly: () => false,
+    isReadOnly: (input) => typeof input.command === "string" && isReadOnlyShellCommand(input.command),
     isDestructive: () => false,
     isConcurrencySafe: () => false
   },

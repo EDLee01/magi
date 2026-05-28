@@ -78,6 +78,107 @@ export function isDangerousShellCommand(command: string): boolean {
   ].some((pattern) => pattern.test(normalized));
 }
 
+export function isReadOnlyShellCommand(command: string): boolean {
+  const trimmed = command.trim();
+  if (!trimmed || hasShellControlOperator(trimmed) || /[`$<>|;&]/.test(trimmed)) {
+    return false;
+  }
+  const parts = trimmed.split(/\s+/);
+  const commandName = parts[0];
+  const args = parts.slice(1);
+  switch (commandName) {
+    case "pwd":
+      return args.length === 0 || args.every(isReadOnlyFlag);
+    case "ls":
+      return args.every(isReadOnlyFlagOrPath);
+    case "cat":
+      return args.length > 0 && args.every(isReadOnlyFlagOrPath);
+    case "head":
+    case "wc":
+      return args.length > 0 && args.every(isReadOnlyFlagOrPath);
+    case "tail":
+      return args.length > 0 && !args.some(isTailFollowFlag) && args.every(isReadOnlyFlagOrPath);
+    case "sed":
+      return isReadOnlySedArgs(args);
+    case "git":
+      return isReadOnlyGitArgs(args);
+    default:
+      return false;
+  }
+}
+
+function hasShellControlOperator(command: string): boolean {
+  return /\s(?:&&|\|\||;)\s/.test(command) || /\n/.test(command);
+}
+
+function isReadOnlyFlag(value: string): boolean {
+  return /^-[A-Za-z0-9-]+$/.test(value);
+}
+
+function isReadOnlyFlagOrPath(value: string): boolean {
+  if (isReadOnlyFlag(value)) {
+    return true;
+  }
+  if (value === ".") {
+    return true;
+  }
+  if (value.startsWith("/") || value.includes("..")) {
+    return false;
+  }
+  return /^[A-Za-z0-9._/@:+,=-]+$/.test(value);
+}
+
+function isReadOnlySedArgs(args: string[]): boolean {
+  if (args.length < 2) {
+    return false;
+  }
+  if (args.some(isMutatingSedFlag)) {
+    return false;
+  }
+  if (!args.some((arg) => arg === "-n" || /^-.*n/.test(arg))) {
+    return false;
+  }
+  return args.every((arg) => isReadOnlyFlagOrPath(arg) || isReadOnlySedPrintScript(arg));
+}
+
+function isTailFollowFlag(value: string): boolean {
+  return value === "-f"
+    || value === "-F"
+    || value === "--follow"
+    || value.startsWith("--follow=")
+    || /^-[A-Za-z]*[fF][A-Za-z]*$/.test(value);
+}
+
+function isMutatingSedFlag(value: string): boolean {
+  return value === "-i" || value.startsWith("-i") || value === "--in-place" || value.startsWith("--in-place=");
+}
+
+function isReadOnlySedPrintScript(value: string): boolean {
+  const unquoted = value.replace(/^['"]|['"]$/g, "");
+  return /^(\d+|\$)(,(\d+|\$))?p$/.test(unquoted);
+}
+
+function isReadOnlyGitArgs(args: string[]): boolean {
+  if (args.length === 0) {
+    return false;
+  }
+  const [subcommand, ...rest] = args;
+  if (rest.some(isMutatingGitFlag)) {
+    return false;
+  }
+  if (subcommand === "status") {
+    return rest.every(isReadOnlyFlagOrPath);
+  }
+  if (subcommand === "diff" || subcommand === "log" || subcommand === "show") {
+    return rest.every(isReadOnlyFlagOrPath);
+  }
+  return false;
+}
+
+function isMutatingGitFlag(value: string): boolean {
+  return value === "-o" || value === "--output" || value.startsWith("--output=");
+}
+
 export async function runShellCommand(input: {
   cwd: string;
   command: string;

@@ -270,6 +270,7 @@ export class QueryEngine {
         toolUse: request.toolUse,
         reason: request.reason,
         diff: request.diff,
+        cwd: this.input.cwd,
         timeoutAt: pending?.timeoutAt
       }
     });

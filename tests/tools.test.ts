@@ -8,7 +8,7 @@ import { runCli } from "../src/cli.js";
 import { readWorkspaceFile, writeWorkspaceFile } from "../src/tools/files.js";
 import { getGitSummary } from "../src/tools/git.js";
 import { searchWorkspace } from "../src/tools/search.js";
-import { isDangerousShellCommand, isLongRunningCommand, runShellCommand } from "../src/tools/shell.js";
+import { isDangerousShellCommand, isLongRunningCommand, isReadOnlyShellCommand, runShellCommand } from "../src/tools/shell.js";
 import { ToolError } from "../src/tools/errors.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
@@ -80,6 +80,24 @@ describe("local tools", () => {
       cwd: process.cwd(),
       command: "rm -rf /tmp/something"
     })).rejects.toMatchObject({ kind: "approval-required" } satisfies Partial<ToolError>);
+  });
+
+  it("classifies only conservative shell commands as read-only", () => {
+    expect(isReadOnlyShellCommand("pwd")).toBe(true);
+    expect(isReadOnlyShellCommand("ls -la src")).toBe(true);
+    expect(isReadOnlyShellCommand("cat package.json")).toBe(true);
+    expect(isReadOnlyShellCommand("head -n 20 src/tools/shell.ts")).toBe(true);
+    expect(isReadOnlyShellCommand("sed -n '1,20p' src/tools/shell.ts")).toBe(true);
+    expect(isReadOnlyShellCommand("git status --short")).toBe(true);
+    expect(isReadOnlyShellCommand("git diff -- src/tools/shell.ts")).toBe(true);
+
+    expect(isReadOnlyShellCommand("npm test")).toBe(false);
+    expect(isReadOnlyShellCommand("python script.py")).toBe(false);
+    expect(isReadOnlyShellCommand("cat package.json > out.txt")).toBe(false);
+    expect(isReadOnlyShellCommand("ls /tmp")).toBe(false);
+    expect(isReadOnlyShellCommand("tail -f app.log")).toBe(false);
+    expect(isReadOnlyShellCommand("sed -n -i '1,20p' src/tools/shell.ts")).toBe(false);
+    expect(isReadOnlyShellCommand("git diff --output=patch.txt")).toBe(false);
   });
 
   it("runs safe shell commands", async () => {

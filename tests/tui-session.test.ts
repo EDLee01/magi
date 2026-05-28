@@ -25,7 +25,7 @@ import { ActiveInteractionRegistry } from "../src/interactions.js";
 import { getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
 import { MagiConfig } from "../src/config.js";
-import { clearPermissionRules, isToolAlwaysAllowed } from "../src/permissions.js";
+import { addPermissionRule, clearPermissionRules, isToolAlwaysAllowed } from "../src/permissions.js";
 
 function stripAnsi(str: string | undefined): string | undefined {
   if (str === undefined) return undefined;
@@ -460,6 +460,84 @@ describe("TUI, slash commands, and session resume", () => {
       expect(stripAnsi(output.join(""))).toContain("[approval] waiting for ApprovalTestTool (approve-terminal)");
       expect(output.join("")).toContain("Approval required");
       expect(prompts).toEqual(["approve? [y/n/a] "]);
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
+  it("shows Bash approval details without honoring a global always-allow action", async () => {
+    temp = makeTempRoot();
+    clearPermissionRules();
+    addPermissionRule("Bash", "stale global Bash allow");
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const output: string[] = [];
+    const prompts: string[] = [];
+    try {
+      const sessionId = store.createSession({ id: "bash-approval-session", title: "bash approval", cwd: "/repo" });
+      const wait = interactions.waitForApproval({
+        sessionId,
+        jobId: "job-bash-approval",
+        toolUse: {
+          type: "tool-use",
+          id: "bash-approval",
+          name: "Bash",
+          input: { command: "npm test", timeout_ms: 12_000 }
+        },
+        reason: "Bash requires approval"
+      });
+      const writer = startTuiLiveEventWriter({
+        store,
+        sessionId,
+        interactions,
+        rl: {
+          question: async (prompt: string) => {
+            prompts.push(prompt);
+            return "n";
+          }
+        },
+        output: {
+          write: (chunk: unknown) => {
+            output.push(String(chunk));
+            return true;
+          }
+        }
+      });
+
+      store.recordAudit({
+        sessionId,
+        jobId: "job-bash-approval",
+        action: "agent.approval.pending",
+        target: "Bash",
+        metadata: {
+          status: "pending",
+          interactionKind: "approval",
+          toolUseId: "bash-approval",
+          toolUse: {
+            type: "tool-use",
+            id: "bash-approval",
+            name: "Bash",
+            input: { command: "npm test", timeout_ms: 12_000 }
+          },
+          reason: "Bash requires approval",
+          cwd: "/repo"
+        }
+      });
+
+      await expect(wait).resolves.toBe(false);
+      writer.stop();
+
+      const visible = stripAnsi(output.join("")) ?? "";
+      expect(visible).toContain("Approval required");
+      expect(visible).toContain("tool: Bash");
+      expect(visible).toContain("command: npm test");
+      expect(visible).toContain("cwd: /repo");
+      expect(visible).toContain("timeout_ms: 12000");
+      expect(visible).toContain("Choose: [y]es / [n]o");
+      expect(visible).not.toContain("always allow");
+      expect(visible).not.toContain("Always allow");
+      expect(prompts).toEqual(["approve? [y/n] "]);
     } finally {
       interactions.close();
       store.close();

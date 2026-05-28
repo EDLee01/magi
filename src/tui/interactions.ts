@@ -80,7 +80,7 @@ export async function handleTuiPendingInteraction(input: {
     if (kind === "approval") {
       const toolName = input.event.target ?? "unknown";
       // Check persistent permission rules
-      if (isToolAlwaysAllowed(toolName)) {
+      if (toolName !== "Bash" && isToolAlwaysAllowed(toolName)) {
         input.interactions.resolveApproval({
           jobId: input.event.jobId,
           toolUseId,
@@ -147,10 +147,19 @@ async function askTerminalApproval(input: {
   const toolName = input.event.target ?? "unknown";
   const reason = readString(input.event.metadata.reason);
   const diff = readString(input.event.metadata.diff);
+  const toolUse = readRecord(input.event.metadata.toolUse);
+  const toolInput = readRecord(toolUse?.input);
+  const command = toolName === "Bash" ? readString(toolInput?.command) : undefined;
+  const timeoutMs = toolName === "Bash" ? readNumber(toolInput?.timeout_ms) : undefined;
+  const cwd = toolName === "Bash" ? readString(input.event.metadata.cwd) ?? process.cwd() : undefined;
+  const allowAlways = toolName !== "Bash";
   const lines: string[] = [
     "Approval required",
     `tool: ${toolName}`,
     `toolUseId: ${toolUseId}`,
+    command ? `command: ${command}` : undefined,
+    cwd ? `cwd: ${cwd}` : undefined,
+    timeoutMs !== undefined ? `timeout_ms: ${timeoutMs}` : undefined,
     reason ? `reason: ${reason}` : undefined
   ].filter((line): line is string => Boolean(line));
 
@@ -171,18 +180,19 @@ async function askTerminalApproval(input: {
       items: [
         { label: "Allow", value: "allow", description: `Run ${toolName}` },
         { label: "Deny", value: "deny", description: "Reject this tool call" },
-        { label: "Always allow", value: "always", description: `Persistently allow ${toolName}` }
+        ...(allowAlways ? [{ label: "Always allow", value: "always", description: `Persistently allow ${toolName}` }] : [])
       ],
       emptyMessage: "No matching approval actions",
-      footer: "↑↓ select · y allow · n deny · a always · Enter choose · Esc deny",
-      maxVisibleItems: 3,
+      footer: allowAlways
+        ? "↑↓ select · y allow · n deny · a always · Enter choose · Esc deny"
+        : "↑↓ select · y allow · n deny · Enter choose · Esc deny",
+      maxVisibleItems: allowAlways ? 3 : 2,
       hotkeys: {
         y: "allow",
         Y: "allow",
         n: "deny",
         N: "deny",
-        a: "always",
-        A: "always"
+        ...(allowAlways ? { a: "always", A: "always" } : {})
       },
       cancelValue: "deny"
     });
@@ -194,23 +204,27 @@ async function askTerminalApproval(input: {
     return decision === "allow";
   }
 
-  lines.push("", "Choose: [y]es / [n]o / [a]lways allow this tool");
+  lines.push("", allowAlways ? "Choose: [y]es / [n]o / [a]lways allow this tool" : "Choose: [y]es / [n]o");
   input.output.write(lines.join("\n") + "\n");
 
   while (true) {
-    const raw = (await askReadlineQuestion(input.rl, "approve? [y/n/a] ", input.signal)).trim().toLowerCase();
+    const raw = (await askReadlineQuestion(
+      input.rl,
+      allowAlways ? "approve? [y/n/a] " : "approve? [y/n] ",
+      input.signal
+    )).trim().toLowerCase();
     if (raw === "y" || raw === "yes" || raw === "approve" || raw === "approved" || raw === "allow") {
       return true;
     }
     if (raw === "n" || raw === "no" || raw === "deny" || raw === "denied" || raw === "reject") {
       return false;
     }
-    if (raw === "a" || raw === "always") {
+    if (allowAlways && (raw === "a" || raw === "always")) {
       addPermissionRule(toolName, `Always allow ${toolName}`);
       input.output.write(`\x1b[32m✓ Added persistent rule: always allow "${toolName}"\x1b[39m\n`);
       return true;
     }
-    input.output.write("Enter y/yes, n/no, or a/always.\n");
+    input.output.write(allowAlways ? "Enter y/yes, n/no, or a/always.\n" : "Enter y/yes or n/no.\n");
   }
 }
 
@@ -303,8 +317,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
 function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 export function parseTuiInteractionTimeoutMs(raw: string | undefined): number | undefined {

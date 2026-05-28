@@ -219,6 +219,39 @@ describe("tool registry", () => {
     })).toMatchObject({ decision: "deny" });
   });
 
+  it("allows conservative read-only Bash commands without approving mutating shell commands", () => {
+    const readOnlyBashCall = {
+      type: "tool-use" as const,
+      id: "bash-status",
+      name: "Bash",
+      input: { command: "git status --short" }
+    };
+    const mutatingBashCall = {
+      type: "tool-use" as const,
+      id: "bash-write",
+      name: "Bash",
+      input: { command: "printf hi > out.txt" }
+    };
+    const testBashCall = {
+      type: "tool-use" as const,
+      id: "bash-test",
+      name: "Bash",
+      input: { command: "npm test" }
+    };
+
+    expect(checkToolPermission({ toolUse: readOnlyBashCall, mode: "default" })).toEqual({
+      decision: "allow",
+      reason: "read-only tool"
+    });
+    expect(checkToolPermission({ toolUse: readOnlyBashCall, mode: "plan" })).toEqual({
+      decision: "allow",
+      reason: "read-only tool"
+    });
+    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "default" })).toMatchObject({ decision: "ask" });
+    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "plan" })).toMatchObject({ decision: "deny" });
+    expect(checkToolPermission({ toolUse: testBashCall, mode: "default" })).toMatchObject({ decision: "ask" });
+  });
+
   it("persists large tool output with a preview", () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
     const formatted = formatToolResult({
