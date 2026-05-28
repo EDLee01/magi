@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli } from "../src/cli.js";
 import { getMagiPaths } from "../src/paths.js";
+import { SessionStore } from "../src/session-store.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let temp: TempRoot | undefined;
@@ -178,6 +179,13 @@ describe("CLI entrypoint", () => {
     expect(afterReplacement.stdout).toContain("Goal: ship replacement");
   });
 
+  it("exposes LearningDraft review commands from the CLI", async () => {
+    temp = makeTempRoot();
+    const result = await runCli(["learning", "list"], temp.env, process.cwd());
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("No LearningDrafts.");
+  });
+
   it("injects active goals into resumed model context", async () => {
     temp = makeTempRoot();
     const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
@@ -216,6 +224,92 @@ describe("CLI entrypoint", () => {
     expect(requests[0].messages[0].role).toBe("system");
     expect(requests[0].messages[0].content).toContain("<active_thread_goal>");
     expect(requests[0].messages[0].content).toContain("Objective: finish the migration");
+  });
+
+  it("injects relevant prior sessions into model context before a task", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+      }
+      requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        choices: [{ message: { content: "RECALL OK" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      }));
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(paths.configFile, [
+      "version: 0.1",
+      "providers:",
+      "  main:",
+      "    type: openai",
+      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+      `    baseUrl: ${baseUrl}/v1`,
+      "models:",
+      "  aliases:",
+      "    main: main:gpt-main",
+      "  fallbacks: {}",
+      ""
+    ].join("\n"), "utf8");
+    const store = SessionStore.open(paths);
+    try {
+      const prior = store.createSession({ title: "pixel snake fix", cwd: process.cwd() });
+      store.appendMessage({ sessionId: prior, role: "user", content: "Pixel snake food spawned inside the snake body." });
+      store.appendMessage({ sessionId: prior, role: "assistant", content: "Keep food generation limited to empty grid cells." });
+    } finally {
+      store.close();
+    }
+
+    const result = await runCli(["--model", "main", "-p", "continue the pixel snake food work"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+
+    expect(result.exitCode).toBe(0);
+    expect(requests[0].messages[0].role).toBe("system");
+    expect(requests[0].messages[0].content).toContain("[Relevant Prior Sessions]");
+    expect(requests[0].messages[0].content).toContain("pixel snake fix");
+    expect(requests[0].messages[0].content).toContain("empty grid cells");
+  });
+
+  it("creates a reviewable LearningDraft after an explicit learning task", async () => {
+    temp = makeTempRoot();
+    server = http.createServer(async (request, response) => {
+      for await (const _chunk of request) {
+        // Drain request body.
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        choices: [{ message: { content: "Workflow: run focused tests before broad test suites." } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      }));
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(paths.configFile, [
+      "version: 0.1",
+      "providers:",
+      "  main:",
+      "    type: openai",
+      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+      `    baseUrl: ${baseUrl}/v1`,
+      "models:",
+      "  aliases:",
+      "    main: main:gpt-main",
+      "  fallbacks: {}",
+      ""
+    ].join("\n"), "utf8");
+
+    const result = await runCli(["--model", "main", "-p", "请记住这个工作流：先跑 focused tests，再跑完整测试"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const drafts = await runCli(["learning", "list"], temp.env, process.cwd());
+
+    expect(result.exitCode).toBe(0);
+    expect(drafts.exitCode).toBe(0);
+    expect(drafts.stdout).toContain("learn_");
+    expect(drafts.stdout).toContain("memory");
+    expect(drafts.stdout).toContain("workflows/README.md");
   });
 
   it("lists resume choices when -r has no value", async () => {

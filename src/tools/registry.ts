@@ -65,8 +65,21 @@ import { sshExec } from "../ssh/exec.js";
 import { sshFileRead, sshFileWrite } from "../ssh/file.js";
 import { executeSnip, formatSnipResult, parseSnipInput, SnipInputSchema } from "./snip.js";
 import { executeSkillTool, parseSkillToolInput, SkillToolInputSchema } from "./skill-tool.js";
+import { executeSkillManage, parseSkillManageInput, skillManagePreview, SkillManageInputSchema } from "./skill-manage.js";
+import {
+  executeLearningDraftTool,
+  LearningDraftToolInputSchema,
+  parseLearningDraftToolInput
+} from "./learning-draft-tool.js";
 import { MemdirType } from "../memdir.js";
 import { proposeMemoryDraft } from "../memory-draft.js";
+import { SessionStore } from "../session-store.js";
+import {
+  formatSessionSearchResult,
+  formatSessionWindowResult,
+  searchSessions,
+  sessionWindow
+} from "../session-search.js";
 import { formatTodoWriteResult, parseTodoWriteInput, replaceTodoList, TodoWriteInputSchema } from "./todo.js";
 import { executeToolSearch, parseToolSearchInput, ToolSearchInputSchema } from "./tool-search.js";
 import {
@@ -350,6 +363,15 @@ export async function executeRegisteredTool(input: {
         permission.diff = createUnifiedDiff(resolved.relativePath, before, after);
       } catch {
         // Diff preview is best-effort
+      }
+    }
+    if (permission.decision === "ask" && input.toolUse.name === "SkillManage") {
+      const appRoot = context.stateRoot ? path.dirname(context.stateRoot) : undefined;
+      if (appRoot) {
+        permission.diff = skillManagePreview({
+          request: parseSkillManageInput(input.toolUse.input),
+          skillsRoot: path.join(appRoot, "skills")
+        });
       }
     }
     const approvalPermission = permission.decision === "ask" ? permission : undefined;
@@ -1315,6 +1337,87 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       request: parseSkillToolInput(input),
       skillsRoot: requireSkillsRoot(context)
     }),
+    isReadOnly: () => true,
+    isDestructive: () => false,
+    isConcurrencySafe: () => true
+  },
+  {
+    name: "SkillManage",
+    description: "Create, patch, or write files inside the Magi skills directory with path-limited safety checks. Use after LearningDraft review or explicit user approval.",
+    category: "skills",
+    tags: ["skill", "manage", "learning", "workflow", "mutation"],
+    inputSchema: SkillManageInputSchema,
+    call: (input, context) => executeSkillManage({
+      request: parseSkillManageInput(input),
+      skillsRoot: requireSkillsRoot(context)
+    }),
+    isReadOnly: (input) => input.action === "list" || input.action === "show",
+    isDestructive: (input) => input.action === "write_file",
+    isConcurrencySafe: (input) => input.action === "list" || input.action === "show"
+  },
+  {
+    name: "LearningDraft",
+    description: "List, show, propose, apply, or reject reviewable learning drafts. Drafts can target Memory or Skills, but durable writes happen only when applied.",
+    category: "memory",
+    tags: ["learning", "memory", "skill", "draft", "review"],
+    inputSchema: LearningDraftToolInputSchema,
+    call: (input, context) => {
+      const appRoot = requireAppRoot(context, "LearningDraft");
+      return executeLearningDraftTool({
+        request: parseLearningDraftToolInput(input),
+        appRoot,
+        memoryRoot: context.memoryRoot,
+        skillsRoot: path.join(appRoot, "skills"),
+        sourceSession: context.sessionId
+      });
+    },
+    isReadOnly: (input) => input.action === "list" || input.action === "show",
+    isDestructive: (input) => input.action === "apply",
+    isConcurrencySafe: (input) => input.action === "list" || input.action === "show"
+  },
+  {
+    name: "SessionSearch",
+    description: "Search previous Magi sessions, browse recent sessions, or inspect a message window for pre-task recall.",
+    category: "memory",
+    tags: ["session", "history", "recall", "learning", "search"],
+    inputSchema: objectSchema({
+      query: { type: "string", description: "Search title, cwd, user messages, and assistant messages." },
+      session_id: { type: "string", description: "Inspect one session instead of searching." },
+      around_message_id: { type: "number", description: "When session_id is set, show messages around this message id." },
+      limit: { type: "number" },
+      window: { type: "number", description: "Snippets per hit or message radius for session windows." },
+      include_current: { type: "boolean" }
+    }, []),
+    call: (input, context) => {
+      const store = new SessionStore(path.join(requireStateRoot(context, "SessionSearch"), "sessions.sqlite"));
+      try {
+        const sessionId = readOptionalString(input, "session_id");
+        const window = readOptionalNumber(input, "window");
+        if (sessionId) {
+          const result = sessionWindow(store, {
+            sessionId,
+            aroundMessageId: readOptionalNumber(input, "around_message_id"),
+            window
+          });
+          return formatSessionWindowResult(result);
+        }
+        const query = readOptionalString(input, "query");
+        const hits = searchSessions(store, {
+          query,
+          limit: readOptionalNumber(input, "limit"),
+          window,
+          currentSessionId: context.sessionId,
+          includeCurrent: readOptionalBoolean(input, "include_current")
+        });
+        return formatSessionSearchResult({
+          hits,
+          query,
+          mode: query ? "search" : "browse"
+        });
+      } finally {
+        store.close();
+      }
+    },
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -2536,6 +2639,17 @@ function requireConfigFile(context: ToolExecutionContext): string {
     throw new Error("Config requires Magi stateRoot");
   }
   return path.join(path.dirname(context.stateRoot), "config.yaml");
+}
+
+function requireStateRoot(context: ToolExecutionContext, toolName: string): string {
+  if (!context.stateRoot) {
+    throw new Error(`${toolName} requires Magi stateRoot`);
+  }
+  return context.stateRoot;
+}
+
+function requireAppRoot(context: ToolExecutionContext, toolName: string): string {
+  return path.dirname(requireStateRoot(context, toolName));
 }
 
 function requireSkillsRoot(context: ToolExecutionContext): string {

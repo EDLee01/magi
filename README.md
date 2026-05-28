@@ -1,13 +1,14 @@
 # Magi Next
 
 A TypeScript-first AI coding agent for the terminal. Run a smart agent locally,
-control it from your phone over the LAN, dispatch sub-agents to peer machines.
+control it from your phone over the LAN after pairing a device, and dispatch
+sub-agents to peer machines.
 
 ```
 $ magi
-  △   Magi · 60 tools
+  △   Magi · 89 tools
  /✦\  cwd: ~/code/my-project
-▔▔▔   model: sonnet
+▔▔▔   model: openai:gpt-5.5
 
   /help for commands · Ctrl+C to interrupt · /exit to quit
 
@@ -17,11 +18,17 @@ $ magi
 ## Quick start
 
 ```sh
-# Install (once)
-npm install -g @magi/cli
+# Install from this repository
+git clone https://github.com/EDLee01/magi.git
+cd magi
+npm install
+npm run build
+npm link
 
-# Set your provider key
-export ANTHROPIC_AUTH_TOKEN="<your-key>"
+# Set one provider key
+export OPENAI_API_KEY="<your-key>"
+# or: export ANTHROPIC_AUTH_TOKEN="<your-key>"
+# or: export DEEPSEEK_API_KEY="<your-key>"
 
 # Configure (interactive)
 magi init
@@ -38,18 +45,21 @@ and bail out cleanly.
 
 - **Real agent loop with parallel tool calls** — file ops, shell, git, web,
   MCP servers, sub-agents.
-- **Smart routing** — `/model auto` picks haiku for simple questions,
-  sonnet for code, opus for planning. Routes by 10 task kinds.
+- **Smart routing** — `/model auto` picks the configured fast/main/deep
+  aliases by task kind.
 - **Plan mode** — `EnterPlanMode` for non-trivial work, ask for approval
   before implementing.
 - **Cross-machine agents** — discover other Magi daemons via mDNS, dispatch
   sub-agents with `target: 'peer-name'`.
-- **Mobile control** — start a daemon, scan a QR-able URL, run prompts from
-  your phone.
+- **Mobile control** — start a LAN-bound daemon, run `magi pair`, open the
+  printed `/panel` URL on your phone, then enter the Device ID and Token.
 - **Persistent memory** — durable facts written to `~/.magi-next/memdir/`
   auto-load into future sessions.
+- **Learning Loop v1** — recalls relevant prior sessions, memory, and skills
+  before work; creates reviewable LearningDrafts after reusable lessons.
 - **Skills** — bundled `verify` / `debug` / `stuck` / `commit-msg` /
-  `review-pr`. Add your own by dropping a `SKILL.md` file.
+  `review-pr`. Add your own by dropping a `SKILL.md` file or applying an
+  approved skill LearningDraft.
 
 ## Five-minute tutorial
 
@@ -70,6 +80,9 @@ multi-machine, sub-agents). Press `q` to quit early.
 | `magi doctor`             | Show config + paths                       |
 | `magi sessions`           | List recent sessions                      |
 | `magi resume <id>`        | Resume a session                          |
+| `magi memory search <q>`   | Search durable Memory                     |
+| `magi learning list`       | List reviewable LearningDrafts            |
+| `magi learning draft <show|apply|reject> <id>` | Review or resolve a LearningDraft |
 | `magi ps`                 | List recent jobs                          |
 | `magi logs <job-id>`      | Show events for a job                     |
 | `magi daemon start`       | Run control API in background             |
@@ -80,31 +93,54 @@ multi-machine, sub-agents). Press `q` to quit early.
 Inside the TUI, type `/help` to list slash commands. Type `/help <name>` for
 details on one.
 
+## Learning Loop
+
+Magi now performs a local-first recall pass before provider calls. It retrieves
+relevant durable Memory, installed skills, and prior session snippets, then
+injects them as fenced background context. Recalled text is context, not a new
+user instruction.
+
+After explicit learning requests or sufficiently complex tasks, Magi can create
+a pending LearningDraft under `~/.magi-next/state/learning-drafts/`. Drafts can
+target Memory, new skills, skill patches, or `do_not_save`; they do not mutate
+Memory or skills until you apply them.
+
+```sh
+magi learning list
+magi learning draft show <id>
+magi learning draft apply <id>
+magi learning draft reject <id>
+```
+
+Agents can also discover the deferred `SessionSearch`, `LearningDraft`, and
+`SkillManage` tools through `ToolSearch`. `SkillManage` is path-limited to the
+configured skills root and requires normal write approval outside bypass modes.
+
 ## Configuration
 
 `~/.magi-next/config.yaml`:
 
 ```yaml
 providers:
-  anthropic:
-    type: messages-compatible
-    format: anthropic-messages
-    apiKeyEnv: ANTHROPIC_AUTH_TOKEN
-    baseUrl: https://api.anthropic.com
-    defaultModel: claude-sonnet-4-6
+  openai:
+    type: openai
+    apiKeyEnv: OPENAI_API_KEY
+    baseUrl: https://api.openai.com/v1
+    defaultModel: gpt-5.5
 models:
   aliases:
-    fast:   anthropic:claude-haiku-4-5
-    main:   anthropic:claude-sonnet-4-6
-    review: anthropic:claude-sonnet-4-6
-    deep:   anthropic:claude-opus-4-7
+    fast:   openai:gpt-5.5
+    main:   openai:gpt-5.5
+    review: openai:gpt-5.5
+    deep:   openai:gpt-5.5
   router:               # used when alias = "auto"
-    fast:   { family: claude, role: haiku,  contextWindow: 200000, supportsVision: true }
-    main:   { family: claude, role: sonnet, contextWindow: 200000, supportsVision: true }
-    deep:   { family: claude, role: opus,   contextWindow: 200000, supportsVision: true }
+    fast:   { family: gpt, role: haiku,  contextWindow: 200000, supportsVision: true }
+    main:   { family: gpt, role: sonnet, contextWindow: 200000, supportsVision: true }
+    deep:   { family: gpt, role: opus,   contextWindow: 200000, supportsVision: true }
 ```
 
 Run `magi init` to generate a working config and skip the manual yaml.
+It supports OpenAI, Anthropic, and DeepSeek credentials.
 
 ## Cross-machine setup
 
@@ -132,17 +168,25 @@ sub-agents. Multiple targets in the same response run in parallel.
 ## Phone access
 
 ```sh
+# The default daemon bind is 127.0.0.1, which a phone cannot reach.
+magi daemon stop
+MAGI_CONTROL_BIND=0.0.0.0 magi daemon start
+
 magi pair my-phone
-# → prints a URL like http://192.168.1.10:8765/panel?device=...&token=...
+# → prints Device ID, Token, and one or more URLs like:
+#   http://192.168.1.10:8765/panel
 ```
 
-Open that URL on your phone. The web panel is mobile-optimized (touch UI,
-swipeable session list, dark mode).
+Open the printed `/panel` URL on a phone connected to the same LAN, then enter
+the printed Device ID and Token. Tokens are not placed in the URL. The current
+CLI prints URLs and credentials; it does not generate a QR code.
 
 ## Documentation
 
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — common errors and fixes
 - [ARCHITECTURE.md](ARCHITECTURE.md) — concepts and component map
+- [docs/magi-next-learning-loop-v1.html](docs/magi-next-learning-loop-v1.html)
+  — Learning Loop v1 design and shipped scope
 - `magi tutorial` — interactive walkthrough
 
 ## State and isolation
@@ -152,7 +196,9 @@ Everything lives at `~/.magi-next/` by default:
 ```
 ~/.magi-next/
   config.yaml          # provider + model setup
-  state/sessions.sqlite  # persisted sessions, jobs, audit, memory
+  state/sessions.sqlite  # persisted sessions, jobs, audit, usage
+  state/learning-drafts/ # reviewable post-task learning proposals
+  memory/              # formal review-applied Memory files
   memdir/              # typed long-term memory (user/feedback/project/reference)
   skills/<name>/SKILL.md
   logs/                # daemon logs
@@ -177,8 +223,8 @@ Requires Node ≥ 20.
 
 ## Status
 
-Active development. The core (agent loop, routing, MCP, daemon, multi-machine,
-mobile panel) is solid and tested. Beta-quality. We use it daily to build
-itself.
+Active development. The core agent loop, routing, MCP, daemon, multi-machine
+dispatch, and mobile web panel are implemented and covered by tests. Beta
+quality; APIs and UX may still change.
 
 Filing bugs: open a GitHub issue with output of `magi doctor` and `magi --version`.

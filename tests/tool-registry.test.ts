@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import { AddressInfo } from "node:net";
@@ -20,6 +20,7 @@ import {
 import { cronStorePathFromRoot } from "../src/tools/cron.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
+import { SessionStore } from "../src/session-store.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -67,6 +68,9 @@ describe("tool registry", () => {
       "WorkspaceDiagnostics",
       "Config",
       "Skill",
+      "SkillManage",
+      "LearningDraft",
+      "SessionSearch",
       "LSP"
     ]));
     expect(getBuiltinToolRegistry().get("FileRead")?.isConcurrencySafe({})).toBe(true);
@@ -93,15 +97,219 @@ describe("tool registry", () => {
       "Agent",
       "Browser",
       "Config",
+      "LearningDraft",
       "GitBranchCreate",
       "LSP",
-      "Monitor"
+      "Monitor",
+      "SessionSearch",
+      "SkillManage"
     ]));
     expect(core).not.toContain("Agent");
     expect(core).not.toContain("Browser");
     expect(core).not.toContain("Config");
     expect(core).not.toContain("GitBranchCreate");
     expect(new Set([...core, ...deferred]).size).toBe(getBuiltinToolDefinitions().length);
+  });
+
+  it("searches prior sessions with SessionSearch", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    let prior: string;
+    let current: string;
+    try {
+      prior = store.createSession({ title: "pixel snake review", cwd: workspace });
+      store.appendMessage({ sessionId: prior, role: "user", content: "Review the pixel snake canvas collision bug" });
+      store.appendMessage({ sessionId: prior, role: "assistant", content: "The fix was to keep food off the snake body." });
+      current = store.createSession({ title: "current", cwd: workspace });
+      store.appendMessage({ sessionId: current, role: "user", content: "current-only content" });
+    } finally {
+      store.close();
+    }
+
+    const search = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      sessionId: current!,
+      toolUse: {
+        type: "tool-use",
+        id: "session-search",
+        name: "SessionSearch",
+        input: { query: "pixel snake food", limit: 5 }
+      }
+    });
+    expect(search.isError).toBeUndefined();
+    expect(search.content).toContain("pixel snake review");
+    expect(search.content).toContain(prior!);
+    expect(search.content).not.toContain("current-only content");
+
+    const windowResult = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      toolUse: {
+        type: "tool-use",
+        id: "session-window",
+        name: "SessionSearch",
+        input: { session_id: prior!, window: 2 }
+      }
+    });
+    expect(windowResult.content).toContain("The fix was to keep food off the snake body.");
+  });
+
+  it("creates reviewable LearningDrafts and applies memory drafts only on apply", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+
+    const proposed = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      sessionId: "session-1",
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "learning-propose",
+        name: "LearningDraft",
+        input: {
+          action: "propose",
+          kind: "memory",
+          target: "workflows/README.md",
+          content: "## Test workflow\n\nUse rg before broad file reads.",
+          reason: "Stable workflow learned in test",
+          evidence: ["test evidence"],
+          confidence: 0.8
+        }
+      }
+    });
+    expect(proposed.isError).toBeUndefined();
+    const id = /Created LearningDraft: ([^ ]+)/.exec(proposed.content)?.[1];
+    expect(id).toBeTruthy();
+    expect(readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")).not.toContain("Use rg before broad file reads.");
+
+    const show = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      toolUse: {
+        type: "tool-use",
+        id: "learning-show",
+        name: "LearningDraft",
+        input: { action: "show", id }
+      }
+    });
+    expect(show.content).toContain("Stable workflow learned in test");
+
+    const applied = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "learning-apply",
+        name: "LearningDraft",
+        input: { action: "apply", id }
+      }
+    });
+    expect(applied.isError).toBeUndefined();
+    expect(readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")).toContain("Use rg before broad file reads.");
+
+    const skillDraft = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      sessionId: "session-1",
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "learning-skill-propose",
+        name: "LearningDraft",
+        input: {
+          action: "propose",
+          kind: "skill_create",
+          target: "skills/learned-debug/SKILL.md",
+          content: "# Learned Debug\n\nRun focused tests before full suites.",
+          reason: "Reusable skill learned in test"
+        }
+      }
+    });
+    const skillDraftId = /Created LearningDraft: ([^ ]+)/.exec(skillDraft.content)?.[1];
+    expect(skillDraftId).toBeTruthy();
+
+    const skillApplied = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "learning-skill-apply",
+        name: "LearningDraft",
+        input: { action: "apply", id: skillDraftId }
+      }
+    });
+    expect(skillApplied.isError).toBeUndefined();
+    expect(readFileSync(path.join(paths.skillsRoot, "learned-debug", "SKILL.md"), "utf8")).toContain("Run focused tests before full suites.");
+  });
+
+  it("creates and patches skills with SkillManage path limits", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+
+    const created = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "skill-create",
+        name: "SkillManage",
+        input: {
+          action: "create",
+          name: "debug-api",
+          content: "# Debug API\n\nUse logs first.\n"
+        }
+      }
+    });
+    expect(created.isError).toBeUndefined();
+    const skillFile = path.join(paths.skillsRoot, "debug-api", "SKILL.md");
+    expect(readFileSync(skillFile, "utf8")).toContain("Use logs first.");
+
+    const patched = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "skill-patch",
+        name: "SkillManage",
+        input: {
+          action: "patch",
+          name: "debug-api",
+          old_string: "Use logs first.",
+          new_string: "Use request logs and failing tests first."
+        }
+      }
+    });
+    expect(patched.isError).toBeUndefined();
+    expect(readFileSync(skillFile, "utf8")).toContain("Use request logs and failing tests first.");
+
+    const escape = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "skill-escape",
+        name: "SkillManage",
+        input: {
+          action: "write_file",
+          name: "debug-api",
+          file_path: "../outside.md",
+          content: "bad"
+        }
+      }
+    });
+    expect(escape.isError).toBe(true);
+    expect(escape.content).toContain("escapes skill root");
   });
 
   it("edits files with old_string uniqueness checks", async () => {

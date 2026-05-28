@@ -14,6 +14,13 @@ import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { proposeMemoryDraft, listDrafts, formatDraftReview, applyDraft, rejectDraft } from "./memory-draft.js";
 import { runDream, listDreams, showDream, applyDream, rejectDream } from "./memory-dream.js";
+import {
+  applyLearningDraft,
+  formatLearningDraftList,
+  formatLearningDraftReview,
+  listLearningDrafts,
+  rejectLearningDraft
+} from "./learning-draft.js";
 import { McpConnectionManager } from "./mcp/connection-manager.js";
 import { ensureMagiHome, getMagiPaths, getRuntimeSettings } from "./paths.js";
 import { formatAgentInstructions, loadAgentInstructions } from "./rules/agents-loader.js";
@@ -505,6 +512,31 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       };
     }
     throw new MagiUsageError(`Unknown memory command: ${subcommand}`);
+  }
+
+  if (command === "learning" || command === "learn") {
+    const paths = getMagiPaths(env);
+    ensureMagiHome(paths);
+    const config = loadConfig(paths, env);
+    const rootInput = {
+      appRoot: paths.root,
+      memoryRoot: config.memory.root,
+      skillsRoot: paths.skillsRoot
+    };
+    const subcommand = parsed.rest[0] ?? "drafts";
+    if (subcommand === "drafts" || subcommand === "list") {
+      return { exitCode: 0, stdout: `${formatLearningDraftList(listLearningDrafts(rootInput))}\n`, stderr: "" };
+    }
+    if (subcommand === "draft") {
+      const action = parsed.rest[1];
+      const id = parsed.rest[2];
+      if (!action || !id) throw new MagiUsageError("magi learning draft <show|apply|reject> <id>");
+      if (action === "show") return { exitCode: 0, stdout: `${formatLearningDraftReview({ ...rootInput, id })}\n`, stderr: "" };
+      if (action === "apply") return { exitCode: 0, stdout: `Applied LearningDraft: ${applyLearningDraft({ ...rootInput, id }).id}\n`, stderr: "" };
+      if (action === "reject") return { exitCode: 0, stdout: `Rejected LearningDraft: ${rejectLearningDraft({ ...rootInput, id }).id}\n`, stderr: "" };
+      throw new MagiUsageError(`Unknown learning draft action: ${action}`);
+    }
+    throw new MagiUsageError(`Unknown learning command: ${subcommand}`);
   }
 
   if (command === "mcp") {
@@ -1374,6 +1406,8 @@ function helpText(): string {
     "  magi memory view [user|project|session] [--session-id <id>]",
     "  magi memory search <query> [--session-id <id>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
+    "  magi learning list",
+    "  magi learning draft <show|apply|reject> <id>",
     "  magi mcp list [server]",
     "  magi mcp resources <server>",
     "  magi mcp read-resource <server> <uri>",
@@ -1397,7 +1431,7 @@ function knownCommands(): Set<string> {
     "help", "--help", "-h", "--version", "-v", "-p", "--prompt", "--print",
     "doctor", "config", "sessions", "resume", "context", "compact", "rules",
     "goal",
-    "workspace", "memory", "mcp", "plugins", "marketplace", "skills", "agents", "runner",
+    "workspace", "memory", "learning", "learn", "mcp", "plugins", "marketplace", "skills", "agents", "runner",
     "serve", "daemon", "pair", "peers", "ps", "logs", "kill", "init", "tutorial", "-r", "--resume"
   ]);
 }

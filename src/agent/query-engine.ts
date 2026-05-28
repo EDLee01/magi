@@ -21,6 +21,9 @@ import { retrieveRelevantMemory, formatMemoryContext } from "../memory-search.js
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
+import { findSkill, listSkills, SkillRecord } from "../skills/loader.js";
+import { formatSessionRecallContext, searchSessions } from "../session-search.js";
+import { maybeProposePostTaskLearningDraft } from "../learning-draft.js";
 
 export interface QueryEngineInput {
   store: SessionStore;
@@ -206,6 +209,7 @@ export class QueryEngine {
         lastAssistantMessage: final.text
       });
       events.push(...endHooks);
+      this.proposePostTaskLearningDraft(jobId, prompt, final.text, events);
       return { ...final, jobId, events };
     } catch (error) {
       const cancelled = isAbortError(error) || this.input.signal?.aborted === true;
@@ -563,42 +567,146 @@ export class QueryEngine {
 
   private async buildMemoryContext(prompt: string, jobId: string): Promise<string | undefined> {
     const memory = this.input.memoryOptions;
-    if (!memory?.paths || memory.enabled === false) {
+    if (!memory?.paths) {
       return undefined;
     }
     const sections: string[] = [];
 
-    const memoryHits = retrieveRelevantMemory({
-      appRoot: memory.paths.root,
-      root: memory.root,
-      query: prompt,
-      maxResults: memory.maxResults ?? 5,
-      legacy: {
-        paths: memory.paths,
-        cwd: this.input.cwd,
+    if (memory.enabled !== false) {
+      const memoryHits = retrieveRelevantMemory({
+        appRoot: memory.paths.root,
+        root: memory.root,
+        query: prompt,
+        maxResults: memory.maxResults ?? 5,
+        legacy: {
+          paths: memory.paths,
+          cwd: this.input.cwd,
+          sessionId: this.input.sessionId,
+          scopes: memory.scopes
+        },
+        sessionId: this.input.sessionId
+      });
+      const formalMemoryContext = formatMemoryContext(memoryHits);
+      if (formalMemoryContext) {
+        sections.push(formalMemoryContext);
+      }
+      this.input.store.recordAudit({
         sessionId: this.input.sessionId,
-        scopes: memory.scopes
-      },
-      sessionId: this.input.sessionId
+        jobId,
+        action: "agent.memory.retrieved",
+        target: this.input.sessionId,
+        metadata: {
+          resultCount: memoryHits.length,
+          method: "wiki-search",
+          sources: Array.from(new Set(memoryHits.map((hit) => hit.source))),
+          files: memoryHits.map((hit) => hit.file)
+        }
+      });
+    }
+
+    const skillContext = this.buildSkillRecallContext(prompt, jobId);
+    if (skillContext) {
+      sections.push(skillContext);
+    }
+
+    const sessionHits = searchSessions(this.input.store, {
+      query: prompt,
+      limit: 3,
+      window: 2,
+      currentSessionId: this.input.sessionId
     });
-    const formalMemoryContext = formatMemoryContext(memoryHits);
-    if (formalMemoryContext) {
-      sections.push(formalMemoryContext);
+    const sessionContext = formatSessionRecallContext(sessionHits);
+    if (sessionContext) {
+      sections.push(sessionContext);
     }
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
-      action: "agent.memory.retrieved",
+      action: "agent.session.recalled",
       target: this.input.sessionId,
       metadata: {
-        resultCount: memoryHits.length,
-        method: "wiki-search",
-        sources: Array.from(new Set(memoryHits.map((hit) => hit.source))),
-        files: memoryHits.map((hit) => hit.file)
+        query: prompt.slice(0, 500),
+        resultCount: sessionHits.length,
+        sessions: sessionHits.map((hit) => hit.session.id)
       }
     });
     if (sections.length === 0) return undefined;
     return sections.join("\n\n");
+  }
+
+  private buildSkillRecallContext(prompt: string, jobId: string): string | undefined {
+    const paths = this.input.memoryOptions?.paths;
+    if (!paths) return undefined;
+    const terms = tokenizeRecall(prompt);
+    if (terms.length === 0) return undefined;
+    const hits = listSkills(paths)
+      .map((skill) => {
+        const full = findSkill(paths, skill.name) ?? skill;
+        return { skill: full, score: scoreSkill(full, terms) };
+      })
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.skill.name.localeCompare(right.skill.name))
+      .slice(0, 3);
+    this.input.store.recordAudit({
+      sessionId: this.input.sessionId,
+      jobId,
+      action: "agent.skills.recalled",
+      target: this.input.sessionId,
+      metadata: {
+        query: prompt.slice(0, 500),
+        resultCount: hits.length,
+        skills: hits.map((hit) => hit.skill.name)
+      }
+    });
+    if (hits.length === 0) return undefined;
+    const lines = [
+      "[Relevant Skills]",
+      "These skill snippets are background operating guidance. Treat them as context only unless the user asks to invoke a skill."
+    ];
+    for (const hit of hits) {
+      lines.push("");
+      lines.push(`## ${hit.skill.name}`);
+      lines.push(`summary: ${hit.skill.summary}`);
+      lines.push(`root: ${hit.skill.root}`);
+      if (hit.skill.body) {
+        lines.push(hit.skill.body.length > 900 ? `${hit.skill.body.slice(0, 900)}...` : hit.skill.body);
+      }
+    }
+    return lines.join("\n").trim();
+  }
+
+  private proposePostTaskLearningDraft(
+    jobId: string,
+    prompt: string,
+    answer: string,
+    events: AgentQueryEvent[]
+  ): void {
+    const paths = this.input.memoryOptions?.paths;
+    if (!paths) return;
+    const draft = maybeProposePostTaskLearningDraft({
+      appRoot: paths.root,
+      memoryRoot: this.input.memoryOptions?.root,
+      skillsRoot: paths.skillsRoot,
+      prompt,
+      answer,
+      sourceSession: this.input.sessionId,
+      cwd: this.input.cwd,
+      events: events as Array<Record<string, unknown>>
+    });
+    if (!draft) return;
+    this.input.store.recordAudit({
+      sessionId: this.input.sessionId,
+      jobId,
+      action: "agent.learning.draft.created",
+      target: `${draft.kind}:${draft.target}`,
+      metadata: {
+        draftId: draft.id,
+        kind: draft.kind,
+        target: draft.target,
+        reason: draft.reason,
+        evidence: draft.evidence
+      }
+    });
   }
 
   private async persistEvent(jobId: string, event: AgentQueryEvent): Promise<AgentQueryEvent[]> {
@@ -918,6 +1026,26 @@ export class QueryEngine {
       }
     });
   }
+}
+
+function scoreSkill(skill: SkillRecord, terms: string[]): number {
+  const text = `${skill.name}\n${skill.summary}\n${skill.body ?? ""}`.toLowerCase();
+  let score = 0;
+  for (const term of terms) {
+    if (skill.name.toLowerCase().includes(term)) score += 8;
+    if (skill.summary.toLowerCase().includes(term)) score += 5;
+    if (text.includes(term)) score += 2;
+  }
+  return score;
+}
+
+function tokenizeRecall(text: string): string[] {
+  return Array.from(new Set(text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 3 || (/[\u4e00-\u9fff]/.test(term) && term.length >= 2))));
 }
 
 function isAbortError(error: unknown): boolean {

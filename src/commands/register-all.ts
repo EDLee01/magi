@@ -4,6 +4,7 @@ import { command as status } from "./status.js";
 import { command as model } from "./model.js";
 import { command as sessions } from "./sessions.js";
 import { command as memory } from "./memory.js";
+import { command as learning } from "./learning.js";
 import { command as review } from "./review.js";
 import { command as commit } from "./commit.js";
 import { command as diff } from "./diff.js";
@@ -38,6 +39,7 @@ export function registerAllCommands(): void {
   registry.register(model);
   registry.register(sessions);
   registry.register(memory);
+  registry.register(learning);
   registry.register(review);
   registry.register(commit);
   registry.register(diff);
