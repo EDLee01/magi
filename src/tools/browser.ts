@@ -1,4 +1,3 @@
-import { chromium, Browser, Page, ElementHandle } from "playwright";
 import { ToolError } from "./errors.js";
 
 // --- Types ---
@@ -25,31 +24,100 @@ export type BrowserAction =
 
 // --- Singleton browser ---
 
-let browserInstance: Browser | null = null;
-let pageInstance: Page | null = null;
+interface PlaywrightModule {
+  chromium: {
+    launch(options: Record<string, unknown>): Promise<BrowserLike>;
+  };
+}
 
-async function getBrowser(): Promise<Browser> {
+interface BrowserLike {
+  isConnected(): boolean;
+  close(): Promise<void>;
+  newContext(options: Record<string, unknown>): Promise<BrowserContextLike>;
+}
+
+interface BrowserContextLike {
+  newPage(): Promise<PageLike>;
+}
+
+interface PageLike {
+  isClosed(): boolean;
+  close(): Promise<void>;
+  goto(url: string, options?: Record<string, unknown>): Promise<unknown>;
+  waitForTimeout(ms: number): Promise<void>;
+  title(): Promise<string>;
+  url(): string;
+  waitForSelector(selector: string, options?: Record<string, unknown>): Promise<ElementHandleLike | null>;
+  mouse: {
+    click(x: number, y: number): Promise<void>;
+    wheel(x: number, y: number): Promise<void>;
+  };
+  screenshot(options?: Record<string, unknown>): Promise<Buffer>;
+  $(selector: string): Promise<ElementHandleLike | null>;
+  innerText(selector: string): Promise<string>;
+  evaluate(script: string): Promise<unknown>;
+}
+
+interface ElementHandleLike {
+  click(): Promise<void>;
+  fill(value: string): Promise<void>;
+  type(value: string, options?: Record<string, unknown>): Promise<void>;
+  innerText(): Promise<string>;
+}
+
+let browserInstance: BrowserLike | null = null;
+let pageInstance: PageLike | null = null;
+let playwrightModule: PlaywrightModule | undefined;
+
+async function loadPlaywright(): Promise<PlaywrightModule> {
+  if (playwrightModule) {
+    return playwrightModule;
+  }
+  try {
+    const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
+    const loaded = await dynamicImport("playwright");
+    if (!isPlaywrightModule(loaded)) {
+      throw new Error("module did not export chromium.launch");
+    }
+    playwrightModule = loaded;
+    return playwrightModule;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new ToolError(
+      `BrowserAction requires the optional dependency "playwright". Install it in this project to use browser automation. ${detail}`,
+      "command-failed"
+    );
+  }
+}
+
+function isPlaywrightModule(value: unknown): value is PlaywrightModule {
+  return typeof value === "object"
+    && value !== null
+    && "chromium" in value
+    && typeof (value as { chromium?: { launch?: unknown } }).chromium?.launch === "function";
+}
+
+async function getBrowser(): Promise<BrowserLike> {
   if (!browserInstance || !browserInstance.isConnected()) {
+    const { chromium } = await loadPlaywright();
     browserInstance = await chromium.launch({
-      headless: false,         // headed mode — the user can see what magi is doing
+      headless: false,
       args: [
-        "--start-maximized",   // open at full screen
+        "--start-maximized",
         "--no-sandbox"
       ]
     });
-    // Ensure we close the browser on exit
     process.on("exit", () => { browserInstance?.close().catch(() => {}); });
   }
   return browserInstance;
 }
 
-async function getPage(): Promise<Page> {
+async function getPage(): Promise<PageLike> {
   const browser = await getBrowser();
   if (!pageInstance || pageInstance.isClosed()) {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
-      locale: "zh-CN",
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      locale: "zh-CN"
     });
     pageInstance = await context.newPage();
   }
