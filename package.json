@@ -1,6 +1,6 @@
 {
-  "name": "@magi/cli",
-  "version": "0.1.0-alpha.0",
+  "name": "@edwardlee5423/magi",
+  "version": "0.1.0-alpha.2",
   "description": "Magi Next clean-room CLI bootstrap.",
   "type": "module",
   "license": "MIT",
@@ -24,7 +24,7 @@
     "verify": "npm run lint && npm run test && npm run build && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom"
   },
   "dependencies": {
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^12.10.0",
     "ws": "^8.20.1",
     "yaml": "^2.7.0"
   },

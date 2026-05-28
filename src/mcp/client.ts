@@ -1,5 +1,6 @@
 import { McpServerConfig } from "../config.js";
 import { MagiUsageError } from "../errors.js";
+import { VERSION } from "../version.js";
 import { requiresMcpApproval } from "./approval.js";
 import { createMcpTransport, McpTransport } from "./transport.js";
 import {
@@ -41,7 +42,7 @@ export class McpClient {
   async initialize(): Promise<void> {
     await this.request("initialize", {
       protocolVersion: "2024-11-05",
-      clientInfo: { name: "magi-next", version: "0.1.0-alpha.0" },
+      clientInfo: { name: "magi-next", version: VERSION },
       capabilities: {}
     });
   }

@@ -24,6 +24,7 @@ import { cronStorePathFromRoot, takeDueCronJobs } from "../tools/cron.js";
 import { MagiEventView, toEventView } from "../events.js";
 import { StoredAuditRecord } from "../session-store.js";
 import { ToolPermissionMode } from "../agent/tools.js";
+import { VERSION } from "../version.js";
 import {
   AskUserQuestionAnswer,
   AskUserQuestionRequest,
@@ -95,7 +96,7 @@ export async function startControlServer(input: {
         instanceName,
         port: address.port,
         txt: {
-          version: "0.1.0-alpha.0",
+          version: VERSION,
           cwd: input.cwd,
           bind: input.runtime.controlBind
         }
@@ -848,7 +849,7 @@ function matchesEventStreamFilter(
   return true;
 }
 
-function runControlJob(input: {
+async function runControlJob(input: {
   paths: MagiPaths;
   config: MagiConfig;
   store: SessionStore;
@@ -857,22 +858,34 @@ function runControlJob(input: {
   interactions: ActiveInteractionRegistry;
   runningJobs: Map<string, RunningControlJob>;
 }, body: Record<string, unknown>, options: { sessionId?: string; cwd?: string } = {}) {
-  return runHeadlessPrompt({
-    prompt: String(body.prompt),
-    cwd: readOptionalString(body.cwd) ?? options.cwd ?? input.cwd,
-    store: input.store,
-    config: input.config,
-    env: input.env,
-    paths: input.paths,
-    stateRoot: input.paths.stateRoot,
-    modelAlias: readOptionalString(body.model),
-    sessionId: options.sessionId,
-    sessionName: readOptionalString(body.sessionName),
-    persistSession: typeof body.persistSession === "boolean" ? body.persistSession : undefined,
-    collectEvents: body.collectEvents === true,
-    permissionMode: readPermissionMode(body.permissionMode) ?? "default",
-    activeInteractions: input.interactions
-  });
+  try {
+    return await runHeadlessPrompt({
+      prompt: String(body.prompt),
+      cwd: readOptionalString(body.cwd) ?? options.cwd ?? input.cwd,
+      store: input.store,
+      config: input.config,
+      env: input.env,
+      paths: input.paths,
+      stateRoot: input.paths.stateRoot,
+      modelAlias: readOptionalString(body.model),
+      sessionId: options.sessionId,
+      sessionName: readOptionalString(body.sessionName),
+      persistSession: typeof body.persistSession === "boolean" ? body.persistSession : undefined,
+      collectEvents: body.collectEvents === true,
+      permissionMode: readPermissionMode(body.permissionMode) ?? "default",
+      activeInteractions: input.interactions
+    });
+  } catch (error) {
+    if (error instanceof ActiveInteractionCancelledError) {
+      const jobId = findLatestCancelledInteractionJobId(input.interactions) ?? findLatestJobId(input.store);
+      return {
+        sessionId: options.sessionId ?? findJobSessionId(input.store, jobId) ?? "",
+        jobId: jobId ?? "",
+        message: "CONTROL CANCEL DONE"
+      };
+    }
+    throw error;
+  }
 }
 
 function startBackgroundControlJob(input: {
@@ -909,7 +922,8 @@ function startBackgroundControlJob(input: {
     collectEvents: body.collectEvents === true,
     permissionMode: readPermissionMode(body.permissionMode) ?? "default",
     activeInteractions: input.interactions,
-    signal: controller.signal
+    signal: controller.signal,
+    stream: true
   }).finally(() => {
     input.runningJobs.delete(jobId);
   });
@@ -956,10 +970,26 @@ function sendInteractionError(response: ServerResponse, error: unknown): void {
   if (error instanceof ActiveInteractionNotFoundError) {
     return sendJson(response, 404, { error: error.message });
   }
-  if (error instanceof ActiveInteractionStateError || error instanceof ActiveInteractionCancelledError) {
+  if (error instanceof ActiveInteractionStateError) {
     return sendJson(response, 409, { error: error.message });
   }
+  if (error instanceof ActiveInteractionCancelledError) {
+    return sendJson(response, 200, { ok: true, status: "cancelled", error: error.message });
+  }
   return sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+}
+
+function findLatestCancelledInteractionJobId(interactions: ActiveInteractionRegistry): string | undefined {
+  return interactions.listInteractions({ status: "cancelled" })
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.jobId;
+}
+
+function findLatestJobId(store: SessionStore): string | undefined {
+  return store.listJobs(1)[0]?.id;
+}
+
+function findJobSessionId(store: SessionStore, jobId: string | undefined): string | undefined {
+  return jobId ? store.getJob(jobId)?.sessionId : undefined;
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {

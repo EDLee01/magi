@@ -1,3 +1,5 @@
+import { VERSION } from "../version.js";
+
 // Re-export the mobile-friendly panel as the primary renderer.
 export { renderWebPanel } from "./panel-html.js";
 
@@ -95,7 +97,7 @@ export function renderPanelClient(): string {
 export function openApiDocument(): Record<string, unknown> {
   return {
     openapi: "3.1.0",
-    info: { title: "Magi Next Control API", version: "0.1.0-alpha.0" },
+    info: { title: "Magi Next Control API", version: VERSION },
     paths: {
       "/health": { get: { summary: "Health check" } },
       "/sessions": { get: { summary: "List sessions" }, post: { summary: "Create session" } },
