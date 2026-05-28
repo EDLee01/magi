@@ -12,13 +12,14 @@ import { ProviderError } from "../providers/errors.js";
 import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
 import { AgentToolResult, CORE_AGENT_TOOLS, executeBuiltinAgentTools, ToolPermissionMode } from "./tools.js";
-import { getBuiltinToolDefinitionByName, isCoreToolName, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
+import { getBuiltinToolDefinitionByName, getDeferredToolDefinitions, isCoreToolName, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { McpToolRegistry } from "../mcp/tool-registry.js";
 import { AskUserQuestionRequest, AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-question.js";
 import { SendUserMessageRequest, SendUserMessageResult, UserMessageSink } from "../tools/user-message.js";
 
 export type AgentQueryEvent =
   | { type: "request_start" }
+  | { type: "tool_context"; toolCount: number; deferredToolCount: number; schemaChars: number; estimatedSchemaTokens: number; toolNames: string[] }
   | { type: "text_delta"; text: string }
   | { type: "tool_use"; toolUse: MagiToolUsePart }
   | { type: "assistant_message"; message: MagiMessage }
@@ -118,6 +119,9 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
     for (let turn = 0; turn < maxTurns; turn++) {
       throwIfCancelled(input.signal);
       const toolDefinitions = toolCatalog.definitions();
+      if (input.env?.MAGI_DEBUG_TOOLS === "1") {
+        yield formatToolContextEvent(toolDefinitions, toolCatalog.deferredCount());
+      }
       let response: ProviderResponse;
       let streamedTextThisTurn = "";
       while (true) {
@@ -588,6 +592,7 @@ async function executePreparedToolUses(
 
 interface AgentToolCatalog {
   definitions(): MagiToolDefinition[];
+  deferredCount(): number;
   revealFromResults(results: AgentToolResult[]): void;
 }
 
@@ -595,6 +600,7 @@ async function createAgentToolCatalog(mcpTools: McpToolRegistry | undefined): Pr
   const dynamic = mcpTools ? await mcpTools.getToolDefinitions() : [];
   const dynamicNames = new Set(dynamic.map((tool) => tool.name));
   const exposedBuiltIns = new Set(CORE_AGENT_TOOLS.map((tool) => tool.name));
+  const allDeferredBuiltIns = new Set(getDeferredToolDefinitions().map((tool) => tool.name));
 
   return {
     definitions() {
@@ -609,6 +615,9 @@ async function createAgentToolCatalog(mcpTools: McpToolRegistry | undefined): Pr
         ...dynamic.filter((tool) => !exposedBuiltIns.has(tool.name))
       ];
     },
+    deferredCount() {
+      return [...allDeferredBuiltIns].filter((name) => !exposedBuiltIns.has(name)).length;
+    },
     revealFromResults(results) {
       for (const result of results) {
         const selected = readSelectedToolName(result);
@@ -620,6 +629,21 @@ async function createAgentToolCatalog(mcpTools: McpToolRegistry | undefined): Pr
         }
       }
     }
+  };
+}
+
+function formatToolContextEvent(
+  toolDefinitions: MagiToolDefinition[],
+  deferredToolCount: number
+): Extract<AgentQueryEvent, { type: "tool_context" }> {
+  const schemaChars = JSON.stringify(toolDefinitions).length;
+  return {
+    type: "tool_context",
+    toolCount: toolDefinitions.length,
+    deferredToolCount,
+    schemaChars,
+    estimatedSchemaTokens: Math.ceil(schemaChars / 4),
+    toolNames: toolDefinitions.map((tool) => tool.name)
   };
 }
 

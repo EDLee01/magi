@@ -44,6 +44,16 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
   if (event.action === "agent.request.started") {
     return undefined;
   }
+  if (event.action === "agent.tool_context.reported") {
+    const toolCount = readNumber(event.metadata.toolCount);
+    const estimatedTokens = readNumber(event.metadata.estimatedSchemaTokens);
+    const deferred = readNumber(event.metadata.deferredToolCount);
+    const detail = [
+      estimatedTokens !== undefined ? `~${estimatedTokens} schema tokens` : undefined,
+      deferred !== undefined ? `${deferred} deferred` : undefined
+    ].filter((item): item is string => Boolean(item)).join(", ");
+    return transcriptEntry(event, "tools", `${toolCount ?? "?"} exposed`, detail || undefined);
+  }
   if (event.action === "tool.file.read") {
     return transcriptEntry(event, "tool", "FileRead completed", event.target);
   }
@@ -279,6 +289,7 @@ function suffixText(value: string): string | undefined {
 function getChannelColor(channel: string): string {
   switch (channel) {
     case "tool": return "\x1b[36m"; // cyan
+    case "tools": return "\x1b[36m"; // cyan
     case "query": return "\x1b[34m"; // blue
     case "approval": return "\x1b[33m"; // yellow
     case "question": return "\x1b[33m"; // yellow

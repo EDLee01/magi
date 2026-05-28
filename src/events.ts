@@ -125,6 +125,11 @@ export function formatEventMessage(event: StoredAuditRecord): string {
     const model = typeof metadata.model === "string" ? ` ${metadata.model}` : "";
     return `provider request started${model}`;
   }
+  if (event.action === "agent.tool_context.reported") {
+    const toolCount = typeof metadata.toolCount === "number" ? metadata.toolCount : undefined;
+    const estimatedTokens = typeof metadata.estimatedSchemaTokens === "number" ? metadata.estimatedSchemaTokens : undefined;
+    return `tool context ${toolCount ?? "?"} tools${estimatedTokens !== undefined ? ` ~${estimatedTokens} tokens` : ""}`;
+  }
   if (event.action === "agent.text.delta") {
     const length = typeof metadata.length === "number" ? ` (${metadata.length} chars)` : "";
     return `assistant text streamed${length}`;
@@ -217,7 +222,7 @@ export function formatEventMessage(event: StoredAuditRecord): string {
 function eventCategory(event: StoredAuditRecord): MagiEventCategory {
   const action = event.action;
   const target = event.target ?? "";
-  if (action.startsWith("agent.query") || action === "agent.request.started" || action === "agent.text.delta" || action === "agent.assistant.message" || action === "agent.usage.reported") return "query";
+  if (action.startsWith("agent.query") || action === "agent.request.started" || action === "agent.tool_context.reported" || action === "agent.text.delta" || action === "agent.assistant.message" || action === "agent.usage.reported") return "query";
   if (action.startsWith("agent.tool")) {
     return target.startsWith("Git") ? "git" : "tool";
   }

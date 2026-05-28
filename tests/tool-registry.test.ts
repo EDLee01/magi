@@ -86,15 +86,20 @@ describe("tool registry", () => {
       "Bash",
       "ToolSearch",
       "WorkspaceDiagnostics",
-      "Agent"
+      "EnterPlanMode",
+      "ExitPlanMode"
     ]));
     expect(deferred).toEqual(expect.arrayContaining([
+      "Agent",
       "Browser",
+      "Config",
       "GitBranchCreate",
       "LSP",
       "Monitor"
     ]));
+    expect(core).not.toContain("Agent");
     expect(core).not.toContain("Browser");
+    expect(core).not.toContain("Config");
     expect(core).not.toContain("GitBranchCreate");
     expect(new Set([...core, ...deferred]).size).toBe(getBuiltinToolDefinitions().length);
   });

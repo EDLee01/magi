@@ -294,7 +294,7 @@ export class SessionStore {
         from sessions
         left join messages on messages.session_id = sessions.id
         group by sessions.id
-        order by sessions.updated_at desc
+        order by sessions.updated_at desc, sessions.created_at desc, sessions.id desc
         limit ?
         `
       )

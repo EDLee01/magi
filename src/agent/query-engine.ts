@@ -625,6 +625,16 @@ export class QueryEngine {
       });
       return [];
     }
+    if (event.type === "tool_context") {
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.tool_context.reported",
+        target: "tools",
+        metadata: event
+      });
+      return [];
+    }
     if (event.type === "text_delta") {
       this.input.store.recordAudit({
         sessionId: this.input.sessionId,

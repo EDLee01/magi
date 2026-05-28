@@ -502,25 +502,13 @@ const CORE_TOOL_NAMES = [
   "GitDiff",
   "GitLog",
   "GitShow",
-  "WebFetch",
-  "WebSearch",
   "AskUserQuestion",
   "SendUserMessage",
   "Brief",
-  "TodoWrite",
-  "TaskCreate",
-  "TaskUpdate",
-  "TaskList",
-  "TaskGet",
-  "TaskOutput",
-  "TaskStop",
   "ToolSearch",
   "WorkspaceDiagnostics",
-  "Config",
-  "Skill",
   "EnterPlanMode",
-  "ExitPlanMode",
-  "Agent"
+  "ExitPlanMode"
 ] as const;
 
 const BUILTIN_TOOLS: RegisteredTool[] = [

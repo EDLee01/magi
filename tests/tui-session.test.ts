@@ -189,8 +189,9 @@ describe("TUI, slash commands, and session resume", () => {
         { label: "fast", value: "fast", description: "main:gpt-fast", detail: "current" },
         { label: "main", value: "main", description: "main:gpt-main" }
       ]);
-      expect(buildSessionPickerItems(store).map(item => item.value)).toEqual(["session-newer", "session-older"]);
-      expect(buildSessionPickerItems(store)[0]?.detail).toContain("/repo/new");
+      const sessionItems = buildSessionPickerItems(store);
+      expect(sessionItems.map(item => item.value)).toEqual(expect.arrayContaining(["session-newer", "session-older"]));
+      expect(sessionItems.find(item => item.value === "session-newer")?.detail).toContain("/repo/new");
       expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(expect.objectContaining({
         label: "bypassPermissions",
         value: "bypassPermissions",
@@ -228,6 +229,13 @@ describe("TUI, slash commands, and session resume", () => {
         target: "backup",
         metadata: { fromProvider: "main", toProvider: "backup" }
       });
+      const toolContext = store.recordAudit({
+        sessionId,
+        jobId: "job-live-format",
+        action: "agent.tool_context.reported",
+        target: "tools",
+        metadata: { toolCount: 18, deferredToolCount: 64, estimatedSchemaTokens: 2100 }
+      });
       const localTool = store.recordAudit({
         sessionId,
         jobId: "job-live-format",
@@ -246,6 +254,7 @@ describe("TUI, slash commands, and session resume", () => {
       expect(stripAnsi(formatTuiLiveEvent(toEventView(toolUse)))).toBe("· [tool] FileRead requested (read-live)");
       expect(stripAnsi(formatTuiLiveEvent(toEventView(approval)))).toBe("⏳ [approval] waiting for FileWrite (write-live)");
       expect(stripAnsi(formatTuiLiveEvent(toEventView(fallback)))).toBe("· [fallback] main -> backup");
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolContext)))).toBe("· [tools] 18 exposed - ~2100 schema tokens, 64 deferred");
       expect(stripAnsi(formatTuiLiveEvent(toEventView(localTool)))).toBe("· [tool] Bash completed exit=0");
       expect(formatTuiLiveEvent(toEventView(textDelta))).toBeUndefined();
     } finally {

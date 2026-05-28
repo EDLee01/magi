@@ -722,7 +722,7 @@ describe("agent query loop", () => {
           seenToolResults.push(toolResult.content);
           return { text: "search result consumed" };
         }
-        expect(request.tools?.map((tool) => tool.name)).toContain("WebSearch");
+        expect(request.tools?.map((tool) => tool.name)).not.toContain("WebSearch");
         return {
           text: "",
           toolUses: [{
@@ -946,6 +946,37 @@ describe("agent query loop", () => {
     expect(seenToolSets[1]).toContain("Monitor");
     expect(result.events).toContainEqual(expect.objectContaining({ type: "tool_result", toolName: "Monitor" }));
     expect(result.final.text).toBe("monitor done");
+  });
+
+  it("emits tool context diagnostics only when MAGI_DEBUG_TOOLS is enabled", async () => {
+    const adapter: ProviderAdapter = {
+      name: "tool-debug-provider",
+      complete: async () => ({ text: "hello" })
+    };
+
+    const quiet = await collectResult(runAgentQuery({
+      routes: [{ providerName: "tool-debug", model: "explicit", adapter }],
+      messages: [textMessage("user", "hello")],
+      cwd: process.cwd()
+    }));
+    expect(quiet.events.some((event) => event.type === "tool_context")).toBe(false);
+
+    const debug = await collectResult(runAgentQuery({
+      routes: [{ providerName: "tool-debug", model: "explicit", adapter }],
+      messages: [textMessage("user", "hello")],
+      cwd: process.cwd(),
+      env: { MAGI_DEBUG_TOOLS: "1" }
+    }));
+    const event = debug.events.find((item) => item.type === "tool_context");
+    expect(event).toMatchObject({
+      type: "tool_context",
+      toolCount: expect.any(Number),
+      deferredToolCount: expect.any(Number),
+      schemaChars: expect.any(Number),
+      estimatedSchemaTokens: expect.any(Number)
+    });
+    expect(event?.toolNames).toContain("ToolSearch");
+    expect(event?.toolNames).not.toContain("Monitor");
   });
 
   it("returns a tool error when AskUserQuestion has no resolver", async () => {
