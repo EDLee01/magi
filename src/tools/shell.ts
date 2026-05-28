@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { ToolError } from "./errors.js";
 
@@ -9,6 +11,57 @@ export interface ShellResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+}
+
+const LONG_RUNNING_PATTERNS = [
+  /\bnpm\s+run\s+dev\b/,
+  /\bnpm\s+run\s+start\b/,
+  /\bnpm\s+start\b/,
+  /\byarn\s+dev\b/,
+  /\byarn\s+start\b/,
+  /\bpnpm\s+dev\b/,
+  /\bpnpm\s+start\b/,
+  /\bvite(\s|$)/,
+  /\bnext\s+dev\b/,
+  /\bnuxt\s+dev\b/,
+  /\buvicorn\b/,
+  /\bflask\s+run\b/,
+  /\bdjango.*runserver\b/,
+  /\bpython\s+-m\s+http\.server\b/,
+  /\bpython\s+-m\s+SimpleHTTPServer\b/,
+  /\bnode\s+.*server\b/,
+  /\bdeno\s+run\b/,
+  /\bbun\s+run\s+dev\b/,
+  /\bbun\s+dev\b/,
+];
+
+export function isLongRunningCommand(command: string): boolean {
+  const trimmed = command.trim();
+  if (/&\s*$/.test(trimmed)) return false;
+  if (hasBackgroundedLongRunningSegment(trimmed)) return false;
+  return LONG_RUNNING_PATTERNS.some((p) => p.test(trimmed));
+}
+
+function hasBackgroundedLongRunningSegment(command: string): boolean {
+  let segmentStart = 0;
+  for (let index = 0; index < command.length; index++) {
+    if (!isBackgroundOperator(command, index)) {
+      continue;
+    }
+    const segment = command.slice(segmentStart, index);
+    if (LONG_RUNNING_PATTERNS.some((pattern) => pattern.test(segment))) {
+      return true;
+    }
+    segmentStart = index + 1;
+  }
+  return false;
+}
+
+function isBackgroundOperator(command: string, index: number): boolean {
+  if (command[index] !== "&") return false;
+  const prev = command[index - 1];
+  const next = command[index + 1];
+  return prev !== "&" && next !== "&" && prev !== ">";
 }
 
 export function isDangerousShellCommand(command: string): boolean {
@@ -30,36 +83,110 @@ export async function runShellCommand(input: {
   command: string;
   timeoutMs?: number;
   approveDangerous?: boolean;
+  signal?: AbortSignal;
+  skipAutoBackground?: boolean;
 }): Promise<ShellResult> {
   if (isDangerousShellCommand(input.command) && !input.approveDangerous) {
     throw new ToolError(`Command requires explicit approval: ${input.command}`, "approval-required");
   }
 
+  // Auto-background long-running commands (dev servers, etc.) to avoid hanging
+  if (!input.skipAutoBackground && isLongRunningCommand(input.command)) {
+    const logFile = join(tmpdir(), `magi-bg-${Date.now()}.log`);
+    // Wrap the entire command in a subshell so compound commands (cd && npm run dev) work correctly.
+    // Use nohup and redirect stdio so the detached process survives shell exit.
+    const escaped = input.command.replace(/'/g, "'\\''");
+    const bgCommand = `nohup bash -c '${escaped}' > ${logFile} 2>&1 < /dev/null & disown; echo "BG_PID=$!"`;
+    const bgResult = await runShellCommand({ ...input, command: bgCommand, skipAutoBackground: true });
+    const pid = parseBackgroundPid(bgResult.stdout);
+    const stopLine = pid
+      ? `To stop: kill ${pid}`
+      : "To stop: use the BG_PID printed below.";
+    return {
+      ...bgResult,
+      command: input.command,
+      stdout:
+        `[Auto-backgrounded] Process detached from shell. The process IS running — DO NOT try to verify by re-running it.\n` +
+        `Log file: ${logFile}\n` +
+        `To check output: cat ${logFile}\n` +
+        `${stopLine}\n` +
+        `Wait 3-5 seconds before checking the log for the URL/port.\n` +
+        bgResult.stdout,
+    };
+  }
+
   return new Promise((resolve, reject) => {
     const child = spawn("bash", ["-lc", input.command], {
       cwd: input.cwd,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true  // create new process group so we can kill the entire tree
     });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let aborted = false;
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+    let settled = false;
+    let stdoutEnded = false;
+    let stderrEnded = false;
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
+    let killTimer: ReturnType<typeof setTimeout> | undefined;
+    let exitCodeFromExit: number | null = null;
+    const MAX_OUTPUT = 1024 * 1024; // 1MB cap per stream
+    const TRUNC_NOTE = "\n[output truncated at 1MB]\n";
+    const killTree = (sig: NodeJS.Signals = "SIGTERM") => {
+      try {
+        if (child.pid) process.kill(-child.pid, sig);  // negative PID = process group
+      } catch {
+        try { child.kill(sig); } catch {}
+      }
+    };
+
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      killTree("SIGTERM");
+      // If still alive after 2s, escalate to SIGKILL
+      killTimer = setTimeout(() => killTree("SIGKILL"), 2000);
     }, input.timeoutMs ?? 30_000);
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
-    });
-    child.on("error", (error) => {
+    // Honor abort signal (e.g. user pressed Ctrl+C)
+    const onAbort = () => {
+      aborted = true;
       clearTimeout(timer);
-      reject(error);
-    });
-    child.on("close", (exitCode) => {
+      killTree("SIGTERM");
+      killTimer = setTimeout(() => killTree("SIGKILL"), 1000);
+    };
+    if (input.signal) {
+      if (input.signal.aborted) {
+        onAbort();
+      } else {
+        input.signal.addEventListener("abort", onAbort);
+      }
+    }
+
+    const cleanup = () => {
       clearTimeout(timer);
+      if (drainTimer) clearTimeout(drainTimer);
+      if (killTimer) clearTimeout(killTimer);
+      input.signal?.removeEventListener("abort", onAbort);
+      child.stdout.removeListener("data", onStdoutData);
+      child.stderr.removeListener("data", onStderrData);
+      child.stdout.removeListener("end", onStdoutEnd);
+      child.stderr.removeListener("end", onStderrEnd);
+    };
+    const finish = (exitCode: number | null, destroyStreams = false) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (destroyStreams) {
+        child.stdout.destroy();
+        child.stderr.destroy();
+      }
+      if (aborted) {
+        reject(new ToolError(`Command aborted: ${input.command}`, "timeout"));
+        return;
+      }
       if (timedOut) {
         reject(new ToolError(`Command timed out after ${input.timeoutMs ?? 30_000}ms: ${input.command}`, "timeout"));
         return;
@@ -72,6 +199,72 @@ export async function runShellCommand(input: {
         stderr,
         timedOut
       });
+    };
+    const maybeFinishAfterExit = () => {
+      if (exitCodeFromExit === null || !stdoutEnded || !stderrEnded) return;
+      finish(exitCodeFromExit);
+    };
+    const onStdoutData = (chunk: Buffer) => {
+      if (stdoutTruncated) return;
+      const piece = chunk.toString("utf8");
+      if (stdout.length + piece.length > MAX_OUTPUT) {
+        const room = MAX_OUTPUT - stdout.length;
+        if (room > 0) stdout += piece.slice(0, room);
+        stdout += TRUNC_NOTE;
+        stdoutTruncated = true;
+      } else {
+        stdout += piece;
+      }
+    };
+    const onStderrData = (chunk: Buffer) => {
+      if (stderrTruncated) return;
+      const piece = chunk.toString("utf8");
+      if (stderr.length + piece.length > MAX_OUTPUT) {
+        const room = MAX_OUTPUT - stderr.length;
+        if (room > 0) stderr += piece.slice(0, room);
+        stderr += TRUNC_NOTE;
+        stderrTruncated = true;
+      } else {
+        stderr += piece;
+      }
+    };
+    const onStdoutEnd = () => {
+      stdoutEnded = true;
+      maybeFinishAfterExit();
+    };
+    const onStderrEnd = () => {
+      stderrEnded = true;
+      maybeFinishAfterExit();
+    };
+    child.stdout.on("data", onStdoutData);
+    child.stderr.on("data", onStderrData);
+    child.stdout.on("end", onStdoutEnd);
+    child.stderr.on("end", onStderrEnd);
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    });
+    child.on("exit", (exitCode) => {
+      exitCodeFromExit = exitCode;
+      // Match geomind-agent's shell task behavior: shell exit is the command
+      // boundary. Do not wait forever for background grandchildren that
+      // inherited stdio; give normal pipes a short chance to drain first.
+      drainTimer = setTimeout(() => finish(exitCode, true), 50);
+      maybeFinishAfterExit();
+    });
+    child.on("close", (exitCode) => {
+      finish(exitCode ?? exitCodeFromExit);
     });
   });
+}
+
+function parseBackgroundPid(output: string): number | undefined {
+  const match = /(?:^|\n)BG_PID=(\d+)(?:\n|$)/.exec(output);
+  if (!match) {
+    return undefined;
+  }
+  const pid = Number(match[1]);
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
 }

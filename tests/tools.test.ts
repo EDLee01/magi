@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,7 +8,7 @@ import { runCli } from "../src/cli.js";
 import { readWorkspaceFile, writeWorkspaceFile } from "../src/tools/files.js";
 import { getGitSummary } from "../src/tools/git.js";
 import { searchWorkspace } from "../src/tools/search.js";
-import { isDangerousShellCommand, runShellCommand } from "../src/tools/shell.js";
+import { isDangerousShellCommand, isLongRunningCommand, runShellCommand } from "../src/tools/shell.js";
 import { ToolError } from "../src/tools/errors.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
@@ -89,6 +89,50 @@ describe("local tools", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("hello");
+  });
+
+  it("does not auto-background commands that already background a long-running segment", () => {
+    expect(isLongRunningCommand("cd app && npm run dev")).toBe(true);
+    expect(isLongRunningCommand("cd app && npm run dev > app.log 2>&1 &\necho \"PID: $!\"")).toBe(false);
+    expect(isLongRunningCommand("nohup bash -c 'npm run dev' > app.log 2>&1 < /dev/null & disown; echo BG_PID=$!")).toBe(false);
+  });
+
+  it("auto-backgrounds long-running commands only once", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tools-"));
+    const binDir = path.join(workspace, "bin");
+    mkdirSync(binDir);
+    const fakeNpm = path.join(binDir, "npm");
+    writeFileSync(fakeNpm, "#!/usr/bin/env bash\nprintf 'fake npm %s' \"$*\"\n", "utf8");
+    chmodSync(fakeNpm, 0o755);
+
+    const result = await runShellCommand({
+      cwd: workspace,
+      command: `PATH=${binDir}:$PATH npm run dev`,
+      timeoutMs: 2_000
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[Auto-backgrounded]");
+    expect(result.stdout).toContain("BG_PID=");
+    expect(result.stdout).toMatch(/To stop: kill \d+/);
+  });
+
+  it("resolves when the shell exits even if a background child inherits stdio", async () => {
+    const startedAt = Date.now();
+    const result = await runShellCommand({
+      cwd: process.cwd(),
+      command: "node -e 'setTimeout(()=>{}, 5000)' & echo \"PID=$!\"",
+      timeoutMs: 2_000
+    });
+
+    const pid = Number(/PID=(\d+)/.exec(result.stdout)?.[1]);
+    if (Number.isFinite(pid)) {
+      try { process.kill(pid, "SIGTERM"); } catch {}
+    }
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("PID=");
+    expect(Date.now() - startedAt).toBeLessThan(1_500);
   });
 
   it("handles git unavailable or non-repository directories gracefully", () => {
