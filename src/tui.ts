@@ -490,6 +490,7 @@ export async function runInteractiveTerminal(inputConfig: {
       abortController = controller;
       const liveEvents = startTuiLiveEventWriter({
         store: inputConfig.store,
+        env: inputConfig.env,
         output,
         stdin: input,
         sessionId: currentSessionId,
@@ -619,6 +620,7 @@ export async function runInteractiveTerminal(inputConfig: {
 
 export function startTuiLiveEventWriter(input: {
   store: SessionStore;
+  env?: NodeJS.ProcessEnv;
   output?: Pick<Writable, "write">;
   stdin?: NodeJS.ReadStream;
   sessionId?: string;
@@ -643,7 +645,7 @@ export function startTuiLiveEventWriter(input: {
     } else {
       liveSessionId = event.sessionId;
     }
-    const line = formatTuiLiveEvent(toEventView(event));
+    const line = formatTuiLiveEvent(toEventView(event), { showToolTrace: input.env?.MAGI_DEBUG_TOOLS === "1" });
     if (line) {
       terminalOutput.write(`${line}\n`);
     }

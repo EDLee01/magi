@@ -132,9 +132,14 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
     return transcriptEntry(event, "config", `updated ${target}`);
   }
   if (event.action === "agent.provider.fallback") {
-    const from = readString(event.metadata.fromProvider) ?? "unknown";
-    const to = readString(event.metadata.toProvider) ?? event.target ?? "unknown";
-    return transcriptEntry(event, "fallback", `${from} -> ${to}`);
+    const fromProvider = readString(event.metadata.fromProvider) ?? "unknown";
+    const fromModel = readString(event.metadata.fromModel);
+    const toProvider = readString(event.metadata.toProvider) ?? event.target ?? "unknown";
+    const toModel = readString(event.metadata.toModel);
+    const errorKind = readString(event.metadata.errorKind);
+    const from = fromModel ? `${fromProvider}/${fromModel}` : fromProvider;
+    const to = toModel ? `${toProvider}/${toModel}` : toProvider;
+    return transcriptEntry(event, "fallback", `${from} -> ${to}`, errorKind ? `error: ${errorKind}` : undefined);
   }
   if (event.action === "agent.context.compacted") {
     return transcriptEntry(event, "context", "compacted", event.target);
@@ -215,7 +220,10 @@ export function formatTuiTranscriptStatus(state: TuiTranscriptState): string {
   ].join("\n");
 }
 
-export function formatTuiLiveEvent(event: MagiEventView): string | undefined {
+export function formatTuiLiveEvent(event: MagiEventView, options: { showToolTrace?: boolean } = {}): string | undefined {
+  if (isNoisyLiveEvent(event) && options.showToolTrace !== true) {
+    return undefined;
+  }
   const entry = formatTuiTranscriptEntry(event);
   if (!entry) {
     return undefined;
@@ -226,6 +234,19 @@ export function formatTuiLiveEvent(event: MagiEventView): string | undefined {
   const channelColor = getChannelColor(entry.channel);
   const statusIcon = getStatusIcon(entry.status);
   return `${channelColor}${statusIcon} [${entry.channel}]\x1b[39m ${entry.title}${detail}`;
+}
+
+function isNoisyLiveEvent(event: MagiEventView): boolean {
+  if (event.action === "agent.assistant.message") {
+    return true;
+  }
+  if (event.action === "agent.tool.use" || event.action === "agent.tool.completed") {
+    return true;
+  }
+  if (event.action === "tool.file.read" || event.action === "tool.file.write.approved" || event.action === "tool.search" || event.action === "tool.shell.run" || event.action === "tool.git.summary") {
+    return true;
+  }
+  return false;
 }
 
 function findLastJobId(events: MagiEventView[]): string | undefined {

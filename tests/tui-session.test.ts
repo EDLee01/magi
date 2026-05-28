@@ -251,11 +251,13 @@ describe("TUI, slash commands, and session resume", () => {
         metadata: { length: 3, preview: "abc" }
       });
 
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolUse)))).toBe("· [tool] FileRead requested (read-live)");
+      expect(formatTuiLiveEvent(toEventView(toolUse))).toBeUndefined();
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolUse), { showToolTrace: true }))).toBe("· [tool] FileRead requested (read-live)");
       expect(stripAnsi(formatTuiLiveEvent(toEventView(approval)))).toBe("⏳ [approval] waiting for FileWrite (write-live)");
       expect(stripAnsi(formatTuiLiveEvent(toEventView(fallback)))).toBe("· [fallback] main -> backup");
       expect(stripAnsi(formatTuiLiveEvent(toEventView(toolContext)))).toBe("· [tools] 18 exposed - ~2100 schema tokens, 64 deferred");
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(localTool)))).toBe("· [tool] Bash completed exit=0");
+      expect(formatTuiLiveEvent(toEventView(localTool))).toBeUndefined();
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(localTool), { showToolTrace: true }))).toBe("· [tool] Bash completed exit=0");
       expect(formatTuiLiveEvent(toEventView(textDelta))).toBeUndefined();
     } finally {
       store.close();
@@ -360,9 +362,42 @@ describe("TUI, slash commands, and session resume", () => {
       });
 
       expect(writer.getSessionId()).toBe(firstSession);
-      expect(stripAnsi(output.join(""))).toContain("[tool] GitDiff completed (current-tool)");
+      expect(output.join("")).not.toContain("[tool]");
       expect(output.join("")).not.toContain("GitStatus");
       expect(output.join("")).not.toContain("[todo]");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("shows live tool trace events when tool debug mode is enabled", () => {
+    temp = makeTempRoot();
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    const output: string[] = [];
+    try {
+      const sessionId = store.createSession({ id: "live-debug-session", title: "debug", cwd: process.cwd() });
+      const writer = startTuiLiveEventWriter({
+        store,
+        env: { MAGI_DEBUG_TOOLS: "1" },
+        sessionId,
+        output: {
+          write: (chunk: unknown) => {
+            output.push(String(chunk));
+            return true;
+          }
+        }
+      });
+
+      store.recordAudit({
+        sessionId,
+        jobId: "job-live-debug",
+        action: "agent.tool.completed",
+        target: "GitDiff",
+        metadata: { toolCallId: "debug-tool" }
+      });
+      writer.stop();
+
+      expect(stripAnsi(output.join(""))).toContain("[tool] GitDiff completed (debug-tool)");
     } finally {
       store.close();
     }
@@ -723,7 +758,7 @@ describe("TUI, slash commands, and session resume", () => {
       writer.stop();
 
       expect(writer.getSessionId()).toBe(firstSession);
-      expect(stripAnsi(output.join(""))).toContain("[tool] Bash completed");
+      expect(output.join("")).not.toContain("[tool]");
       expect(output.join("")).not.toContain("GitShow");
     } finally {
       store.close();

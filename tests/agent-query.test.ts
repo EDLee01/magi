@@ -8,7 +8,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { QueryEngine } from "../src/agent/query-engine.js";
-import { runAgentQuery } from "../src/agent/query.js";
+import { AgentQueryEvent, runAgentQuery } from "../src/agent/query.js";
 import { ActiveInteractionRegistry } from "../src/interactions.js";
 import { ProviderAdapter, textMessage } from "../src/providers/ir.js";
 import { ProviderError } from "../src/providers/errors.js";
@@ -60,7 +60,7 @@ describe("agent query loop", () => {
       }
     };
 
-    const events = [];
+    const events: AgentQueryEvent[] = [];
     for await (const event of runAgentQuery({
       adapter,
       model: "explicit-test-model",
@@ -320,7 +320,10 @@ describe("agent query loop", () => {
     expect(result.events).toContainEqual(expect.objectContaining({
       type: "fallback_switched",
       fromProvider: "primary",
-      toProvider: "backup"
+      fromModel: "model-a",
+      toProvider: "backup",
+      toModel: "model-b",
+      errorKind: "server-error"
     }));
     expect(result.final.text).toBe("fallback ok");
     expect(result.final.providerName).toBe("backup");
@@ -363,6 +366,16 @@ describe("agent query loop", () => {
       { providerName: "shaky", model: "m", ok: false, errorKind: "server-error" },
       { providerName: "shaky", model: "m", ok: true }
     ]);
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "error",
+      retryable: true,
+      providerName: "shaky",
+      model: "m",
+      errorKind: "server-error",
+      attempt: 1,
+      nextRetryDelayMs: expect.any(Number),
+      error: expect.stringContaining("kind server-error")
+    }));
   });
 
   it("retries complete() on retryable errors when no stream is available", async () => {
@@ -392,6 +405,16 @@ describe("agent query loop", () => {
       { providerName: "shaky", model: "m", ok: false, errorKind: "server-error" },
       { providerName: "shaky", model: "m", ok: true }
     ]);
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "error",
+      retryable: true,
+      providerName: "shaky",
+      model: "m",
+      errorKind: "server-error",
+      attempt: 1,
+      nextRetryDelayMs: expect.any(Number),
+      error: expect.stringContaining("kind server-error")
+    }));
   });
 
   it("retries raw fetch failed network errors before succeeding", async () => {
@@ -423,7 +446,44 @@ describe("agent query loop", () => {
     expect(result.events).toContainEqual(expect.objectContaining({
       type: "error",
       retryable: true,
+      providerName: "network-shaky",
+      model: "m",
+      errorKind: "network",
+      attempt: 1,
+      nextRetryDelayMs: expect.any(Number),
       error: expect.stringContaining("network error")
+    }));
+  });
+
+
+  it("does not emit retry diagnostics for non-retryable auth errors", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const events: AgentQueryEvent[] = [];
+    const adapter: ProviderAdapter = {
+      name: "auth-provider",
+      complete: async () => {
+        throw new ProviderError("bad api key", { kind: "auth", retryable: false });
+      }
+    };
+
+    const generator = runAgentQuery({
+      routes: [{ providerName: "auth-provider", model: "m", adapter }],
+      messages: [textMessage("user", "ping")],
+      cwd: workspace
+    });
+    await expect((async () => {
+      for await (const event of generator) {
+        events.push(event);
+      }
+    })()).rejects.toThrow("bad api key");
+    expect(events).toContainEqual(expect.objectContaining({
+      type: "error",
+      retryable: false,
+      error: "bad api key"
+    }));
+    expect(events).not.toContainEqual(expect.objectContaining({
+      type: "error",
+      nextRetryDelayMs: expect.any(Number)
     }));
   });
 

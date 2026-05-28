@@ -32,7 +32,7 @@ export type AgentQueryEvent =
   | { type: "usage"; usage: ProviderUsage }
   | { type: "fallback_switched"; fromProvider: string; fromModel: string; toProvider: string; toModel: string; errorKind?: string }
   | { type: "cancelled"; reason?: string }
-  | { type: "error"; error: string; retryable: boolean }
+  | { type: "error"; error: string; retryable: boolean; providerName?: string; model?: string; errorKind?: string; attempt?: number; maxAttempts?: number; nextRetryDelayMs?: number }
   | { type: "max_turns_reached" }
   | { type: "done"; text: string; messages: MagiMessage[] };
 
@@ -169,11 +169,13 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
           // waits so a bad baseUrl or closed port fails quickly.
           if (retryable && sameRouteRetries < retryPolicy.fastRetries) {
             const delayMs = retryDelayMs(providerError, sameRouteRetries, "fast");
-            yield {
-              type: "error",
-              error: `${errorMessage(providerError)} — retrying in ${formatRetryDelay(delayMs)} (attempt ${sameRouteRetries + 1}/${retryPolicy.fastRetries})`,
-              retryable: true
-            };
+            yield formatProviderRetryEvent({
+              route: activeRoute,
+              error: providerError,
+              attempt: sameRouteRetries,
+              maxAttempts: retryPolicy.fastRetries,
+              delayMs
+            });
             await new Promise((resolve) => setTimeout(resolve, delayMs));
             continue;
           }
@@ -182,11 +184,14 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
           // and a longer one for HTTP retryable failures from an overloaded proxy.
           if (retryable && !hasFallback && sameRouteRetries < retryPolicy.totalRetries) {
             const delayMs = retryDelayMs(providerError, sameRouteRetries, "slow", retryPolicy.fastRetries);
-            yield {
-              type: "error",
-              error: `${errorMessage(providerError)} — proxy still down, retrying in ${formatRetryDelay(delayMs)} (attempt ${sameRouteRetries + 1}/${retryPolicy.totalRetries})`,
-              retryable: true
-            };
+            yield formatProviderRetryEvent({
+              route: activeRoute,
+              error: providerError,
+              attempt: sameRouteRetries,
+              maxAttempts: retryPolicy.totalRetries,
+              delayMs,
+              messageSuffix: "proxy still down"
+            });
             await new Promise((resolve) => setTimeout(resolve, delayMs));
             continue;
           }
@@ -428,6 +433,29 @@ async function* completeRoute(route: AgentRoute, request: ProviderRequest): Asyn
     yield { type: "text_delta", text: response.text };
   }
   return { response, streamedText };
+}
+
+function formatProviderRetryEvent(input: {
+  route: AgentRoute;
+  error: unknown;
+  attempt: number;
+  maxAttempts: number;
+  delayMs: number;
+  messageSuffix?: string;
+}): Extract<AgentQueryEvent, { type: "error" }> {
+  const errorKind = input.error instanceof ProviderError ? input.error.kind : "unknown";
+  const suffix = input.messageSuffix ? ` — ${input.messageSuffix}, retrying` : " — retrying";
+  return {
+    type: "error",
+    error: `${errorMessage(input.error)}${suffix} in ${formatRetryDelay(input.delayMs)} (attempt ${input.attempt}/${input.maxAttempts}, kind ${errorKind})`,
+    retryable: true,
+    providerName: input.route.providerName,
+    model: input.route.model,
+    errorKind,
+    attempt: input.attempt,
+    maxAttempts: input.maxAttempts,
+    nextRetryDelayMs: input.delayMs
+  };
 }
 
 function retryPolicyFor(error: unknown, hasFallback: boolean): { fastRetries: number; totalRetries: number } {
