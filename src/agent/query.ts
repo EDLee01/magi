@@ -8,7 +8,7 @@ import {
   ProviderUsage,
   textMessage
 } from "../providers/ir.js";
-import { ProviderError } from "../providers/errors.js";
+import { ProviderError, providerErrorFromException } from "../providers/errors.js";
 import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
 import { AgentToolResult, CORE_AGENT_TOOLS, executeBuiltinAgentTools, ToolPermissionMode } from "./tools.js";
@@ -147,12 +147,13 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
           }
           break;
         } catch (error) {
-          const retryable = error instanceof ProviderError && error.retryable;
+          const providerError = providerErrorFromException(activeRoute.providerName, error);
+          const retryable = providerError instanceof ProviderError && providerError.retryable;
           attempts.push({
             providerName: activeRoute.providerName,
             model: activeRoute.model,
             ok: false,
-            errorKind: error instanceof ProviderError ? error.kind : "unknown"
+            errorKind: providerError instanceof ProviderError ? providerError.kind : "unknown"
           });
 
           // Retry same route for transient errors (502, 503, timeout, rate-limit)
@@ -162,29 +163,28 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
 
           const nextRoute = routes[routeIndex + 1];
           const hasFallback = retryable && nextRoute !== undefined;
+          const retryPolicy = retryPolicyFor(providerError, hasFallback);
 
-          // Fast retries: exponential backoff 1s -> 2s -> 4s (max 8s).
-          const maxFastRetries = hasFallback ? 3 : 5;
-          if (retryable && sameRouteRetries < maxFastRetries) {
-            const delayMs = Math.min(1000 * Math.pow(2, sameRouteRetries - 1), 8000);
+          // Fast retries use bounded backoff. Network failures keep shorter
+          // waits so a bad baseUrl or closed port fails quickly.
+          if (retryable && sameRouteRetries < retryPolicy.fastRetries) {
+            const delayMs = retryDelayMs(providerError, sameRouteRetries, "fast");
             yield {
               type: "error",
-              error: `${error instanceof Error ? error.message : String(error)} — retrying in ${Math.round(delayMs / 1000)}s (attempt ${sameRouteRetries + 1}/${maxFastRetries})`,
+              error: `${errorMessage(providerError)} — retrying in ${formatRetryDelay(delayMs)} (attempt ${sameRouteRetries + 1}/${retryPolicy.fastRetries})`,
               retryable: true
             };
             await new Promise((resolve) => setTimeout(resolve, delayMs));
             continue;
           }
 
-          // No fallback available: the proxy is likely having a transient issue.
-          // Don't give up after fast retries — keep retrying with longer
-          // intervals (10s -> 20s -> 30s) up to ~60s total so brief blips recover.
-          if (retryable && !hasFallback && sameRouteRetries < 8) {
-            const slowIndex = sameRouteRetries - maxFastRetries;
-            const delayMs = Math.min(10_000 * Math.pow(2, slowIndex), 30_000);
+          // No fallback available: keep a short retry tail for network errors,
+          // and a longer one for HTTP retryable failures from an overloaded proxy.
+          if (retryable && !hasFallback && sameRouteRetries < retryPolicy.totalRetries) {
+            const delayMs = retryDelayMs(providerError, sameRouteRetries, "slow", retryPolicy.fastRetries);
             yield {
               type: "error",
-              error: `${error instanceof Error ? error.message : String(error)} — proxy still down, retrying in ${Math.round(delayMs / 1000)}s (attempt ${sameRouteRetries + 1}/8)`,
+              error: `${errorMessage(providerError)} — proxy still down, retrying in ${formatRetryDelay(delayMs)} (attempt ${sameRouteRetries + 1}/${retryPolicy.totalRetries})`,
               retryable: true
             };
             await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -201,16 +201,16 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
               fromModel: previous.model,
               toProvider: activeRoute.providerName,
               toModel: activeRoute.model,
-              errorKind: error instanceof ProviderError ? error.kind : "unknown"
+              errorKind: providerError instanceof ProviderError ? providerError.kind : "unknown"
             };
             continue;
           }
           yield {
             type: "error",
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(providerError),
             retryable
           };
-          throw error;
+          throw providerError;
         }
       }
 
@@ -428,6 +428,36 @@ async function* completeRoute(route: AgentRoute, request: ProviderRequest): Asyn
     yield { type: "text_delta", text: response.text };
   }
   return { response, streamedText };
+}
+
+function retryPolicyFor(error: unknown, hasFallback: boolean): { fastRetries: number; totalRetries: number } {
+  if (error instanceof ProviderError && error.kind === "network") {
+    return { fastRetries: hasFallback ? 2 : 2, totalRetries: hasFallback ? 2 : 3 };
+  }
+  const fastRetries = hasFallback ? 3 : 5;
+  return { fastRetries, totalRetries: 8 };
+}
+
+function retryDelayMs(error: unknown, sameRouteRetries: number, phase: "fast" | "slow", fastRetries = 0): number {
+  if (error instanceof ProviderError && error.kind === "network") {
+    return Math.min(250 * Math.pow(2, sameRouteRetries - 1), 1000);
+  }
+  if (phase === "fast") {
+    return Math.min(1000 * Math.pow(2, sameRouteRetries - 1), 8000);
+  }
+  const slowIndex = sameRouteRetries - fastRetries;
+  return Math.min(10_000 * Math.pow(2, slowIndex), 30_000);
+}
+
+function formatRetryDelay(delayMs: number): string {
+  if (delayMs < 1000) {
+    return `${delayMs}ms`;
+  }
+  return `${Math.round(delayMs / 1000)}s`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function throwIfCancelled(signal: AbortSignal | undefined): void {

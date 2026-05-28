@@ -23,7 +23,7 @@ export class ProviderError extends Error {
 }
 
 export function isRetryableFailure(kind: ProviderFailureKind): boolean {
-  return kind === "timeout" || kind === "rate-limit" || kind === "server-error" || kind === "model-unavailable";
+  return kind === "timeout" || kind === "rate-limit" || kind === "server-error" || kind === "model-unavailable" || kind === "network";
 }
 
 export function classifyHttpStatus(status: number): ProviderFailureKind {
@@ -73,8 +73,54 @@ function formatProviderErrorMessage(providerName: string, status: number, kind: 
     case "bad-request":
       return `${base} (bad request). The request shape was rejected — likely a config issue or unsupported parameter for this model.`;
     case "network":
-      return `${base} (network error). Check your internet connection and the provider's baseUrl.`;
+      return `${base} (network error, likely transient). Will retry. Check your internet connection and the provider's baseUrl if it persists.`;
     default:
       return `${base}.`;
   }
+}
+
+export function providerErrorFromException(providerName: string, error: unknown): unknown {
+  if (error instanceof ProviderError || isAbortError(error)) {
+    return error;
+  }
+  if (!isLikelyNetworkError(error)) {
+    return error;
+  }
+  const detail = errorDetail(error);
+  return new ProviderError(`${providerName} request failed (network error, likely transient). Will retry.${detail ? ` ${detail}` : ""}`, {
+    kind: "network",
+    retryable: true
+  });
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError"
+    || error instanceof Error && error.name === "AbortError";
+}
+
+function isLikelyNetworkError(error: unknown): boolean {
+  const text = errorDetail(error);
+  return /fetch failed|failed to fetch|network|socket|connection|terminated|timeout|timed out|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|UND_ERR/i.test(text);
+}
+
+function errorDetail(error: unknown): string {
+  const seen = new Set<unknown>();
+  const parts: string[] = [];
+  let current: unknown = error;
+  while (current !== undefined && current !== null && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof Error) {
+      if (current.message) parts.push(current.message);
+      current = (current as Error & { cause?: unknown }).cause;
+      continue;
+    }
+    if (typeof current === "object" && current !== null && "message" in current && typeof (current as { message?: unknown }).message === "string") {
+      parts.push((current as { message: string }).message);
+      current = (current as { cause?: unknown }).cause;
+      continue;
+    }
+    parts.push(String(current));
+    break;
+  }
+  return parts.filter(Boolean).join(": ");
 }

@@ -394,6 +394,39 @@ describe("agent query loop", () => {
     ]);
   });
 
+  it("retries raw fetch failed network errors before succeeding", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    let callCount = 0;
+    const shaky: ProviderAdapter = {
+      name: "network-shaky",
+      complete: async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new TypeError("fetch failed", { cause: new Error("ECONNRESET") });
+        }
+        return { text: "network recovered", usage: { inputTokens: 1, outputTokens: 1 } };
+      }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      routes: [{ providerName: "network-shaky", model: "m", adapter: shaky }],
+      messages: [textMessage("user", "ping")],
+      cwd: workspace
+    }));
+
+    expect(callCount).toBe(2);
+    expect(result.final.text).toBe("network recovered");
+    expect(result.final.attempts).toEqual([
+      { providerName: "network-shaky", model: "m", ok: false, errorKind: "network" },
+      { providerName: "network-shaky", model: "m", ok: true }
+    ]);
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "error",
+      retryable: true,
+      error: expect.stringContaining("network error")
+    }));
+  });
+
   it("consumes provider streams as durable text delta events without duplicating final text", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const adapter: ProviderAdapter = {

@@ -1,6 +1,6 @@
 import { ProviderConfig } from "../config.js";
 import { ProviderError, providerErrorFromResponse } from "./errors.js";
-import { FetchLike, getApiKey, normalizeBaseUrl } from "./http.js";
+import { FetchLike, fetchProvider, getApiKey, normalizeBaseUrl } from "./http.js";
 import {
   MagiMessage,
   MagiToolUsePart,
@@ -29,7 +29,7 @@ export class OpenAiAdapter implements ProviderAdapter {
     const apiKey = getApiKey(this.name, this.config, this.env);
     const endpoint = this.config.endpoint ?? "chat";
     const baseUrl = normalizeBaseUrl(this.config.baseUrl ?? "https://api.openai.com/v1");
-    const response = await this.fetchImpl(`${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`, {
+    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`, {
       method: "POST",
       signal: request.signal,
       headers: {
@@ -55,7 +55,7 @@ export class OpenAiAdapter implements ProviderAdapter {
     const apiKey = getApiKey(this.name, this.config, this.env);
     const endpoint = this.config.endpoint ?? "chat";
     const baseUrl = normalizeBaseUrl(this.config.baseUrl ?? "https://api.openai.com/v1");
-    const response = await this.fetchImpl(`${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`, {
+    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`, {
       method: "POST",
       signal: request.signal,
       headers: {

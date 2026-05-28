@@ -1,7 +1,16 @@
 import { ProviderConfig } from "../config.js";
 import { MagiConfigError } from "../errors.js";
+import { providerErrorFromException } from "./errors.js";
 
 export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+
+export async function fetchProvider(providerName: string, fetchImpl: FetchLike, input: string | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetchImpl(input, init);
+  } catch (error) {
+    throw providerErrorFromException(providerName, error);
+  }
+}
 
 export function getApiKey(providerName: string, config: ProviderConfig, env: NodeJS.ProcessEnv): string {
   const envName = config.apiKeyEnv ?? "MAGI_OPENAI_API_KEY";

@@ -179,6 +179,23 @@ describe("provider routing", () => {
     expect(result.text).toBe("visible answer");
   });
 
+  it("wraps OpenAI fetch failures as retryable network provider errors", async () => {
+    const adapter = new OpenAiAdapter({
+      name: "main",
+      config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "chat" },
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      fetchImpl: async () => {
+        throw new TypeError("fetch failed", { cause: new Error("ECONNRESET") });
+      }
+    });
+
+    await expect(adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] })).rejects.toMatchObject({
+      kind: "network",
+      retryable: true
+    });
+    await expect(adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] })).rejects.toThrow(/fetch failed/);
+  });
+
   it("parses OpenAI-compatible streaming deltas", () => {
     const events = parseOpenAiStream([
       'data: {"choices":[{"delta":{"content":"hel"}}]}',
@@ -342,6 +359,27 @@ describe("provider routing", () => {
     expect(JSON.stringify(calls[0].headers)).toContain("x-api-key");
     expect(result.text).toBe("anthropic ok");
     expect(result.usage).toEqual({ inputTokens: 2, outputTokens: 3 });
+  });
+
+  it("wraps compatible provider fetch failures as retryable network provider errors", async () => {
+    const adapter = new MessagesCompatibleAdapter({
+      name: "compatible",
+      config: {
+        type: "messages-compatible",
+        apiKeyEnv: "MAGI_COMPATIBLE_API_KEY",
+        baseUrl: "https://example.invalid",
+        defaultModel: "compatible-test"
+      },
+      env: { MAGI_COMPATIBLE_API_KEY: "test-key" },
+      fetchImpl: async () => {
+        throw new TypeError("fetch failed", { cause: new Error("UND_ERR_SOCKET") });
+      }
+    });
+
+    await expect(adapter.complete({ model: "compatible-test", messages: [textMessage("user", "hello")] })).rejects.toMatchObject({
+      kind: "network",
+      retryable: true
+    });
   });
 
   it("resolves model aliases and fallback chains", () => {

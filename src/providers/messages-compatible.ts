@@ -1,7 +1,7 @@
 import { ProviderConfig } from "../config.js";
 import { MagiConfigError } from "../errors.js";
 import { providerErrorFromResponse } from "./errors.js";
-import { FetchLike, getApiKey, normalizeBaseUrl } from "./http.js";
+import { FetchLike, fetchProvider, getApiKey, normalizeBaseUrl } from "./http.js";
 import { MagiMessage, MagiToolUsePart, ProviderAdapter, ProviderRequest, ProviderResponse, ProviderStreamEvent, messageText } from "./ir.js";
 import { readSseEvents } from "./sse.js";
 
@@ -29,7 +29,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await this.fetchImpl(`${baseUrl}/chat/completions`, {
+    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/chat/completions`, {
       method: "POST",
       signal: request.signal,
       headers: {
@@ -71,7 +71,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await this.fetchImpl(`${baseUrl}/chat/completions`, {
+    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/chat/completions`, {
       method: "POST",
       signal: request.signal,
       headers: {
@@ -137,7 +137,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await this.fetchImpl(`${baseUrl}/v1/messages`, {
+    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/v1/messages`, {
       method: "POST",
       signal: request.signal,
       headers: {
@@ -164,7 +164,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await this.fetchImpl(`${baseUrl}/v1/messages`, {
+    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/v1/messages`, {
       method: "POST",
       signal: request.signal,
       headers: {
