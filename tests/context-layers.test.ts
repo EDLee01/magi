@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildLayeredContext, getGitContext } from "../src/context/layers.js";
+import { MemoryNodeStore } from "../src/memory-node-store.js";
 
 describe("context/layers", () => {
   function makeTempCwd(): string {
@@ -32,10 +33,80 @@ describe("context/layers", () => {
       expect(rulesLayer!.content).toContain("Always use TypeScript.");
     });
 
-    it("includes user memory index when paths provided", () => {
+    it("includes hot memory from weighted graph nodes when paths provided", () => {
       const cwd = makeTempCwd();
       const root = mkdtempSync(path.join(tmpdir(), "magi-home-"));
-      writeFileSync(path.join(root, "memory.md"), "preferred language: TypeScript\n", "utf8");
+      const paths = {
+        root,
+        stateRoot: path.join(root, "state"),
+        configFile: path.join(root, "config.yaml"),
+        sessionDbFile: path.join(root, "state", "sessions.db")
+      } as import("../src/paths.js").MagiPaths;
+      const store = MemoryNodeStore.open(paths);
+      store.upsertNode({
+        type: "work_habit",
+        title: "Focused verification",
+        summary: "User prefers focused verification before broad checks.",
+        body: "For coding tasks, run focused verification before broad checks unless asked otherwise.",
+        source: "test",
+        weight: 0.8
+      });
+      store.close();
+
+      const injectedNodes: string[] = [];
+      const result = buildLayeredContext({ cwd, paths, includeGit: false });
+      const memLayer = result.layers.find((l) => l.name === "hot-memory");
+      expect(memLayer).toBeDefined();
+      expect(memLayer!.content).toContain("Focused verification");
+      expect(memLayer!.content).toContain("work_habit");
+
+      buildLayeredContext({
+        cwd,
+        paths,
+        includeGit: false,
+        hotMemorySink: (nodes) => injectedNodes.push(...nodes.map((node) => node.title))
+      });
+      expect(injectedNodes).toEqual(["Focused verification"]);
+    });
+
+    it("loads graph memory before dynamic memory", () => {
+      const cwd = makeTempCwd();
+      const root = mkdtempSync(path.join(tmpdir(), "magi-home-"));
+      const paths = {
+        root,
+        stateRoot: path.join(root, "state"),
+        configFile: path.join(root, "config.yaml"),
+        sessionDbFile: path.join(root, "state", "sessions.db")
+      } as import("../src/paths.js").MagiPaths;
+      const store = MemoryNodeStore.open(paths);
+      store.upsertNode({
+        type: "project",
+        title: "Memory architecture",
+        summary: "Memory graph is the primary store.",
+        body: "Magi memory should use the SQLite memory graph as the source of truth.",
+        source: "test",
+        weight: 0.9
+      });
+      store.close();
+
+      const result = buildLayeredContext({
+        cwd,
+        paths,
+        memoryContext: "[Relevant Memory]\nlow-priority recall",
+        includeGit: false
+      });
+      const names = result.layers.map((layer) => layer.name);
+      expect(names.indexOf("hot-memory")).toBeLessThan(names.indexOf("dynamic-memory"));
+      const memLayer = result.layers.find((layer) => layer.name === "hot-memory");
+      expect(memLayer!.content).toContain("[Hot Memory]");
+      expect(memLayer!.content).toContain("Memory architecture");
+      expect(memLayer!.content).toContain("SQLite memory graph");
+    });
+
+    it("does not inject legacy markdown or memdir as hot memory", () => {
+      const cwd = makeTempCwd();
+      const root = mkdtempSync(path.join(tmpdir(), "magi-home-"));
+      writeFileSync(path.join(root, "memory.md"), "legacy memory should not be hot\n", "utf8");
       const paths = {
         root,
         stateRoot: path.join(root, "state"),
@@ -44,9 +115,7 @@ describe("context/layers", () => {
       } as import("../src/paths.js").MagiPaths;
 
       const result = buildLayeredContext({ cwd, paths, includeGit: false });
-      const memLayer = result.layers.find((l) => l.name === "memory-index");
-      expect(memLayer).toBeDefined();
-      expect(memLayer!.content).toContain("preferred language: TypeScript");
+      expect(result.layers.some((layer) => layer.name === "hot-memory")).toBe(false);
     });
 
     it("includes dynamic memory context", () => {

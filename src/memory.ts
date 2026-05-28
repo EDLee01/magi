@@ -230,6 +230,8 @@ export function extractExplicitMemoryWrite(prompt: string): { scope: MemoryScope
   const trimmed = prompt.trim();
   const patterns: Array<{ pattern: RegExp; scope?: MemoryScope }> = [
     { pattern: /^(?:remember|please remember)\s+(?:for\s+)?(user|project|session)\s*:\s*(.+)$/i },
+    { pattern: /^(?:remember|please remember)\s+(?:that\s+)?(.+)$/i, scope: "user" },
+    { pattern: /^记住[，,]\s*(.+)$/, scope: "user" },
     { pattern: /^记住(?:到|为)?(用户|项目|会话)?记忆?[:：]\s*(.+)$/ },
     { pattern: /^把(.+?)记到(用户|项目|会话)记忆$/ }
   ];
@@ -241,7 +243,14 @@ export function extractExplicitMemoryWrite(prompt: string): { scope: MemoryScope
     if (item.pattern.source.startsWith("^把")) {
       return { scope: readChineseScope(match[2]), text: match[1].trim() };
     }
-    const scope = match[1] ? readScope(match[1]) : item.scope ?? "session";
+    if (item.scope) {
+      const text = match[1]?.trim();
+      if (text) {
+        return { scope: item.scope, text };
+      }
+      continue;
+    }
+    const scope = match[1] ? readScope(match[1]) : "session";
     const text = match[2]?.trim();
     if (text) {
       return { scope, text };

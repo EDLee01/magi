@@ -71,8 +71,7 @@ import {
   LearningDraftToolInputSchema,
   parseLearningDraftToolInput
 } from "./learning-draft-tool.js";
-import { MemdirType } from "../memdir.js";
-import { proposeMemoryDraft } from "../memory-draft.js";
+import { MemoryNodeStore, MemoryNodeType } from "../memory-node-store.js";
 import { SessionStore } from "../session-store.js";
 import {
   formatSessionSearchResult,
@@ -527,6 +526,7 @@ const CORE_TOOL_NAMES = [
   "AskUserQuestion",
   "SendUserMessage",
   "Brief",
+  "Memorize",
   "ToolSearch",
   "WorkspaceDiagnostics",
   "EnterPlanMode",
@@ -1280,27 +1280,28 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "Memorize",
-    description: "Propose a Memory Draft for future conversations. Use sparingly for genuine user preferences, project facts, corrections, or reference pointers — not for ephemeral conversation state. This does not write formal Memory until the user applies the draft.",
+    description: "Write a durable weighted memory graph node for future conversations. Use sparingly for genuine user profiles, preferences, work habits, workflows, project facts, decisions, problems, skill references, or reference pointers — not ephemeral conversation state.",
     category: "memory",
-    tags: ["memory", "memdir", "persist"],
+    tags: ["memory", "graph", "persist"],
     inputSchema: {
       type: "object" as const,
       additionalProperties: false,
       properties: {
         type: {
           type: "string",
-          enum: ["user", "feedback", "project", "reference"],
-          description: "Memory type. user=facts about the user, feedback=corrections/preferences, project=ongoing work facts, reference=pointers to external systems."
+          enum: ["user_profile", "preference", "work_habit", "workflow", "project", "decision", "problem", "reference", "skill_ref"],
+          description: "Memory node type. Use work_habit for recurring user working style, workflow for repeatable procedures, and skill_ref to point to reusable skills."
         },
         name: { type: "string", minLength: 1, maxLength: 80, description: "Short title (e.g. 'User role', 'Prefers tabs over spaces')." },
         description: { type: "string", minLength: 1, maxLength: 200, description: "One-line description used to decide relevance in future conversations." },
-        body: { type: "string", minLength: 1, maxLength: 4000, description: "Memory content. For feedback/project entries, include why and how to apply." }
+        body: { type: "string", minLength: 1, maxLength: 4000, description: "Memory content. For preferences, habits, workflows, and project decisions, include when and how to apply it." },
+        weight: { type: "number", minimum: 0, maximum: 1, description: "Optional confidence/priority weight. Explicit or highly stable facts should be higher; uncertain autonomous memories should be lower." }
       },
       required: ["type", "name", "description", "body"]
     },
     call: (input, context) => {
       const type = String((input as Record<string, unknown>).type ?? "");
-      if (!isValidMemdirType(type)) {
+      if (!isValidMemoryNodeType(type)) {
         throw new Error(`Invalid memory type: ${type}`);
       }
       const name = String((input as Record<string, unknown>).name ?? "").trim();
@@ -1312,16 +1313,19 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       if (!context.stateRoot) {
         throw new Error("Memorize requires Magi stateRoot");
       }
-      const appRoot = path.dirname(context.stateRoot);
-      const draft = proposeMemoryDraft({
-        appRoot,
-        root: context.memoryRoot,
-        targetFile: memoryTargetFile(type),
-        content: formatProposedMemory({ name, description, body, type }),
-        reason: `Memorize tool proposed ${type} Memory: ${description}`,
-        sourceSession: context.sessionId
+      const nodeStore = new MemoryNodeStore(path.join(context.stateRoot, "sessions.sqlite"));
+      const node = nodeStore.upsertNode({
+        type,
+        title: name,
+        summary: description,
+        body,
+        weight: readOptionalWeight((input as Record<string, unknown>).weight),
+        source: "agent",
+        sourceSessionId: context.sessionId,
+        metadata: { tool: "Memorize" }
       });
-      return `Created Memory Draft: ${draft.id} -> ${draft.targetFile}. It will not change formal Memory until the user applies it.`;
+      nodeStore.close();
+      return `Wrote Memory node: ${node.id} (${node.type}, weight ${node.weight.toFixed(2)}).`;
     },
     isReadOnly: () => false,
     isDestructive: () => false,
@@ -2659,29 +2663,23 @@ function requireSkillsRoot(context: ToolExecutionContext): string {
   return path.join(path.dirname(context.stateRoot), "skills");
 }
 
-function isValidMemdirType(value: string): value is MemdirType {
-  return value === "user" || value === "feedback" || value === "project" || value === "reference";
+function isValidMemoryNodeType(value: string): value is MemoryNodeType {
+  return value === "user_profile"
+    || value === "preference"
+    || value === "work_habit"
+    || value === "workflow"
+    || value === "project"
+    || value === "decision"
+    || value === "problem"
+    || value === "reference"
+    || value === "skill_ref"
+    || value === "session";
 }
 
-function memoryTargetFile(type: MemdirType): string {
-  if (type === "user") return "user.md";
-  if (type === "feedback") return "preferences.md";
-  if (type === "project") return "projects/default.md";
-  return "workflows/README.md";
-}
-
-function formatProposedMemory(input: {
-  type: MemdirType;
-  name: string;
-  description: string;
-  body: string;
-}): string {
-  return [
-    `## ${input.name}`,
-    "",
-    `Type: ${input.type}`,
-    `Description: ${input.description}`,
-    "",
-    input.body
-  ].join("\n");
+function readOptionalWeight(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error("Memorize weight must be a number between 0 and 1");
+  }
+  return value;
 }

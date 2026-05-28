@@ -21,6 +21,7 @@ import { cronStorePathFromRoot } from "../src/tools/cron.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
+import { MemoryNodeStore } from "../src/memory-node-store.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -247,6 +248,46 @@ describe("tool registry", () => {
     });
     expect(skillApplied.isError).toBeUndefined();
     expect(readFileSync(path.join(paths.skillsRoot, "learned-debug", "SKILL.md"), "utf8")).toContain("Run focused tests before full suites.");
+  });
+
+  it("writes Memorize tool calls directly to the memory graph", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+
+    const result = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      sessionId: "session-1",
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "memorize",
+        name: "Memorize",
+        input: {
+          type: "work_habit",
+          name: "Focused checks first",
+          description: "User prefers focused checks before broad checks.",
+          body: "For coding tasks, run focused checks before broad checks unless the user asks otherwise.",
+          weight: 0.7
+        }
+      }
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("Wrote Memory node");
+
+    const store = MemoryNodeStore.open(paths);
+    const nodes = store.listHotNodes({ limit: 10, minWeight: 0 });
+    store.close();
+    expect(nodes).toContainEqual(expect.objectContaining({
+      type: "work_habit",
+      title: "Focused checks first",
+      summary: "User prefers focused checks before broad checks.",
+      body: "For coding tasks, run focused checks before broad checks unless the user asks otherwise.",
+      weight: 0.7,
+      source: "agent",
+      sourceSessionId: "session-1"
+    }));
   });
 
   it("creates and patches skills with SkillManage path limits", async () => {

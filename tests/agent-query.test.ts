@@ -14,7 +14,7 @@ import { ProviderAdapter, textMessage } from "../src/providers/ir.js";
 import { ProviderError } from "../src/providers/errors.js";
 import { SessionStore } from "../src/session-store.js";
 import { appendMemory, readMemory } from "../src/memory.js";
-import { listDrafts, showDraft } from "../src/memory-draft.js";
+import { MemoryNodeStore } from "../src/memory-node-store.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
 
@@ -1700,7 +1700,7 @@ describe("agent query loop", () => {
     }
   });
 
-  it("creates memory drafts for explicit memory prompts without inferring ordinary chat", async () => {
+  it("writes explicit memory prompts directly to weighted memory nodes without inferring ordinary chat", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
     ensureMagiHome(paths);
@@ -1728,19 +1728,21 @@ describe("agent query loop", () => {
 
       await engine.submitMessage("remember session: handoff: finish memory tests");
 
-      expect(readMemory({ paths, scope: "session", cwd: workspace, sessionId })).not.toContain("handoff: finish memory tests");
-      const drafts = listDrafts({ appRoot: paths.root });
-      expect(drafts).toHaveLength(1);
-      const draft = showDraft({ appRoot: paths.root, id: drafts[0].id });
-      expect(draft).toMatchObject({
-        status: "pending",
-        targetFile: "sessions/README.md",
-        content: "handoff: finish memory tests"
+      expect(readMemory({ paths, scope: "session", cwd: workspace, sessionId })).toContain("handoff: finish memory tests");
+      const nodeStore = MemoryNodeStore.open(paths);
+      const nodes = nodeStore.listHotNodes({ limit: 10, minWeight: 0 });
+      nodeStore.close();
+      const node = nodes.find((item) => item.body === "handoff: finish memory tests");
+      expect(node).toBeDefined();
+      expect(node).toMatchObject({
+        type: "session",
+        source: "explicit",
+        sourceSessionId: sessionId
       });
       expect(store.listAuditEvents(20)).toContainEqual(expect.objectContaining({
-        action: "agent.memory.draft.created",
-        target: "sessions/README.md",
-        metadata: expect.objectContaining({ draftId: draft.id })
+        action: "agent.memory.written",
+        target: node!.id,
+        metadata: expect.objectContaining({ nodeId: node!.id, scope: "session" })
       }));
 
       const second = new QueryEngine({
@@ -1758,7 +1760,152 @@ describe("agent query loop", () => {
         }
       });
       await second.submitMessage("handoff should finish memory tests");
-      expect(listDrafts({ appRoot: paths.root })).toHaveLength(1);
+      const afterNoWriteStore = MemoryNodeStore.open(paths);
+      expect(afterNoWriteStore.listHotNodes({ limit: 10, minWeight: 0 }).filter((item) => item.body.includes("handoff")).length).toBe(1);
+      afterNoWriteStore.close();
+    } finally {
+      store.close();
+    }
+  });
+
+  it("injects explicit user memory nodes into the next query without keyword retrieval", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const durableFact = "User prefers focused checks before broad checks";
+      const sessionId = store.createSession({ title: "user memory", cwd: workspace });
+      const writer: ProviderAdapter = {
+        name: "memory-writer",
+        complete: async () => ({ text: "remembered" })
+      };
+      await new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-memory-user-write",
+        cwd: workspace,
+        routes: [{ providerName: "memory", model: "writer", adapter: writer }],
+        memoryOptions: {
+          paths,
+          enabled: true,
+          autoWrite: "explicit",
+          maxResults: 4,
+          scopes: ["user", "project", "session"]
+        }
+      }).submitMessage(`remember ${durableFact}`);
+
+      const nodeStore = MemoryNodeStore.open(paths);
+      const durableNode = nodeStore.listHotNodes({ limit: 10, minWeight: 0 }).find((node) => node.body === durableFact);
+      nodeStore.close();
+      expect(durableNode).toMatchObject({
+        type: "work_habit",
+        title: expect.stringContaining("Work habit")
+      });
+
+      const reader: ProviderAdapter = {
+        name: "memory-reader",
+        complete: async (request) => {
+          seen.push(request.messages.map((message) => `${message.role}:${message.content.map((part) => part.type === "text" ? part.text : "").join("")}`).join("\n"));
+          return { text: "ok" };
+        }
+      };
+      await new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-memory-user-read",
+        cwd: workspace,
+        routes: [{ providerName: "memory", model: "reader", adapter: reader }],
+        memoryOptions: {
+          paths,
+          enabled: true,
+          autoWrite: "explicit",
+          maxResults: 4,
+          scopes: ["user", "project", "session"]
+        }
+      }).submitMessage("Unrelated prompt with no matching terms");
+
+      expect(seen[0]).toContain("[Hot Memory]");
+      expect(seen[0]).toContain(durableFact);
+      expect(store.listJobAuditEvents("job-memory-user-read", 20)).toContainEqual(expect.objectContaining({
+        action: "agent.memory.hot.injected",
+        metadata: expect.objectContaining({
+          resultCount: expect.any(Number),
+          nodeIds: expect.arrayContaining([durableNode!.id]),
+          types: expect.arrayContaining(["work_habit"])
+        })
+      }));
+    } finally {
+      store.close();
+    }
+  });
+
+  it("writes natural-language memory requests through an LLM decision", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    try {
+      const sessionId = store.createSession({ title: "llm memory write", cwd: workspace });
+      const adapter: ProviderAdapter = {
+        name: "assistant-provider",
+        complete: async () => ({ text: "记住了" })
+      };
+      const memoryJudge: ProviderAdapter = {
+        name: "memory-judge",
+        complete: async () => ({
+          text: JSON.stringify({
+            shouldWrite: true,
+            scope: "user",
+            type: "user_profile",
+            content: "我是 Edward，你的创造者",
+            confidence: 0.94
+          }),
+          usage: { inputTokens: 11, outputTokens: 7 }
+        })
+      };
+      await new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-memory-natural-write",
+        cwd: workspace,
+        routes: [{ providerName: "assistant", model: "main", adapter }],
+        memoryOptions: {
+          paths,
+          enabled: true,
+          autoWrite: "explicit",
+          maxResults: 4,
+          scopes: ["user", "project", "session"],
+          writeDecisionRoute: {
+            providerName: "judge",
+            model: "fast",
+            adapter: memoryJudge
+          }
+        }
+      }).submitMessage("那你记得哈，我是edward 你的创造者");
+
+      const nodeStore = MemoryNodeStore.open(paths);
+      const node = nodeStore.listHotNodes({ limit: 10, minWeight: 0 }).find((item) => item.body === "我是 Edward，你的创造者");
+      nodeStore.close();
+      expect(node).toMatchObject({
+        type: "user_profile",
+        source: "explicit",
+        metadata: expect.objectContaining({
+          decisionMethod: "llm",
+          confidence: 0.94
+        })
+      });
+      expect(store.listJobAuditEvents("job-memory-natural-write", 20)).toContainEqual(expect.objectContaining({
+        action: "agent.memory.written",
+        target: node!.id,
+        metadata: expect.objectContaining({
+          type: "user_profile",
+          decisionMethod: "llm",
+          providerName: "judge",
+          model: "fast"
+        })
+      }));
     } finally {
       store.close();
     }

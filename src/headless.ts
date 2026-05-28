@@ -264,6 +264,9 @@ async function runPersistedHeadless(input: {
         scopes: input.config.memory.scopes,
         selectionRoute: input.config.memory.selectionModel
           ? resolveSelectionRoute({ config: input.config, registry, modelRef: input.config.memory.selectionModel })
+          : undefined,
+        writeDecisionRoute: input.config.memory.selectionModel
+          ? resolveSelectionRoute({ config: input.config, registry, modelRef: input.config.memory.selectionModel })
           : undefined
       }
     });

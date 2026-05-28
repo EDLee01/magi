@@ -13,11 +13,16 @@ import { AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-quest
 import { UserMessageSink } from "../tools/user-message.js";
 import { ActiveInteractionRegistry, interactionErrorStatus } from "../interactions.js";
 import {
-  extractExplicitMemoryWrite,
+  appendMemory,
   MemoryScope
 } from "../memory.js";
-import { proposeMemoryDraft } from "../memory-draft.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "../memory-search.js";
+import {
+  MemoryNode,
+  MemoryNodeStore,
+  MemoryNodeType
+} from "../memory-node-store.js";
+import { decideMemoryWrite } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
@@ -64,6 +69,7 @@ export interface QueryEngineInput {
     scopes?: MemoryScope[];
     root?: string;
     selectionRoute?: import("../memory-selection.js").MemorySelectionRoute;
+    writeDecisionRoute?: import("../memory-write-decision.js").MemoryWriteDecisionRoute;
   };
 }
 
@@ -519,20 +525,22 @@ export class QueryEngine {
       await this.persistEvent(jobId, compactEvent);
     }
 
-    return {
-      messages: buildSessionMessages({
-        store: this.input.store,
-        sessionId: session.id,
-        prompt,
-        currentUserMessageId,
-        recentMessages: this.input.contextOptions?.recentMessages ?? 20,
-        memoryContext: await this.buildMemoryContext(prompt, jobId),
-        goalContext: this.input.memoryOptions?.paths ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id)) : undefined,
-        cwd: this.input.cwd,
-        paths: this.input.memoryOptions?.paths
-      }),
-      events
-    };
+    const hotMemoryNodes: MemoryNode[] = [];
+    const messages = buildSessionMessages({
+      store: this.input.store,
+      sessionId: session.id,
+      prompt,
+      currentUserMessageId,
+      recentMessages: this.input.contextOptions?.recentMessages ?? 20,
+      memoryContext: await this.buildMemoryContext(prompt, jobId),
+      goalContext: this.input.memoryOptions?.paths ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id)) : undefined,
+      cwd: this.input.cwd,
+      paths: this.input.memoryOptions?.paths,
+      hotMemoryNodeSink: (nodes) => hotMemoryNodes.push(...nodes)
+    });
+    this.recordHotMemoryInjection(jobId, hotMemoryNodes);
+
+    return { messages, events };
   }
 
   private async handleExplicitMemoryWrite(prompt: string, jobId: string): Promise<AgentQueryEvent[]> {
@@ -540,29 +548,94 @@ export class QueryEngine {
     if (!memory?.paths || memory.enabled === false || memory.autoWrite === "off") {
       return [];
     }
-    const write = extractExplicitMemoryWrite(prompt);
+    const write = await decideMemoryWrite({
+      prompt,
+      route: memory.writeDecisionRoute,
+      signal: this.input.signal
+    });
     if (!write) {
       return [];
     }
-    const draft = proposeMemoryDraft({
-      appRoot: memory.paths.root,
-      root: memory.root,
-      targetFile: explicitMemoryTargetFile(write.scope),
-      content: write.text,
-      reason: `Explicit user Memory request for ${write.scope}`,
-      sourceSession: this.input.sessionId
-    });
+    const nodeStore = MemoryNodeStore.open(memory.paths);
+    let node: MemoryNode;
+    try {
+      node = nodeStore.upsertNode({
+        type: write.type,
+        title: explicitMemoryTitle(write.type, write.content),
+        summary: write.content,
+        body: write.content,
+        weight: write.scope === "session" ? 0.55 : 0.95,
+        source: "explicit",
+        sourceSessionId: this.input.sessionId,
+        metadata: {
+          scope: write.scope,
+          classifiedType: write.type,
+          decisionMethod: write.method,
+          confidence: write.confidence,
+          providerName: write.providerName,
+          model: write.model
+        }
+      });
+    } finally {
+      nodeStore.close();
+    }
+    if (write.scope === "session") {
+      appendMemory({
+        paths: memory.paths,
+        scope: "session",
+        cwd: this.input.cwd,
+        sessionId: this.input.sessionId,
+        text: write.content
+      });
+    }
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
-      action: "agent.memory.draft.created",
-      target: draft.targetFile,
+      action: "agent.memory.written",
+      target: node.id,
       metadata: {
         scope: write.scope,
-        draftId: draft.id
+        nodeId: node.id,
+        type: node.type,
+        weight: node.weight,
+        source: "explicit",
+        decisionMethod: write.method,
+        confidence: write.confidence,
+        providerName: write.providerName,
+        model: write.model
       }
     });
+    if (write.usage) {
+      this.input.store.recordUsage({
+        sessionId: this.input.sessionId,
+        provider: write.providerName ?? "memory-decision",
+        model: write.model ?? "memory-decision",
+        inputTokens: write.usage.inputTokens,
+        outputTokens: write.usage.outputTokens,
+        costUsd: 0,
+        metadata: { purpose: "memory-write-decision" }
+      });
+    }
     return [];
+  }
+
+  private recordHotMemoryInjection(jobId: string, nodes: MemoryNode[]): void {
+    if (nodes.length === 0) {
+      return;
+    }
+    this.input.store.recordAudit({
+      sessionId: this.input.sessionId,
+      jobId,
+      action: "agent.memory.hot.injected",
+      target: this.input.sessionId,
+      metadata: {
+        resultCount: nodes.length,
+        nodeIds: nodes.map((node) => node.id),
+        types: nodes.map((node) => node.type),
+        titles: nodes.map((node) => node.title),
+        weights: nodes.map((node) => node.weight)
+      }
+    });
   }
 
   private async buildMemoryContext(prompt: string, jobId: string): Promise<string | undefined> {
@@ -1081,10 +1154,33 @@ function countTodoStatuses(todos: unknown[]): Record<string, number> {
   return counts;
 }
 
-function explicitMemoryTargetFile(scope: MemoryScope): string {
-  if (scope === "user") return "user.md";
-  if (scope === "project") return "projects/default.md";
-  return "sessions/README.md";
+function explicitMemoryTitle(type: MemoryNodeType, text: string): string {
+  return `${memoryNodeTypeLabel(type)}: ${text.trim().slice(0, 60)}`;
+}
+
+function memoryNodeTypeLabel(type: MemoryNodeType): string {
+  switch (type) {
+    case "user_profile":
+      return "User profile";
+    case "preference":
+      return "Preference";
+    case "work_habit":
+      return "Work habit";
+    case "workflow":
+      return "Workflow";
+    case "project":
+      return "Project memory";
+    case "decision":
+      return "Decision";
+    case "problem":
+      return "Problem";
+    case "reference":
+      return "Reference";
+    case "skill_ref":
+      return "Skill reference";
+    case "session":
+      return "Session memory";
+  }
 }
 
 function buildSessionMessages(input: {
@@ -1098,6 +1194,7 @@ function buildSessionMessages(input: {
   cwd?: string;
   paths?: import("../paths.js").MagiPaths;
   systemInstructions?: string;
+  hotMemoryNodeSink?: (nodes: MemoryNode[]) => void;
 }): MagiMessage[] {
   const session = input.store.getSession(input.sessionId);
   if (!session) {
@@ -1115,6 +1212,7 @@ function buildSessionMessages(input: {
       toolCount: getBuiltinToolDefinitions().length
     }),
     memoryContext: [input.goalContext, input.memoryContext].filter(Boolean).join("\n\n") || undefined,
+    hotMemorySink: input.hotMemoryNodeSink,
     includeGit: true,
     includeDate: true,
     platform: process.platform

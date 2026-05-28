@@ -4,18 +4,19 @@
  * Layers (in order):
  * 1. System instructions (core behavior rules)
  * 2. Project rules (AGENTS.md / .magi/rules/)
- * 3. User memory index (MEMORY.md)
- * 4. Dynamic memory (LLM-selected relevant memories)
+ * 3. Hot memory (durable user/project/profile memory)
+ * 4. Dynamic memory (retrieved long-tail memory)
  * 5. Git context (branch, status)
  * 6. Environment (date, cwd, platform)
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { execSync } from "node:child_process";
 
 import { loadAgentInstructions, formatAgentInstructions } from "../rules/agents-loader.js";
 import { MagiPaths } from "../paths.js";
+import { MemoryNode, MemoryNodeStore } from "../memory-node-store.js";
+
+const HOT_MEMORY_CHAR_LIMIT = 8000;
 
 export interface ContextLayer {
   name: string;
@@ -28,6 +29,7 @@ export interface ContextBuildInput {
   systemInstructions?: string;
   memoryContext?: string;
   userMemoryIndex?: string;
+  hotMemorySink?: (nodes: MemoryNode[]) => void;
   includeGit?: boolean;
   includeDate?: boolean;
   platform?: string;
@@ -52,10 +54,12 @@ export function buildLayeredContext(input: ContextBuildInput): BuiltContext {
     layers.push({ name: "project-rules", content: projectRules });
   }
 
-  // Layer 3: User memory index
-  const memoryIndex = input.userMemoryIndex ?? loadUserMemoryIndex(input.paths);
-  if (memoryIndex) {
-    layers.push({ name: "memory-index", content: `[User memory]\n${memoryIndex}` });
+  // Layer 3: Hot memory. This is first-class context, not a best-effort
+  // search result. Keep it before skills/recall so user/project facts frame
+  // later operating guidance.
+  const hotMemory = input.userMemoryIndex ?? loadHotMemory(input.paths, input.hotMemorySink);
+  if (hotMemory) {
+    layers.push({ name: "hot-memory", content: hotMemory });
   }
 
   // Layer 4: Dynamic memory (selected relevant memories)
@@ -87,16 +91,47 @@ function loadProjectRules(cwd: string): string | undefined {
   return formatAgentInstructions(files).trimEnd();
 }
 
-function loadUserMemoryIndex(paths?: MagiPaths): string | undefined {
+function loadHotMemory(paths?: MagiPaths, hotMemorySink?: (nodes: MemoryNode[]) => void): string | undefined {
   if (!paths) {
     return undefined;
   }
-  const indexFile = path.join(paths.root, "memory.md");
-  if (!existsSync(indexFile)) {
+  const nodeMemory = formatNodeHotMemory(paths, hotMemorySink);
+  if (!nodeMemory) {
     return undefined;
   }
-  const content = readFileSync(indexFile, "utf8").trim();
-  return content || undefined;
+  return [
+    "[Hot Memory]",
+    "Durable memory graph nodes. Treat these as high-priority context; current explicit user instructions can override them.",
+    nodeMemory
+  ].join("\n\n").slice(0, HOT_MEMORY_CHAR_LIMIT).trimEnd();
+}
+
+function formatNodeHotMemory(paths: MagiPaths, hotMemorySink?: (nodes: MemoryNode[]) => void): string | undefined {
+  let store: MemoryNodeStore | undefined;
+  try {
+    store = MemoryNodeStore.open(paths);
+    const nodes = store.listHotNodes({ limit: 12, minWeight: 0.25 });
+    if (nodes.length === 0) {
+      return undefined;
+    }
+    hotMemorySink?.(nodes);
+    return ["## Weighted Memory Nodes", ...nodes.map(formatMemoryNode)].join("\n\n");
+  } catch {
+    return undefined;
+  } finally {
+    store?.close();
+  }
+}
+
+function formatMemoryNode(node: MemoryNode): string {
+  return [
+    `### ${node.title}`,
+    `id: ${node.id}`,
+    `type: ${node.type}`,
+    `weight: ${node.weight.toFixed(2)}`,
+    `summary: ${node.summary}`,
+    node.body
+  ].filter(Boolean).join("\n");
 }
 
 export function getGitContext(cwd: string): string | undefined {
