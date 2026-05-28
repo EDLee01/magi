@@ -158,6 +158,66 @@ describe("CLI entrypoint", () => {
     expect(body.message).toContain("No provider is configured");
   });
 
+  it("manages active goals from the CLI", async () => {
+    temp = makeTempRoot();
+    const create = await runCli(["goal", "ship", "goal", "support"], temp.env, process.cwd());
+    expect(create.exitCode).toBe(0);
+    expect(create.stdout).toContain("Goal started: ship goal support");
+
+    const status = await runCli(["goal"], temp.env, process.cwd());
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain("Goal: ship goal support");
+    expect(status.stdout).toContain("Status: active");
+
+    const replacement = await runCli(["goal", "ship", "replacement"], temp.env, process.cwd());
+    expect(replacement.exitCode).toBe(0);
+    expect(replacement.stdout).toContain("Goal started: ship replacement");
+
+    const afterReplacement = await runCli(["goal"], temp.env, process.cwd());
+    expect(afterReplacement.exitCode).toBe(0);
+    expect(afterReplacement.stdout).toContain("Goal: ship replacement");
+  });
+
+  it("injects active goals into resumed model context", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+      }
+      requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        choices: [{ message: { content: "GOAL OK" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      }));
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(paths.configFile, [
+      "version: 0.1",
+      "providers:",
+      "  main:",
+      "    type: openai",
+      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+      `    baseUrl: ${baseUrl}/v1`,
+      "models:",
+      "  aliases:",
+      "    main: main:gpt-main",
+      "  fallbacks: {}",
+      ""
+    ].join("\n"), "utf8");
+
+    await runCli(["goal", "finish", "the", "migration"], temp.env, process.cwd());
+    const result = await runCli(["-c", "-p", "continue"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+
+    expect(result.exitCode).toBe(0);
+    expect(requests[0].messages[0].role).toBe("system");
+    expect(requests[0].messages[0].content).toContain("<active_thread_goal>");
+    expect(requests[0].messages[0].content).toContain("Objective: finish the migration");
+  });
+
   it("lists resume choices when -r has no value", async () => {
     temp = makeTempRoot();
     await runCli(["--name", "resume search target", "-p", "write a short status"], temp.env, process.cwd());

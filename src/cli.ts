@@ -33,6 +33,7 @@ import { VERSION } from "./version.js";
 import { triggerHooks } from "./hooks/events.js";
 import { buildProviderRegistry } from "./providers/registry.js";
 import { resolveModelAlias } from "./routing/model-alias.js";
+import { createGoal, clearGoal, formatGoal, formatGoalStatus, getGoal, isGoalCreationArgs, listGoals, updateGoalStatus } from "./goal.js";
 
 export interface CliResult {
   exitCode: number;
@@ -331,6 +332,52 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         stdout: formatCompactResult(compacted),
         stderr: ""
       };
+    } finally {
+      store.close();
+    }
+  }
+
+  if (command === "goal") {
+    const paths = getMagiPaths(env);
+    ensureMagiHome(paths);
+    loadConfig(paths, env);
+    const store = SessionStore.open(paths);
+    try {
+      const sub = parsed.rest[0]?.toLowerCase();
+      const session = resolveGoalSessionForCommand({
+        store,
+        sessionId: parsed.sessionId ?? parsed.resumeSessionId,
+        cwd,
+        create: isGoalCreationArgs(parsed.rest),
+        title: parsed.rest.join(" ").slice(0, 80) || "goal"
+      });
+      if (!sub || sub === "status" || sub === "show") {
+        return { exitCode: 0, stdout: `${formatGoal(getGoal(paths, session.id))}\n`, stderr: "" };
+      }
+      if (sub === "list") {
+        const goals = listGoals(paths, session.id);
+        return {
+          exitCode: 0,
+          stdout: goals.length === 0
+            ? "No goals for this session.\n"
+            : `${["Goals for this session:", ...goals.map((goal) => `- ${formatGoalStatus(goal.status).padEnd(16)} ${goal.objective} (${goal.updatedAt})`)].join("\n")}\n`,
+          stderr: ""
+        };
+      }
+      if (sub === "done" || sub === "complete" || sub === "completed") {
+        const goal = updateGoalStatus(paths, { sessionId: session.id, status: "completed", note: parsed.rest.slice(1).join(" ") });
+        return { exitCode: goal ? 0 : 2, stdout: `${goal ? `Goal completed: ${goal.objective}` : "No active goal."}\n`, stderr: "" };
+      }
+      if (sub === "blocked" || sub === "block") {
+        const goal = updateGoalStatus(paths, { sessionId: session.id, status: "blocked", note: parsed.rest.slice(1).join(" ") });
+        return { exitCode: goal ? 0 : 2, stdout: `${goal ? `Goal blocked: ${goal.objective}` : "No active goal."}\n`, stderr: "" };
+      }
+      if (sub === "cancel" || sub === "cancelled" || sub === "clear" || sub === "reset" || sub === "stop") {
+        const goal = clearGoal(paths, session.id);
+        return { exitCode: goal ? 0 : 2, stdout: `${goal ? `Goal cancelled: ${goal.objective}` : "No active goal."}\n`, stderr: "" };
+      }
+      const goal = createGoal(paths, { sessionId: session.id, objective: parsed.rest.join(" ") });
+      return { exitCode: 0, stdout: `Goal started: ${goal.objective}\n`, stderr: "" };
     } finally {
       store.close();
     }
@@ -1276,6 +1323,7 @@ function helpText(): string {
     "  magi -p <prompt>",
     "  magi sessions",
     "  magi resume <session-id>",
+    "  magi goal [objective] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",
@@ -1305,6 +1353,7 @@ function knownCommands(): Set<string> {
   return new Set([
     "help", "--help", "-h", "--version", "-v", "-p", "--prompt", "--print",
     "doctor", "config", "sessions", "resume", "context", "compact", "rules",
+    "goal",
     "workspace", "memory", "mcp", "plugins", "marketplace", "skills", "agents", "runner",
     "serve", "daemon", "pair", "peers", "ps", "logs", "kill", "init", "tutorial", "-r", "--resume"
   ]);
@@ -1462,6 +1511,34 @@ function resolveSessionForCommand(store: SessionStore, sessionId: string | undef
     throw new MagiUsageError("No sessions found");
   }
   return session;
+}
+
+function resolveGoalSessionForCommand(input: {
+  store: SessionStore;
+  sessionId: string | undefined;
+  cwd: string;
+  create: boolean;
+  title: string;
+}) {
+  if (input.sessionId) {
+    const session = input.store.getSession(input.sessionId);
+    if (!session) {
+      throw new MagiUsageError(`Session not found: ${input.sessionId}`);
+    }
+    return session;
+  }
+  const session = input.store.getMostRecentSession(input.cwd) ?? input.store.getMostRecentSession();
+  if (session) return session;
+  if (input.create) {
+    const id = input.store.createSession({
+      title: input.title,
+      cwd: input.cwd,
+      metadata: { mode: "goal", command: "goal" }
+    });
+    const created = input.store.getSession(id);
+    if (created) return created;
+  }
+  throw new MagiUsageError("No sessions found");
 }
 
 function resolveCompactionModelRunner(config: ReturnType<typeof loadConfig>, env: NodeJS.ProcessEnv, alias: string) {

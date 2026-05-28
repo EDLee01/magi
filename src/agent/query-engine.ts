@@ -23,6 +23,7 @@ import { selectRelevantMemories } from "../memory-selection.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { searchMemdir, readMemdirIndex } from "../memdir.js";
+import { formatGoalContext, getGoal } from "../goal.js";
 
 export interface QueryEngineInput {
   store: SessionStore;
@@ -486,6 +487,7 @@ export class QueryEngine {
         currentUserMessageId,
         recentMessages: this.input.contextOptions?.recentMessages ?? 20,
         memoryContext: await this.buildMemoryContext(prompt, jobId),
+        goalContext: this.input.memoryOptions?.paths ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id)) : undefined,
         cwd: this.input.cwd,
         paths: this.input.memoryOptions?.paths
       }),
@@ -943,6 +945,7 @@ function buildSessionMessages(input: {
   currentUserMessageId: number;
   recentMessages: number;
   memoryContext?: string;
+  goalContext?: string;
   cwd?: string;
   paths?: import("../paths.js").MagiPaths;
   systemInstructions?: string;
@@ -962,7 +965,7 @@ function buildSessionMessages(input: {
       platform: process.platform,
       toolCount: getBuiltinToolDefinitions().length
     }),
-    memoryContext: input.memoryContext,
+    memoryContext: [input.goalContext, input.memoryContext].filter(Boolean).join("\n\n") || undefined,
     includeGit: true,
     includeDate: true,
     platform: process.platform

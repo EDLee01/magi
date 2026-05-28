@@ -47,4 +47,8 @@ describe("typo suggestion", () => {
     const suggestion = registry.suggestCommand("imag");
     expect(["image", "img"]).toContain(suggestion);
   });
+
+  it("registers the goal slash command", () => {
+    expect(registry.get("goal")?.usage).toContain("/goal");
+  });
 });

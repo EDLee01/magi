@@ -36,6 +36,7 @@ export type SlashCommand =
   | { type: "cost" }
   | { type: "doctor" }
   | { type: "compact" }
+  | { type: "goal"; args: string[] }
   | { type: "commit"; args: string[] }
   | { type: "diff"; args: string[] }
   | { type: "unknown"; name: string };
@@ -61,6 +62,7 @@ export const SLASH_COMMANDS: SlashCommandSpec[] = [
   { name: "diff", usage: "/diff [path]", group: "Git", description: "Show git diff" },
   { name: "clear", usage: "/clear", group: "Session", description: "Start a fresh session" },
   { name: "summary", usage: "/summary", group: "Session", description: "Show session summary" },
+  { name: "goal", usage: "/goal <objective> | /goal", group: "Session", description: "Start or show the current session goal" },
   { name: "cost", usage: "/cost", group: "Session", description: "Show job and cost info" },
   { name: "doctor", usage: "/doctor", group: "Tools", description: "Run workspace diagnostics" },
   { name: "compact", usage: "/compact", group: "Session", description: "Trigger context compaction" },
@@ -95,6 +97,7 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
   if (n === "cost") return { type: "cost" };
   if (n === "doctor") return { type: "doctor" };
   if (n === "compact") return { type: "compact" };
+  if (n === "goal") return { type: "goal", args: rest };
   return { type: "unknown", name: n };
 }
 
@@ -119,6 +122,7 @@ export function runSlashCommand(input: {
   if (cmd.type === "model") args = cmd.alias ? [cmd.alias] : [];
   else if (cmd.type === "resume") args = cmd.sessionId ? [cmd.sessionId] : [];
   else if (cmd.type === "memory") args = cmd.scope ? [cmd.scope] : [];
+  else if (cmd.type === "goal") args = cmd.args ?? [];
   else if (cmd.type === "commit") args = cmd.args ?? [];
   else if (cmd.type === "diff") args = cmd.args ?? [];
 

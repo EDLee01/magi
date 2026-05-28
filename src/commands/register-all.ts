@@ -30,6 +30,7 @@ import { command as todos } from "./todos.js";
 import { command as usage } from "./usage.js";
 import { command as upgrade } from "./upgrade.js";
 import { command as image } from "./image.js";
+import { command as goal } from "./goal.js";
 
 export function registerAllCommands(): void {
   registry.register(help);
@@ -63,4 +64,5 @@ export function registerAllCommands(): void {
   registry.register(usage);
   registry.register(upgrade);
   registry.register(image);
+  registry.register(goal);
 }
