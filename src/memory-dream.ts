@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { atomicWrite } from "./fs-utils.js";
@@ -22,6 +23,7 @@ export interface DreamOperation {
   reason: string;
   content?: string;
   relatedFiles?: string[];
+  graphNodeIds?: string[];
 }
 
 export interface DreamManifest {
@@ -31,6 +33,12 @@ export interface DreamManifest {
   summary: string;
   operations: DreamOperation[];
   draftIds: string[];
+  graphNodeIds?: string[];
+  graphReview?: {
+    decision: "archive" | "keep";
+    nodeIds: string[];
+    reviewedAt: string;
+  };
 }
 
 export interface DreamRecord {
@@ -70,7 +78,8 @@ export function runDream(input: MemoryRootOptions & { paths?: MagiPaths }): Drea
     status: "pending",
     summary: formatDreamSummary(operations),
     operations,
-    draftIds
+    draftIds,
+    graphNodeIds: extractGraphNodeIds(operations)
   };
   atomicWrite(path.join(dreamRoot, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   atomicWrite(path.join(dreamRoot, "summary.md"), formatDreamMarkdown(manifest));
@@ -123,7 +132,11 @@ export function showDream(input: MemoryRootOptions & { id: string }): DreamManif
 }
 
 export function applyDream(
-  input: MemoryRootOptions & { id: string; applyDraft: (draftId: string) => MemoryDraft }
+  input: MemoryRootOptions & {
+    id: string;
+    applyDraft: (draftId: string) => MemoryDraft;
+    paths?: MagiPaths;
+  }
 ): DreamManifest {
   const root = ensureMemoryStructure(input);
   const file = dreamManifestPath(root, input.id);
@@ -134,20 +147,39 @@ export function applyDream(
   for (const draftId of manifest.draftIds) {
     input.applyDraft(draftId);
   }
-  const applied = { ...manifest, status: "applied" as const };
+  const graphNodeIds = extractGraphNodeIds(manifest.operations, manifest.graphNodeIds);
+  const archivedGraphNodeIds = archiveDreamGraphNodes({
+    paths: input.paths,
+    dreamId: manifest.id,
+    nodeIds: graphNodeIds
+  });
+  const applied: DreamManifest = {
+    ...manifest,
+    status: "applied",
+    graphNodeIds,
+    graphReview: {
+      decision: "archive",
+      nodeIds: archivedGraphNodeIds,
+      reviewedAt: new Date().toISOString()
+    }
+  };
   atomicWrite(file, JSON.stringify(applied, null, 2) + "\n");
   recordMemoryAudit({
     ...input,
     root,
     action: "memory.dream.applied",
     target: manifest.id,
-    metadata: { draftIds: manifest.draftIds }
+    metadata: { draftIds: manifest.draftIds, graphNodeIds, archivedGraphNodeIds }
   });
   return applied;
 }
 
 export function rejectDream(
-  input: MemoryRootOptions & { id: string; rejectDraft: (draftId: string) => MemoryDraft }
+  input: MemoryRootOptions & {
+    id: string;
+    rejectDraft: (draftId: string) => MemoryDraft;
+    paths?: MagiPaths;
+  }
 ): DreamManifest {
   const root = ensureMemoryStructure(input);
   const file = dreamManifestPath(root, input.id);
@@ -158,14 +190,29 @@ export function rejectDream(
   for (const draftId of manifest.draftIds) {
     input.rejectDraft(draftId);
   }
-  const rejected = { ...manifest, status: "rejected" as const };
+  const graphNodeIds = extractGraphNodeIds(manifest.operations, manifest.graphNodeIds);
+  const keptGraphNodeIds = keepDreamGraphNodes({
+    paths: input.paths,
+    dreamId: manifest.id,
+    nodeIds: graphNodeIds
+  });
+  const rejected: DreamManifest = {
+    ...manifest,
+    status: "rejected",
+    graphNodeIds,
+    graphReview: {
+      decision: "keep",
+      nodeIds: keptGraphNodeIds,
+      reviewedAt: new Date().toISOString()
+    }
+  };
   atomicWrite(file, JSON.stringify(rejected, null, 2) + "\n");
   recordMemoryAudit({
     ...input,
     root,
     action: "memory.dream.rejected",
     target: manifest.id,
-    metadata: { draftIds: manifest.draftIds }
+    metadata: { draftIds: manifest.draftIds, graphNodeIds, keptGraphNodeIds }
   });
   return rejected;
 }
@@ -230,11 +277,68 @@ function analyzeGraphCleanupCandidates(paths: MagiPaths): DreamOperation[] {
         targetFile: "archive/README.md",
         reason: `Graph node ${candidate.node.id}: ${candidate.reason}`,
         content: `\n<!-- Dream graph archive candidate -->\n- ${candidate.node.title} (${candidate.node.id}): ${candidate.reason}\n`,
-        relatedFiles: [`graph:${candidate.node.id}`]
+        relatedFiles: [`graph:${candidate.node.id}`],
+        graphNodeIds: [candidate.node.id]
       }));
   } finally {
     store.close();
   }
+}
+
+function archiveDreamGraphNodes(input: {
+  paths?: MagiPaths;
+  dreamId: string;
+  nodeIds: string[];
+}): string[] {
+  if (!input.paths || input.nodeIds.length === 0) return [];
+  const store = MemoryNodeStore.open(input.paths);
+  try {
+    return store
+      .archiveNodes({
+        ids: input.nodeIds,
+        reason: `Archived by Dream ${input.dreamId}`,
+        metadata: { dreamId: input.dreamId }
+      })
+      .map((node) => node.id);
+  } finally {
+    store.close();
+  }
+}
+
+function keepDreamGraphNodes(input: {
+  paths?: MagiPaths;
+  dreamId: string;
+  nodeIds: string[];
+}): string[] {
+  if (!input.paths || input.nodeIds.length === 0) return [];
+  const store = MemoryNodeStore.open(input.paths);
+  try {
+    return store
+      .keepNodes({
+        ids: input.nodeIds,
+        reason: `Kept by Dream ${input.dreamId}`,
+        metadata: { dreamId: input.dreamId }
+      })
+      .map((node) => node.id);
+  } finally {
+    store.close();
+  }
+}
+
+function extractGraphNodeIds(operations: DreamOperation[], storedIds: string[] = []): string[] {
+  const ids = new Set(storedIds.filter(Boolean));
+  for (const op of operations) {
+    for (const id of op.graphNodeIds ?? []) {
+      if (id.trim()) ids.add(id.trim());
+    }
+    for (const related of op.relatedFiles ?? []) {
+      if (related.startsWith("graph:")) {
+        const id = related.slice("graph:".length).trim();
+        if (id) ids.add(id);
+      }
+    }
+  }
+  return Array.from(ids);
 }
 
 function formatDreamSummary(operations: DreamOperation[]): string {
@@ -303,7 +407,7 @@ function createDreamId(): string {
     .toISOString()
     .replace(/[-:T.Z]/g, "")
     .slice(0, 14);
-  return `dream_${stamp}`;
+  return `dream_${stamp}_${randomUUID().slice(0, 8)}`;
 }
 
 function normalizeLine(line: string): string {

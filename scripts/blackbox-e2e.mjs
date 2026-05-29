@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import http from "node:http";
@@ -467,6 +467,12 @@ function parseDraftId(output) {
   return match[1];
 }
 
+function parseDreamId(output) {
+  const match = output.match(/Experimental Dream created:\s*([a-z0-9_-]+)/i);
+  assert(match, `could not parse dream id from output:\n${output}`);
+  return match[1];
+}
+
 async function seedMemoryAndGoal({ workDir, configDir }) {
   await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory init" });
   const userDraft = parseDraftId(await runCli({
@@ -889,7 +895,7 @@ async function scenarioMemoryCorrection() {
     assert(conflicts.includes("Memory graph conflicts:"), "memory conflicts did not list graph conflicts");
     assert(conflicts.includes("recommendation: prefer_from"), "memory conflicts did not recommend active replacement");
     assert(conflicts.includes("edge reason:"), "memory conflicts did not include correction edge reason");
-    await createStaleGraphNodeForDream(configDir, workDir);
+    const staleGraphNodeId = await createStaleGraphNodeForDream(configDir, workDir);
     const dream = await runCli({
       args: ["memory", "dream"],
       cwd: workDir,
@@ -898,6 +904,22 @@ async function scenarioMemoryCorrection() {
     });
     assert(dream.includes("archive_candidate"), "memory dream did not include graph archive candidate");
     assert(dream.includes("Drafts:"), "memory dream did not create reviewable drafts");
+    const dreamId = parseDreamId(dream);
+    const appliedDream = await runCli({
+      args: ["memory", "dream", "apply", dreamId],
+      cwd: workDir,
+      configDir,
+      label: "memory dream apply graph cleanup",
+    });
+    assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream apply did not archive graph node");
+    const archivedSearch = await runCli({
+      args: ["memory", "search", "Dormant graph cleanup workflow"],
+      cwd: workDir,
+      configDir,
+      label: "memory dream archive search",
+    });
+    assert(!archivedSearch.includes("Dormant graph cleanup workflow should be reviewed for archive"), "archived graph node was still recalled");
+    assertGraphNodeStatus(configDir, staleGraphNodeId, "archived");
     const maintenanceConfig = await runCli({
       args: [
         "memory",
@@ -939,6 +961,7 @@ async function scenarioMemoryCorrection() {
     assert(existsSync(auditPath), "memory correction audit log was not written");
     const audit = readFileSync(auditPath, "utf8");
     assert(audit.includes("memory.corrected"), "memory correction audit event missing");
+    assert(audit.includes("memory.dream.applied"), "memory dream apply audit event missing");
     assert(audit.includes("memory.maintenance.configured"), "memory maintenance config audit event missing");
     assert(audit.includes("memory.maintenance.applied"), "memory maintenance audit event missing");
     return {
@@ -950,6 +973,7 @@ async function scenarioMemoryCorrection() {
         "disputed stale memory excluded from search results",
         "memory conflict audit view recommends active replacement",
         "memory dream suggests stale graph cleanup",
+        "memory dream apply archives stale graph node",
         "memory maintenance policy persisted and reused",
         "memory maintenance decayed stale node weights",
         "memory correction and maintenance audit persisted"
@@ -966,6 +990,7 @@ async function createStaleGraphNodeForDream(configDir, cwd) {
     "const db = new Database(dbFile);",
     "const id = crypto.randomUUID();",
     "db.prepare(`insert into memory_nodes (id, type, title, summary, body, weight, status, source, source_session_id, created_at, updated_at, last_used_at, use_count, metadata_json) values (?, 'workflow', 'Dormant graph cleanup workflow', 'Dormant graph cleanup workflow.', 'Dormant graph cleanup workflow should be reviewed for archive.', 0.25, 'active', 'explicit', null, ?, ?, null, 0, '{}')`).run(id, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');",
+    "console.log(id);",
     "db.close();",
   ].join("\n");
   const result = await runCommand({
@@ -978,6 +1003,34 @@ async function createStaleGraphNodeForDream(configDir, cwd) {
   });
   if (result.code !== 0) {
     throw new Error(`memory dream stale graph fixture failed\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
+  }
+  const id = result.stdout.trim();
+  assert(id, "memory dream stale graph fixture did not print node id");
+  return id;
+}
+
+function assertGraphNodeStatus(configDir, nodeId, expectedStatus) {
+  const script = [
+    "import Database from 'better-sqlite3';",
+    "const [dbFile, nodeId, expectedStatus] = process.argv.slice(1);",
+    "const db = new Database(dbFile);",
+    "const row = db.prepare('select status from memory_nodes where id = ?').get(nodeId);",
+    "db.close();",
+    "if (!row) throw new Error(`node not found: ${nodeId}`);",
+    "if (row.status !== expectedStatus) throw new Error(`expected ${expectedStatus}, got ${row.status}`);",
+  ].join("\n");
+  const result = spawnSync(nodeBin, ["--input-type=module", "-e", script, path.join(configDir, "state", "sessions.sqlite"), nodeId, expectedStatus], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      MAGI_CONFIG_DIR: configDir,
+      MAGI_OPENAI_API_KEY: "test-key",
+      NO_COLOR: "1",
+    },
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    throw new Error(`graph node status check failed\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
   }
 }
 

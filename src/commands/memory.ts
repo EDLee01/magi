@@ -86,7 +86,7 @@ export const command = {
       const action = args[1];
       const id = args[2];
       if (!action) {
-        const dream = runDream(rootInput);
+        const dream = runDream({ ...rootInput, paths: input.paths });
         return [
           `Experimental Dream created: ${dream.id}`,
           dream.summary,
@@ -99,17 +99,19 @@ export const command = {
         const dream = applyDream({
           ...rootInput,
           id,
+          paths: input.paths,
           applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId })
         });
-        return `Applied Dream: ${dream.id}`;
+        return `Applied Dream: ${dream.id}\nArchived graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}`;
       }
       if (action === "reject") {
         const dream = rejectDream({
           ...rootInput,
           id,
+          paths: input.paths,
           rejectDraft: (draftId) => rejectDraft({ ...rootInput, id: draftId })
         });
-        return `Rejected Dream: ${dream.id}`;
+        return `Rejected Dream: ${dream.id}\nKept graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}`;
       }
       return `Unknown Dream action: ${action}`;
     }

@@ -732,17 +732,27 @@ async function runCliUnsafeWithParsed(
         const dream = applyDream({
           ...rootInput,
           id,
+          paths,
           applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId })
         });
-        return { exitCode: 0, stdout: `Applied Dream: ${dream.id}\n`, stderr: "" };
+        return {
+          exitCode: 0,
+          stdout: `Applied Dream: ${dream.id}\nArchived graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}\n`,
+          stderr: ""
+        };
       }
       if (action === "reject") {
         const dream = rejectDream({
           ...rootInput,
           id,
+          paths,
           rejectDraft: (draftId) => rejectDraft({ ...rootInput, id: draftId })
         });
-        return { exitCode: 0, stdout: `Rejected Dream: ${dream.id}\n`, stderr: "" };
+        return {
+          exitCode: 0,
+          stdout: `Rejected Dream: ${dream.id}\nKept graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}\n`,
+          stderr: ""
+        };
       }
       throw new MagiUsageError(`Unknown memory dream action: ${action}`);
     }

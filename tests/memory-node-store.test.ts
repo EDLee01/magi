@@ -207,6 +207,84 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("archives and keeps reviewed graph cleanup nodes", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "wiki",
+        uri: "memory/workflows/cleanup.md",
+        title: "Cleanup workflow",
+        contentHash: "hash-cleanup-1"
+      });
+      const chunk = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/workflows/cleanup.md#stale",
+        type: "workflow",
+        heading: "Stale workflow",
+        body: "Stale workflow should be removed from active recall.",
+        summary: "Stale workflow.",
+        contentHash: "chunk-cleanup-1",
+        weight: 0.25
+      });
+      const standalone = store.upsertNode({
+        type: "workflow",
+        title: "Reviewed workflow",
+        summary: "Reviewed workflow.",
+        body: "Reviewed workflow should remain active after cleanup review.",
+        source: "explicit",
+        weight: 0.25
+      });
+
+      const kept = store.keepNodes({
+        ids: [standalone.id],
+        reason: "Reviewer kept this workflow",
+        metadata: { dreamId: "dream_keep" }
+      });
+      expect(kept.map((node) => node.id)).toEqual([standalone.id]);
+      expect(store.getNode(standalone.id)).toMatchObject({
+        status: "active",
+        metadata: expect.objectContaining({
+          cleanupReview: expect.objectContaining({
+            decision: "kept",
+            dreamId: "dream_keep"
+          })
+        })
+      });
+
+      const archived = store.archiveNodes({
+        ids: [chunk.nodeId],
+        reason: "Reviewer archived this workflow",
+        metadata: { dreamId: "dream_archive" }
+      });
+      expect(archived.map((node) => node.id)).toEqual([chunk.nodeId]);
+      expect(store.getNode(chunk.nodeId)).toMatchObject({
+        status: "archived",
+        metadata: expect.objectContaining({
+          archive: expect.objectContaining({
+            dreamId: "dream_archive"
+          })
+        })
+      });
+      expect(store.searchGraph({ query: "removed recall", limit: 5 })).toHaveLength(0);
+
+      store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/workflows/cleanup.md#stale",
+        type: "workflow",
+        heading: "Stale workflow",
+        body: "Stale workflow should be removed from active recall.",
+        summary: "Stale workflow.",
+        contentHash: "chunk-cleanup-2",
+        weight: 0.72
+      });
+      expect(store.getNode(chunk.nodeId)?.status).toBe("archived");
+      expect(store.searchGraph({ query: "removed recall", limit: 5 })).toHaveLength(0);
+    } finally {
+      store.close();
+    }
+  });
+
   it("disputes incorrect nodes and recalls corrected replacements through supersedes edges", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

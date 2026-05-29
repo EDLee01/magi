@@ -105,6 +105,18 @@ export interface MemoryCleanupCandidate {
   reason: string;
 }
 
+export interface ArchiveMemoryNodesInput {
+  ids: string[];
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface KeepMemoryNodesInput {
+  ids: string[];
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface DecayUnusedMemoryResult {
   applied: boolean;
   olderThanDays: number;
@@ -514,7 +526,11 @@ export class MemoryNodeStore {
     if (existing) {
       const node = this.getNode(existing.nodeId);
       const weight = node?.weight ?? input.weight ?? defaultWeight(source.kind);
-      const nodeStatus = node?.status === "disputed" ? "disputed" : "active";
+      const nodeStatus =
+        node?.status === "archived" && node.metadata.archive
+          ? "archived"
+          : (node?.status ?? "active");
+      const chunkStatus = nodeStatus === "archived" ? "archived" : "active";
       this.db
         .prepare(
           `
@@ -547,7 +563,7 @@ export class MemoryNodeStore {
           `
         update memory_chunks
         set uri = ?, heading = ?, body = ?, summary = ?, content_hash = ?, order_index = ?,
-            status = 'active', updated_at = ?, metadata_json = ?
+            status = ?, updated_at = ?, metadata_json = ?
         where id = ?
       `
         )
@@ -558,6 +574,7 @@ export class MemoryNodeStore {
           input.summary?.trim() || defaultSummary(body),
           contentHash,
           input.orderIndex ?? existing.orderIndex,
+          chunkStatus,
           now,
           encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
           existing.id
@@ -911,6 +928,89 @@ export class MemoryNodeStore {
         reason: `${node.title} is low-weight (${node.weight.toFixed(2)}) and unused for ${ageDays}d.`
       };
     });
+  }
+
+  archiveNodes(input: ArchiveMemoryNodesInput): MemoryNode[] {
+    const ids = uniqueIds(input.ids);
+    if (ids.length === 0) return [];
+    const now = nowIso();
+    const updateNode = this.db.prepare(`
+      update memory_nodes
+      set status = 'archived',
+          updated_at = ?,
+          metadata_json = ?
+      where id = ? and status != 'archived'
+    `);
+    const updateChunks = this.db.prepare(`
+      update memory_chunks
+      set status = 'archived',
+          updated_at = ?
+      where node_id = ?
+    `);
+    const archived = this.db.transaction((nodeIds: string[]) => {
+      const changed: MemoryNode[] = [];
+      for (const id of nodeIds) {
+        const node = this.getNode(id);
+        if (!node || node.status === "archived") {
+          continue;
+        }
+        updateNode.run(
+          now,
+          encodeJson({
+            ...node.metadata,
+            archive: {
+              reason: input.reason ?? "Memory graph node archived",
+              archivedAt: now,
+              ...(input.metadata ?? {})
+            }
+          }),
+          id
+        );
+        updateChunks.run(now, id);
+        changed.push(this.getNode(id)!);
+      }
+      return changed;
+    })(ids);
+    return archived;
+  }
+
+  keepNodes(input: KeepMemoryNodesInput): MemoryNode[] {
+    const ids = uniqueIds(input.ids);
+    if (ids.length === 0) return [];
+    const now = nowIso();
+    const update = this.db.prepare(`
+      update memory_nodes
+      set last_used_at = ?,
+          updated_at = ?,
+          metadata_json = ?
+      where id = ? and status = 'active'
+    `);
+    const kept = this.db.transaction((nodeIds: string[]) => {
+      const changed: MemoryNode[] = [];
+      for (const id of nodeIds) {
+        const node = this.getNode(id);
+        if (!node || node.status !== "active") {
+          continue;
+        }
+        update.run(
+          now,
+          now,
+          encodeJson({
+            ...node.metadata,
+            cleanupReview: {
+              decision: "kept",
+              reason: input.reason ?? "Memory graph node kept after review",
+              reviewedAt: now,
+              ...(input.metadata ?? {})
+            }
+          }),
+          id
+        );
+        changed.push(this.getNode(id)!);
+      }
+      return changed;
+    })(ids);
+    return kept;
   }
 
   getNode(id: string): MemoryNode | undefined {
@@ -1328,6 +1428,10 @@ function toMemoryChunk(row: DbMemoryChunk): MemoryChunk {
     updatedAt: row.updated_at,
     metadata: decodeJson(row.metadata_json)
   };
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
 function toMemoryEdge(row: DbMemoryEdge): MemoryEdge {

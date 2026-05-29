@@ -171,9 +171,108 @@ describe("AGENTS rules and memory", () => {
       expect.objectContaining({
         type: "archive_candidate",
         reason: expect.stringContaining(stale.id),
-        relatedFiles: [`graph:${stale.id}`]
+        relatedFiles: [`graph:${stale.id}`],
+        graphNodeIds: [stale.id]
       })
     );
+    expect(manifest.graphNodeIds).toContain(stale.id);
+  });
+
+  it("applies or rejects Dream graph cleanup through reviewable CLI actions", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const firstStore = MemoryNodeStore.open(paths);
+    const archiveCandidate = firstStore.upsertNode({
+      type: "workflow",
+      title: "Archive reviewed workflow",
+      summary: "Archive reviewed workflow.",
+      body: "Archive reviewed workflow should disappear from active graph recall.",
+      source: "explicit",
+      weight: 0.2
+    });
+    firstStore.close();
+    const db = new Database(paths.sessionDbFile);
+    db.prepare(
+      "update memory_nodes set created_at = ?, updated_at = ?, last_used_at = null where id = ?"
+    ).run("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", archiveCandidate.id);
+    db.close();
+
+    const archiveDream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(archiveDream.exitCode).toBe(0);
+    const pendingDreams = listDreams({ appRoot: paths.root });
+    const archiveDreamId = pendingDreams.find((dream) => dream.status === "pending")?.id;
+    expect(archiveDreamId).toBeDefined();
+
+    const applied = await runCli(
+      ["memory", "dream", "apply", archiveDreamId!],
+      temp.env,
+      workspace
+    );
+    expect(applied.exitCode).toBe(0);
+    expect(applied.stdout).toContain("Archived graph nodes: 1");
+    const afterApply = MemoryNodeStore.open(paths);
+    expect(afterApply.getNode(archiveCandidate.id)).toMatchObject({
+      status: "archived",
+      metadata: expect.objectContaining({
+        archive: expect.objectContaining({ dreamId: archiveDreamId })
+      })
+    });
+    afterApply.close();
+    expect(showDream({ appRoot: paths.root, id: archiveDreamId! })).toMatchObject({
+      status: "applied",
+      graphReview: expect.objectContaining({
+        decision: "archive",
+        nodeIds: [archiveCandidate.id]
+      })
+    });
+
+    const secondStore = MemoryNodeStore.open(paths);
+    const keepCandidate = secondStore.upsertNode({
+      type: "workflow",
+      title: "Keep reviewed workflow",
+      summary: "Keep reviewed workflow.",
+      body: "Keep reviewed workflow should stay in active graph recall.",
+      source: "explicit",
+      weight: 0.2
+    });
+    secondStore.close();
+    const keepDb = new Database(paths.sessionDbFile);
+    keepDb
+      .prepare(
+        "update memory_nodes set created_at = ?, updated_at = ?, last_used_at = null where id = ?"
+      )
+      .run("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", keepCandidate.id);
+    keepDb.close();
+
+    const keepDream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(keepDream.exitCode).toBe(0);
+    const keepDreamId = listDreams({ appRoot: paths.root }).find(
+      (dream) => dream.status === "pending"
+    )?.id;
+    expect(keepDreamId).toBeDefined();
+
+    const rejected = await runCli(["memory", "dream", "reject", keepDreamId!], temp.env, workspace);
+    expect(rejected.exitCode).toBe(0);
+    expect(rejected.stdout).toContain("Kept graph nodes: 1");
+    const afterReject = MemoryNodeStore.open(paths);
+    expect(afterReject.getNode(keepCandidate.id)).toMatchObject({
+      status: "active",
+      metadata: expect.objectContaining({
+        cleanupReview: expect.objectContaining({
+          decision: "kept",
+          dreamId: keepDreamId
+        })
+      })
+    });
+    afterReject.close();
+    expect(showDream({ appRoot: paths.root, id: keepDreamId! })).toMatchObject({
+      status: "rejected",
+      graphReview: expect.objectContaining({
+        decision: "keep",
+        nodeIds: [keepCandidate.id]
+      })
+    });
   });
 
   it("rejects memory drafts that look like secrets", async () => {
