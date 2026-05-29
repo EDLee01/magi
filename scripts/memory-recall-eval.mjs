@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+
+import { MemoryNodeStore } from "../dist/memory-node-store.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(repoRoot, "dist", "cli.js");
@@ -123,13 +125,13 @@ function seedBusinessMemory() {
   );
 }
 
-function runMemoryEval(label) {
+function runMemoryEval(label, caseFile = options.caseFile) {
   const evalOutput = runCli(
     [
       "memory",
       "eval",
       "--case-file",
-      options.caseFile,
+      caseFile,
       "--report",
       reportFile,
       ...(options.minScore === undefined ? [] : ["--min-score", String(options.minScore)])
@@ -194,6 +196,22 @@ function assertDreamReviewLifecycle() {
 
 function assertMaintenanceLifecycle() {
   const target = nodeByTitle("Magi release verification");
+  seedTypedGraphNode({
+    type: "workflow",
+    title: "Resilient memory verification workflow",
+    summary: "Run focused memory eval before broad verify for Memory Graph changes.",
+    body: "For Memory Graph changes, first run focused memory recall evals, then run broad verification."
+  });
+  seedTypedGraphNode({
+    type: "project",
+    title: "Ordinary memory project fact",
+    summary: "The package currently publishes as @edwardlee5423/magi.",
+    body: "The Magi package currently publishes as @edwardlee5423/magi."
+  });
+  const workflow = nodeByTitle("Resilient memory verification workflow");
+  const projectFact = nodeByTitle("Ordinary memory project fact");
+  makeNodesStale([workflow.id, projectFact.id], "2026-01-01T00:00:00.000Z");
+
   const configured = runCli(
     [
       "memory",
@@ -220,15 +238,99 @@ function assertMaintenanceLifecycle() {
     nodeById(target.id).weight === target.weight,
     "maintenance preview should not change node weight"
   );
+  assert(
+    nodeById(workflow.id).weight === workflow.weight,
+    "maintenance preview should not change workflow node weight"
+  );
 
   const applied = runCli(["memory", "maintain", "--apply"], "memory maintenance apply");
   assert(applied.includes("Memory maintenance applied"), "maintenance apply did not run");
   assert(applied.includes("->"), "maintenance apply did not report weight change");
+  assert(
+    applied.includes("effectiveDecay=0.100"),
+    "maintenance apply did not report protected workflow effective decay"
+  );
+  assert(
+    applied.includes("effectiveDecay=0.200"),
+    "maintenance apply did not report baseline effective decay"
+  );
   const decayed = nodeById(target.id);
   assert(decayed.weight < target.weight, "maintenance apply should decay active node weight");
+  const decayedWorkflow = nodeById(workflow.id);
+  const decayedProjectFact = nodeById(projectFact.id);
+  assert(
+    decayedWorkflow.weight > decayedProjectFact.weight,
+    "workflow memory should retain more weight than ordinary project facts"
+  );
+  assert(
+    decayedWorkflow.weight === 0.81,
+    `workflow memory expected weight 0.81 after protected decay, got ${decayedWorkflow.weight}`
+  );
+  assert(
+    decayedProjectFact.weight === 0.72,
+    `project fact expected weight 0.72 after baseline decay, got ${decayedProjectFact.weight}`
+  );
 
-  const postMaintenanceEval = runMemoryEval("memory recall eval after maintenance");
+  const postMaintenanceEval = runMemoryEval(
+    "memory recall eval after maintenance",
+    writeMaintenanceCaseFile()
+  );
   assert(postMaintenanceEval.includes("threshold: PASS"), "memory eval failed after maintenance");
+}
+
+function writeMaintenanceCaseFile() {
+  const suite = JSON.parse(readFileSync(options.caseFile, "utf8"));
+  const file = path.join(workDir, "memory-recall-maintenance-business.json");
+  writeFileSync(
+    file,
+    `${JSON.stringify(
+      {
+        ...suite,
+        name: `${suite.name ?? "memory business recall"} with maintenance strategy`,
+        cases: [
+          ...(Array.isArray(suite.cases) ? suite.cases : []),
+          {
+            name: "protected workflow survives maintenance",
+            query: "resilient memory verification workflow",
+            expect: ["Resilient memory verification workflow"],
+            minResults: 1
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  return file;
+}
+
+function seedTypedGraphNode(input) {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    store.upsertNode({
+      ...input,
+      source: "agent",
+      weight: 0.9,
+      metadata: { evalSeed: "memory-recall-eval" }
+    });
+  } finally {
+    store.close();
+  }
+}
+
+function makeNodesStale(ids, timestamp) {
+  const db = openDb(false);
+  try {
+    const update = db.prepare(
+      "update memory_nodes set updated_at = ?, last_used_at = null where id = ?"
+    );
+    for (const id of ids) {
+      update.run(timestamp, id);
+    }
+  } finally {
+    db.close();
+  }
 }
 
 function runCli(args, label) {
@@ -293,8 +395,8 @@ function nodeById(id) {
   }
 }
 
-function openDb() {
-  return new Database(path.join(configDir, "state", "sessions.sqlite"), { readonly: true });
+function openDb(readonly = true) {
+  return new Database(path.join(configDir, "state", "sessions.sqlite"), { readonly });
 }
 
 function parseArgs(args) {

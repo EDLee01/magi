@@ -96,6 +96,7 @@ export interface DecayedMemoryNode {
   node: MemoryNode;
   previousWeight: number;
   nextWeight: number;
+  effectiveDecay: number;
   ageDays: number;
 }
 
@@ -1320,10 +1321,12 @@ export class MemoryNodeStore {
       .map(toMemoryNode)
       .map((node) => {
         const lastSignal = node.lastUsedAt ?? node.updatedAt;
+        const effectiveDecay = memoryTypeEffectiveDecay(node.type, decay);
         return {
           node,
           previousWeight: node.weight,
-          nextWeight: Math.max(minWeight, Number((node.weight * (1 - decay)).toFixed(6))),
+          nextWeight: Math.max(minWeight, Number((node.weight * (1 - effectiveDecay)).toFixed(6))),
+          effectiveDecay,
           ageDays: Math.max(0, Math.floor((now.getTime() - Date.parse(lastSignal)) / 86_400_000))
         };
       })
@@ -1350,6 +1353,8 @@ export class MemoryNodeStore {
                 nextWeight: item.nextWeight,
                 olderThanDays,
                 decay,
+                effectiveDecay: item.effectiveDecay,
+                type: item.node.type,
                 decayedAt: stamp
               }
             }),
@@ -2161,6 +2166,23 @@ function clampNumber(value: number, min: number, max: number): number {
     throw new Error("Memory decay value must be a finite number");
   }
   return Math.max(min, Math.min(max, value));
+}
+
+const MEMORY_TYPE_DECAY_MULTIPLIERS: Record<MemoryNodeType, number> = {
+  user_profile: 1,
+  preference: 1,
+  work_habit: 0.5,
+  workflow: 0.5,
+  project: 1,
+  decision: 1,
+  problem: 1,
+  reference: 1,
+  skill_ref: 0.5,
+  session: 1
+};
+
+function memoryTypeEffectiveDecay(type: MemoryNodeType, decay: number): number {
+  return Number((decay * MEMORY_TYPE_DECAY_MULTIPLIERS[type]).toFixed(6));
 }
 
 function normalizeClassifierText(text: string): string {

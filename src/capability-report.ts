@@ -146,9 +146,15 @@ function checkHarnessReport(input: {
 function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const failures = [];
   const score = readNumber(report.score);
+  const results = Array.isArray(report.results) ? report.results.map(readRecord) : [];
+  const resultNames = results
+    .map((result) => (typeof result.name === "string" ? result.name : ""))
+    .filter(Boolean);
+  const maintenanceRecallSeen = resultNames.includes("protected workflow survives maintenance");
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
+  if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -159,7 +165,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       passed: readNumber(report.passed),
       failed: readNumber(report.failed),
       score,
-      minScore: readNumber(report.minScore)
+      minScore: readNumber(report.minScore),
+      maintenanceRecallSeen
     },
     failures
   };

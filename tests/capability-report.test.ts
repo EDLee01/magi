@@ -71,7 +71,12 @@ describe("capability report", () => {
   it("fails memory alignment when recall misses the threshold", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
-      memory: memoryReport({ failed: 1, thresholdPassed: false, score: 0.67 }),
+      memory: memoryReport({
+        failed: 1,
+        thresholdPassed: false,
+        score: 0.67,
+        maintenanceRecallSeen: false
+      }),
       patch: patchReport({
         filePatchCalls: 2,
         fileEditCalls: 1,
@@ -90,6 +95,7 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(output).toContain("- memory: failed");
     expect(output).toContain("thresholdPassed=false");
+    expect(output).toContain("maintenanceRecallSeen=false");
   });
 
   it("fails goal-plan alignment when the lifecycle evidence is incomplete", () => {
@@ -243,16 +249,25 @@ function memoryReport(input: {
   failed: number;
   thresholdPassed: boolean;
   score: number;
+  maintenanceRecallSeen?: boolean;
 }): Record<string, unknown> {
+  const total = input.maintenanceRecallSeen === false ? 3 : 4;
+  const results = [
+    "linked workflow retrieves project neighbor",
+    "corrected preference replaces stale memory",
+    "durable user identity survives graph recall",
+    ...(input.maintenanceRecallSeen === false ? [] : ["protected workflow survives maintenance"])
+  ].map((name) => ({ name, passed: true }));
   return {
     version: 1,
     name: "memory business recall",
-    total: 3,
-    passed: 3 - input.failed,
+    total,
+    passed: total - input.failed,
     failed: input.failed,
     score: input.score,
     minScore: 1,
-    thresholdPassed: input.thresholdPassed
+    thresholdPassed: input.thresholdPassed,
+    results
   };
 }
 

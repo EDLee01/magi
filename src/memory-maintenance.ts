@@ -128,7 +128,7 @@ export function formatMemoryMaintenanceResult(result: DecayUnusedMemoryResult): 
   ];
   for (const item of result.changed.slice(0, 20)) {
     lines.push(
-      `- ${item.node.title} (${item.node.id}) ${item.previousWeight.toFixed(3)} -> ${item.nextWeight.toFixed(3)} age=${item.ageDays}d`
+      `- ${item.node.title} (${item.node.id}) ${item.previousWeight.toFixed(3)} -> ${item.nextWeight.toFixed(3)} type=${item.node.type} effectiveDecay=${item.effectiveDecay.toFixed(3)} age=${item.ageDays}d`
     );
   }
   if (result.changed.length > 20) {

@@ -153,14 +153,69 @@ describe("memory-node-store", () => {
       });
       expect(applied.changed.find((item) => item.node.id === stale.id)).toMatchObject({
         previousWeight: 0.9,
-        nextWeight: 0.72
+        nextWeight: 0.72,
+        effectiveDecay: 0.2
       });
       expect(store.getNode(stale.id)?.weight).toBeCloseTo(0.72);
       expect(store.getNode(stale.id)?.metadata.decay).toMatchObject({
         previousWeight: 0.9,
         nextWeight: 0.72,
-        olderThanDays: 1
+        olderThanDays: 1,
+        effectiveDecay: 0.2,
+        type: "preference"
       });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("decays reusable workflow memory more slowly than ordinary project facts", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const workflow = store.upsertNode({
+        type: "workflow",
+        title: "Release workflow",
+        summary: "Release workflow.",
+        body: "Run focused memory eval before broad verify.",
+        source: "explicit",
+        weight: 0.9
+      });
+      const project = store.upsertNode({
+        type: "project",
+        title: "Release project fact",
+        summary: "Release project fact.",
+        body: "Release project uses the current package name.",
+        source: "explicit",
+        weight: 0.9
+      });
+      const db = new Database(paths.sessionDbFile);
+      db.prepare("update memory_nodes set updated_at = ?, last_used_at = null").run(
+        "2026-01-01T00:00:00.000Z"
+      );
+      db.close();
+
+      const applied = store.decayUnusedNodes({
+        now: new Date("2026-05-29T00:00:00Z"),
+        olderThanDays: 1,
+        decay: 0.2,
+        minWeight: 0.4,
+        apply: true
+      });
+      const workflowDecay = applied.changed.find((item) => item.node.id === workflow.id);
+      const projectDecay = applied.changed.find((item) => item.node.id === project.id);
+
+      expect(workflowDecay).toMatchObject({
+        previousWeight: 0.9,
+        nextWeight: 0.81,
+        effectiveDecay: 0.1
+      });
+      expect(projectDecay).toMatchObject({
+        previousWeight: 0.9,
+        nextWeight: 0.72,
+        effectiveDecay: 0.2
+      });
+      expect(store.getNode(workflow.id)?.weight).toBeGreaterThan(store.getNode(project.id)!.weight);
     } finally {
       store.close();
     }
