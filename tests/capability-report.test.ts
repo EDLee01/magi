@@ -306,6 +306,8 @@ describe("capability report", () => {
         parallelPlanIsolationSeen: false,
         parallelPlanConflictRejected: false,
         parallelPlanAdoptedExplicitly: false,
+        mergedPlanCreated: false,
+        mergedPlanContextSeen: false,
         assertions: 3,
         filesVerified: 1,
         toolCallCount: 2,
@@ -345,7 +347,9 @@ describe("capability report", () => {
         "crossSessionAdoptedPlanContextSeen=false",
         "parallelPlanIsolationSeen=false",
         "parallelPlanConflictRejected=false",
-        "parallelPlanAdoptedExplicitly=false"
+        "parallelPlanAdoptedExplicitly=false",
+        "mergedPlanCreated=false",
+        "mergedPlanContextSeen=false"
       ])
     );
   });
@@ -1045,6 +1049,8 @@ function goalPlanReport(
     parallelPlanIsolationSeen: boolean;
     parallelPlanConflictRejected: boolean;
     parallelPlanAdoptedExplicitly: boolean;
+    mergedPlanCreated: boolean;
+    mergedPlanContextSeen: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
     assertions: number;
@@ -1058,7 +1064,7 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 30,
+      assertions: overrides.assertions ?? 32,
       filesVerified: overrides.filesVerified ?? 4,
       toolCallCount: overrides.toolCallCount ?? 10,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1073,7 +1079,7 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 30 },
+            { length: overrides.assertions ?? 32 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1112,6 +1118,8 @@ function goalPlanReport(
           parallelPlanIsolationSeen: true,
           parallelPlanConflictRejected: true,
           parallelPlanAdoptedExplicitly: true,
+          mergedPlanCreated: true,
+          mergedPlanContextSeen: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

@@ -21,6 +21,8 @@ export interface PlanReviewRecord {
   rootPlanId?: string;
   adoptedFromPlanId?: string;
   adoptedFromSessionId?: string;
+  mergedFromPlanIds?: string[];
+  mergedFromSessionIds?: string[];
 }
 
 interface PlanStoreData {
@@ -43,6 +45,8 @@ export function recordPlanReview(input: {
   revisesPlanId?: string;
   adoptedFromPlanId?: string;
   adoptedFromSessionId?: string;
+  mergedFromPlanIds?: string[];
+  mergedFromSessionIds?: string[];
 }): PlanReviewRecord {
   const plan = input.plan.trim();
   if (!plan) {
@@ -73,7 +77,9 @@ export function recordPlanReview(input: {
     revisesPlanId,
     rootPlanId: predecessor ? (predecessor.rootPlanId ?? predecessor.id) : undefined,
     adoptedFromPlanId: input.adoptedFromPlanId,
-    adoptedFromSessionId: input.adoptedFromSessionId
+    adoptedFromSessionId: input.adoptedFromSessionId,
+    mergedFromPlanIds: cleanStringList(input.mergedFromPlanIds),
+    mergedFromSessionIds: cleanStringList(input.mergedFromSessionIds)
   };
   if (predecessor) {
     predecessor.revisedByPlanId = record.id;
@@ -97,12 +103,7 @@ export function adoptPlanReview(input: {
   if (source.status !== "approved") {
     throw new Error(`Can only adopt approved plans: ${input.sourcePlanId}`);
   }
-  const existing = getLatestActivePlanReview(input.stateRoot, input.targetSessionId);
-  if (existing && !input.force) {
-    throw new Error(
-      `Session already has an approved or submitted plan: ${existing.id}. Use --force to adopt anyway.`
-    );
-  }
+  assertNoActivePlanConflict(input.stateRoot, input.targetSessionId, input.force, "adopt");
   return recordPlanReview({
     stateRoot: input.stateRoot,
     sessionId: input.targetSessionId,
@@ -112,6 +113,39 @@ export function adoptPlanReview(input: {
     adoptedFromPlanId: source.id,
     adoptedFromSessionId: source.sessionId,
     revisesPlanId: undefined
+  });
+}
+
+export function mergePlanReviews(input: {
+  stateRoot: string;
+  sourcePlanIds: string[];
+  targetSessionId: string;
+  response?: string;
+  force?: boolean;
+}): PlanReviewRecord {
+  const sourcePlanIds = uniqueStringList(input.sourcePlanIds);
+  if (sourcePlanIds.length < 2) {
+    throw new Error("Merging plans requires at least two distinct plan ids");
+  }
+  const sources = sourcePlanIds.map((id) => {
+    const plan = getPlanReview(input.stateRoot, id);
+    if (!plan) {
+      throw new Error(`Cannot merge unknown plan: ${id}`);
+    }
+    if (plan.status !== "approved") {
+      throw new Error(`Can only merge approved plans: ${id}`);
+    }
+    return plan;
+  });
+  assertNoActivePlanConflict(input.stateRoot, input.targetSessionId, input.force, "merge");
+  return recordPlanReview({
+    stateRoot: input.stateRoot,
+    sessionId: input.targetSessionId,
+    plan: formatMergedPlanText(sources),
+    status: "approved",
+    response: input.response ?? `Merged from plans ${sourcePlanIds.join(", ")}`,
+    mergedFromPlanIds: sourcePlanIds,
+    mergedFromSessionIds: uniqueStringList(sources.map((source) => source.sessionId))
   });
 }
 
@@ -207,6 +241,12 @@ export function formatPlanReview(record: PlanReviewRecord | undefined): string {
     record.adoptedFromSessionId
       ? `Adopted from session: ${record.adoptedFromSessionId}`
       : undefined,
+    record.mergedFromPlanIds?.length
+      ? `Merged from plans: ${record.mergedFromPlanIds.join(", ")}`
+      : undefined,
+    record.mergedFromSessionIds?.length
+      ? `Merged from sessions: ${record.mergedFromSessionIds.join(", ")}`
+      : undefined,
     `Updated: ${record.updatedAt}`,
     record.response ? `Response: ${record.response}` : undefined,
     "",
@@ -249,6 +289,12 @@ export function formatPlanContext(record: PlanReviewRecord | undefined): string 
     record.adoptedFromPlanId ? `Adopted from plan: ${record.adoptedFromPlanId}` : undefined,
     record.adoptedFromSessionId
       ? `Adopted from session: ${record.adoptedFromSessionId}`
+      : undefined,
+    record.mergedFromPlanIds?.length
+      ? `Merged from plans: ${record.mergedFromPlanIds.join(", ")}`
+      : undefined,
+    record.mergedFromSessionIds?.length
+      ? `Merged from sessions: ${record.mergedFromSessionIds.join(", ")}`
       : undefined,
     record.response ? `Last user response: ${record.response}` : undefined,
     "Implementation plan:",
@@ -324,7 +370,9 @@ function normalizePlanReview(value: unknown): PlanReviewRecord | undefined {
     adoptedFromPlanId:
       typeof record.adoptedFromPlanId === "string" ? record.adoptedFromPlanId : undefined,
     adoptedFromSessionId:
-      typeof record.adoptedFromSessionId === "string" ? record.adoptedFromSessionId : undefined
+      typeof record.adoptedFromSessionId === "string" ? record.adoptedFromSessionId : undefined,
+    mergedFromPlanIds: normalizeStringList(record.mergedFromPlanIds),
+    mergedFromSessionIds: normalizeStringList(record.mergedFromSessionIds)
   };
 }
 
@@ -348,7 +396,60 @@ function formatPlanReviewLinks(record: PlanReviewRecord): string {
   const links = [
     record.revisesPlanId ? `revises:${record.revisesPlanId}` : undefined,
     record.revisedByPlanId ? `revised-by:${record.revisedByPlanId}` : undefined,
-    record.adoptedFromPlanId ? `adopted-from:${record.adoptedFromPlanId}` : undefined
+    record.adoptedFromPlanId ? `adopted-from:${record.adoptedFromPlanId}` : undefined,
+    record.mergedFromPlanIds?.length
+      ? `merged-from:${record.mergedFromPlanIds.join(",")}`
+      : undefined
   ].filter((link): link is string => Boolean(link));
   return links.length > 0 ? ` ${links.join(" ")}` : "";
+}
+
+function assertNoActivePlanConflict(
+  stateRoot: string,
+  targetSessionId: string,
+  force: boolean | undefined,
+  action: "adopt" | "merge"
+): void {
+  const existing = getLatestActivePlanReview(stateRoot, targetSessionId);
+  if (existing && !force) {
+    throw new Error(
+      `Session already has an approved or submitted plan: ${existing.id}. Use --force to ${action} anyway.`
+    );
+  }
+}
+
+function formatMergedPlanText(records: PlanReviewRecord[]): string {
+  return [
+    `Merged implementation plan from ${records.length} approved plans.`,
+    "",
+    ...records.flatMap((record, index) => [
+      `Source ${index + 1}: plan ${record.id} from session ${record.sessionId}`,
+      record.plan,
+      ""
+    ])
+  ]
+    .join("\n")
+    .trim();
+}
+
+function uniqueStringList(values: string[] | undefined): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values ?? []) {
+    const item = value.trim();
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
+}
+
+function cleanStringList(values: string[] | undefined): string[] | undefined {
+  const result = uniqueStringList(values);
+  return result.length > 0 ? result : undefined;
+}
+
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return cleanStringList(value.filter((item): item is string => typeof item === "string"));
 }

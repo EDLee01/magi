@@ -44,7 +44,8 @@ import {
   getLatestPlanReview,
   getPlanReview,
   getPlanReviewChain,
-  listPlanReviews
+  listPlanReviews,
+  mergePlanReviews
 } from "./plan-state.js";
 import {
   proposeMemoryDraft,
@@ -584,6 +585,43 @@ async function runCliUnsafeWithParsed(
             `Plan adopted: ${adopted.id}`,
             `Session: ${adopted.sessionId}`,
             `Adopted from plan: ${adopted.adoptedFromPlanId}`,
+            ""
+          ].join("\n"),
+          stderr: ""
+        };
+      }
+      if (sub === "merge") {
+        const force = parsed.rest.includes("--force");
+        const planIds = parsed.rest.slice(1).filter((arg) => arg !== "--force");
+        const session = resolvePlanSessionForCommand({
+          store,
+          sessionId: parsed.sessionId ?? parsed.resumeSessionId,
+          cwd,
+          optional: false
+        });
+        if (!session) {
+          throw new MagiUsageError("No sessions found");
+        }
+        if (planIds.length < 2) {
+          return {
+            exitCode: 2,
+            stdout: "",
+            stderr:
+              "Usage: magi plan merge <plan-id> <plan-id> [more-plan-ids...] --session-id <target-session>\n"
+          };
+        }
+        const merged = mergePlanReviews({
+          stateRoot: paths.stateRoot,
+          sourcePlanIds: planIds,
+          targetSessionId: session.id,
+          force
+        });
+        return {
+          exitCode: 0,
+          stdout: [
+            `Plan merged: ${merged.id}`,
+            `Session: ${merged.sessionId}`,
+            `Merged from plans: ${merged.mergedFromPlanIds?.join(", ") ?? ""}`,
             ""
           ].join("\n"),
           stderr: ""
@@ -1921,7 +1959,7 @@ function helpText(): string {
     "  magi sessions",
     "  magi resume <session-id>",
     "  magi goal [objective] [--session-id <id>]",
-    "  magi plan [list|all|show <id>|chain <id>|adopt <id>] [--session-id <id>]",
+    "  magi plan [list|all|show <id>|chain <id>|adopt <id>|merge <id> <id>] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",

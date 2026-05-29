@@ -7,6 +7,7 @@ import {
   getLatestPlanReview,
   getPlanReviewChain,
   listPlanReviews,
+  mergePlanReviews,
   recordPlanReview,
   updatePlanReviewStatus
 } from "../src/plan-state.js";
@@ -171,6 +172,76 @@ describe("plan review state", () => {
         adoptedFromPlanId: source.id
       });
       expect(getLatestPlanReview(paths.stateRoot, "target-session")?.id).toBe(forced.id);
+    } finally {
+      temp.cleanup();
+    }
+  });
+
+  it("merges approved plans across sessions and protects active targets", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const alpha = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "alpha-session",
+        plan: "1. Read alpha source\n2. Patch alpha target",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      const beta = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "beta-session",
+        plan: "1. Read beta source\n2. Patch beta target",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+
+      const merged = mergePlanReviews({
+        stateRoot: paths.stateRoot,
+        sourcePlanIds: [alpha.id, beta.id],
+        targetSessionId: "merged-session"
+      });
+
+      expect(merged).toMatchObject({
+        sessionId: "merged-session",
+        status: "approved",
+        mergedFromPlanIds: [alpha.id, beta.id],
+        mergedFromSessionIds: ["alpha-session", "beta-session"]
+      });
+      expect(merged.plan).toContain("Merged implementation plan from 2 approved plans.");
+      expect(merged.plan).toContain(alpha.plan);
+      expect(merged.plan).toContain(beta.plan);
+      expect(formatPlanReview(merged)).toContain(`Merged from plans: ${alpha.id}, ${beta.id}`);
+      expect(formatPlanReview(merged)).toContain(
+        "Merged from sessions: alpha-session, beta-session"
+      );
+      expect(formatPlanReviewList(listPlanReviews(paths.stateRoot, "merged-session"))).toContain(
+        `merged-from:${alpha.id},${beta.id}`
+      );
+
+      const target = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "busy-session",
+        plan: "1. Existing target plan",
+        status: "submitted"
+      });
+      expect(() =>
+        mergePlanReviews({
+          stateRoot: paths.stateRoot,
+          sourcePlanIds: [alpha.id, beta.id],
+          targetSessionId: "busy-session"
+        })
+      ).toThrow("already has an approved or submitted plan");
+      expect(getLatestPlanReview(paths.stateRoot, "busy-session")?.id).toBe(target.id);
+
+      const forced = mergePlanReviews({
+        stateRoot: paths.stateRoot,
+        sourcePlanIds: [alpha.id, beta.id],
+        targetSessionId: "busy-session",
+        force: true
+      });
+      expect(forced.mergedFromPlanIds).toEqual([alpha.id, beta.id]);
+      expect(getLatestPlanReview(paths.stateRoot, "busy-session")?.id).toBe(forced.id);
     } finally {
       temp.cleanup();
     }

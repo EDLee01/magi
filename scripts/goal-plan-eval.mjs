@@ -25,6 +25,7 @@ const adoptedSessionId = "goal-plan-eval-adopted-session";
 const parallelAlphaSessionId = "goal-plan-eval-parallel-alpha";
 const parallelBetaSessionId = "goal-plan-eval-parallel-beta";
 const parallelAdoptSessionId = "goal-plan-eval-parallel-adopt";
+const mergedPlanSessionId = "goal-plan-eval-merged-plan";
 const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
 const blockedGoalObjective = "wait for Goal/Plan blocked audit";
 const completedGoalObjective = "complete Goal/Plan lifecycle eval";
@@ -94,7 +95,8 @@ try {
     migrationPlanExecutionVerified: false,
     parallelPlanIsolationSeen: false,
     parallelPlanConflictRejected: false,
-    parallelPlanAdoptedExplicitly: false
+    parallelPlanAdoptedExplicitly: false,
+    mergedPlanContextSeen: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -279,6 +281,7 @@ try {
     );
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
     const parallelPlans = await runParallelPlanConflictFlow(tools.executeRegisteredTool);
+    const mergedPlans = await runMergedPlanFlow(parallelPlans.alphaPlanId, parallelPlans.betaPlanId);
     const planRevisionChainLinked = assertPlanRevisionChainLinked(
       planRevision.revisionPlanId,
       planRevision.secondRevisionPlanId,
@@ -359,6 +362,7 @@ try {
     assert(state.inheritedPlanExecutionCompleted, "provider did not complete inherited plan");
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
     assert(state.parallelPlanIsolationSeen, "provider did not see isolated parallel plan contexts");
+    assert(state.mergedPlanContextSeen, "provider did not see merged plan context");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
     const toolCounts = mergeToolCounts(provider.metrics().toolCounts, planRevision.toolCounts);
@@ -392,7 +396,9 @@ try {
       "adopted plan context included source metadata",
       "parallel approved plans stayed isolated by session",
       "parallel conflicting plan was rejected without explicit adopt",
-      "parallel approved plan adopted only when requested"
+      "parallel approved plan adopted only when requested",
+      "approved plans merged into an explicit target session",
+      "merged plan context included all source metadata"
     ];
     const filesVerified = [
       "state/goals.json",
@@ -443,6 +449,8 @@ try {
             parallelPlanIsolationSeen: state.parallelPlanIsolationSeen,
             parallelPlanConflictRejected: parallelPlans.conflictRejected,
             parallelPlanAdoptedExplicitly: parallelPlans.adoptedExplicitly,
+            mergedPlanCreated: mergedPlans.mergedPlanCreated,
+            mergedPlanContextSeen: state.mergedPlanContextSeen,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -712,6 +720,19 @@ function createRouter(state) {
         "parallel adopted context missed source session"
       );
       return messageText("Explicitly adopted parallel plan context is present.");
+    }
+
+    if (latestUser.includes("Verify merged parallel plan context")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "merged plan context missing");
+      assert(systemPrompt.includes("Merged implementation plan from 2 approved plans."), "merged plan header missing");
+      assert(systemPrompt.includes(parallelAlphaPlanText), "merged plan missed alpha plan text");
+      assert(systemPrompt.includes(parallelBetaPlanText), "merged plan missed beta plan text");
+      assert(
+        systemPrompt.includes(`Merged from sessions: ${parallelAlphaSessionId}, ${parallelBetaSessionId}`),
+        "merged plan context missed source sessions"
+      );
+      state.mergedPlanContextSeen = true;
+      return messageText("Merged parallel plan context is present.");
     }
 
     return messageText("OK");
@@ -1243,8 +1264,56 @@ async function runParallelPlanConflictFlow(executeRegisteredTool) {
 
   return {
     conflictRejected,
-    adoptedExplicitly: true
+    adoptedExplicitly: true,
+    alphaPlanId: alpha.planId,
+    betaPlanId: beta.planId
   };
+}
+
+async function runMergedPlanFlow(alphaPlanId, betaPlanId) {
+  await runCli(
+    [
+      "--session-id",
+      mergedPlanSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare merged Goal/Plan eval session."
+    ],
+    "seed merged plan session"
+  );
+  const merged = await runCli(
+    ["plan", "merge", alphaPlanId, betaPlanId, "--session-id", mergedPlanSessionId],
+    "merge parallel approved plans"
+  );
+  assert(merged.includes("Plan merged:"), "plan merge did not confirm");
+  assert(merged.includes(`Merged from plans: ${alphaPlanId}, ${betaPlanId}`), "plan merge missed sources");
+
+  const status = await runCli(["plan", "--session-id", mergedPlanSessionId], "merged plan status");
+  assert(status.includes(`Merged from plans: ${alphaPlanId}, ${betaPlanId}`), "merged plan missed source plans");
+  assert(
+    status.includes(`Merged from sessions: ${parallelAlphaSessionId}, ${parallelBetaSessionId}`),
+    "merged plan missed source sessions"
+  );
+  assert(status.includes(parallelAlphaPlanText), "merged plan missed alpha plan text");
+  assert(status.includes(parallelBetaPlanText), "merged plan missed beta plan text");
+
+  const context = await runCli(
+    [
+      "--session-id",
+      mergedPlanSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify merged parallel plan context."
+    ],
+    "merged plan context"
+  );
+  assert(context.includes("Merged parallel plan context is present"), "merged plan context failed");
+
+  return { mergedPlanCreated: true };
 }
 
 async function approvePlanWithTool(input) {

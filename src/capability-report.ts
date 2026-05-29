@@ -606,7 +606,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 30) failures.push(`assertions=${assertions}`);
+  if (assertions < 32) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 10) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -660,6 +660,8 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.parallelPlanAdoptedExplicitly !== true) {
     failures.push("parallelPlanAdoptedExplicitly=false");
   }
+  if (details.mergedPlanCreated !== true) failures.push("mergedPlanCreated=false");
+  if (details.mergedPlanContextSeen !== true) failures.push("mergedPlanContextSeen=false");
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -698,6 +700,8 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       parallelPlanIsolationSeen: details.parallelPlanIsolationSeen === true,
       parallelPlanConflictRejected: details.parallelPlanConflictRejected === true,
       parallelPlanAdoptedExplicitly: details.parallelPlanAdoptedExplicitly === true,
+      mergedPlanCreated: details.mergedPlanCreated === true,
+      mergedPlanContextSeen: details.mergedPlanContextSeen === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },
