@@ -618,6 +618,50 @@ describe("CLI entrypoint", () => {
     expect(show.stdout).toContain("Read beta input");
   });
 
+  it("shows merge conflicts from the CLI", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const alphaSessionId = "33333333-3333-4333-8333-333333333345";
+    const betaSessionId = "33333333-3333-4333-8333-333333333346";
+    const targetSessionId = "33333333-3333-4333-8333-333333333347";
+    await runCli(
+      ["--session-id", alphaSessionId, "-p", "prepare alpha conflict session"],
+      temp.env
+    );
+    await runCli(["--session-id", betaSessionId, "-p", "prepare beta conflict session"], temp.env);
+    await runCli(["--session-id", targetSessionId, "-p", "prepare conflict target"], temp.env);
+    const { recordPlanReview } = await import("../src/plan-state.js");
+    const alpha = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: alphaSessionId,
+      plan: "1. Read src/config.ts\n2. Patch src/config.ts to use alpha endpoint",
+      status: "approved",
+      response: "Yes, proceed"
+    });
+    const beta = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: betaSessionId,
+      plan: "1. Read src/config.ts\n2. Patch src/config.ts to use beta endpoint",
+      status: "approved",
+      response: "Yes, proceed"
+    });
+
+    const merged = await runCli(
+      ["plan", "merge", alpha.id, beta.id, "--session-id", targetSessionId],
+      temp.env
+    );
+    expect(merged.exitCode).toBe(0);
+    expect(merged.stdout).toContain("Plan merged:");
+
+    const show = await runCli(["plan", "--session-id", targetSessionId], temp.env);
+    expect(show.exitCode).toBe(0);
+    expect(show.stdout).toContain("Status: needs_revision");
+    expect(show.stdout).toContain("Merge conflicts: 1");
+    expect(show.stdout).toContain("Conflict target: src/config.ts");
+    expect(show.stdout).toContain("Patch src/config.ts to use alpha endpoint");
+    expect(show.stdout).toContain("Patch src/config.ts to use beta endpoint");
+  });
+
   it("keeps CLI goals isolated by explicit session id", async () => {
     temp = makeTempRoot();
     const firstId = "11111111-1111-4111-8111-111111111111";

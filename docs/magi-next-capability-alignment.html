@@ -248,7 +248,7 @@
           <tr>
             <td>Goal / Plan Harness</td>
             <td>计划、todo、完成审计、阻塞审计由外层状态机维护。</td>
-            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划、跨 session 历史计划、单条 plan 详情和修订链聚合视图；修订和批准后的计划会保存 revises / revised-by / root plan 链路，并在恢复同 session 时把最新计划作为 session plan context 注入模型；approved plan 可被 adopt 到另一个 session 并保留来源链路，目标 session 已有 submitted/approved plan 时默认拒绝冲突，只有显式 <code>--force</code> 才允许覆盖；多个 approved plan 可显式 merge 到目标 session，并保留所有来源 plan/session 元数据。独立 goal/plan eval 已覆盖 active goal 注入、completed/blocked 后不注入、plan mode 写入拒绝、plan review 持久化、跨 session plan review 检索、连续两轮用户反馈后的 needs_revision 链、修订计划审批通过后的 approved 状态、多轮修订链路持久化、修订链 CLI 检索、历史计划上下文继承、继承计划驱动的 read-before-write 执行一致性、迁移型计划执行质量、继承计划连续两次偏离时的 guard 纠偏反馈、多步恢复后的复读验证、跨 session plan adopt 和 adopted plan context 注入、并行 session approved plan 隔离、冲突 adopt 拒绝、显式 adopt 注入来源上下文、显式 merge 后上下文包含全部来源计划、blocked audit 和 goal completion；报告会输出业务断言、验证文件和真实工具调用分布，并由 capability report 门禁检查证据厚度。</td>
+            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划、跨 session 历史计划、单条 plan 详情和修订链聚合视图；修订和批准后的计划会保存 revises / revised-by / root plan 链路，并在恢复同 session 时把最新计划作为 session plan context 注入模型；approved plan 可被 adopt 到另一个 session 并保留来源链路，目标 session 已有 submitted/approved plan 时默认拒绝冲突，只有显式 <code>--force</code> 才允许覆盖；多个 approved plan 可显式 merge 到目标 session，并保留所有来源 plan/session 元数据；同一目标文件的不同修改会被标为 merge conflict，合并计划进入 needs_revision 而不是静默批准。独立 goal/plan eval 已覆盖 active goal 注入、completed/blocked 后不注入、plan mode 写入拒绝、plan review 持久化、跨 session plan review 检索、连续两轮用户反馈后的 needs_revision 链、修订计划审批通过后的 approved 状态、多轮修订链路持久化、修订链 CLI 检索、历史计划上下文继承、继承计划驱动的 read-before-write 执行一致性、迁移型计划执行质量、继承计划连续两次偏离时的 guard 纠偏反馈、多步恢复后的复读验证、跨 session plan adopt 和 adopted plan context 注入、并行 session approved plan 隔离、冲突 adopt 拒绝、显式 adopt 注入来源上下文、显式 merge 后上下文包含全部来源计划、冲突 merge 进入 needs_revision 并注入冲突目标和来源步骤、blocked audit 和 goal completion；报告会输出业务断言、验证文件和真实工具调用分布，并由 capability report 门禁检查证据厚度。</td>
             <td><code>tests/plan-state.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>tests/cli.test.ts</code>、<code>scripts/goal-plan-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
@@ -281,7 +281,7 @@
         <h3>v0.1.0-alpha.4</h3>
         <ul>
           <li>把 Patch Engine 继续推到更复杂的真实仓库任务：跨文件依赖、测试驱动修复、连续 patch 失败后的策略恢复、文件移动、批量 API 迁移、多包 monorepo 迁移和生成代码边界已进入主门禁；下一步扩大到更多真实仓库规模和混合语言边界。</li>
-          <li>Goal/Plan benchmark 已覆盖多轮用户反馈、迁移后计划执行质量、计划偏离后的多步恢复质量、并行 session plan 隔离、冲突 adopt 保护和跨 agent plan merge；下一步扩展到更长会话、计划分支收敛和冲突片段级合并。</li>
+          <li>Goal/Plan benchmark 已覆盖多轮用户反馈、迁移后计划执行质量、计划偏离后的多步恢复质量、并行 session plan 隔离、冲突 adopt 保护、跨 agent plan merge 和冲突片段级 needs_revision；下一步扩展到更长会话的分支收敛和人工选择后的冲突 resolution。</li>
           <li>继续扩展 capability report，把更多真实模型业务级 benchmark 纳入以后每次能力对齐的主门禁。</li>
         </ul>
       </div>

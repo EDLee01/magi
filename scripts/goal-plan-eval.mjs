@@ -26,6 +26,9 @@ const parallelAlphaSessionId = "goal-plan-eval-parallel-alpha";
 const parallelBetaSessionId = "goal-plan-eval-parallel-beta";
 const parallelAdoptSessionId = "goal-plan-eval-parallel-adopt";
 const mergedPlanSessionId = "goal-plan-eval-merged-plan";
+const conflictAlphaSessionId = "goal-plan-eval-conflict-alpha";
+const conflictBetaSessionId = "goal-plan-eval-conflict-beta";
+const conflictMergeSessionId = "goal-plan-eval-conflict-merge";
 const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
 const blockedGoalObjective = "wait for Goal/Plan blocked audit";
 const completedGoalObjective = "complete Goal/Plan lifecycle eval";
@@ -57,6 +60,14 @@ const parallelBetaPlanText = [
   "1. Read beta-source.txt",
   "2. Patch beta-target.txt",
   "3. Verify beta result"
+].join("\n");
+const conflictAlphaPlanText = [
+  "1. Read src/config.ts",
+  "2. Patch src/config.ts to use alpha endpoint"
+].join("\n");
+const conflictBetaPlanText = [
+  "1. Read src/config.ts",
+  "2. Patch src/config.ts to use beta endpoint"
 ].join("\n");
 const inheritedPlanSourcePath = "inherited-plan-source.txt";
 const inheritedPlanOutputPath = "inherited-plan-output.txt";
@@ -96,7 +107,8 @@ try {
     parallelPlanIsolationSeen: false,
     parallelPlanConflictRejected: false,
     parallelPlanAdoptedExplicitly: false,
-    mergedPlanContextSeen: false
+    mergedPlanContextSeen: false,
+    conflictedMergeContextSeen: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -282,6 +294,7 @@ try {
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
     const parallelPlans = await runParallelPlanConflictFlow(tools.executeRegisteredTool);
     const mergedPlans = await runMergedPlanFlow(parallelPlans.alphaPlanId, parallelPlans.betaPlanId);
+    const conflictedMerge = await runConflictedMergeFlow(tools.executeRegisteredTool);
     const planRevisionChainLinked = assertPlanRevisionChainLinked(
       planRevision.revisionPlanId,
       planRevision.secondRevisionPlanId,
@@ -363,6 +376,7 @@ try {
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
     assert(state.parallelPlanIsolationSeen, "provider did not see isolated parallel plan contexts");
     assert(state.mergedPlanContextSeen, "provider did not see merged plan context");
+    assert(state.conflictedMergeContextSeen, "provider did not see conflicted merge context");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
     const toolCounts = mergeToolCounts(provider.metrics().toolCounts, planRevision.toolCounts);
@@ -398,7 +412,9 @@ try {
       "parallel conflicting plan was rejected without explicit adopt",
       "parallel approved plan adopted only when requested",
       "approved plans merged into an explicit target session",
-      "merged plan context included all source metadata"
+      "merged plan context included all source metadata",
+      "conflicting plan merge persisted as needs_revision",
+      "conflicting merge context included conflict target and source steps"
     ];
     const filesVerified = [
       "state/goals.json",
@@ -451,6 +467,8 @@ try {
             parallelPlanAdoptedExplicitly: parallelPlans.adoptedExplicitly,
             mergedPlanCreated: mergedPlans.mergedPlanCreated,
             mergedPlanContextSeen: state.mergedPlanContextSeen,
+            conflictedMergeNeedsRevision: conflictedMerge.needsRevision,
+            conflictedMergeContextSeen: state.conflictedMergeContextSeen,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -725,14 +743,33 @@ function createRouter(state) {
     if (latestUser.includes("Verify merged parallel plan context")) {
       assert(systemPrompt.includes("<session_plan_context>"), "merged plan context missing");
       assert(systemPrompt.includes("Merged implementation plan from 2 approved plans."), "merged plan header missing");
-      assert(systemPrompt.includes(parallelAlphaPlanText), "merged plan missed alpha plan text");
-      assert(systemPrompt.includes(parallelBetaPlanText), "merged plan missed beta plan text");
+      assert(systemPrompt.includes("Read alpha-source.txt"), "merged plan missed alpha read step");
+      assert(systemPrompt.includes("Patch alpha-target.txt"), "merged plan missed alpha patch step");
+      assert(systemPrompt.includes("Read beta-source.txt"), "merged plan missed beta read step");
+      assert(systemPrompt.includes("Patch beta-target.txt"), "merged plan missed beta patch step");
       assert(
         systemPrompt.includes(`Merged from sessions: ${parallelAlphaSessionId}, ${parallelBetaSessionId}`),
         "merged plan context missed source sessions"
       );
       state.mergedPlanContextSeen = true;
       return messageText("Merged parallel plan context is present.");
+    }
+
+    if (latestUser.includes("Verify conflicted merged plan context")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "conflicted merge context missing");
+      assert(systemPrompt.includes("Status: needs_revision"), "conflicted merge status missing");
+      assert(systemPrompt.includes("Merge conflicts: 1"), "conflicted merge count missing");
+      assert(systemPrompt.includes("Conflict target: src/config.ts"), "conflicted merge target missing");
+      assert(
+        systemPrompt.includes("Patch src/config.ts to use alpha endpoint"),
+        "conflicted merge missed alpha step"
+      );
+      assert(
+        systemPrompt.includes("Patch src/config.ts to use beta endpoint"),
+        "conflicted merge missed beta step"
+      );
+      state.conflictedMergeContextSeen = true;
+      return messageText("Conflicted merged plan context is present.");
     }
 
     return messageText("OK");
@@ -1295,8 +1332,10 @@ async function runMergedPlanFlow(alphaPlanId, betaPlanId) {
     status.includes(`Merged from sessions: ${parallelAlphaSessionId}, ${parallelBetaSessionId}`),
     "merged plan missed source sessions"
   );
-  assert(status.includes(parallelAlphaPlanText), "merged plan missed alpha plan text");
-  assert(status.includes(parallelBetaPlanText), "merged plan missed beta plan text");
+  assert(status.includes("Read alpha-source.txt"), "merged plan missed alpha read step");
+  assert(status.includes("Patch alpha-target.txt"), "merged plan missed alpha patch step");
+  assert(status.includes("Read beta-source.txt"), "merged plan missed beta read step");
+  assert(status.includes("Patch beta-target.txt"), "merged plan missed beta patch step");
 
   const context = await runCli(
     [
@@ -1314,6 +1353,76 @@ async function runMergedPlanFlow(alphaPlanId, betaPlanId) {
   assert(context.includes("Merged parallel plan context is present"), "merged plan context failed");
 
   return { mergedPlanCreated: true };
+}
+
+async function runConflictedMergeFlow(executeRegisteredTool) {
+  await runCli(
+    ["--session-id", conflictAlphaSessionId, "--model", "main", "-p", "Prepare conflict alpha plan session."],
+    "seed conflict alpha session"
+  );
+  await runCli(
+    ["--session-id", conflictBetaSessionId, "--model", "main", "-p", "Prepare conflict beta plan session."],
+    "seed conflict beta session"
+  );
+  await runCli(
+    ["--session-id", conflictMergeSessionId, "--model", "main", "-p", "Prepare conflict merge target session."],
+    "seed conflict merge session"
+  );
+
+  const alpha = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: conflictAlphaSessionId,
+    toolUseId: "approve-conflict-alpha-plan",
+    plan: conflictAlphaPlanText
+  });
+  const beta = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: conflictBetaSessionId,
+    toolUseId: "approve-conflict-beta-plan",
+    plan: conflictBetaPlanText
+  });
+
+  const merged = await runCli(
+    ["plan", "merge", alpha.planId, beta.planId, "--session-id", conflictMergeSessionId],
+    "merge conflicting approved plans"
+  );
+  assert(merged.includes("Plan merged:"), "conflicted plan merge did not confirm");
+
+  const status = await runCli(
+    ["plan", "--session-id", conflictMergeSessionId],
+    "conflicted merge status"
+  );
+  assert(status.includes("Status: needs_revision"), "conflicted merge should need revision");
+  assert(status.includes("Merge conflicts: 1"), "conflicted merge missed conflict count");
+  assert(status.includes("Conflict target: src/config.ts"), "conflicted merge missed target");
+  assert(
+    status.includes("Patch src/config.ts to use alpha endpoint"),
+    "conflicted merge missed alpha step"
+  );
+  assert(
+    status.includes("Patch src/config.ts to use beta endpoint"),
+    "conflicted merge missed beta step"
+  );
+
+  const context = await runCli(
+    [
+      "--session-id",
+      conflictMergeSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify conflicted merged plan context."
+    ],
+    "conflicted merge context"
+  );
+  assert(
+    context.includes("Conflicted merged plan context is present"),
+    "conflicted merge context failed"
+  );
+
+  return { needsRevision: true };
 }
 
 async function approvePlanWithTool(input) {

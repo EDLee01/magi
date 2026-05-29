@@ -209,8 +209,11 @@ describe("plan review state", () => {
         mergedFromSessionIds: ["alpha-session", "beta-session"]
       });
       expect(merged.plan).toContain("Merged implementation plan from 2 approved plans.");
-      expect(merged.plan).toContain(alpha.plan);
-      expect(merged.plan).toContain(beta.plan);
+      expect(merged.plan).toContain("Compatible steps:");
+      expect(merged.plan).toContain("Read alpha source");
+      expect(merged.plan).toContain("Patch alpha target");
+      expect(merged.plan).toContain("Read beta source");
+      expect(merged.plan).toContain("Patch beta target");
       expect(formatPlanReview(merged)).toContain(`Merged from plans: ${alpha.id}, ${beta.id}`);
       expect(formatPlanReview(merged)).toContain(
         "Merged from sessions: alpha-session, beta-session"
@@ -242,6 +245,64 @@ describe("plan review state", () => {
       });
       expect(forced.mergedFromPlanIds).toEqual([alpha.id, beta.id]);
       expect(getLatestPlanReview(paths.stateRoot, "busy-session")?.id).toBe(forced.id);
+    } finally {
+      temp.cleanup();
+    }
+  });
+
+  it("marks merged plans needing revision when source plans conflict on a target", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const alpha = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "alpha-session",
+        plan: "1. Read shared config\n2. Patch src/config.ts to use alpha endpoint",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      const beta = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "beta-session",
+        plan: "1. Read shared config\n2. Patch src/config.ts to use beta endpoint",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+
+      const merged = mergePlanReviews({
+        stateRoot: paths.stateRoot,
+        sourcePlanIds: [alpha.id, beta.id],
+        targetSessionId: "conflict-session"
+      });
+
+      expect(merged.status).toBe("needs_revision");
+      expect(merged.response).toContain("needs revision");
+      expect(merged.mergeConflicts).toEqual([
+        {
+          target: "src/config.ts",
+          steps: [
+            {
+              planId: alpha.id,
+              sessionId: "alpha-session",
+              step: "Patch src/config.ts to use alpha endpoint"
+            },
+            {
+              planId: beta.id,
+              sessionId: "beta-session",
+              step: "Patch src/config.ts to use beta endpoint"
+            }
+          ]
+        }
+      ]);
+      expect(merged.plan).toContain("Merge conflicts requiring revision:");
+      expect(merged.plan).toContain("Target: src/config.ts");
+      expect(merged.plan).toContain("Patch src/config.ts to use alpha endpoint");
+      expect(merged.plan).toContain("Patch src/config.ts to use beta endpoint");
+      expect(formatPlanReview(merged)).toContain("Status: needs_revision");
+      expect(formatPlanReview(merged)).toContain("Merge conflicts: 1");
+      expect(formatPlanReviewList(listPlanReviews(paths.stateRoot, "conflict-session"))).toContain(
+        "merge-conflicts:1"
+      );
     } finally {
       temp.cleanup();
     }

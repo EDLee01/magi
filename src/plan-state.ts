@@ -23,6 +23,18 @@ export interface PlanReviewRecord {
   adoptedFromSessionId?: string;
   mergedFromPlanIds?: string[];
   mergedFromSessionIds?: string[];
+  mergeConflicts?: PlanMergeConflict[];
+}
+
+export interface PlanMergeConflict {
+  target: string;
+  steps: PlanMergeConflictStep[];
+}
+
+export interface PlanMergeConflictStep {
+  planId: string;
+  sessionId: string;
+  step: string;
 }
 
 interface PlanStoreData {
@@ -47,6 +59,7 @@ export function recordPlanReview(input: {
   adoptedFromSessionId?: string;
   mergedFromPlanIds?: string[];
   mergedFromSessionIds?: string[];
+  mergeConflicts?: PlanMergeConflict[];
 }): PlanReviewRecord {
   const plan = input.plan.trim();
   if (!plan) {
@@ -79,7 +92,8 @@ export function recordPlanReview(input: {
     adoptedFromPlanId: input.adoptedFromPlanId,
     adoptedFromSessionId: input.adoptedFromSessionId,
     mergedFromPlanIds: cleanStringList(input.mergedFromPlanIds),
-    mergedFromSessionIds: cleanStringList(input.mergedFromSessionIds)
+    mergedFromSessionIds: cleanStringList(input.mergedFromSessionIds),
+    mergeConflicts: normalizeMergeConflicts(input.mergeConflicts)
   };
   if (predecessor) {
     predecessor.revisedByPlanId = record.id;
@@ -138,14 +152,20 @@ export function mergePlanReviews(input: {
     return plan;
   });
   assertNoActivePlanConflict(input.stateRoot, input.targetSessionId, input.force, "merge");
+  const conflicts = detectPlanMergeConflicts(sources);
   return recordPlanReview({
     stateRoot: input.stateRoot,
     sessionId: input.targetSessionId,
-    plan: formatMergedPlanText(sources),
-    status: "approved",
-    response: input.response ?? `Merged from plans ${sourcePlanIds.join(", ")}`,
+    plan: formatMergedPlanText(sources, conflicts),
+    status: conflicts.length > 0 ? "needs_revision" : "approved",
+    response:
+      input.response ??
+      (conflicts.length > 0
+        ? `Merged plan needs revision: ${conflicts.length} conflict(s) detected`
+        : `Merged from plans ${sourcePlanIds.join(", ")}`),
     mergedFromPlanIds: sourcePlanIds,
-    mergedFromSessionIds: uniqueStringList(sources.map((source) => source.sessionId))
+    mergedFromSessionIds: uniqueStringList(sources.map((source) => source.sessionId)),
+    mergeConflicts: conflicts
   });
 }
 
@@ -247,6 +267,8 @@ export function formatPlanReview(record: PlanReviewRecord | undefined): string {
     record.mergedFromSessionIds?.length
       ? `Merged from sessions: ${record.mergedFromSessionIds.join(", ")}`
       : undefined,
+    record.mergeConflicts?.length ? `Merge conflicts: ${record.mergeConflicts.length}` : undefined,
+    ...formatMergeConflictLines(record.mergeConflicts),
     `Updated: ${record.updatedAt}`,
     record.response ? `Response: ${record.response}` : undefined,
     "",
@@ -296,6 +318,8 @@ export function formatPlanContext(record: PlanReviewRecord | undefined): string 
     record.mergedFromSessionIds?.length
       ? `Merged from sessions: ${record.mergedFromSessionIds.join(", ")}`
       : undefined,
+    record.mergeConflicts?.length ? `Merge conflicts: ${record.mergeConflicts.length}` : undefined,
+    ...formatMergeConflictLines(record.mergeConflicts),
     record.response ? `Last user response: ${record.response}` : undefined,
     "Implementation plan:",
     record.plan,
@@ -372,7 +396,8 @@ function normalizePlanReview(value: unknown): PlanReviewRecord | undefined {
     adoptedFromSessionId:
       typeof record.adoptedFromSessionId === "string" ? record.adoptedFromSessionId : undefined,
     mergedFromPlanIds: normalizeStringList(record.mergedFromPlanIds),
-    mergedFromSessionIds: normalizeStringList(record.mergedFromSessionIds)
+    mergedFromSessionIds: normalizeStringList(record.mergedFromSessionIds),
+    mergeConflicts: normalizeMergeConflicts(record.mergeConflicts)
   };
 }
 
@@ -399,7 +424,8 @@ function formatPlanReviewLinks(record: PlanReviewRecord): string {
     record.adoptedFromPlanId ? `adopted-from:${record.adoptedFromPlanId}` : undefined,
     record.mergedFromPlanIds?.length
       ? `merged-from:${record.mergedFromPlanIds.join(",")}`
-      : undefined
+      : undefined,
+    record.mergeConflicts?.length ? `merge-conflicts:${record.mergeConflicts.length}` : undefined
   ].filter((link): link is string => Boolean(link));
   return links.length > 0 ? ` ${links.join(" ")}` : "";
 }
@@ -418,18 +444,108 @@ function assertNoActivePlanConflict(
   }
 }
 
-function formatMergedPlanText(records: PlanReviewRecord[]): string {
+function formatMergedPlanText(
+  records: PlanReviewRecord[],
+  conflicts: PlanMergeConflict[] = []
+): string {
+  const conflictStepKeys = new Set(
+    conflicts.flatMap((conflict) =>
+      conflict.steps.map((step) => `${step.planId}\n${normalizePlanStepText(step.step)}`)
+    )
+  );
+  const compatibleSteps = uniquePlanSteps(
+    records.flatMap((record) =>
+      extractPlanSteps(record.plan)
+        .filter((step) => !conflictStepKeys.has(`${record.id}\n${normalizePlanStepText(step)}`))
+        .map((step) => ({
+          planId: record.id,
+          sessionId: record.sessionId,
+          step
+        }))
+    )
+  );
   return [
     `Merged implementation plan from ${records.length} approved plans.`,
     "",
-    ...records.flatMap((record, index) => [
-      `Source ${index + 1}: plan ${record.id} from session ${record.sessionId}`,
-      record.plan,
-      ""
-    ])
+    "Compatible steps:",
+    ...(compatibleSteps.length > 0
+      ? compatibleSteps.map((item, index) => `${index + 1}. ${item.step}`)
+      : ["- No compatible steps detected."]),
+    ...(conflicts.length > 0
+      ? [
+          "",
+          "Merge conflicts requiring revision:",
+          ...conflicts.flatMap((conflict, index) => [
+            `${index + 1}. Target: ${conflict.target}`,
+            ...conflict.steps.map(
+              (step) => `   - plan ${step.planId} (${step.sessionId}): ${step.step}`
+            )
+          ])
+        ]
+      : [])
   ]
     .join("\n")
     .trim();
+}
+
+function detectPlanMergeConflicts(records: PlanReviewRecord[]): PlanMergeConflict[] {
+  const byTarget = new Map<string, PlanMergeConflictStep[]>();
+  for (const record of records) {
+    for (const step of extractPlanSteps(record.plan)) {
+      const target = mutablePlanStepTarget(step);
+      if (!target) continue;
+      const current = byTarget.get(target) ?? [];
+      current.push({ planId: record.id, sessionId: record.sessionId, step });
+      byTarget.set(target, current);
+    }
+  }
+  const conflicts: PlanMergeConflict[] = [];
+  for (const [target, steps] of byTarget) {
+    const uniqueSteps = uniquePlanSteps(steps);
+    const distinctSources = new Set(uniqueSteps.map((step) => step.planId));
+    const distinctTexts = new Set(uniqueSteps.map((step) => normalizePlanStepText(step.step)));
+    if (distinctSources.size > 1 && distinctTexts.size > 1) {
+      conflicts.push({ target, steps: uniqueSteps });
+    }
+  }
+  return conflicts;
+}
+
+function extractPlanSteps(plan: string): string[] {
+  return plan
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function mutablePlanStepTarget(step: string): string | undefined {
+  if (!/\b(patch|edit|update|write|replace|change|modify|delete|remove)\b/i.test(step)) {
+    return undefined;
+  }
+  const fileMatch = step.match(
+    /[`'"]?([A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9_-]+)[`'"]?/
+  );
+  if (fileMatch) return fileMatch[1].toLowerCase();
+  const targetMatch = step.match(
+    /\b(?:patch|edit|update|write|replace|change|modify|delete|remove)\s+(.+?)(?:\s+(?:to|with|after|before|from)\b|$)/i
+  );
+  return targetMatch?.[1]?.trim().toLowerCase();
+}
+
+function uniquePlanSteps<T extends { planId: string; step: string }>(steps: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const step of steps) {
+    const key = `${step.planId}\n${normalizePlanStepText(step.step)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(step);
+  }
+  return result;
+}
+
+function normalizePlanStepText(step: string): string {
+  return step.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function uniqueStringList(values: string[] | undefined): string[] {
@@ -452,4 +568,42 @@ function cleanStringList(values: string[] | undefined): string[] | undefined {
 function normalizeStringList(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return cleanStringList(value.filter((item): item is string => typeof item === "string"));
+}
+
+function normalizeMergeConflicts(value: unknown): PlanMergeConflict[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const conflicts = value.flatMap((item): PlanMergeConflict[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    const target = typeof record.target === "string" ? record.target.trim() : "";
+    const steps = Array.isArray(record.steps)
+      ? record.steps.flatMap((step): PlanMergeConflictStep[] => {
+          if (!step || typeof step !== "object" || Array.isArray(step)) return [];
+          const candidate = step as Record<string, unknown>;
+          if (
+            typeof candidate.planId !== "string" ||
+            typeof candidate.sessionId !== "string" ||
+            typeof candidate.step !== "string"
+          ) {
+            return [];
+          }
+          return [
+            {
+              planId: candidate.planId,
+              sessionId: candidate.sessionId,
+              step: candidate.step
+            }
+          ];
+        })
+      : [];
+    return target && steps.length > 0 ? [{ target, steps }] : [];
+  });
+  return conflicts.length > 0 ? conflicts : undefined;
+}
+
+function formatMergeConflictLines(conflicts: PlanMergeConflict[] | undefined): string[] {
+  return (conflicts ?? []).flatMap((conflict) => [
+    `- Conflict target: ${conflict.target}`,
+    ...conflict.steps.map((step) => `  ${step.planId} (${step.sessionId}): ${step.step}`)
+  ]);
 }
