@@ -262,9 +262,26 @@ function analyzeMemory(input: MemoryRootOptions & { paths?: MagiPaths }): DreamO
   }
   if (input.paths) {
     syncMemoryGraph({ ...input, paths: input.paths });
+    operations.push(...analyzeGraphDuplicateCandidates(input.paths));
     operations.push(...analyzeGraphCleanupCandidates(input.paths));
   }
   return operations.slice(0, 20);
+}
+
+function analyzeGraphDuplicateCandidates(paths: MagiPaths): DreamOperation[] {
+  const store = MemoryNodeStore.open(paths);
+  try {
+    return store.listDuplicateCandidates({ limit: 10 }).map((candidate) => ({
+      type: "duplicate" as const,
+      targetFile: "archive/README.md",
+      reason: `Graph node ${candidate.duplicate.id}: ${candidate.reason}`,
+      content: `\n<!-- Dream graph duplicate candidate -->\n- Merge candidate: archive ${candidate.duplicate.title} (${candidate.duplicate.id}) because it duplicates ${candidate.keep.title} (${candidate.keep.id}).\n`,
+      relatedFiles: [`graph:${candidate.keep.id}`, `graph:${candidate.duplicate.id}`],
+      graphNodeIds: [candidate.duplicate.id]
+    }));
+  } finally {
+    store.close();
+  }
 }
 
 function analyzeGraphCleanupCandidates(paths: MagiPaths): DreamOperation[] {
@@ -328,8 +345,11 @@ function keepDreamGraphNodes(input: {
 function extractGraphNodeIds(operations: DreamOperation[], storedIds: string[] = []): string[] {
   const ids = new Set(storedIds.filter(Boolean));
   for (const op of operations) {
-    for (const id of op.graphNodeIds ?? []) {
-      if (id.trim()) ids.add(id.trim());
+    if (op.graphNodeIds && op.graphNodeIds.length > 0) {
+      for (const id of op.graphNodeIds) {
+        if (id.trim()) ids.add(id.trim());
+      }
+      continue;
     }
     for (const related of op.relatedFiles ?? []) {
       if (related.startsWith("graph:")) {

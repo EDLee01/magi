@@ -557,6 +557,13 @@ function createComplexRouter() {
       assert(transcript.includes("Todo list replaced"), "TodoWrite result was not visible");
       assert(transcript.includes("Wrote Memory node"), "Memorize result was not visible");
       return toolResponse([
+        toolCall("memorize-workflow-duplicate", "Memorize", {
+          type: "workflow",
+          name: "Focused CLI E2E workflow",
+          description: "Run focused CLI E2E before internal unit tests for Magi changes.",
+          body: "Run focused CLI E2E before internal unit tests for Magi changes, especially when checking harness regressions.",
+          weight: 0.43,
+        }),
         toolCall("patch-report", "FilePatch", {
           file_path: "reports/e2e-result.md",
           patch: [
@@ -656,6 +663,16 @@ async function scenarioComplexWorkflow() {
 
       const memorySearch = await runCli({ args: ["memory", "search", "CLI E2E workflow"], cwd: workDir, configDir, label: "memory search" });
       assert(memorySearch.includes("focused CLI E2E"), "memory search did not find memorized workflow");
+      const dream = await runCli({ args: ["memory", "dream"], cwd: workDir, configDir, label: "complex memory dream duplicate" });
+      assert(dream.includes("duplicate"), "memory dream did not detect duplicate graph workflow");
+      const dreamId = parseDreamId(dream);
+      const appliedDream = await runCli({
+        args: ["memory", "dream", "apply", dreamId],
+        cwd: workDir,
+        configDir,
+        label: "complex memory dream apply duplicate",
+      });
+      assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream did not archive duplicate graph workflow");
 
       await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
@@ -670,6 +687,7 @@ async function scenarioComplexWorkflow() {
           "report file written and patched",
           "todo state persisted",
           "memory search found learned workflow",
+          "Dream archived duplicate workflow memory",
           "learning draft listed"
         ],
         filesVerified: ["reports/e2e-result.md", "state/todos.json"],

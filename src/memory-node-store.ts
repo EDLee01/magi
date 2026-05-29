@@ -105,6 +105,12 @@ export interface MemoryCleanupCandidate {
   reason: string;
 }
 
+export interface MemoryDuplicateCandidate {
+  keep: MemoryNode;
+  duplicate: MemoryNode;
+  reason: string;
+}
+
 export interface ArchiveMemoryNodesInput {
   ids: string[];
   reason?: string;
@@ -959,6 +965,44 @@ export class MemoryNodeStore {
       });
   }
 
+  listDuplicateCandidates(input: { limit?: number } = {}): MemoryDuplicateCandidate[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
+    const rows = this.db
+      .prepare(
+        `
+      select * from memory_nodes
+      where status = 'active'
+        and source in ('agent', 'tool', 'explicit')
+      order by type asc, weight desc, updated_at desc
+    `
+      )
+      .all() as DbMemoryNode[];
+    const byKey = new Map<string, MemoryNode>();
+    const candidates: MemoryDuplicateCandidate[] = [];
+    for (const row of rows) {
+      const node = toMemoryNode(row);
+      const key = `${node.type}:${normalizeDuplicateTitle(node.title)}`;
+      if (!key.endsWith(":")) {
+        const existing = byKey.get(key);
+        if (existing && existing.id !== node.id && hasDuplicateSimilarity(existing, node)) {
+          const [keep, duplicate] = chooseDuplicateKeeper(existing, node);
+          candidates.push({
+            keep,
+            duplicate,
+            reason: `${duplicate.title} looks like a duplicate of active node ${keep.id} (${keep.title}).`
+          });
+          if (candidates.length >= limit) {
+            break;
+          }
+          byKey.set(key, keep);
+          continue;
+        }
+        byKey.set(key, node);
+      }
+    }
+    return candidates;
+  }
+
   archiveNodes(input: ArchiveMemoryNodesInput): MemoryNode[] {
     const ids = uniqueIds(input.ids);
     if (ids.length === 0) return [];
@@ -1616,6 +1660,47 @@ function defaultWeight(source: string): number {
 
 function normalizeWhitespace(text: string): string {
   return text.trim().replace(/\s+/g, " ");
+}
+
+function normalizeDuplicateTitle(text: string): string {
+  return normalizeWhitespace(text).toLowerCase();
+}
+
+function hasDuplicateSimilarity(left: MemoryNode, right: MemoryNode): boolean {
+  if (normalizeDuplicateTitle(left.summary) === normalizeDuplicateTitle(right.summary)) {
+    return true;
+  }
+  const leftTerms = new Set(tokenizeDuplicateText(`${left.summary} ${left.body}`));
+  const rightTerms = new Set(tokenizeDuplicateText(`${right.summary} ${right.body}`));
+  if (leftTerms.size === 0 || rightTerms.size === 0) {
+    return false;
+  }
+  let intersection = 0;
+  for (const term of leftTerms) {
+    if (rightTerms.has(term)) {
+      intersection += 1;
+    }
+  }
+  const overlap = intersection / Math.min(leftTerms.size, rightTerms.size);
+  return overlap >= 0.72;
+}
+
+function tokenizeDuplicateText(text: string): string[] {
+  return normalizeWhitespace(text)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+    .split(/\s+/)
+    .filter((term) => term.length > 2);
+}
+
+function chooseDuplicateKeeper(left: MemoryNode, right: MemoryNode): [MemoryNode, MemoryNode] {
+  if (left.weight !== right.weight) {
+    return left.weight > right.weight ? [left, right] : [right, left];
+  }
+  if (left.useCount !== right.useCount) {
+    return left.useCount > right.useCount ? [left, right] : [right, left];
+  }
+  return left.updatedAt >= right.updatedAt ? [left, right] : [right, left];
 }
 
 function clampNumber(value: number, min: number, max: number): number {

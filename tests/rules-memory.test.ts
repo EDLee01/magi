@@ -226,6 +226,53 @@ describe("AGENTS rules and memory", () => {
     afterApply.close();
   });
 
+  it("adds duplicate graph nodes to memory dream merge candidates", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const keep = nodeStore.upsertNode({
+      type: "workflow",
+      title: "Focused release verification",
+      summary: "Run focused checks before broad checks.",
+      body: "Run focused checks and typecheck before broad checks for releases.",
+      source: "agent",
+      weight: 0.9
+    });
+    const duplicate = nodeStore.upsertNode({
+      type: "workflow",
+      title: "Focused release verification",
+      summary: "Run focused checks before broad checks.",
+      body: "Run focused checks and typecheck before broad verification for releases.",
+      source: "agent",
+      weight: 0.45
+    });
+    nodeStore.close();
+
+    const dream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(dream.exitCode).toBe(0);
+    expect(dream.stdout).toContain("duplicate");
+
+    const dreams = listDreams({ appRoot: paths.root });
+    const manifest = showDream({ appRoot: paths.root, id: dreams[0].id });
+    expect(manifest.operations).toContainEqual(
+      expect.objectContaining({
+        type: "duplicate",
+        reason: expect.stringContaining(duplicate.id),
+        relatedFiles: [`graph:${keep.id}`, `graph:${duplicate.id}`],
+        graphNodeIds: [duplicate.id]
+      })
+    );
+
+    const applied = await runCli(["memory", "dream", "apply", dreams[0].id], temp.env, workspace);
+    expect(applied.exitCode).toBe(0);
+    expect(applied.stdout).toContain("Archived graph nodes: 1");
+    const afterApply = MemoryNodeStore.open(paths);
+    expect(afterApply.getNode(keep.id)?.status).toBe("active");
+    expect(afterApply.getNode(duplicate.id)?.status).toBe("archived");
+    afterApply.close();
+  });
+
   it("applies or rejects Dream graph cleanup through reviewable CLI actions", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));

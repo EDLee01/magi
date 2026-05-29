@@ -246,6 +246,40 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("lists similar explicit memory nodes as duplicate candidates", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const keep = store.upsertNode({
+        type: "workflow",
+        title: "Release verification workflow",
+        summary: "Run focused checks before broad checks.",
+        body: "Run focused checks and typecheck before broad checks for releases.",
+        source: "agent",
+        weight: 0.9
+      });
+      const duplicate = store.upsertNode({
+        type: "workflow",
+        title: "Release verification workflow",
+        summary: "Run focused checks before broad checks.",
+        body: "Run focused checks and typecheck before broad verification for releases.",
+        source: "agent",
+        weight: 0.45
+      });
+
+      const candidates = store.listDuplicateCandidates();
+      expect(candidates).toContainEqual(
+        expect.objectContaining({
+          keep: expect.objectContaining({ id: keep.id }),
+          duplicate: expect.objectContaining({ id: duplicate.id }),
+          reason: expect.stringContaining("looks like a duplicate")
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("archives and keeps reviewed graph cleanup nodes", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);
