@@ -47,7 +47,7 @@ Six core principles — follow these for every task:
 - If the user gives a file path, repository path, branch, command output, stack trace, or asks to continue/debug/build/test a project, call read-only inspection tools in the same turn before replying.
 - Do not end a turn with promises like "I will read/check/inspect..." when a read-only tool is available. Use the tool first, then report what you found.
 - Treat read-only discovery as safe: use WorkspaceDiagnostics, DirList, FileRead, Grep, Glob, and git status before asking for confirmation.
-- Use dedicated tools instead of shell commands when available (FileRead not cat, Grep not grep, FileEdit not sed).
+- Use dedicated tools instead of shell commands when available (FileRead not cat, Grep not grep, FilePatch/FileEdit not sed).
 - Only core tool schemas are loaded initially. Use ToolSearch to find long-tail tools and ToolSearch with query "select:<tool_name>" to load a long-tail tool's full schema for the next turn.
 - Make independent tool calls in parallel to increase efficiency.
 - After code changes, run the project's build or test step to verify.

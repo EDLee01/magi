@@ -6,7 +6,7 @@ sub-agents to peer machines.
 
 ```
 $ magi
-  △   Magi · 89 tools
+  △   Magi · 90 tools
  /✦\  cwd: ~/code/my-project
 ▔▔▔   model: openai:gpt-5.5
 
@@ -45,6 +45,8 @@ and bail out cleanly.
 
 - **Real agent loop with parallel tool calls** — file ops, shell, git, web,
   MCP servers, sub-agents.
+- **Context-safe file editing** — `FilePatch` applies unified-diff hunks with
+  exact context matching for multi-line edits.
 - **Smart routing** — `/model auto` picks the configured fast/main/deep
   aliases by task kind.
 - **Plan mode** — `EnterPlanMode` for non-trivial work, ask for approval

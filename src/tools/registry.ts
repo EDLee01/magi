@@ -20,6 +20,8 @@ import {
 import {
   createUnifiedDiff,
   editWorkspaceFile,
+  patchWorkspaceFile,
+  previewPatchedContent,
   readWorkspaceFile,
   writeWorkspaceFile
 } from "./files.js";
@@ -498,7 +500,9 @@ export async function executeRegisteredTool(input: {
     // Generate diff preview for FileWrite/FileEdit when approval is needed
     if (
       permission.decision === "ask" &&
-      (input.toolUse.name === "FileWrite" || input.toolUse.name === "FileEdit")
+      (input.toolUse.name === "FileWrite" ||
+        input.toolUse.name === "FileEdit" ||
+        input.toolUse.name === "FilePatch")
     ) {
       try {
         const filePath = readString(input.toolUse.input, "file_path");
@@ -509,6 +513,8 @@ export async function executeRegisteredTool(input: {
         let after: string;
         if (input.toolUse.name === "FileWrite") {
           after = readString(input.toolUse.input, "content");
+        } else if (input.toolUse.name === "FilePatch") {
+          after = previewPatchedContent(before, readString(input.toolUse.input, "patch"));
         } else {
           const oldString = readString(input.toolUse.input, "old_string");
           const newString = readString(input.toolUse.input, "new_string");
@@ -680,6 +686,7 @@ const CORE_TOOL_NAMES = [
   "FileRead",
   "FileWrite",
   "FileEdit",
+  "FilePatch",
   "Glob",
   "Grep",
   "Bash",
@@ -772,6 +779,36 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         approved: true
       });
       return `Wrote ${result.path}\n${result.diff}`;
+    },
+    isReadOnly: () => false,
+    isDestructive: () => false,
+    isConcurrencySafe: () => false
+  },
+  {
+    name: "FilePatch",
+    description:
+      "Apply one or more unified-diff hunks to an existing UTF-8 file inside the workspace. Prefer this over FileEdit for multi-line edits because context must match exactly and uniquely.",
+    category: "files",
+    tags: ["file", "patch", "diff", "workspace"],
+    inputSchema: objectSchema(
+      {
+        file_path: { type: "string" },
+        patch: {
+          type: "string",
+          description:
+            "Unified diff hunks for this file, including @@ hunk markers and lines prefixed with space, -, or +."
+        }
+      },
+      ["file_path", "patch"]
+    ),
+    call: (input, context) => {
+      const result = patchWorkspaceFile({
+        cwd: context.cwd,
+        filePath: readString(input, "file_path"),
+        patch: readString(input, "patch"),
+        approved: true
+      });
+      return `Patched ${result.path} (${result.hunks} hunk${result.hunks === 1 ? "" : "s"})\n${result.diff}`;
     },
     isReadOnly: () => false,
     isDestructive: () => false,

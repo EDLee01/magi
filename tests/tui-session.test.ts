@@ -1232,6 +1232,36 @@ it("generates diff preview for FileEdit approval in registry", async () => {
   expect(capturedDiff).toContain("+const a = 99;");
 });
 
+it("generates diff preview for FilePatch approval in registry", async () => {
+  workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-patch-"));
+  const existingFile = path.join(workspace, "patch.ts");
+  writeFileSync(existingFile, "const a = 1;\nconst b = 2;\n", "utf8");
+
+  const { executeRegisteredTool } = await import("../src/tools/registry.js");
+  let capturedDiff: string | undefined;
+  await executeRegisteredTool({
+    cwd: workspace,
+    toolUse: {
+      type: "tool-use",
+      id: "fp-1",
+      name: "FilePatch",
+      input: {
+        file_path: "patch.ts",
+        patch: ["@@", " const a = 1;", "-const b = 2;", "+const b = 22;"].join("\n")
+      }
+    },
+    permissionMode: "default",
+    approvalResolver: async ({ permission }) => {
+      capturedDiff = permission.diff;
+      return true;
+    }
+  });
+
+  expect(capturedDiff).toBeDefined();
+  expect(capturedDiff).toContain("-const b = 2;");
+  expect(capturedDiff).toContain("+const b = 22;");
+});
+
 it("passes diff through approval chain to audit metadata", async () => {
   workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-chain-"));
   writeFileSync(path.join(workspace, "chain.ts"), "old content\n", "utf8");

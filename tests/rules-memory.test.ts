@@ -17,6 +17,7 @@ import {
 import { appendMemoryFile } from "../src/memory-files.js";
 import { retrieveRelevantMemory } from "../src/memory-search.js";
 import { MemoryNodeStore } from "../src/memory-node-store.js";
+import { syncMemoryGraph } from "../src/memory-wiki-indexer.js";
 import { writeMemdirEntry } from "../src/memdir.js";
 import { getMagiPaths } from "../src/paths.js";
 import { loadAgentInstructions } from "../src/rules/agents-loader.js";
@@ -242,6 +243,60 @@ describe("AGENTS rules and memory", () => {
     } finally {
       store.close();
     }
+  });
+
+  it("retrieves graph-neighbor memory through the normal memory search path", () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    appendMemoryFile({
+      appRoot: paths.root,
+      filePath: "projects/magi.md",
+      content: [
+        "## Graph memory",
+        "Magi stores durable facts as weighted graph memory.",
+        "",
+        "## Verification workflow",
+        "Run focused business checks before broad checks."
+      ].join("\n")
+    });
+    syncMemoryGraph({ appRoot: paths.root, paths });
+
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.getSourceByUri("memory/projects/magi.md");
+      expect(source).toBeDefined();
+      const chunks = store.listChunksForSource(source!.id);
+      const project = chunks.find((chunk) => chunk.heading === "Graph memory");
+      const workflow = chunks.find((chunk) => chunk.heading === "Verification workflow");
+      expect(project).toBeDefined();
+      expect(workflow).toBeDefined();
+      store.addEdge({
+        fromNodeId: project!.nodeId,
+        toNodeId: workflow!.nodeId,
+        relation: "relates_to",
+        weight: 0.9
+      });
+    } finally {
+      store.close();
+    }
+
+    const hits = retrieveRelevantMemory({
+      appRoot: paths.root,
+      query: "durable weighted graph",
+      maxResults: 5,
+      legacy: {
+        paths,
+        cwd: workspace,
+        sessionId: "s-1",
+        scopes: ["session"]
+      },
+      audit: false
+    });
+
+    expect(hits.map((hit) => hit.title)).toEqual(
+      expect.arrayContaining(["Graph memory", "Verification workflow"])
+    );
   });
 
   it("searches layered memory with session and project relevance", () => {

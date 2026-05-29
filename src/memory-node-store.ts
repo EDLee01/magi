@@ -600,26 +600,22 @@ export class MemoryNodeStore {
     `
       )
       .all() as DbGraphSearchRow[];
-    return rows
-      .map((row) => {
-        const node = toMemoryNode(row);
-        const source = graphRowToSource(row);
-        const chunk = graphRowToChunk(row);
-        return {
-          node,
-          source,
-          chunk,
-          score: scoreGraphHit({ node, source, chunk }, terms)
-        };
-      })
+    const baseHits = rows.map((row) => {
+      const node = toMemoryNode(row);
+      const source = graphRowToSource(row);
+      const chunk = graphRowToChunk(row);
+      return {
+        node,
+        source,
+        chunk,
+        score: scoreGraphHit({ node, source, chunk }, terms)
+      };
+    });
+    const rankedHits = applyGraphEdges(baseHits, this.listActiveEdges(), minScore)
       .filter((hit) => hit.score >= minScore)
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          b.node.weight - a.node.weight ||
-          a.source.uri.localeCompare(b.source.uri)
-      )
+      .sort(compareGraphSearchHits)
       .slice(0, limit);
+    return rankedHits;
   }
 
   markSourceMissing(sourceId: string): void {
@@ -773,6 +769,21 @@ export class MemoryNodeStore {
       createdAt: now,
       metadata: input.metadata ?? {}
     };
+  }
+
+  private listActiveEdges(): MemoryEdge[] {
+    const rows = this.db
+      .prepare(
+        `
+      select e.*
+      from memory_edges e
+      join memory_nodes from_node on from_node.id = e.from_node_id
+      join memory_nodes to_node on to_node.id = e.to_node_id
+      where from_node.status = 'active' and to_node.status = 'active'
+    `
+      )
+      .all() as DbMemoryEdge[];
+    return rows.map(toMemoryEdge);
   }
 
   private findDuplicate(type: MemoryNodeType, body: string): MemoryNode | undefined {
@@ -931,6 +942,16 @@ interface DbMemoryChunk {
   metadata_json: string;
 }
 
+interface DbMemoryEdge {
+  id: number;
+  from_node_id: string;
+  to_node_id: string;
+  relation: MemoryEdgeRelation;
+  weight: number;
+  created_at: string;
+  metadata_json: string;
+}
+
 type DbGraphSearchRow = DbMemoryNode & {
   source_id: string;
   source_kind: MemorySourceKind;
@@ -1001,6 +1022,18 @@ function toMemoryChunk(row: DbMemoryChunk): MemoryChunk {
     orderIndex: row.order_index,
     status: row.status,
     updatedAt: row.updated_at,
+    metadata: decodeJson(row.metadata_json)
+  };
+}
+
+function toMemoryEdge(row: DbMemoryEdge): MemoryEdge {
+  return {
+    id: row.id,
+    fromNodeId: row.from_node_id,
+    toNodeId: row.to_node_id,
+    relation: row.relation,
+    weight: row.weight,
+    createdAt: row.created_at,
     metadata: decodeJson(row.metadata_json)
   };
 }
@@ -1141,7 +1174,165 @@ function scoreGraphHit(
       score += 3;
     }
   }
-  return score + input.node.weight;
+  return score > 0 ? score + input.node.weight : 0;
+}
+
+function applyGraphEdges(
+  hits: MemoryGraphSearchHit[],
+  edges: MemoryEdge[],
+  minScore: number
+): MemoryGraphSearchHit[] {
+  const scored = new Map<string, MemoryGraphSearchHit>();
+  const direct = new Set<string>();
+  for (const hit of hits) {
+    if (hit.score >= minScore) {
+      direct.add(hit.node.id);
+    }
+    scored.set(hit.node.id, { ...hit });
+  }
+
+  for (const edge of edges) {
+    if (edge.relation === "supersedes") {
+      applySupersedesPromotion(scored, edge, minScore);
+      continue;
+    }
+    if (edge.relation === "conflicts_with") {
+      continue;
+    }
+    spreadScore(scored, direct, edge, minScore);
+  }
+
+  for (const edge of edges) {
+    if (edge.relation === "supersedes") {
+      applySupersedesDemotion(scored, edge, minScore);
+    }
+  }
+
+  for (const edge of edges) {
+    if (edge.relation === "conflicts_with") {
+      applyConflictPenalty(scored, direct, edge, minScore);
+    }
+  }
+
+  return [...scored.values()];
+}
+
+function applySupersedesPromotion(
+  scored: Map<string, MemoryGraphSearchHit>,
+  edge: MemoryEdge,
+  minScore: number
+): void {
+  const current = scored.get(edge.fromNodeId);
+  const superseded = scored.get(edge.toNodeId);
+  if (!current || !superseded || superseded.score < minScore) {
+    return;
+  }
+  current.score = Math.max(current.score, relationBoostedScore(superseded.score, edge, "backward"));
+}
+
+function applySupersedesDemotion(
+  scored: Map<string, MemoryGraphSearchHit>,
+  edge: MemoryEdge,
+  minScore: number
+): void {
+  const current = scored.get(edge.fromNodeId);
+  const superseded = scored.get(edge.toNodeId);
+  if (!current || !superseded || current.score < minScore) {
+    return;
+  }
+  superseded.score = Math.min(superseded.score, minScore - 0.001);
+}
+
+function spreadScore(
+  scored: Map<string, MemoryGraphSearchHit>,
+  direct: Set<string>,
+  edge: MemoryEdge,
+  minScore: number
+): void {
+  const from = scored.get(edge.fromNodeId);
+  const to = scored.get(edge.toNodeId);
+  if (!from || !to) {
+    return;
+  }
+  if (from.score >= minScore) {
+    to.score = Math.max(to.score, relationBoostedScore(from.score, edge, "forward"));
+  }
+  if (to.score >= minScore && isBidirectionalRelation(edge.relation)) {
+    from.score = Math.max(from.score, relationBoostedScore(to.score, edge, "backward"));
+  }
+}
+
+function applyConflictPenalty(
+  scored: Map<string, MemoryGraphSearchHit>,
+  direct: Set<string>,
+  edge: MemoryEdge,
+  minScore: number
+): void {
+  const from = scored.get(edge.fromNodeId);
+  const to = scored.get(edge.toNodeId);
+  if (!from || !to || from.score < minScore || to.score < minScore) {
+    return;
+  }
+  if (direct.has(edge.fromNodeId) && !direct.has(edge.toNodeId)) {
+    to.score = Math.min(to.score, minScore - 0.001);
+    return;
+  }
+  if (direct.has(edge.toNodeId) && !direct.has(edge.fromNodeId)) {
+    from.score = Math.min(from.score, minScore - 0.001);
+    return;
+  }
+  const loser = compareGraphSearchHits(from, to) <= 0 ? to : from;
+  loser.score = Math.min(loser.score, minScore - 0.001);
+}
+
+function relationBoostedScore(
+  score: number,
+  edge: MemoryEdge,
+  direction: "forward" | "backward"
+): number {
+  const base = score * relationStrength(edge.relation, direction) * Math.max(0, edge.weight);
+  return base + relationBonus(edge.relation);
+}
+
+function relationStrength(relation: MemoryEdgeRelation, direction: "forward" | "backward"): number {
+  switch (relation) {
+    case "belongs_to":
+      return direction === "forward" ? 0.88 : 0.35;
+    case "depends_on":
+      return direction === "forward" ? 0.82 : 0.28;
+    case "derived_from":
+      return direction === "forward" ? 0.72 : 0.3;
+    case "uses_skill":
+      return direction === "forward" ? 0.78 : 0.25;
+    case "supersedes":
+      return direction === "backward" ? 0.95 : 0.05;
+    case "conflicts_with":
+      return 0;
+    case "relates_to":
+    default:
+      return 0.64;
+  }
+}
+
+function relationBonus(relation: MemoryEdgeRelation): number {
+  if (relation === "supersedes") return 0.35;
+  if (relation === "belongs_to" || relation === "depends_on") return 0.2;
+  if (relation === "uses_skill") return 0.15;
+  return 0.1;
+}
+
+function isBidirectionalRelation(relation: MemoryEdgeRelation): boolean {
+  return relation === "relates_to" || relation === "conflicts_with";
+}
+
+function compareGraphSearchHits(a: MemoryGraphSearchHit, b: MemoryGraphSearchHit): number {
+  return (
+    b.score - a.score ||
+    b.node.weight - a.node.weight ||
+    b.node.useCount - a.node.useCount ||
+    a.source.uri.localeCompare(b.source.uri) ||
+    a.chunk.heading.localeCompare(b.chunk.heading)
+  );
 }
 
 function hashText(text: string): string {

@@ -45,6 +45,7 @@ describe("tool registry", () => {
         "FileRead",
         "FileWrite",
         "FileEdit",
+        "FilePatch",
         "Glob",
         "Grep",
         "Bash",
@@ -89,6 +90,7 @@ describe("tool registry", () => {
         "FileRead",
         "FileWrite",
         "FileEdit",
+        "FilePatch",
         "Glob",
         "Grep",
         "Bash",
@@ -395,6 +397,51 @@ describe("tool registry", () => {
     await expect(readFile(path.join(workspace, "note.txt"), "utf8")).resolves.toBe("one\nthree\n");
   });
 
+  it("applies unified diff hunks with FilePatch context checks", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    writeFileSync(
+      path.join(workspace, "note.txt"),
+      ["one", "two", "three", "four", ""].join("\n"),
+      "utf8"
+    );
+
+    const result = await executeRegisteredTool({
+      cwd: workspace,
+      toolUse: {
+        type: "tool-use",
+        id: "patch-1",
+        name: "FilePatch",
+        input: {
+          file_path: "note.txt",
+          patch: ["@@", " one", "-two", "+TWO", " three"].join("\n")
+        }
+      },
+      permissionMode: "acceptEdits"
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("Patched note.txt (1 hunk)");
+    await expect(readFile(path.join(workspace, "note.txt"), "utf8")).resolves.toBe(
+      "one\nTWO\nthree\nfour\n"
+    );
+
+    const failed = await executeRegisteredTool({
+      cwd: workspace,
+      toolUse: {
+        type: "tool-use",
+        id: "patch-miss",
+        name: "FilePatch",
+        input: {
+          file_path: "note.txt",
+          patch: ["@@", " missing", "-value", "+new"].join("\n")
+        }
+      },
+      permissionMode: "acceptEdits"
+    });
+    expect(failed.isError).toBe(true);
+    expect(failed.content).toContain("Patch context did not match file");
+  });
+
   it("supports glob and grep options", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
     writeFileSync(path.join(workspace, "a.ts"), "const alpha = 1;\n", "utf8");
@@ -478,8 +525,20 @@ describe("tool registry", () => {
       name: "FileWrite",
       input: { file_path: "x.txt", content: "x" }
     };
+    const patchCall = {
+      type: "tool-use" as const,
+      id: "patch-1",
+      name: "FilePatch",
+      input: { file_path: "x.txt", patch: "@@\n-old\n+new" }
+    };
     expect(checkToolPermission({ toolUse: writeCall, mode: "plan" })).toMatchObject({
       decision: "deny"
+    });
+    expect(checkToolPermission({ toolUse: patchCall, mode: "plan" })).toMatchObject({
+      decision: "deny"
+    });
+    expect(checkToolPermission({ toolUse: patchCall, mode: "default" })).toMatchObject({
+      decision: "ask"
     });
     expect(
       checkToolPermission({

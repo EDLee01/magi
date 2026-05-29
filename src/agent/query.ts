@@ -946,7 +946,10 @@ function normalizeTextToolInput(
   input: Record<string, unknown>
 ): Record<string, unknown> {
   if (
-    (toolName === "FileRead" || toolName === "FileWrite" || toolName === "FileEdit") &&
+    (toolName === "FileRead" ||
+      toolName === "FileWrite" ||
+      toolName === "FileEdit" ||
+      toolName === "FilePatch") &&
     input.file_path === undefined &&
     input.path !== undefined
   ) {

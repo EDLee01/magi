@@ -104,6 +104,151 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("uses graph edges to recall related memory nodes", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "wiki",
+        uri: "memory/projects/magi.md",
+        title: "Magi project memory",
+        contentHash: "source-edge-related"
+      });
+      const project = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/projects/magi.md#memory-graph",
+        type: "project",
+        heading: "Memory graph",
+        body: "Magi stores durable memory as weighted SQLite graph nodes.",
+        summary: "Durable memory uses weighted graph nodes.",
+        contentHash: "project-edge-related",
+        weight: 0.7
+      });
+      const workflow = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/projects/magi.md#verification-workflow",
+        type: "workflow",
+        heading: "Verification workflow",
+        body: "Run focused business checks before broad verification.",
+        summary: "Focused verification workflow.",
+        contentHash: "workflow-edge-related",
+        weight: 0.6
+      });
+      store.addEdge({
+        fromNodeId: project.nodeId,
+        toNodeId: workflow.nodeId,
+        relation: "relates_to",
+        weight: 0.9
+      });
+
+      const hits = store.searchGraph({ query: "durable sqlite graph", limit: 5 });
+      expect(hits.map((hit) => hit.chunk.heading)).toEqual(
+        expect.arrayContaining(["Memory graph", "Verification workflow"])
+      );
+      expect(
+        hits.find((hit) => hit.chunk.heading === "Verification workflow")?.score
+      ).toBeGreaterThan(1);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("prefers superseding memories over superseded matches", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "wiki",
+        uri: "memory/preferences/verification.md",
+        title: "Verification preferences",
+        contentHash: "source-edge-supersedes"
+      });
+      const oldNode = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/preferences/verification.md#old",
+        type: "preference",
+        heading: "Old verification style",
+        body: "Old preference: show detailed terminal logs after every test run.",
+        summary: "Show detailed terminal logs.",
+        contentHash: "old-edge-supersedes",
+        weight: 0.65
+      });
+      const currentNode = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/preferences/verification.md#current",
+        type: "preference",
+        heading: "Current verification style",
+        body: "Current preference: summarize verification results concisely.",
+        summary: "Summarize verification concisely.",
+        contentHash: "current-edge-supersedes",
+        weight: 0.75
+      });
+      store.addEdge({
+        fromNodeId: currentNode.nodeId,
+        toNodeId: oldNode.nodeId,
+        relation: "supersedes",
+        weight: 1
+      });
+
+      const hits = store.searchGraph({ query: "detailed terminal logs verification", limit: 5 });
+      expect(hits.map((hit) => hit.chunk.heading)).toContain("Current verification style");
+      expect(hits.map((hit) => hit.chunk.heading)).not.toContain("Old verification style");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("filters indirectly recalled conflicting memories", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "wiki",
+        uri: "memory/preferences/output.md",
+        title: "Output preferences",
+        contentHash: "source-edge-conflict"
+      });
+      const concise = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/preferences/output.md#concise",
+        type: "preference",
+        heading: "Concise summaries",
+        body: "Prefer concise summaries for verification output.",
+        summary: "Concise verification summaries.",
+        contentHash: "concise-edge-conflict",
+        weight: 0.8
+      });
+      const verbose = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/preferences/output.md#verbose",
+        type: "preference",
+        heading: "Verbose logs",
+        body: "Prefer verbose logs for verification output.",
+        summary: "Verbose verification logs.",
+        contentHash: "verbose-edge-conflict",
+        weight: 0.6
+      });
+      store.addEdge({
+        fromNodeId: concise.nodeId,
+        toNodeId: verbose.nodeId,
+        relation: "conflicts_with",
+        weight: 1
+      });
+      store.addEdge({
+        fromNodeId: concise.nodeId,
+        toNodeId: verbose.nodeId,
+        relation: "relates_to",
+        weight: 1
+      });
+
+      const hits = store.searchGraph({ query: "concise summaries", limit: 5 });
+      expect(hits.map((hit) => hit.chunk.heading)).toContain("Concise summaries");
+      expect(hits.map((hit) => hit.chunk.heading)).not.toContain("Verbose logs");
+    } finally {
+      store.close();
+    }
+  });
+
   it("stores graph sources, chunks, and archives missing source chunks", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);
