@@ -667,7 +667,7 @@ function renderMemoryDecisionConfig(port) {
     "  enabled: true",
     "  autoWrite: explicit",
     "  maxResults: 5",
-    "  selectionModel: fast",
+    "  writeDecisionModel: fast",
     "  scopes:",
     "    - user",
     "    - project",

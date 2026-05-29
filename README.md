@@ -215,6 +215,9 @@ models:
     fast:   { family: gpt, role: haiku,  contextWindow: 200000, supportsVision: true }
     main:   { family: gpt, role: sonnet, contextWindow: 200000, supportsVision: true }
     deep:   { family: gpt, role: opus,   contextWindow: 200000, supportsVision: true }
+memory:
+  selectionModel: fast       # optional relevance selector for large memory sets
+  writeDecisionModel: fast   # optional judge for remember/correction requests
 ```
 
 Run `magi init` to generate a working config and skip the manual yaml.

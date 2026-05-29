@@ -79,6 +79,7 @@ export interface MemoryConfig {
   maxResults: number;
   scopes: Array<"user" | "project" | "session">;
   selectionModel?: string;
+  writeDecisionModel?: string;
 }
 
 export interface WebSearchConfig {
@@ -688,7 +689,12 @@ function readMemoryConfig(value: Record<string, unknown>, configFile: string): M
     autoWrite: readMemoryAutoWrite(value.autoWrite, "memory.autoWrite", configFile),
     maxResults: readOptionalPositiveInteger(value.maxResults, "memory.maxResults", configFile) ?? 8,
     scopes: readMemoryScopes(value.scopes, "memory.scopes", configFile),
-    selectionModel: readOptionalString(value.selectionModel, "memory.selectionModel", configFile)
+    selectionModel: readOptionalString(value.selectionModel, "memory.selectionModel", configFile),
+    writeDecisionModel: readOptionalString(
+      value.writeDecisionModel,
+      "memory.writeDecisionModel",
+      configFile
+    )
   };
 }
 

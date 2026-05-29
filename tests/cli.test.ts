@@ -119,6 +119,95 @@ describe("CLI entrypoint", () => {
     expect(body.message).toContain("No provider is configured");
   });
 
+  it("uses memory.writeDecisionModel instead of selectionModel for memory write decisions", async () => {
+    temp = makeTempRoot();
+    const calls: Array<{ model: string; text: string }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as { model: string; messages: Array<{ content: string }> };
+      const text = body.messages.map((message) => String(message.content ?? "")).join("\n");
+      calls.push({ model: body.model, text });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  body.model === "gpt-memory-write"
+                    ? JSON.stringify({
+                        action: "write",
+                        scope: "user",
+                        type: "preference",
+                        content: "User prefers concise memory write checks.",
+                        confidence: 0.91
+                      })
+                    : "WRITE DECISION MODEL OK"
+              }
+            }
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "    select: main:gpt-memory-select",
+        "    decide: main:gpt-memory-write",
+        "  fallbacks: {}",
+        "memory:",
+        "  enabled: true",
+        "  autoWrite: explicit",
+        "  maxResults: 4",
+        "  selectionModel: select",
+        "  writeDecisionModel: decide",
+        "  scopes:",
+        "    - user",
+        "    - project",
+        "    - session",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["--model", "main", "-p", "remember that I prefer concise memory write checks"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(calls.map((call) => call.model)).toEqual(["gpt-memory-write", "gpt-main"]);
+    expect(calls.map((call) => call.model)).not.toContain("gpt-memory-select");
+    const nodeStore = MemoryNodeStore.open(paths);
+    try {
+      expect(
+        nodeStore
+          .listHotNodes({ limit: 10, minWeight: 0 })
+          .some((node) => node.body === "User prefers concise memory write checks.")
+      ).toBe(true);
+    } finally {
+      nodeStore.close();
+    }
+  });
+
   it("loads MAGI_* secrets from the runtime .env before provider requests", async () => {
     temp = makeTempRoot();
     const requests: Array<{ authorization: string | undefined }> = [];

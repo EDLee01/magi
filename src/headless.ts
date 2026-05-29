@@ -238,6 +238,8 @@ async function runPersistedHeadless(
           modelRef: input.config.context.compactionModel
         })
       : undefined;
+    const memoryWriteDecisionModel =
+      input.config.memory.writeDecisionModel ?? input.config.memory.selectionModel;
     const queryEngine = new QueryEngine({
       store: input.store,
       sessionId,
@@ -286,11 +288,11 @@ async function runPersistedHeadless(
               modelRef: input.config.memory.selectionModel
             })
           : undefined,
-        writeDecisionRoute: input.config.memory.selectionModel
+        writeDecisionRoute: memoryWriteDecisionModel
           ? resolveSelectionRoute({
               config: input.config,
               registry,
-              modelRef: input.config.memory.selectionModel
+              modelRef: memoryWriteDecisionModel
             })
           : undefined
       }

@@ -213,6 +213,8 @@ describe("configuration", () => {
         "  enabled: false",
         "  autoWrite: off",
         "  maxResults: 3",
+        "  selectionModel: fast",
+        "  writeDecisionModel: review",
         "  scopes:",
         "    - project",
         "    - session",
@@ -226,6 +228,8 @@ describe("configuration", () => {
       enabled: false,
       autoWrite: "off",
       maxResults: 3,
+      selectionModel: "fast",
+      writeDecisionModel: "review",
       scopes: ["project", "session"]
     });
   });
