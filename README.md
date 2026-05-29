@@ -142,6 +142,16 @@ That eval runs a real headless CLI session against a mock provider and verifies
 FilePatch ranking, failed-patch recovery, successful retry, exact FileEdit use,
 and that FileWrite is not used for existing-file edits.
 
+Goal/Plan lifecycle behavior can be checked with:
+
+```sh
+npm run test:goal-plan-eval
+```
+
+That eval runs a real headless CLI session against a mock provider and verifies
+active goal injection, completed-goal suppression, plan mode mutation denial,
+submitted plan persistence, and goal completion state.
+
 After the eval scripts run, aggregate the current capability evidence with:
 
 ```sh
@@ -149,7 +159,7 @@ npm run report:capability
 ```
 
 `npm run verify` runs the aggregate report last and fails if blackbox, Memory,
-or Patch Engine gates miss their required thresholds.
+Patch Engine, or Goal/Plan gates miss their required thresholds.
 
 ## Configuration
 
@@ -254,6 +264,7 @@ npm run build
 npm test
 npm run test:memory-eval
 npm run test:patch-eval
+npm run test:goal-plan-eval
 npm run report:capability
 ```
 

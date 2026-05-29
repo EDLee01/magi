@@ -5,6 +5,7 @@ export interface CapabilityReportInput {
   blackbox: Record<string, unknown>;
   memory: Record<string, unknown>;
   patch: Record<string, unknown>;
+  goalPlan: Record<string, unknown>;
   generatedAt?: Date;
   sources?: Record<string, string>;
 }
@@ -43,7 +44,8 @@ export function buildCapabilityReport(input: CapabilityReportInput): CapabilityR
       minSuccessRate: 1
     }),
     checkMemoryReport(input.memory),
-    checkPatchReport(input.patch)
+    checkPatchReport(input.patch),
+    checkGoalPlanReport(input.goalPlan)
   ];
   const failed = checks.filter((check) => check.status !== "passed");
   return {
@@ -73,11 +75,13 @@ export function buildCapabilityReportFromFiles(input: {
     blackbox: readJsonReport(reportPath("blackbox-e2e.json")),
     memory: readJsonReport(reportPath("memory-recall-eval.json")),
     patch: readJsonReport(reportPath("patch-engine-eval.json")),
+    goalPlan: readJsonReport(reportPath("goal-plan-eval.json")),
     generatedAt: input.generatedAt,
     sources: {
       blackbox: path.relative(input.repoRoot, reportPath("blackbox-e2e.json")),
       memory: path.relative(input.repoRoot, reportPath("memory-recall-eval.json")),
-      patch: path.relative(input.repoRoot, reportPath("patch-engine-eval.json"))
+      patch: path.relative(input.repoRoot, reportPath("patch-engine-eval.json")),
+      goalPlan: path.relative(input.repoRoot, reportPath("goal-plan-eval.json"))
     }
   });
 }
@@ -185,6 +189,41 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
       fileWriteCalls: readNumber(toolCounts.FileWrite),
       recoverySeen: details.recoverySeen === true,
       toolSearchRankedFilePatch: details.toolSearchRankedFilePatch === true
+    },
+    failures
+  };
+}
+
+function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
+  const base = checkHarnessReport({
+    id: "goal-plan",
+    title: "Goal and Plan lifecycle eval",
+    report,
+    minScore: 1,
+    minSuccessRate: 1
+  });
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
+  const scenario = readRecord(scenarios[0]);
+  const details = readRecord(scenario.details);
+  const failures = [...base.failures];
+  if (details.activeGoalContextSeen !== true) failures.push("activeGoalContextSeen=false");
+  if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
+  if (details.writeDeniedInPlanMode !== true) failures.push("writeDeniedInPlanMode=false");
+  if (details.planSubmittedToModel !== true) failures.push("planSubmittedToModel=false");
+  if (details.planReviewPersisted !== true) failures.push("planReviewPersisted=false");
+  if (details.goalCompleted !== true) failures.push("goalCompleted=false");
+  return {
+    ...base,
+    status: failures.length === 0 ? "passed" : "failed",
+    score: failures.length === 0 ? 1 : 0,
+    metrics: {
+      ...base.metrics,
+      activeGoalContextSeen: details.activeGoalContextSeen === true,
+      completedGoalSuppressed: details.completedGoalSuppressed === true,
+      writeDeniedInPlanMode: details.writeDeniedInPlanMode === true,
+      planSubmittedToModel: details.planSubmittedToModel === true,
+      planReviewPersisted: details.planReviewPersisted === true,
+      goalCompleted: details.goalCompleted === true
     },
     failures
   };

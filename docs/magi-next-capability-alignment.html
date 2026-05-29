@@ -242,14 +242,14 @@
           <tr>
             <td>Eval Harness</td>
             <td>真实模型运行业务级任务，记录成功率、工具效率、回归原因。</td>
-            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告和失败分类；capability report 会汇总 blackbox、Memory 和 Patch Engine 门禁。</td>
-            <td><code>npm run test:blackbox</code>、<code>npm run report:capability</code>、<code>tests/harness-report.test.ts</code>；下一步补真实模型任务集和更细评分器。</td>
+            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告和失败分类；capability report 会汇总 blackbox、Memory、Patch Engine 和 Goal/Plan 门禁。</td>
+            <td><code>npm run test:blackbox</code>、<code>npm run test:goal-plan-eval</code>、<code>npm run report:capability</code>、<code>tests/harness-report.test.ts</code>；下一步补真实模型任务集和更细评分器。</td>
           </tr>
           <tr>
             <td>Goal / Plan Harness</td>
             <td>计划、todo、完成审计、阻塞审计由外层状态机维护。</td>
-            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划，blackbox 已覆盖 plan visibility。</td>
-            <td><code>tests/plan-state.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>tests/cli.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code></td>
+            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划；独立 goal/plan eval 已覆盖 active goal 注入、完成后不注入、plan mode 写入拒绝、plan review 持久化和 goal completion。</td>
+            <td><code>tests/plan-state.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>tests/cli.test.ts</code>、<code>scripts/goal-plan-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
             <td>Tool Discovery</td>
