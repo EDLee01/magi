@@ -97,7 +97,8 @@ describe("capability report", () => {
         uniqueToolCount: 2,
         regressions: 1,
         learningDraftApplySeen: false,
-        skillLearningApplySeen: false
+        skillLearningApplySeen: false,
+        skillPatchLearningSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -125,6 +126,7 @@ describe("capability report", () => {
         "filesVerified=0",
         "learningDraftApplySeen=false",
         "skillLearningApplySeen=false",
+        "skillPatchLearningSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -615,6 +617,7 @@ function harnessReport(input: {
   regressions?: number;
   learningDraftApplySeen?: boolean;
   skillLearningApplySeen?: boolean;
+  skillPatchLearningSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -632,7 +635,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 42,
+      assertions: input.assertions ?? 45,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -655,28 +658,13 @@ function harnessReport(input: {
         details: {
           assertions:
             input.learningDraftApplySeen === false
-              ? [
-                  "learning draft listed",
-                  ...(input.skillLearningApplySeen === false
-                    ? []
-                    : [
-                        "skill learning draft reviewed",
-                        "skill learning draft applied",
-                        "learned skill recalled in model context"
-                      ])
-                ]
+              ? ["learning draft listed", ...skillLearningAssertions(input)]
               : [
                   "learning draft listed",
                   "learning draft review showed evidence",
                   "learning draft applied to memory",
                   "applied learning indexed into memory graph",
-                  ...(input.skillLearningApplySeen === false
-                    ? []
-                    : [
-                        "skill learning draft reviewed",
-                        "skill learning draft applied",
-                        "learned skill recalled in model context"
-                      ])
+                  ...skillLearningAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -695,6 +683,28 @@ function harnessReport(input: {
       }
     ]
   };
+}
+
+function skillLearningAssertions(input: {
+  skillLearningApplySeen?: boolean;
+  skillPatchLearningSeen?: boolean;
+}): string[] {
+  return [
+    ...(input.skillLearningApplySeen === false
+      ? []
+      : [
+          "skill learning draft reviewed",
+          "skill learning draft applied",
+          "learned skill recalled in model context"
+        ]),
+    ...(input.skillPatchLearningSeen === false
+      ? []
+      : [
+          "skill patch learning draft reviewed",
+          "skill patch learning draft applied",
+          "patched skill recalled in model context"
+        ])
+  ];
 }
 
 function modelTaskReport(

@@ -550,6 +550,24 @@ async function seedMemoryAndGoal({ workDir, configDir }) {
 function createComplexRouter() {
   let complexTurns = 0;
   return ({ transcript, toolNames }) => {
+    if (transcript.includes("Use the patched blackbox verify skill after a learning update.")) {
+      assert(
+        transcript.includes("[Relevant Skills]"),
+        "patched skill recall request missed skills context"
+      );
+      assert(
+        transcript.includes("## blackbox-verify"),
+        "patched skill recall missed learned skill name"
+      );
+      assert(
+        transcript.includes("Confirm the patched skill update before broad suites."),
+        "patched skill recall missed skill_patch content"
+      );
+      return messageText(
+        "Use patched blackbox-verify: confirm the patched skill update before broad suites."
+      );
+    }
+
     if (transcript.includes("Use the blackbox verify skill for isolated provider validation.")) {
       assert(transcript.includes("[Relevant Skills]"), "skill recall request missed skills context");
       assert(transcript.includes("## blackbox-verify"), "skill recall missed learned skill name");
@@ -945,6 +963,81 @@ async function scenarioComplexWorkflow() {
         skillRecall.includes("blackbox-verify"),
         "learned skill recall answer missed skill name"
       );
+      const skillPatchDraft = await runCli({
+        args: [
+          "learning",
+          "propose",
+          "--kind",
+          "skill_patch",
+          "--target",
+          "skills/blackbox-verify/SKILL.md",
+          "--reason",
+          "Refine an existing learned verification skill after repeated black-box use.",
+          "--evidence",
+          "Validated by skill_patch black-box recall",
+          "--confidence",
+          "0.88",
+          "## Learned patch update\n\nConfirm the patched skill update before broad suites.\n"
+        ],
+        cwd: workDir,
+        configDir,
+        label: "learning skill patch draft propose"
+      });
+      assert(
+        skillPatchDraft.includes("Created LearningDraft:"),
+        "skill_patch LearningDraft was not proposed"
+      );
+      const skillPatchDraftId = /learn_[a-z0-9_]+/i.exec(skillPatchDraft)?.[0];
+      assert(skillPatchDraftId, "skill_patch LearningDraft id was not returned");
+      const skillPatchReview = await runCli({
+        args: ["learning", "draft", "show", skillPatchDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning skill patch draft show"
+      });
+      assert(
+        skillPatchReview.includes("Refine an existing learned verification skill"),
+        "skill_patch LearningDraft review missed reason"
+      );
+      assert(
+        skillPatchReview.includes("Validated by skill_patch black-box recall"),
+        "skill_patch LearningDraft review missed evidence"
+      );
+      const skillPatchApply = await runCli({
+        args: ["learning", "draft", "apply", skillPatchDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning skill patch draft apply"
+      });
+      assert(
+        skillPatchApply.includes("Applied LearningDraft:"),
+        "skill_patch LearningDraft apply did not run"
+      );
+      const patchedSkill = readFileSync(skillFile, "utf8");
+      assert(
+        patchedSkill.includes(`<!-- LearningDraft ${skillPatchDraftId} -->`),
+        "applied skill_patch did not mark the source LearningDraft"
+      );
+      assert(
+        patchedSkill.includes("Confirm the patched skill update before broad suites."),
+        "applied skill_patch file missed learned update"
+      );
+      const patchedSkillRecall = await runCli({
+        args: [
+          "--model",
+          "main",
+          "-c",
+          "-p",
+          "Use the patched blackbox verify skill after a learning update."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "patched skill recall"
+      });
+      assert(
+        patchedSkillRecall.includes("patched blackbox-verify"),
+        "patched skill recall answer missed patched skill name"
+      );
 
       const memorySearch = await runCli({
         args: ["memory", "search", "CLI E2E workflow"],
@@ -1124,7 +1217,10 @@ async function scenarioComplexWorkflow() {
           "applied learning indexed into memory graph",
           "skill learning draft reviewed",
           "skill learning draft applied",
-          "learned skill recalled in model context"
+          "learned skill recalled in model context",
+          "skill patch learning draft reviewed",
+          "skill patch learning draft applied",
+          "patched skill recalled in model context"
         ],
         filesVerified: [
           "reports/e2e-result.md",
