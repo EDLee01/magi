@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli } from "../src/cli.js";
 import { getMagiPaths } from "../src/paths.js";
+import { MemoryNodeStore } from "../src/memory-node-store.js";
 import { SessionStore } from "../src/session-store.js";
 import { writeDaemonPidFile } from "../src/control/daemon.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
@@ -912,6 +913,161 @@ describe("CLI entrypoint", () => {
     expect(lines[0]).toMatchObject({ type: "session.started" });
     expect(lines.at(-1)).toMatchObject({ type: "session.completed" });
     expect(lines.at(-1)?.jobId).toBeTruthy();
+  });
+
+  it("recalls workflow graph neighbors across sessions from the CLI", async () => {
+    temp = makeTempRoot();
+    const store = MemoryNodeStore.open(getMagiPaths(temp.env));
+    const seeded = (() => {
+      try {
+        const project = store.upsertNode({
+          type: "project",
+          title: "Release rollout project",
+          summary: "Release rollout project.",
+          body: "Release rollout project uses staged deployment gates.",
+          source: "explicit",
+          weight: 0.8
+        });
+        const workflow = store.upsertNode({
+          type: "workflow",
+          title: "Deployment gate workflow",
+          summary: "Deployment gate workflow.",
+          body: "Run smoke verification before deployment expansion.",
+          source: "explicit",
+          weight: 0.7
+        });
+        const habit = store.upsertNode({
+          type: "work_habit",
+          title: "Concise deployment reporting",
+          summary: "Concise deployment reporting.",
+          body: "Summarize expansion risks and verification outcome.",
+          source: "explicit",
+          weight: 0.65
+        });
+        return { project, workflow, habit };
+      } finally {
+        store.close();
+      }
+    })();
+    await runCli(
+      [
+        "memory",
+        "link",
+        "--from",
+        seeded.project.id,
+        "--to",
+        seeded.workflow.id,
+        "--relation",
+        "depends_on",
+        "--weight",
+        "0.95"
+      ],
+      temp.env,
+      process.cwd()
+    );
+    await runCli(
+      [
+        "memory",
+        "link",
+        "--from",
+        seeded.workflow.id,
+        "--to",
+        seeded.habit.id,
+        "--relation",
+        "relates_to",
+        "--weight",
+        "0.95"
+      ],
+      temp.env,
+      process.cwd()
+    );
+
+    const search = await runCli(
+      ["memory", "search", "release rollout project"],
+      temp.env,
+      process.cwd()
+    );
+
+    expect(search.exitCode).toBe(0);
+    expect(search.stdout).toContain("Release rollout project");
+    expect(search.stdout).toContain("Deployment gate workflow");
+    expect(search.stdout).toContain("Concise deployment reporting");
+    expect(search.stdout).toContain("graph-distance: 2");
+  });
+
+  it("shows grouped memory conflicts from the CLI", async () => {
+    temp = makeTempRoot();
+    const firstDraft = await runCli(
+      [
+        "memory",
+        "append",
+        "user",
+        "## Stale verification preference\nThe user prefers verbose terminal dumps after verification."
+      ],
+      temp.env,
+      process.cwd()
+    );
+    const firstDraftId = /Created Memory Draft:\s+([a-z0-9_]+)/i.exec(firstDraft.stdout)?.[1];
+    expect(firstDraftId).toBeTruthy();
+    await runCli(["memory", "draft", "apply", firstDraftId!], temp.env, process.cwd());
+    await runCli(
+      [
+        "memory",
+        "correct",
+        "--target",
+        "verbose terminal dumps",
+        "--reason",
+        "User corrected stale verification output preference.",
+        "--replacement",
+        "The user prefers concise verification summaries with only key outcomes.",
+        "--replacement-title",
+        "Correct verification output preference",
+        "--replacement-summary",
+        "Correct verification output preference.",
+        "--type",
+        "preference"
+      ],
+      temp.env,
+      process.cwd()
+    );
+    const secondDraft = await runCli(
+      [
+        "memory",
+        "append",
+        "user",
+        "## Raw terminal log preference\nThe user prefers raw terminal logs after verification."
+      ],
+      temp.env,
+      process.cwd()
+    );
+    const secondDraftId = /Created Memory Draft:\s+([a-z0-9_]+)/i.exec(secondDraft.stdout)?.[1];
+    expect(secondDraftId).toBeTruthy();
+    await runCli(["memory", "draft", "apply", secondDraftId!], temp.env, process.cwd());
+    await runCli(
+      [
+        "memory",
+        "link",
+        "--from",
+        "Stale verification preference",
+        "--to",
+        "Raw terminal log preference",
+        "--relation",
+        "conflicts_with",
+        "--weight",
+        "0.8"
+      ],
+      temp.env,
+      process.cwd()
+    );
+
+    const groups = await runCli(["memory", "conflicts", "--groups"], temp.env, process.cwd());
+
+    expect(groups.exitCode).toBe(0);
+    expect(groups.stdout).toContain("Memory graph conflict groups:");
+    expect(groups.stdout).toContain("nodes: 3");
+    expect(groups.stdout).toContain("recommendation: prefer_node");
+    expect(groups.stdout).toContain("Correct verification output preference");
+    expect(groups.stdout).toContain("Raw terminal log preference");
   });
 
   it("uses config context settings for headless auto compaction with explicit compaction model", async () => {

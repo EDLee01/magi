@@ -89,6 +89,58 @@ function seedBusinessMemory() {
     "link verification workflow"
   );
 
+  const rolloutProject = seedTypedGraphNode({
+    type: "project",
+    title: "Release rollout project",
+    summary: "Release rollout project.",
+    body: "Release rollout project uses staged deployment gates.",
+    weight: 0.8
+  });
+  const rolloutWorkflow = seedTypedGraphNode({
+    type: "workflow",
+    title: "Deployment gate workflow",
+    summary: "Deployment gate workflow.",
+    body: "Run smoke verification before deployment expansion.",
+    weight: 0.7
+  });
+  const rolloutHabit = seedTypedGraphNode({
+    type: "work_habit",
+    title: "Concise deployment reporting",
+    summary: "Concise deployment reporting.",
+    body: "Summarize expansion risks and verification outcome.",
+    weight: 0.65
+  });
+  runCli(
+    [
+      "memory",
+      "link",
+      "--from",
+      rolloutProject.id,
+      "--to",
+      rolloutWorkflow.id,
+      "--relation",
+      "depends_on",
+      "--weight",
+      "0.95"
+    ],
+    "link rollout project to workflow"
+  );
+  runCli(
+    [
+      "memory",
+      "link",
+      "--from",
+      rolloutWorkflow.id,
+      "--to",
+      rolloutHabit.id,
+      "--relation",
+      "relates_to",
+      "--weight",
+      "0.95"
+    ],
+    "link rollout workflow to habit"
+  );
+
   const staleDraft = draftId(
     runCli(
       [
@@ -159,6 +211,7 @@ function assertRestartRecall() {
 
 function assertDreamReviewLifecycle() {
   const staleNodeId = nodeByTitle("Stale verification preference").id;
+  assertConflictGroupView();
   const firstDream = runCli(["memory", "dream"], "memory dream cleanup preview");
   assert(firstDream.includes("archive_candidate"), "memory dream did not propose cleanup");
   const firstDreamId = dreamId(firstDream);
@@ -192,6 +245,60 @@ function assertDreamReviewLifecycle() {
 
   const postDreamEval = runMemoryEval("memory recall eval after Dream apply");
   assert(postDreamEval.includes("threshold: PASS"), "memory eval failed after Dream apply");
+}
+
+function assertConflictGroupView() {
+  const stale = nodeByTitle("Stale verification preference");
+  const rawLogs = seedTypedGraphNode({
+    type: "preference",
+    title: "Raw terminal log preference",
+    summary: "Stale raw terminal log preference.",
+    body: "The user prefers raw terminal logs after verification.",
+    weight: 0.35
+  });
+  seedConflictEdge({
+    fromNodeId: stale.id,
+    toNodeId: rawLogs.id,
+    weight: 0.8,
+    reason: "Both stale preferences describe verbose terminal output."
+  });
+
+  const groups = runCli(["memory", "conflicts", "--groups"], "memory conflict groups");
+  assert(
+    groups.includes("Memory graph conflict groups:"),
+    "memory conflict group view did not list groups"
+  );
+  assert(groups.includes("nodes: 3"), "memory conflict group view did not group three nodes");
+  assert(
+    groups.includes("recommendation: prefer_node"),
+    "memory conflict group view did not recommend the strongest node"
+  );
+  assert(
+    groups.includes("Correct verification output preference"),
+    "memory conflict group view missed corrected replacement node"
+  );
+  assert(
+    groups.includes("Raw terminal log preference"),
+    "memory conflict group view missed connected stale node"
+  );
+}
+
+function seedConflictEdge(input) {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    store.addEdge({
+      fromNodeId: input.fromNodeId,
+      toNodeId: input.toNodeId,
+      relation: "conflicts_with",
+      weight: input.weight,
+      metadata: {
+        reason: input.reason,
+        evalSeed: "memory-recall-eval"
+      }
+    });
+  } finally {
+    store.close();
+  }
 }
 
 function assertMaintenanceLifecycle() {
@@ -308,10 +415,10 @@ function writeMaintenanceCaseFile() {
 function seedTypedGraphNode(input) {
   const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
   try {
-    store.upsertNode({
+    return store.upsertNode({
       ...input,
       source: "agent",
-      weight: 0.9,
+      weight: input.weight ?? 0.9,
       metadata: { evalSeed: "memory-recall-eval" }
     });
   } finally {

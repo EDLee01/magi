@@ -629,6 +629,68 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("walks workflow graph neighborhoods across multiple related nodes", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const project = store.upsertNode({
+        type: "project",
+        title: "Release project context",
+        body: "The release project uses staged rollout verification.",
+        summary: "Release project context.",
+        source: "explicit",
+        weight: 0.8
+      });
+      const workflow = store.upsertNode({
+        type: "workflow",
+        title: "Deployment gate workflow",
+        body: "Run smoke verification before deployment expansion.",
+        summary: "Deployment gate workflow.",
+        source: "explicit",
+        weight: 0.7
+      });
+      const habit = store.upsertNode({
+        type: "work_habit",
+        title: "Concise deployment reporting",
+        body: "Summarize expansion verification with concise risk notes.",
+        summary: "Concise deployment reporting.",
+        source: "explicit",
+        weight: 0.65
+      });
+      store.addEdge({
+        fromNodeId: project.id,
+        toNodeId: workflow.id,
+        relation: "depends_on",
+        weight: 0.95
+      });
+      store.addEdge({
+        fromNodeId: workflow.id,
+        toNodeId: habit.id,
+        relation: "relates_to",
+        weight: 0.95
+      });
+
+      const hits = store.searchGraph({ query: "release project", limit: 5 });
+      const hitHeadings = hits.map((hit) => hit.chunk.heading);
+      const habitHit = hits.find((hit) => hit.chunk.heading === "Concise deployment reporting");
+
+      expect(hitHeadings).toEqual(
+        expect.arrayContaining([
+          "Release project context",
+          "Deployment gate workflow",
+          "Concise deployment reporting"
+        ])
+      );
+      expect(habitHit).toMatchObject({
+        graphDistance: 2,
+        viaNodeIds: [project.id, workflow.id]
+      });
+      expect(habitHit!.score).toBeGreaterThan(1);
+    } finally {
+      store.close();
+    }
+  });
+
   it("prefers superseding memories over superseded matches", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);
@@ -728,6 +790,71 @@ describe("memory-node-store", () => {
         recommendation: "prefer_from"
       });
       expect(conflicts[0].reason).toContain("higher weight");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("groups connected conflict edges into reviewable memory conflict clusters", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const current = store.upsertNode({
+        type: "preference",
+        title: "Current verification preference",
+        summary: "Current verification preference.",
+        body: "User prefers concise verification summaries.",
+        source: "explicit",
+        weight: 0.95
+      });
+      const staleVerbose = store.upsertNode({
+        type: "preference",
+        title: "Verbose verification preference",
+        summary: "Verbose verification preference.",
+        body: "User prefers verbose terminal dumps.",
+        source: "explicit",
+        weight: 0.4
+      });
+      const staleRawLogs = store.upsertNode({
+        type: "preference",
+        title: "Raw log preference",
+        summary: "Raw log preference.",
+        body: "User prefers raw terminal logs after tests.",
+        source: "explicit",
+        weight: 0.35
+      });
+      store.addEdge({
+        fromNodeId: current.id,
+        toNodeId: staleVerbose.id,
+        relation: "conflicts_with",
+        weight: 1,
+        metadata: { reason: "User corrected verbose output." }
+      });
+      store.addEdge({
+        fromNodeId: staleVerbose.id,
+        toNodeId: staleRawLogs.id,
+        relation: "conflicts_with",
+        weight: 0.8,
+        metadata: { reason: "Both stale preferences describe verbose logs." }
+      });
+
+      const groups = store.listConflictGroups();
+
+      expect(groups).toHaveLength(1);
+      expect(groups[0]).toMatchObject({
+        recommendation: "prefer_node",
+        preferredNodeId: current.id,
+        nodes: expect.arrayContaining([
+          expect.objectContaining({ id: current.id }),
+          expect.objectContaining({ id: staleVerbose.id }),
+          expect.objectContaining({ id: staleRawLogs.id })
+        ]),
+        conflicts: expect.arrayContaining([
+          expect.objectContaining({ from: expect.objectContaining({ id: current.id }) }),
+          expect.objectContaining({ to: expect.objectContaining({ id: staleRawLogs.id }) })
+        ])
+      });
+      expect(groups[0].reason).toContain("strongest active signal");
     } finally {
       store.close();
     }

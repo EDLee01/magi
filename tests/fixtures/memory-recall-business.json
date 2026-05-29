@@ -14,6 +14,17 @@
       "minResults": 2
     },
     {
+      "name": "workflow graph recalls second-hop habit",
+      "query": "release rollout project",
+      "expect": [
+        "Release rollout project",
+        "Deployment gate workflow",
+        "Concise deployment reporting"
+      ],
+      "forbid": ["verbose terminal dumps"],
+      "minResults": 3
+    },
+    {
       "name": "corrected preference replaces stale memory",
       "query": "terminal dumps verification preference",
       "expect": ["concise verification summaries"],

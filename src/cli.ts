@@ -14,7 +14,12 @@ import { formatMemory, MemoryScope } from "./memory.js";
 import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
-import { formatMemoryConflicts, listMemoryConflicts } from "./memory-conflicts.js";
+import {
+  formatMemoryConflictGroups,
+  formatMemoryConflicts,
+  listMemoryConflictGroups,
+  listMemoryConflicts
+} from "./memory-conflicts.js";
 import { formatMemoryMerges, listMemoryMerges } from "./memory-merges.js";
 import { formatMemoryEvalReport, runMemoryEval, writeMemoryEvalReport } from "./memory-eval.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
@@ -702,6 +707,14 @@ async function runCliUnsafeWithParsed(
     }
     if (subcommand === "conflicts") {
       const options = parseMemoryConflictsArgs(parsed.rest.slice(1));
+      if (options.groups) {
+        const groups = listMemoryConflictGroups({
+          ...rootInput,
+          paths,
+          limit: options.limit
+        });
+        return { exitCode: 0, stdout: `${formatMemoryConflictGroups(groups)}\n`, stderr: "" };
+      }
       const conflicts = listMemoryConflicts({
         ...rootInput,
         paths,
@@ -1883,7 +1896,7 @@ function helpText(): string {
     "  magi memory search <query> [--session-id <id>]",
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
-    "  magi memory conflicts [--limit <n>]",
+    "  magi memory conflicts [--groups] [--limit <n>]",
     "  magi memory merges [--limit <n>]",
     "  magi memory eval --case-file <file> [--max-results <n>] [--min-score <0..1>] [--report <file>]",
     "  magi memory maintain [--apply] [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>]",
@@ -2046,17 +2059,22 @@ function parseMemoryCorrectArgs(args: string[]): {
   return { target, reason, replacement, replacementTitle, replacementSummary, replacementType };
 }
 
-function parseMemoryConflictsArgs(args: string[]): { limit?: number } {
+function parseMemoryConflictsArgs(args: string[]): { groups?: boolean; limit?: number } {
+  let groups = false;
   let limit: number | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--groups" || arg === "--grouped") {
+      groups = true;
+      continue;
+    }
     if (arg === "--limit") {
       limit = readPositiveNumberArg(args[++index], "magi memory conflicts --limit");
       continue;
     }
     throw new MagiUsageError(`Unknown magi memory conflicts option: ${arg}`);
   }
-  return { limit };
+  return { groups, limit };
 }
 
 function parseMemoryMergesArgs(args: string[]): { limit?: number } {

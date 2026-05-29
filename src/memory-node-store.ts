@@ -181,6 +181,15 @@ export interface MemoryConflictRecord {
   reason: string;
 }
 
+export interface MemoryConflictGroup {
+  id: string;
+  nodes: MemoryNode[];
+  conflicts: MemoryConflictRecord[];
+  recommendation: "prefer_node" | "needs_review";
+  preferredNodeId?: string;
+  reason: string;
+}
+
 export interface MemorySource {
   id: string;
   kind: MemorySourceKind;
@@ -233,6 +242,7 @@ export interface SearchMemoryGraphInput {
   query: string;
   limit?: number;
   minScore?: number;
+  maxGraphDistance?: number;
 }
 
 export interface MemoryGraphSearchHit {
@@ -240,6 +250,8 @@ export interface MemoryGraphSearchHit {
   source: MemorySource;
   chunk: MemoryChunk;
   score: number;
+  graphDistance?: number;
+  viaNodeIds?: string[];
 }
 
 export function classifyMemoryNodeType(
@@ -749,7 +761,12 @@ export class MemoryNodeStore {
         score: scoreGraphHit({ node, source, chunk }, terms)
       });
     }
-    const rankedHits = applyGraphEdges(baseHits, this.listActiveEdges(), minScore)
+    const rankedHits = applyGraphEdges(
+      baseHits,
+      this.listActiveEdges(),
+      minScore,
+      input.maxGraphDistance ?? 2
+    )
       .filter((hit) => hit.node.status === "active" && hit.score >= minScore)
       .sort(compareGraphSearchHits)
       .slice(0, limit);
@@ -932,6 +949,15 @@ export class MemoryNodeStore {
       }
       return [{ edge, from, to, ...recommendConflictResolution(from, to) }];
     });
+  }
+
+  listConflictGroups(input: { limit?: number } = {}): MemoryConflictGroup[] {
+    const conflicts = this.listConflicts({ limit: input.limit ?? 200 });
+    if (conflicts.length === 0) {
+      return [];
+    }
+    const groups = groupConflictRecords(conflicts);
+    return groups.slice(0, Math.max(1, Math.min(input.limit ?? 50, 200)));
   }
 
   listCleanupCandidates(
@@ -1997,6 +2023,121 @@ function recommendConflictResolution(
   };
 }
 
+function groupConflictRecords(conflicts: MemoryConflictRecord[]): MemoryConflictGroup[] {
+  const nodeById = new Map<string, MemoryNode>();
+  const parent = new Map<string, string>();
+  for (const conflict of conflicts) {
+    nodeById.set(conflict.from.id, conflict.from);
+    nodeById.set(conflict.to.id, conflict.to);
+    union(parent, conflict.from.id, conflict.to.id);
+  }
+
+  const byRoot = new Map<string, MemoryConflictRecord[]>();
+  for (const conflict of conflicts) {
+    const root = findRoot(parent, conflict.from.id);
+    const existing = byRoot.get(root) ?? [];
+    existing.push(conflict);
+    byRoot.set(root, existing);
+  }
+
+  return Array.from(byRoot.entries())
+    .map(([root, groupConflicts]) => {
+      const nodes = Array.from(
+        new Set(groupConflicts.flatMap((conflict) => [conflict.from.id, conflict.to.id]))
+      )
+        .map((id) => nodeById.get(id))
+        .filter((node): node is MemoryNode => Boolean(node))
+        .sort(compareConflictGroupNodes);
+      const preferred = chooseConflictGroupPreferredNode(nodes, groupConflicts);
+      const recommendation: MemoryConflictGroup["recommendation"] = preferred
+        ? "prefer_node"
+        : "needs_review";
+      return {
+        id: `conflict-group:${root}`,
+        nodes,
+        conflicts: groupConflicts.sort((left, right) => right.edge.weight - left.edge.weight),
+        recommendation,
+        preferredNodeId: preferred?.id,
+        reason: preferred
+          ? `${preferred.title} has the strongest active signal in this conflict group.`
+          : "No single active node dominates this conflict group; ask the user or use MemoryCorrect."
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.conflicts.length - left.conflicts.length ||
+        Math.max(...right.nodes.map((node) => node.weight)) -
+          Math.max(...left.nodes.map((node) => node.weight)) ||
+        left.id.localeCompare(right.id)
+    );
+}
+
+function union(parent: Map<string, string>, left: string, right: string): void {
+  const leftRoot = findRoot(parent, left);
+  const rightRoot = findRoot(parent, right);
+  if (leftRoot !== rightRoot) {
+    parent.set(rightRoot, leftRoot);
+  }
+}
+
+function findRoot(parent: Map<string, string>, id: string): string {
+  const current = parent.get(id);
+  if (!current) {
+    parent.set(id, id);
+    return id;
+  }
+  if (current === id) {
+    return id;
+  }
+  const root = findRoot(parent, current);
+  parent.set(id, root);
+  return root;
+}
+
+function compareConflictGroupNodes(left: MemoryNode, right: MemoryNode): number {
+  return (
+    conflictNodeRank(right) - conflictNodeRank(left) ||
+    right.weight - left.weight ||
+    right.useCount - left.useCount ||
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    left.title.localeCompare(right.title)
+  );
+}
+
+function conflictNodeRank(node: MemoryNode): number {
+  if (node.status === "active" && typeof node.metadata.correctionFor === "string") return 4;
+  if (node.status === "active") return 3;
+  if (node.status === "disputed") return 1;
+  return 0;
+}
+
+function chooseConflictGroupPreferredNode(
+  nodes: MemoryNode[],
+  conflicts: MemoryConflictRecord[]
+): MemoryNode | undefined {
+  const active = nodes.filter((node) => node.status === "active");
+  if (active.length === 0) {
+    return undefined;
+  }
+  const [first, second] = active.sort(compareConflictGroupNodes);
+  if (!second) {
+    return first;
+  }
+  if (first.weight >= second.weight + 0.05 || first.useCount > second.useCount) {
+    return first;
+  }
+  const preferredIds = new Set(
+    conflicts
+      .map((conflict) => {
+        if (conflict.recommendation === "prefer_from") return conflict.from.id;
+        if (conflict.recommendation === "prefer_to") return conflict.to.id;
+        return undefined;
+      })
+      .filter((id): id is string => Boolean(id))
+  );
+  return preferredIds.size === 1 && preferredIds.has(first.id) ? first : undefined;
+}
+
 function findMergeEntry(
   keep: MemoryNode,
   duplicateNodeId: string
@@ -2273,26 +2414,36 @@ function scoreGraphHit(
 function applyGraphEdges(
   hits: MemoryGraphSearchHit[],
   edges: MemoryEdge[],
-  minScore: number
+  minScore: number,
+  maxGraphDistance: number
 ): MemoryGraphSearchHit[] {
   const scored = new Map<string, MemoryGraphSearchHit>();
   const direct = new Set<string>();
   for (const hit of hits) {
     if (hit.score >= minScore) {
       direct.add(hit.node.id);
+      hit.graphDistance = 0;
+      hit.viaNodeIds = [];
     }
     scored.set(hit.node.id, { ...hit });
   }
 
-  for (const edge of edges) {
-    if (edge.relation === "supersedes") {
-      applySupersedesPromotion(scored, edge, minScore);
-      continue;
+  const rounds = Math.max(1, Math.min(Math.floor(maxGraphDistance), 3));
+  for (let distance = 1; distance <= rounds; distance += 1) {
+    let changed = false;
+    for (const edge of edges) {
+      if (edge.relation === "supersedes") {
+        changed = applySupersedesPromotion(scored, edge, minScore, distance) || changed;
+        continue;
+      }
+      if (edge.relation === "conflicts_with") {
+        continue;
+      }
+      changed = spreadScore(scored, direct, edge, minScore, distance) || changed;
     }
-    if (edge.relation === "conflicts_with") {
-      continue;
+    if (!changed) {
+      break;
     }
-    spreadScore(scored, direct, edge, minScore);
   }
 
   for (const edge of edges) {
@@ -2313,14 +2464,15 @@ function applyGraphEdges(
 function applySupersedesPromotion(
   scored: Map<string, MemoryGraphSearchHit>,
   edge: MemoryEdge,
-  minScore: number
-): void {
+  minScore: number,
+  distance: number
+): boolean {
   const current = scored.get(edge.fromNodeId);
   const superseded = scored.get(edge.toNodeId);
   if (!current || !superseded || superseded.score < minScore) {
-    return;
+    return false;
   }
-  current.score = Math.max(current.score, relationBoostedScore(superseded.score, edge, "backward"));
+  return promoteGraphHit(current, superseded, edge, "backward", distance);
 }
 
 function applySupersedesDemotion(
@@ -2340,19 +2492,22 @@ function spreadScore(
   scored: Map<string, MemoryGraphSearchHit>,
   direct: Set<string>,
   edge: MemoryEdge,
-  minScore: number
-): void {
+  minScore: number,
+  distance: number
+): boolean {
   const from = scored.get(edge.fromNodeId);
   const to = scored.get(edge.toNodeId);
   if (!from || !to) {
-    return;
+    return false;
   }
+  let changed = false;
   if (from.score >= minScore) {
-    to.score = Math.max(to.score, relationBoostedScore(from.score, edge, "forward"));
+    changed = promoteGraphHit(to, from, edge, "forward", distance) || changed;
   }
   if (to.score >= minScore && isBidirectionalRelation(edge.relation)) {
-    from.score = Math.max(from.score, relationBoostedScore(to.score, edge, "backward"));
+    changed = promoteGraphHit(from, to, edge, "backward", distance) || changed;
   }
+  return changed;
 }
 
 function applyConflictPenalty(
@@ -2378,13 +2533,35 @@ function applyConflictPenalty(
   loser.score = Math.min(loser.score, minScore - 0.001);
 }
 
+function promoteGraphHit(
+  target: MemoryGraphSearchHit,
+  source: MemoryGraphSearchHit,
+  edge: MemoryEdge,
+  direction: "forward" | "backward",
+  distance: number
+): boolean {
+  if ((source.graphDistance ?? 0) >= distance) {
+    return false;
+  }
+  const nextScore = relationBoostedScore(source.score, edge, direction, distance);
+  if (nextScore <= target.score) {
+    return false;
+  }
+  target.score = nextScore;
+  target.graphDistance = distance;
+  target.viaNodeIds = [...(source.viaNodeIds ?? []), source.node.id];
+  return true;
+}
+
 function relationBoostedScore(
   score: number,
   edge: MemoryEdge,
-  direction: "forward" | "backward"
+  direction: "forward" | "backward",
+  distance = 1
 ): number {
   const base = score * relationStrength(edge.relation, direction) * Math.max(0, edge.weight);
-  return base + relationBonus(edge.relation);
+  const distancePenalty = distance <= 1 ? 1 : Math.pow(0.72, distance - 1);
+  return base * distancePenalty + relationBonus(edge.relation) / distance;
 }
 
 function relationStrength(relation: MemoryEdgeRelation, direction: "forward" | "backward"): number {

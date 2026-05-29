@@ -18,6 +18,8 @@ export interface MemorySearchHit {
   sourceId?: string;
   chunkId?: string;
   sourceKind?: string;
+  graphDistance?: number;
+  viaNodeIds?: string[];
 }
 
 export function retrieveRelevantMemory(
@@ -124,6 +126,12 @@ export function formatMemoryContext(hits: MemorySearchHit[]): string {
     if (hit.nodeId) {
       lines.push(`node: ${hit.nodeId}`);
     }
+    if (hit.graphDistance && hit.graphDistance > 0) {
+      lines.push(`graph-distance: ${hit.graphDistance}`);
+      if (hit.viaNodeIds && hit.viaNodeIds.length > 0) {
+        lines.push(`via: ${hit.viaNodeIds.join(" -> ")}`);
+      }
+    }
     lines.push(hit.snippet.length > 900 ? `${hit.snippet.slice(0, 900)}...` : hit.snippet);
   }
   return lines.join("\n").trim();
@@ -183,7 +191,9 @@ function graphHitToMemorySearchHit(hit: MemoryGraphSearchHit, terms: string[]): 
     nodeId: hit.node.id,
     sourceId: hit.source.id,
     chunkId: hit.chunk.id,
-    sourceKind: hit.source.kind
+    sourceKind: hit.source.kind,
+    graphDistance: hit.graphDistance,
+    viaNodeIds: hit.viaNodeIds
   };
 }
 

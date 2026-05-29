@@ -120,7 +120,8 @@ describe("capability report", () => {
         failed: 1,
         thresholdPassed: false,
         score: 0.67,
-        maintenanceRecallSeen: false
+        maintenanceRecallSeen: false,
+        workflowGraphRecallSeen: false
       }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -141,6 +142,7 @@ describe("capability report", () => {
     expect(output).toContain("- memory: failed");
     expect(output).toContain("thresholdPassed=false");
     expect(output).toContain("maintenanceRecallSeen=false");
+    expect(output).toContain("workflowGraphRecallSeen=false");
   });
 
   it("fails model task alignment when task coverage or scorer evidence is too thin", () => {
@@ -477,14 +479,17 @@ function memoryReport(input: {
   thresholdPassed: boolean;
   score: number;
   maintenanceRecallSeen?: boolean;
+  workflowGraphRecallSeen?: boolean;
 }): Record<string, unknown> {
-  const total = input.maintenanceRecallSeen === false ? 3 : 4;
-  const results = [
+  const names = [
     "linked workflow retrieves project neighbor",
+    ...(input.workflowGraphRecallSeen === false ? [] : ["workflow graph recalls second-hop habit"]),
     "corrected preference replaces stale memory",
     "durable user identity survives graph recall",
     ...(input.maintenanceRecallSeen === false ? [] : ["protected workflow survives maintenance"])
-  ].map((name) => ({ name, passed: true }));
+  ];
+  const total = names.length;
+  const results = [...names.map((name) => ({ name, passed: true }))];
   return {
     version: 1,
     name: "memory business recall",

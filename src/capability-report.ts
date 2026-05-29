@@ -248,10 +248,12 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     .map((result) => (typeof result.name === "string" ? result.name : ""))
     .filter(Boolean);
   const maintenanceRecallSeen = resultNames.includes("protected workflow survives maintenance");
+  const workflowGraphRecallSeen = resultNames.includes("workflow graph recalls second-hop habit");
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
+  if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -263,7 +265,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       failed: readNumber(report.failed),
       score,
       minScore: readNumber(report.minScore),
-      maintenanceRecallSeen
+      maintenanceRecallSeen,
+      workflowGraphRecallSeen
     },
     failures
   };
