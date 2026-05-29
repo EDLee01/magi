@@ -145,6 +145,7 @@ describe("capability report", () => {
         intentScopedUsageRecorded: false,
         failureKindRecorded: false,
         failureKindShownInRanking: false,
+        failureRecoverySuggested: false,
         revealedToolCount: 21,
         grepFailures: 2,
         grepIntentFailures: 2,
@@ -163,6 +164,7 @@ describe("capability report", () => {
         "intentScopedUsageRecorded=false",
         "failureKindRecorded=false",
         "failureKindShownInRanking=false",
+        "failureRecoverySuggested=false",
         "grepFailures < 4",
         "grepIntentFailures < 4",
         "grepPathFailures < 4",
@@ -339,6 +341,7 @@ function toolDiscoveryReport(
     intentScopedUsageRecorded: boolean;
     failureKindRecorded: boolean;
     failureKindShownInRanking: boolean;
+    failureRecoverySuggested: boolean;
     initialToolCount: number;
     revealedToolCount: number;
     grepFailures: number;
@@ -370,6 +373,7 @@ function toolDiscoveryReport(
           intentScopedUsageRecorded: true,
           failureKindRecorded: true,
           failureKindShownInRanking: true,
+          failureRecoverySuggested: true,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,

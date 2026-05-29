@@ -217,7 +217,8 @@ function scoreUsageSignals(
       reasons.push(reason);
     }
   }
-  const globalReason = formatToolUsageReason(usage);
+  const recoveryIntent = intents[0];
+  const globalReason = formatToolUsageReason(usage, undefined, recoveryIntent);
   if (globalReason && toolUsageScore(usage) !== 0) {
     reasons.push(globalReason);
   }

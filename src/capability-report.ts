@@ -273,6 +273,9 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.failureKindShownInRanking !== true) {
     failures.push("failureKindShownInRanking=false");
   }
+  if (details.failureRecoverySuggested !== true) {
+    failures.push("failureRecoverySuggested=false");
+  }
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
   if (readNumber(details.grepIntentFailures) < 4) failures.push("grepIntentFailures < 4");
@@ -300,6 +303,7 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       intentScopedUsageRecorded: details.intentScopedUsageRecorded === true,
       failureKindRecorded: details.failureKindRecorded === true,
       failureKindShownInRanking: details.failureKindShownInRanking === true,
+      failureRecoverySuggested: details.failureRecoverySuggested === true,
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),

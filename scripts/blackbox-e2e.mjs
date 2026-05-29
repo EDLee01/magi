@@ -1137,6 +1137,11 @@ async function scenarioToolFeedbackRanking() {
       assert(output.includes("1. Glob"), "ToolSearch did not rank successful Glob ahead after feedback");
       assert(output.includes("usage:+"), "ToolSearch did not report positive usage feedback");
       assert(output.includes("usage:-"), "ToolSearch did not report negative usage feedback");
+      assert(output.includes("failure:path"), "ToolSearch did not report failure kind feedback");
+      assert(
+        output.includes("recovery:path=use Glob for broad search or pass a workspace-relative path"),
+        "ToolSearch did not report recovery guidance"
+      );
       const statsPath = path.join(configDir, "state", "tool-usage-stats.json");
       assert(existsSync(statsPath), "tool feedback stats were not persisted");
       const stats = JSON.parse(readFileSync(statsPath, "utf8"));
@@ -1144,11 +1149,17 @@ async function scenarioToolFeedbackRanking() {
       assert(stats.tools?.Glob?.successes === 4, "Glob successes were not recorded");
       return {
         score: 1,
-        assertions: ["tool failures persisted", "tool successes persisted", "ToolSearch ranking used feedback"],
+        assertions: [
+          "tool failures persisted",
+          "tool successes persisted",
+          "ToolSearch ranking used feedback",
+          "ToolSearch recovery guidance visible"
+        ],
         provider: provider.summary(),
         toolFeedback: {
           grepFailures: stats.tools.Grep.failures,
-          globSuccesses: stats.tools.Glob.successes
+          globSuccesses: stats.tools.Glob.successes,
+          recoveryGuidanceSeen: true
         }
       };
     } catch (error) {

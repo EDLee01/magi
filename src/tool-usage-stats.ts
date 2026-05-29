@@ -166,7 +166,8 @@ export function toolUsageScore(
 
 export function formatToolUsageReason(
   record: ToolUsageRecord | ToolUsageIntentRecord | undefined,
-  intent?: string
+  intent?: string,
+  recoveryIntent?: string
 ): string | undefined {
   const score = toolUsageScore(record);
   if (!record || score === 0) {
@@ -177,7 +178,11 @@ export function formatToolUsageReason(
   const scope = intent ? ` intent:${intent}` : "";
   const failureKind = dominantFailureKind(record);
   const failureSuffix = failureKind ? `, failure:${failureKind}` : "";
-  return `usage:${sign}${score}${scope} (${record.successes}/${record.attempts} success, ${rate}%${failureSuffix})`;
+  const recovery = failureKind
+    ? toolFailureRecoverySuggestion(failureKind, recoveryIntent ?? intent)
+    : undefined;
+  const recoverySuffix = recovery ? `, recovery:${failureKind}=${recovery}` : "";
+  return `usage:${sign}${score}${scope} (${record.successes}/${record.attempts} success, ${rate}%${failureSuffix}${recoverySuffix})`;
 }
 
 export function writeToolUsageStats(stateRoot: string, stats: ToolUsageStats): void {
@@ -395,6 +400,24 @@ function dominantFailureKind(
   }
   entries.sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
   return entries[0][0];
+}
+
+function toolFailureRecoverySuggestion(kind: string, intent?: string): string {
+  if (kind === "path" && intent === "workspace-search") {
+    return "use Glob for broad search or pass a workspace-relative path";
+  }
+  const suggestions: Record<string, string> = {
+    path: "pass a workspace-relative path",
+    permission: "ask for approval or switch to an allowed plan",
+    input: "check the selected tool schema before retrying",
+    "not-found": "verify the target exists before retrying",
+    timeout: "narrow the scope or raise the timeout",
+    command: "inspect the exit output before retrying",
+    binary: "use a binary-safe read or metadata tool",
+    runtime: "read the error and try an alternate tool",
+    unknown: "read the error and choose a safer retry"
+  };
+  return suggestions[kind] ?? suggestions.runtime;
 }
 
 function normalizeFailureKind(kind: unknown): string {

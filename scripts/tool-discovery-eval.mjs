@@ -39,6 +39,7 @@ try {
     intentScopedUsageRecorded: false,
     failureKindRecorded: false,
     failureKindShownInRanking: false,
+    failureRecoverySuggested: false,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -102,6 +103,7 @@ try {
     state.intentScopedUsageRecorded = grepIntentFailures >= 4 && globIntentSuccesses >= 4;
     state.failureKindRecorded = grepPathFailures >= 4 && grepIntentPathFailures >= 4;
     assert(state.failureKindShownInRanking, "ToolSearch did not expose failure kind feedback");
+    assert(state.failureRecoverySuggested, "ToolSearch did not expose recovery guidance");
 
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
@@ -125,6 +127,7 @@ try {
             intentScopedUsageRecorded: state.intentScopedUsageRecorded,
             failureKindRecorded: state.failureKindRecorded,
             failureKindShownInRanking: state.failureKindShownInRanking,
+            failureRecoverySuggested: state.failureRecoverySuggested,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
@@ -242,8 +245,15 @@ function createRouter(state) {
     assert(transcript.includes("usage:+"), "positive usage feedback was not reported");
     assert(transcript.includes("usage:-"), "negative usage feedback was not reported");
     assert(transcript.includes("failure:path"), "failure kind feedback was not reported");
+    assert(
+      transcript.includes(
+        "recovery:path=use Glob for broad search or pass a workspace-relative path"
+      ),
+      "failure recovery guidance was not reported"
+    );
     state.feedbackRankingUsedUsage = true;
     state.failureKindShownInRanking = true;
+    state.failureRecoverySuggested = true;
     return messageText("Tool Discovery eval completed.");
   };
 }

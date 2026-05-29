@@ -1682,6 +1682,9 @@ describe("tool registry", () => {
     expect(search.content).toContain("usage:+");
     expect(search.content).toContain("usage:-");
     expect(search.content).toContain("failure:path");
+    expect(search.content).toContain(
+      "recovery:path=use Glob for broad search or pass a workspace-relative path"
+    );
   });
 
   it("uses task-intent tool feedback without letting unrelated usage dominate ranking", async () => {
@@ -1744,6 +1747,9 @@ describe("tool registry", () => {
     expect(search.content).toContain("usage:+");
     expect(search.content).toContain("intent:workspace-search");
     expect(search.content).toContain("failure:path");
+    expect(search.content).toContain(
+      "recovery:path=use Glob for broad search or pass a workspace-relative path"
+    );
   });
 
   it("diagnoses workspace manifests, scripts, languages, commands, and git state without executing commands", async () => {
