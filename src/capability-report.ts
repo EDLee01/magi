@@ -394,7 +394,14 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.crossTaskRecoveryGuidanceSeen !== true) {
     failures.push("crossTaskRecoveryGuidanceSeen=false");
   }
+  if (details.crossTaskIntentScopedRankingSeen !== true) {
+    failures.push("crossTaskIntentScopedRankingSeen=false");
+  }
+  if (details.crossTaskUnrelatedIntentIsolated !== true) {
+    failures.push("crossTaskUnrelatedIntentIsolated=false");
+  }
   if (readNumber(details.crossTaskProviderCalls) <= 0) failures.push("crossTaskProviderCalls=0");
+  if (readNumber(details.longCycleProviderCalls) <= 0) failures.push("longCycleProviderCalls=0");
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
   if (readNumber(details.grepIntentFailures) < 4) failures.push("grepIntentFailures < 4");
@@ -425,7 +432,10 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       failureRecoverySuggested: details.failureRecoverySuggested === true,
       crossTaskRecoveryRankingSeen: details.crossTaskRecoveryRankingSeen === true,
       crossTaskRecoveryGuidanceSeen: details.crossTaskRecoveryGuidanceSeen === true,
+      crossTaskIntentScopedRankingSeen: details.crossTaskIntentScopedRankingSeen === true,
+      crossTaskUnrelatedIntentIsolated: details.crossTaskUnrelatedIntentIsolated === true,
       crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
+      longCycleProviderCalls: readNumber(details.longCycleProviderCalls),
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),

@@ -203,19 +203,24 @@ function scoreUsageSignals(
   if (!usage) {
     return { score: 0, reasons: [] };
   }
-  let score = toolUsageScore(usage);
+  let score = 0;
   const reasons: string[] = [];
+  let hasIntentScore = false;
   for (const intent of intents) {
     const record = usage.intents[intent];
     const intentScore = toolUsageScore(record);
     if (intentScore === 0) {
       continue;
     }
+    hasIntentScore = true;
     score += intentScore;
     const reason = formatToolUsageReason(record, intent);
     if (reason) {
       reasons.push(reason);
     }
+  }
+  if (!hasIntentScore) {
+    score += toolUsageScore(usage);
   }
   const recoveryIntent = intents[0];
   const globalReason = formatToolUsageReason(usage, undefined, recoveryIntent);

@@ -254,8 +254,8 @@
           <tr>
             <td>Tool Discovery</td>
             <td>核心工具常驻，边缘工具可语义搜索、按任务和历史成功率排序。</td>
-            <td><span class="tag next">进行中</span> ToolSearch 已加入任务意图 ranking、匹配原因、deferred reveal 回放，以及按任务意图分组的工具成功/失败反馈加权；独立 tool discovery eval 已覆盖核心/延迟曝光、语义排序、schema reveal、usage feedback 排名、intent-scoped usage 记录、失败分类反馈、恢复建议，以及独立后续任务中复用历史反馈的跨任务恢复排名。</td>
-            <td><code>tests/tool-registry.test.ts</code>、<code>scripts/tool-discovery-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run report:capability</code>；下一步扩展长周期多任务工具策略评估。</td>
+            <td><span class="tag next">进行中</span> ToolSearch 已加入任务意图 ranking、匹配原因、deferred reveal 回放，以及按任务意图分组的工具成功/失败反馈加权；独立 tool discovery eval 已覆盖核心/延迟曝光、语义排序、schema reveal、usage feedback 排名、intent-scoped usage 记录、失败分类反馈、恢复建议、独立后续任务中复用历史反馈的跨任务恢复排名，以及长周期多任务下同类任务复用反馈但无关 intent 不被污染。</td>
+            <td><code>tests/tool-registry.test.ts</code>、<code>scripts/tool-discovery-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run report:capability</code>；下一步扩展更长真实使用序列下的工具策略漂移评估。</td>
           </tr>
           <tr>
             <td>TUI / Mobile Control</td>

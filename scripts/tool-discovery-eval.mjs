@@ -42,6 +42,8 @@ try {
     failureRecoverySuggested: false,
     crossTaskRecoveryRankingSeen: false,
     crossTaskRecoveryGuidanceSeen: false,
+    crossTaskIntentScopedRankingSeen: false,
+    crossTaskUnrelatedIntentIsolated: false,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -105,6 +107,7 @@ try {
     assert(state.failureRecoverySuggested, "ToolSearch did not expose recovery guidance");
 
     const crossTask = await runCrossTaskRecoveryEval(provider, state);
+    const longCycle = await runLongCycleStrategyEval(provider, state);
 
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
@@ -132,6 +135,9 @@ try {
             crossTaskRecoveryRankingSeen: crossTask.rankingSeen,
             crossTaskRecoveryGuidanceSeen: crossTask.recoveryGuidanceSeen,
             crossTaskProviderCalls: crossTask.providerCalls,
+            crossTaskIntentScopedRankingSeen: longCycle.intentScopedRankingSeen,
+            crossTaskUnrelatedIntentIsolated: longCycle.unrelatedIntentIsolated,
+            longCycleProviderCalls: longCycle.providerCalls,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
@@ -162,7 +168,48 @@ try {
 function createRouter(state) {
   let turn = 0;
   let crossTaskTurn = 0;
+  let longCycleTurn = 0;
   return ({ transcript, toolNames }) => {
+    if (transcript.includes("Run long-cycle ToolSearch strategy regression checks.")) {
+      longCycleTurn += 1;
+      if (longCycleTurn === 1) {
+        return toolResponse([
+          toolCall("long-cycle-workspace-search", "ToolSearch", {
+            query: "search workspace files",
+            max_results: 5
+          }),
+          toolCall("long-cycle-browser-search", "ToolSearch", {
+            query: "automate browser click and screenshot",
+            max_results: 5
+          })
+        ]);
+      }
+      assert(
+        transcript.includes('ToolSearch results for "search workspace files"'),
+        "long-cycle workspace ToolSearch result was not visible"
+      );
+      assert(
+        transcript.includes('ToolSearch results for "automate browser click and screenshot"'),
+        "long-cycle browser ToolSearch result was not visible"
+      );
+      assert(transcript.includes("1. Glob"), "long-cycle workspace search did not rank Glob first");
+      assert(
+        transcript.includes("intent:workspace-search"),
+        "long-cycle workspace intent feedback missing"
+      );
+      assert(
+        transcript.includes("failure:path"),
+        "long-cycle workspace failure feedback missing"
+      );
+      assert(
+        transcript.includes("1. Browser"),
+        "unrelated browser intent was polluted by search history"
+      );
+      state.crossTaskIntentScopedRankingSeen = true;
+      state.crossTaskUnrelatedIntentIsolated = true;
+      return messageText("Long-cycle Tool Discovery strategy verified.");
+    }
+
     if (
       transcript.includes(
         "Run a new independent ToolSearch task for workspace file search after prior feedback."
@@ -316,6 +363,37 @@ async function runCrossTaskRecoveryEval(provider, state) {
   return {
     rankingSeen: state.crossTaskRecoveryRankingSeen,
     recoveryGuidanceSeen: state.crossTaskRecoveryGuidanceSeen,
+    providerCalls: matchingCalls.length
+  };
+
+  function providerCallsForPrompt(prompt) {
+    return provider.calls.filter((call) => call.transcript.includes(prompt));
+  }
+}
+
+async function runLongCycleStrategyEval(provider, state) {
+  const output = await runCli([
+    "--model",
+    "main",
+    "--output-format",
+    "stream-json",
+    "-p",
+    "Run long-cycle ToolSearch strategy regression checks."
+  ]);
+  const matchingCalls = providerCallsForPrompt("Run long-cycle ToolSearch strategy");
+  assert(matchingCalls.length > 0, "long-cycle ToolSearch prompt did not call provider");
+  assert(
+    output.includes("Long-cycle Tool Discovery strategy verified"),
+    "long-cycle strategy final answer missing"
+  );
+  assert(state.crossTaskIntentScopedRankingSeen, "long-cycle intent scoped ranking was not verified");
+  assert(
+    state.crossTaskUnrelatedIntentIsolated,
+    "long-cycle unrelated intent isolation was not verified"
+  );
+  return {
+    intentScopedRankingSeen: state.crossTaskIntentScopedRankingSeen,
+    unrelatedIntentIsolated: state.crossTaskUnrelatedIntentIsolated,
     providerCalls: matchingCalls.length
   };
 

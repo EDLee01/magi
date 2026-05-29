@@ -251,7 +251,10 @@ describe("capability report", () => {
         failureRecoverySuggested: false,
         crossTaskRecoveryRankingSeen: false,
         crossTaskRecoveryGuidanceSeen: false,
+        crossTaskIntentScopedRankingSeen: false,
+        crossTaskUnrelatedIntentIsolated: false,
         crossTaskProviderCalls: 0,
+        longCycleProviderCalls: 0,
         revealedToolCount: 21,
         grepFailures: 2,
         grepIntentFailures: 2,
@@ -273,7 +276,10 @@ describe("capability report", () => {
         "failureRecoverySuggested=false",
         "crossTaskRecoveryRankingSeen=false",
         "crossTaskRecoveryGuidanceSeen=false",
+        "crossTaskIntentScopedRankingSeen=false",
+        "crossTaskUnrelatedIntentIsolated=false",
         "crossTaskProviderCalls=0",
+        "longCycleProviderCalls=0",
         "grepFailures < 4",
         "grepIntentFailures < 4",
         "grepPathFailures < 4",
@@ -572,7 +578,10 @@ function toolDiscoveryReport(
     failureRecoverySuggested: boolean;
     crossTaskRecoveryRankingSeen: boolean;
     crossTaskRecoveryGuidanceSeen: boolean;
+    crossTaskIntentScopedRankingSeen: boolean;
+    crossTaskUnrelatedIntentIsolated: boolean;
     crossTaskProviderCalls: number;
+    longCycleProviderCalls: number;
     initialToolCount: number;
     revealedToolCount: number;
     grepFailures: number;
@@ -607,7 +616,10 @@ function toolDiscoveryReport(
           failureRecoverySuggested: true,
           crossTaskRecoveryRankingSeen: true,
           crossTaskRecoveryGuidanceSeen: true,
+          crossTaskIntentScopedRankingSeen: true,
+          crossTaskUnrelatedIntentIsolated: true,
           crossTaskProviderCalls: 2,
+          longCycleProviderCalls: 2,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,
