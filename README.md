@@ -83,6 +83,7 @@ multi-machine, sub-agents). Press `q` to quit early.
 | `magi sessions`           | List recent sessions                      |
 | `magi resume <id>`        | Resume a session                          |
 | `magi memory search <q>`   | Search durable Memory                     |
+| `magi memory link --from <node> --to <node>` | Link Memory graph nodes       |
 | `magi learning list`       | List reviewable LearningDrafts            |
 | `magi learning draft <show|apply|reject> <id>` | Review or resolve a LearningDraft |
 | `magi ps`                 | List recent jobs                          |

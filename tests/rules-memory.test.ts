@@ -299,6 +299,52 @@ describe("AGENTS rules and memory", () => {
     );
   });
 
+  it("links graph memory nodes through the CLI and retrieves the linked neighbor", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    appendMemoryFile({
+      appRoot: paths.root,
+      filePath: "projects/magi.md",
+      content: [
+        "## Graph CLI anchor",
+        "Magi CLI exposes durable graph memory linking.",
+        "",
+        "## Linked workflow neighbor",
+        "Run business-level verification after graph memory changes."
+      ].join("\n")
+    });
+
+    const linked = await runCli(
+      [
+        "memory",
+        "link",
+        "--from",
+        "Graph CLI anchor",
+        "--to",
+        "Linked workflow neighbor",
+        "--relation",
+        "relates_to",
+        "--weight",
+        "0.9"
+      ],
+      temp.env,
+      workspace
+    );
+    expect(linked.exitCode).toBe(0);
+    expect(linked.stdout).toContain("Linked Memory nodes:");
+    expect(linked.stdout).toContain("relates_to -> Linked workflow neighbor");
+
+    const search = await runCli(
+      ["memory", "search", "durable graph memory linking"],
+      temp.env,
+      workspace
+    );
+    expect(search.exitCode).toBe(0);
+    expect(search.stdout).toContain("Graph CLI anchor");
+    expect(search.stdout).toContain("Linked workflow neighbor");
+  });
+
   it("searches layered memory with session and project relevance", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));

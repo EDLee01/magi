@@ -12,6 +12,7 @@ import { runHeadlessPrompt } from "./headless.js";
 import { formatMemory, MemoryScope } from "./memory.js";
 import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
+import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
 import {
   proposeMemoryDraft,
   listDrafts,
@@ -563,6 +564,18 @@ async function runCliUnsafeWithParsed(
         stdout: `${formatMemoryContext(hits) || "No matching Memory"}\n`,
         stderr: ""
       };
+    }
+    if (subcommand === "link") {
+      const options = parseMemoryLinkArgs(parsed.rest.slice(1));
+      const result = linkMemoryNodes({
+        ...rootInput,
+        paths,
+        from: options.from,
+        to: options.to,
+        relation: options.relation,
+        weight: options.weight
+      });
+      return { exitCode: 0, stdout: `${formatMemoryLinkResult(result)}\n`, stderr: "" };
     }
     if (subcommand === "drafts") {
       const drafts = listDrafts(rootInput);
@@ -1643,6 +1656,7 @@ function helpText(): string {
     "  magi workspace diagnose [path]",
     "  magi memory view [user|project|session] [--session-id <id>]",
     "  magi memory search <query> [--session-id <id>]",
+    "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
     "  magi learning list",
     "  magi learning draft <show|apply|reject> <id>",
@@ -1704,6 +1718,46 @@ function knownCommands(): Set<string> {
     "-r",
     "--resume"
   ]);
+}
+
+function parseMemoryLinkArgs(args: string[]): {
+  from: string;
+  to: string;
+  relation?: string;
+  weight?: number;
+} {
+  let from = "";
+  let to = "";
+  let relation: string | undefined;
+  let weight: number | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--from") {
+      from = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--to") {
+      to = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--relation") {
+      relation = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--weight") {
+      const value = Number(args[++index]);
+      if (!Number.isFinite(value)) {
+        throw new MagiUsageError("magi memory link --weight must be a number between 0 and 1");
+      }
+      weight = value;
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory link option: ${arg}`);
+  }
+  if (!from || !to) {
+    throw new MagiUsageError("magi memory link requires --from <node> and --to <node>");
+  }
+  return { from, to, relation, weight };
 }
 
 interface ParsedArgs {

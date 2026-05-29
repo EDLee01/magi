@@ -308,6 +308,7 @@ function createComplexRouter() {
       assert(transcript.includes("focused CLI black-box verification"), "complex task missed user verification memory");
       assert(transcript.includes("Run focused CLI E2E before internal unit tests"), "complex task missed project workflow memory");
       assert(toolNames.includes("ToolSearch"), "ToolSearch was not available as a core tool");
+      assert(toolNames.includes("FilePatch"), "FilePatch was not available as a core tool");
       assert(!toolNames.includes("LearningDraft"), "LearningDraft should start as a deferred tool");
       return toolResponse([
         toolCall("tool-select-learning", "ToolSearch", { query: "select:LearningDraft" }),
@@ -343,6 +344,22 @@ function createComplexRouter() {
       assert(transcript.includes("Focused CLI business flow passed"), "FileWrite result was not visible");
       assert(transcript.includes("Todo list replaced"), "TodoWrite result was not visible");
       assert(transcript.includes("Wrote Memory node"), "Memorize result was not visible");
+      return toolResponse([
+        toolCall("patch-report", "FilePatch", {
+          file_path: "reports/e2e-result.md",
+          patch: [
+            "@@",
+            " - goal context loaded",
+            " - hot memory loaded",
+            " - deferred tool revealed",
+            "+- FilePatch core edit verified",
+          ].join("\n"),
+        }),
+      ]);
+    }
+
+    if (complexTurns === 4) {
+      assert(transcript.includes("Patched reports/e2e-result.md"), "FilePatch result was not visible");
       return toolResponse([
         toolCall("learning-propose", "LearningDraft", {
           action: "propose",
@@ -390,6 +407,7 @@ async function scenarioComplexWorkflow() {
       const reportPath = path.join(workDir, "reports", "e2e-result.md");
       assert(existsSync(reportPath), "complex task did not create report file");
       assert(readFileSync(reportPath, "utf8").includes("Focused CLI business flow passed"), "report file content was not written correctly");
+      assert(readFileSync(reportPath, "utf8").includes("FilePatch core edit verified"), "FilePatch did not update the report file");
 
       const todosPath = path.join(configDir, "state", "todos.json");
       assert(existsSync(todosPath), "TodoWrite did not persist todo state");
@@ -500,6 +518,59 @@ async function scenarioRetryAndFallback() {
     } finally {
       await provider.close();
     }
+  });
+}
+
+async function scenarioMemoryGraphLink() {
+  await withTempWorkspace("memory-graph-link", async ({ configDir, workDir }) => {
+    writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
+    await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory graph init" });
+    const draftId = parseDraftId(await runCli({
+      args: [
+        "memory",
+        "append",
+        "project",
+        [
+          "## Graph CLI anchor",
+          "Magi CLI exposes durable graph memory linking.",
+          "",
+          "## Linked workflow neighbor",
+          "Run business-level verification after graph memory changes.",
+        ].join("\n"),
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory graph append",
+    }));
+    await runCli({ args: ["memory", "draft", "apply", draftId], cwd: workDir, configDir, label: "memory graph apply" });
+    const linked = await runCli({
+      args: [
+        "memory",
+        "link",
+        "--from",
+        "Graph CLI anchor",
+        "--to",
+        "Linked workflow neighbor",
+        "--relation",
+        "relates_to",
+        "--weight",
+        "0.9",
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory graph link",
+    });
+    assert(linked.includes("Linked Memory nodes:"), "memory link did not create an edge");
+    assert(linked.includes("relates_to -> Linked workflow neighbor"), "memory link did not show the target node");
+
+    const search = await runCli({
+      args: ["memory", "search", "durable graph memory linking"],
+      cwd: workDir,
+      configDir,
+      label: "memory graph search",
+    });
+    assert(search.includes("Graph CLI anchor"), "memory graph search missed direct anchor");
+    assert(search.includes("Linked workflow neighbor"), "memory graph search missed linked neighbor");
   });
 }
 
@@ -618,6 +689,7 @@ async function main() {
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
     ["retry fallback", scenarioRetryAndFallback],
+    ["memory graph link", scenarioMemoryGraphLink],
     ["plan mode", scenarioPlanMode],
     ["TUI requires TTY", scenarioTuiRequiresTty],
   ];
