@@ -880,35 +880,37 @@ async function scenarioMemoryCorrection() {
     });
     assert(after.includes("concise verification summaries"), "replacement memory was not recalled");
     assert(!after.includes("prefers verbose terminal dumps"), "disputed stale memory was still recalled");
-    const maintenancePreview = await runCli({
+    const maintenanceConfig = await runCli({
       args: [
         "memory",
         "maintain",
+        "config",
         "--older-than-days",
         "0",
         "--decay",
         "0.1",
         "--min-weight",
-        "0.4"
+        "0.4",
+        "--limit",
+        "5"
       ],
+      cwd: workDir,
+      configDir,
+      label: "memory maintenance config",
+    });
+    assert(maintenanceConfig.includes("Memory maintenance policy"), "memory maintenance config did not run");
+    assert(maintenanceConfig.includes("decay: 0.100"), "memory maintenance config did not persist decay");
+    const maintenancePreview = await runCli({
+      args: ["memory", "maintain"],
       cwd: workDir,
       configDir,
       label: "memory maintenance preview",
     });
     assert(maintenancePreview.includes("Memory maintenance preview"), "memory maintenance preview did not run");
     assert(maintenancePreview.includes("changed:"), "memory maintenance preview did not report changed count");
+    assert(maintenancePreview.includes("decay: 0.100"), "memory maintenance preview did not use configured policy");
     const maintenanceApply = await runCli({
-      args: [
-        "memory",
-        "maintain",
-        "--apply",
-        "--older-than-days",
-        "0",
-        "--decay",
-        "0.1",
-        "--min-weight",
-        "0.4"
-      ],
+      args: ["memory", "maintain", "--apply"],
       cwd: workDir,
       configDir,
       label: "memory maintenance apply",
@@ -919,6 +921,7 @@ async function scenarioMemoryCorrection() {
     assert(existsSync(auditPath), "memory correction audit log was not written");
     const audit = readFileSync(auditPath, "utf8");
     assert(audit.includes("memory.corrected"), "memory correction audit event missing");
+    assert(audit.includes("memory.maintenance.configured"), "memory maintenance config audit event missing");
     assert(audit.includes("memory.maintenance.applied"), "memory maintenance audit event missing");
     return {
       score: 1,
@@ -927,6 +930,7 @@ async function scenarioMemoryCorrection() {
         "memory correct disputed old node",
         "replacement memory recalled through graph search",
         "disputed stale memory excluded from search results",
+        "memory maintenance policy persisted and reused",
         "memory maintenance decayed stale node weights",
         "memory correction and maintenance audit persisted"
       ]

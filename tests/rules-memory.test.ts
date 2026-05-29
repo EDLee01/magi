@@ -451,6 +451,63 @@ describe("AGENTS rules and memory", () => {
     expect(audit).toContain("memory.maintenance.applied");
   });
 
+  it("persists memory maintenance policy and uses it by default", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const stale = nodeStore.upsertNode({
+      type: "workflow",
+      title: "Old workflow habit",
+      summary: "Old workflow habit.",
+      body: "Run obsolete broad checks before focused checks.",
+      source: "explicit",
+      weight: 0.8
+    });
+    nodeStore.close();
+
+    const configured = await runCli(
+      [
+        "memory",
+        "maintain",
+        "config",
+        "--older-than-days",
+        "0",
+        "--decay",
+        "0.25",
+        "--min-weight",
+        "0.3",
+        "--limit",
+        "7"
+      ],
+      temp.env,
+      workspace
+    );
+    expect(configured.exitCode).toBe(0);
+    expect(configured.stdout).toContain("Memory maintenance policy");
+    expect(configured.stdout).toContain("olderThanDays: 0");
+    expect(configured.stdout).toContain("decay: 0.250");
+    expect(configured.stdout).toContain("changed: yes");
+
+    const shown = await runCli(["memory", "maintain", "config"], temp.env, workspace);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("minWeight: 0.300");
+    expect(shown.stdout).toContain("limit: 7");
+
+    const applied = await runCli(["memory", "maintain", "--apply"], temp.env, workspace);
+    expect(applied.exitCode).toBe(0);
+    expect(applied.stdout).toContain("olderThanDays: 0");
+    expect(applied.stdout).toContain("decay: 0.250");
+    expect(applied.stdout).toContain("0.800 -> 0.600");
+
+    const afterApply = MemoryNodeStore.open(paths);
+    expect(afterApply.getNode(stale.id)?.weight).toBeCloseTo(0.6);
+    afterApply.close();
+    const audit = readFileSync(path.join(paths.root, "memory", "logs", "audit.jsonl"), "utf8");
+    expect(audit).toContain("memory.maintenance.configured");
+    expect(audit).toContain("memory.maintenance.applied");
+  });
+
   it("searches layered memory with session and project relevance", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));

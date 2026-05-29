@@ -230,8 +230,8 @@
           <tr>
             <td>Memory Graph</td>
             <td>记忆节点、wiki chunk、edge、权重、冲突和替代关系共同决定召回。</td>
-            <td><span class="tag done">进行中</span> edge-aware retrieval、standalone node search、CLI graph link、MemoryCorrect 纠错闭环和长期未用节点降权维护已实现。</td>
-            <td><code>tests/memory-node-store.test.ts</code>、<code>tests/rules-memory.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code></td>
+            <td><span class="tag done">进行中</span> edge-aware retrieval、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、可持久配置的长期未用节点降权维护已实现。</td>
+            <td><code>tests/memory-node-store.test.ts</code>、<code>tests/rules-memory.test.ts</code>、<code>tests/cli.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
             <td>Patch Engine</td>
@@ -272,8 +272,8 @@
       <div class="panel">
         <h3>v0.1.0-alpha.3</h3>
         <ul>
-          <li>继续完成 Memory Graph v2：冲突审计可视化、记忆维护策略配置、长期节点清理建议。</li>
-          <li>扩展真实 memory 业务测试：写入、重启、召回、显式 link、用户纠错、维护降权和权重变化。</li>
+          <li>继续完成 Memory Graph v2：冲突审计可视化和长期节点清理建议。</li>
+          <li>扩展真实 memory 业务测试：写入、重启、召回、显式 link、用户纠错、维护策略配置、降权和权重变化。</li>
           <li>推进 Patch Engine v1：继续补真实模型 patch benchmark，观察复杂任务中 FilePatch、FileEdit、FileWrite 的实际选择比例。</li>
         </ul>
       </div>

@@ -14,7 +14,13 @@ import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
-import { formatMemoryMaintenanceResult, maintainMemory } from "./memory-maintenance.js";
+import {
+  configureMemoryMaintenance,
+  formatMemoryMaintenancePolicy,
+  formatMemoryMaintenanceResult,
+  maintainMemory,
+  readMemoryMaintenancePolicy
+} from "./memory-maintenance.js";
 import {
   formatPlanReview,
   formatPlanReviewList,
@@ -632,7 +638,28 @@ async function runCliUnsafeWithParsed(
       return { exitCode: 0, stdout: `${formatMemoryCorrectionResult(result)}\n`, stderr: "" };
     }
     if (subcommand === "maintain") {
-      const options = parseMemoryMaintainArgs(parsed.rest.slice(1));
+      const rawMaintainArgs = parsed.rest.slice(1);
+      if (rawMaintainArgs[0] === "config") {
+        const configArgs = rawMaintainArgs.slice(1);
+        if (configArgs.length === 0) {
+          return {
+            exitCode: 0,
+            stdout: `${formatMemoryMaintenancePolicy(readMemoryMaintenancePolicy(rootInput))}\n`,
+            stderr: ""
+          };
+        }
+        const options = parseMemoryMaintainConfigArgs(configArgs);
+        const result = configureMemoryMaintenance({
+          ...rootInput,
+          sessionId: parsed.resumeSessionId ?? parsed.sessionId,
+          olderThanDays: options.olderThanDays,
+          decay: options.decay,
+          minWeight: options.minWeight,
+          limit: options.limit
+        });
+        return { exitCode: 0, stdout: `${formatMemoryMaintenancePolicy(result)}\n`, stderr: "" };
+      }
+      const options = parseMemoryMaintainArgs(rawMaintainArgs);
       const result = maintainMemory({
         ...rootInput,
         paths,
@@ -1728,6 +1755,7 @@ function helpText(): string {
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
     "  magi memory maintain [--apply] [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>]",
+    "  magi memory maintain config [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>] [--limit <n>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
     "  magi learning list",
     "  magi learning draft <show|apply|reject> <id>",
@@ -1926,6 +1954,24 @@ function parseMemoryMaintainArgs(args: string[]): {
     throw new MagiUsageError(`Unknown magi memory maintain option: ${arg}`);
   }
   return { apply, olderThanDays, decay, minWeight, limit };
+}
+
+function parseMemoryMaintainConfigArgs(args: string[]): {
+  olderThanDays?: number;
+  decay?: number;
+  minWeight?: number;
+  limit?: number;
+} {
+  const options = parseMemoryMaintainArgs(args);
+  if (options.apply) {
+    throw new MagiUsageError("magi memory maintain config does not accept --apply");
+  }
+  return {
+    olderThanDays: options.olderThanDays,
+    decay: options.decay,
+    minWeight: options.minWeight,
+    limit: options.limit
+  };
 }
 
 function readPositiveNumberArg(value: string | undefined, label: string): number {
