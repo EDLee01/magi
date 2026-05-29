@@ -608,6 +608,9 @@ async function scenarioPlanMode() {
       });
       assert(output.includes("Plan mode surfaced the plan"), "plan mode final answer missing");
       assert(!existsSync(path.join(workDir, "should-not-edit.txt")), "plan mode should not mutate workspace");
+      const planStatus = await runCli({ args: ["plan"], cwd: workDir, configDir, label: "plan status" });
+      assert(planStatus.includes("Status: submitted"), "submitted plan was not persisted");
+      assert(planStatus.includes("Show this plan before implementation"), "persisted plan did not include plan content");
     } catch (error) {
       printProviderLog(providerLog);
       throw error;

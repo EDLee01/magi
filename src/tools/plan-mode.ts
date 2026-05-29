@@ -57,14 +57,17 @@ export function formatEnterPlanModeResult(input: { reason?: string }): string {
     .join("\n");
 }
 
-export function formatExitPlanModeResult(input: { plan: string }): string {
+export function formatExitPlanModeResult(input: { plan: string; id?: string }): string {
   return [
     "Plan submitted for user approval.",
+    input.id ? `Plan id: ${input.id}` : undefined,
     "",
     "---",
     input.plan,
     "---",
     "",
     "Waiting for user to approve or provide feedback."
-  ].join("\n");
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }

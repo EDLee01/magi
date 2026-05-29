@@ -14,6 +14,12 @@ import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
 import {
+  formatPlanReview,
+  formatPlanReviewList,
+  getLatestPlanReview,
+  listPlanReviews
+} from "./plan-state.js";
+import {
   proposeMemoryDraft,
   listDrafts,
   formatDraftReview,
@@ -490,6 +496,31 @@ async function runCliUnsafeWithParsed(
       }
       const goal = createGoal(paths, { sessionId: session.id, objective: parsed.rest.join(" ") });
       return { exitCode: 0, stdout: `Goal started: ${goal.objective}\n`, stderr: "" };
+    } finally {
+      store.close();
+    }
+  }
+
+  if (command === "plan") {
+    const paths = getMagiPaths(env);
+    ensureMagiHome(paths);
+    loadConfig(paths, env);
+    const store = SessionStore.open(paths);
+    try {
+      const sub = parsed.rest[0]?.toLowerCase();
+      const isList = sub === "list";
+      const session = resolvePlanSessionForCommand({
+        store,
+        sessionId: parsed.sessionId ?? parsed.resumeSessionId,
+        cwd,
+        optional: true
+      });
+      const records = listPlanReviews(paths.stateRoot, session?.id);
+      return {
+        exitCode: 0,
+        stdout: `${isList ? formatPlanReviewList(records) : formatPlanReview(getLatestPlanReview(paths.stateRoot, session?.id))}\n`,
+        stderr: ""
+      };
     } finally {
       store.close();
     }
@@ -1650,6 +1681,7 @@ function helpText(): string {
     "  magi sessions",
     "  magi resume <session-id>",
     "  magi goal [objective] [--session-id <id>]",
+    "  magi plan [list] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",
@@ -1713,6 +1745,7 @@ function knownCommands(): Set<string> {
     "ps",
     "logs",
     "kill",
+    "plan",
     "init",
     "tutorial",
     "-r",
@@ -1957,6 +1990,24 @@ function resolveGoalSessionForCommand(input: {
   if (input.optional) {
     return undefined;
   }
+  throw new MagiUsageError("No sessions found");
+}
+
+function resolvePlanSessionForCommand(input: {
+  store: SessionStore;
+  sessionId: string | undefined;
+  cwd: string;
+  optional?: boolean;
+}) {
+  if (input.sessionId) {
+    const session = input.store.getSession(input.sessionId);
+    if (!session) {
+      throw new MagiUsageError(`Session not found: ${input.sessionId}`);
+    }
+    return session;
+  }
+  const session = input.store.getMostRecentSession(input.cwd) ?? input.store.getMostRecentSession();
+  if (session || input.optional) return session;
   throw new MagiUsageError("No sessions found");
 }
 

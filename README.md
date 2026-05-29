@@ -82,6 +82,7 @@ multi-machine, sub-agents). Press `q` to quit early.
 | `magi doctor`             | Show config + paths                       |
 | `magi sessions`           | List recent sessions                      |
 | `magi resume <id>`        | Resume a session                          |
+| `magi plan [list]`         | Show submitted plan reviews               |
 | `magi memory search <q>`   | Search durable Memory                     |
 | `magi memory link --from <node> --to <node>` | Link Memory graph nodes       |
 | `magi learning list`       | List reviewable LearningDrafts            |

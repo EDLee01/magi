@@ -254,6 +254,40 @@ describe("CLI entrypoint", () => {
     expect(afterDone.stdout).toContain("No active goal.");
   });
 
+  it("shows submitted plans from the CLI", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const sessionId = "33333333-3333-4333-8333-333333333333";
+    await runCli(
+      ["--session-id", sessionId, "-p", "prepare plan session"],
+      temp.env,
+      process.cwd()
+    );
+    const { recordPlanReview, updatePlanReviewStatus } = await import("../src/plan-state.js");
+    const plan = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId,
+      jobId: "job-plan-cli",
+      toolUseId: "exit-plan-cli",
+      plan: "1. Inspect\n2. Implement\n3. Verify"
+    });
+    updatePlanReviewStatus(paths.stateRoot, plan.id, {
+      status: "approved",
+      response: "Yes, proceed"
+    });
+
+    const show = await runCli(["plan", "--session-id", sessionId], temp.env, process.cwd());
+    expect(show.exitCode).toBe(0);
+    expect(show.stdout).toContain(`Plan: ${plan.id}`);
+    expect(show.stdout).toContain("Status: approved");
+    expect(show.stdout).toContain("1. Inspect");
+
+    const list = await runCli(["plan", "list", "--session-id", sessionId], temp.env, process.cwd());
+    expect(list.exitCode).toBe(0);
+    expect(list.stdout).toContain("Submitted plans:");
+    expect(list.stdout).toContain(plan.id);
+  });
+
   it("keeps CLI goals isolated by explicit session id", async () => {
     temp = makeTempRoot();
     const firstId = "11111111-1111-4111-8111-111111111111";

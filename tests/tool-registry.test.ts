@@ -1149,10 +1149,14 @@ describe("tool registry", () => {
   });
 
   it("shows ExitPlanMode plans in the approval question before selection", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-plan-review-"));
+    const stateRoot = path.join(workspace, ".magi-next", "state");
     const plan =
       "1. Inspect the current plan UI\n2. Show this plan before approval\n3. Verify with tests";
     const result = await executeRegisteredTool({
-      cwd: process.cwd(),
+      cwd: workspace,
+      stateRoot,
+      sessionId: "session-plan-review",
       toolUse: {
         type: "tool-use",
         id: "exit-plan-1",
@@ -1178,7 +1182,17 @@ describe("tool registry", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content).toContain("Plan approved. Proceeding with implementation.");
+    expect(result.content).toContain("Plan id:");
     expect(result.content).toContain(plan);
+
+    const { listPlanReviews } = await import("../src/plan-state.js");
+    expect(listPlanReviews(stateRoot, "session-plan-review")).toEqual([
+      expect.objectContaining({
+        status: "approved",
+        toolUseId: "exit-plan-1",
+        plan
+      })
+    ]);
   });
 
   it("rejects invalid AskUserQuestion shapes and answers", async () => {

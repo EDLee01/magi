@@ -258,6 +258,7 @@ import {
   parseEnterPlanModeInput,
   parseExitPlanModeInput
 } from "./plan-mode.js";
+import { recordPlanReview, updatePlanReviewStatus } from "../plan-state.js";
 import {
   EnterWorktreeInputSchema,
   ExitWorktreeInputSchema,
@@ -1805,6 +1806,16 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: ExitPlanModeInputSchema,
     call: async (input, context) => {
       const parsed = parseExitPlanModeInput(input);
+      const planRecord =
+        context.stateRoot && context.sessionId
+          ? recordPlanReview({
+              stateRoot: context.stateRoot,
+              sessionId: context.sessionId,
+              toolUseId: context.toolUse?.id,
+              plan: parsed.plan,
+              status: "submitted"
+            })
+          : undefined;
       // Ask the user to approve or reject the plan
       if (context.userQuestionResolver && context.toolUse) {
         try {
@@ -1834,26 +1845,44 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
           const selection = answer.answers?.[0];
           const approved = selection?.selectedLabels?.includes("Yes, proceed") ?? false;
           if (approved) {
+            if (context.stateRoot && planRecord) {
+              updatePlanReviewStatus(context.stateRoot, planRecord.id, {
+                status: "approved",
+                response: "Yes, proceed"
+              });
+            }
             return [
               "Plan approved. Proceeding with implementation.",
+              planRecord ? `Plan id: ${planRecord.id}` : undefined,
               "",
               "---",
               parsed.plan,
               "---"
-            ].join("\n");
+            ]
+              .filter((line): line is string => line !== undefined)
+              .join("\n");
           }
           const feedback =
             selection?.selectedLabels?.join(", ") ?? "User wants to revise the plan.";
+          if (context.stateRoot && planRecord) {
+            updatePlanReviewStatus(context.stateRoot, planRecord.id, {
+              status: "needs_revision",
+              response: feedback
+            });
+          }
           return [
             `Plan not approved. User response: ${feedback}`,
+            planRecord ? `Plan id: ${planRecord.id}` : undefined,
             "",
             "Stay in plan mode. Revise the approach based on the feedback above and call ExitPlanMode again with an updated plan."
-          ].join("\n");
+          ]
+            .filter((line): line is string => line !== undefined)
+            .join("\n");
         } catch {
-          return formatExitPlanModeResult(parsed);
+          return formatExitPlanModeResult({ ...parsed, id: planRecord?.id });
         }
       }
-      return formatExitPlanModeResult(parsed);
+      return formatExitPlanModeResult({ ...parsed, id: planRecord?.id });
     },
     isReadOnly: () => true,
     isDestructive: () => false,
