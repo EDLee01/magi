@@ -171,17 +171,31 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       .map((scenario) => readRecord(scenario.details).taskClass)
       .filter((taskClass): taskClass is string => typeof taskClass === "string")
   );
+  const patchStrategy = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "patch_strategy"
+  );
+  const patchStrategyDetails = readRecord(patchStrategy ? readRecord(patchStrategy).details : {});
+  const patchStrategyToolCounts = readRecord(patchStrategyDetails.toolCounts);
+  const patchStrategyRate = readNumber(patchStrategyDetails.patchUsageRate);
+  const patchStrategyFilePatchCalls = readNumber(patchStrategyToolCounts.FilePatch);
+  const patchStrategyFileEditCalls = readNumber(patchStrategyToolCounts.FileEdit);
+  const patchStrategyFileWriteCalls = readNumber(patchStrategyToolCounts.FileWrite);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 4) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 4) failures.push(`taskClasses=${taskClasses.size}`);
-  if (assertions < 14) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 11) failures.push(`toolCallCount=${toolCallCount}`);
+  if (readNumber(summary.total) < 5) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 5) failures.push(`taskClasses=${taskClasses.size}`);
+  if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
+  if (assertions < 19) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 14) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 5) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
+  if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
+  if (patchStrategyFileWriteCalls !== 0) failures.push("patchStrategyFileWrite used");
+  if (patchStrategyRate < 0.5) failures.push(`patchStrategyRate=${patchStrategyRate}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -199,6 +213,10 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       toolCallCount,
       uniqueToolCount,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
+      patchStrategyRate,
+      patchStrategyFilePatchCalls,
+      patchStrategyFileEditCalls,
+      patchStrategyFileWriteCalls,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

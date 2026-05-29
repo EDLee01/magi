@@ -735,6 +735,150 @@ async function scenarioCrossFileVerifiedEditTask() {
   });
 }
 
+async function scenarioPatchStrategyTask() {
+  return await withWorkspace("patch-strategy", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "src"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "src", "formatter.ts"),
+      [
+        "export function formatReport(title: string, lines: string[]): string {",
+        "  const heading = `Report: ${title}`;",
+        '  const body = lines.map((line) => `- ${line}`).join("\\n");',
+        '  return [heading, body].join("\\n");',
+        "}",
+        "",
+        'export const FORMAT_VERSION = "format-v1";',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("ToolSearch"), "ToolSearch was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(toolNames.includes("FileEdit"), "FileEdit was not available");
+          assert(
+            transcript.includes("use FilePatch for multi-line edits"),
+            "FilePatch guidance was not injected"
+          );
+          return toolResponse([
+            toolCall("find-patch-tool", "ToolSearch", {
+              query: "modify existing file with multi-line patch and exact string replacement",
+              max_results: 4
+            }),
+            toolCall("read-formatter", "FileRead", { file_path: "src/formatter.ts" })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("1. FilePatch"), "ToolSearch did not rank FilePatch first");
+          assert(transcript.includes("formatReport"), "FileRead did not expose formatter source");
+          return toolResponse([
+            toolCall("patch-formatter", "FilePatch", {
+              file_path: "src/formatter.ts",
+              patch: [
+                "@@",
+                " export function formatReport(title: string, lines: string[]): string {",
+                "-  const heading = `Report: ${title}`;",
+                '-  const body = lines.map((line) => `- ${line}`).join("\\n");',
+                '-  return [heading, body].join("\\n");',
+                "+  const heading = `Report: ${title.trim()}`;",
+                "+  const body = lines",
+                "+    .filter((line) => line.trim().length > 0)",
+                "+    .map((line) => `* ${line.trim()}`)",
+                '+    .join("\\n");',
+                '+  return [heading, body || "(empty)"].join("\\n");',
+                " }"
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(transcript.includes("Patched src/formatter.ts"), "FilePatch result was not visible");
+          return toolResponse([
+            toolCall("edit-format-version", "FileEdit", {
+              file_path: "src/formatter.ts",
+              old_string: 'export const FORMAT_VERSION = "format-v1";',
+              new_string: 'export const FORMAT_VERSION = "format-v2";'
+            })
+          ]);
+        }
+        assert(transcript.includes("Wrote src/formatter.ts"), "FileEdit result was not visible");
+        return messageText("Formatter updated with FilePatch for the body and FileEdit for version.");
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Update src/formatter.ts.",
+            "Use FilePatch for the multi-line formatReport behavior change.",
+            "Use FileEdit only for the exact FORMAT_VERSION replacement.",
+            "Do not rewrite the whole file."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "patch strategy task"
+      });
+      assert(output.includes("session.completed"), "patch strategy task did not complete");
+      const source = readFileSync(path.join(workDir, "src", "formatter.ts"), "utf8");
+      assert(source.includes("title.trim()"), "formatter title normalization missing");
+      assert(
+        source.includes(".filter((line) => line.trim().length > 0)"),
+        "formatter blank-line filtering missing"
+      );
+      assert(source.includes('body || "(empty)"'), "formatter empty fallback missing");
+      assert(source.includes('FORMAT_VERSION = "format-v2"'), "format version edit missing");
+
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      const patchToolCalls =
+        (toolCounts.FilePatch ?? 0) + (toolCounts.FileEdit ?? 0) + (toolCounts.FileWrite ?? 0);
+      const patchUsageRate = patchToolCalls === 0 ? 0 : (toolCounts.FilePatch ?? 0) / patchToolCalls;
+      assert(toolCounts.FilePatch === 1, "patch strategy should use one FilePatch call");
+      assert(toolCounts.FileEdit === 1, "patch strategy should use one FileEdit call");
+      assert(!toolCounts.FileWrite, "patch strategy should not use FileWrite for existing file");
+      assert(patchUsageRate >= 0.5, "patch strategy FilePatch usage rate was too low");
+      return {
+        score: 1,
+        assertions: [
+          "ToolSearch ranked FilePatch",
+          "FilePatch handled multi-line edit",
+          "FileEdit handled exact version replacement",
+          "FileWrite avoided for existing file",
+          "final response completed"
+        ],
+        filesVerified: ["src/formatter.ts"],
+        provider: summary,
+        taskClass: "patch_strategy",
+        toolCounts,
+        patchUsageRate,
+        fileWriteAvoided: !toolCounts.FileWrite
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -783,7 +927,8 @@ async function main() {
     ["project edit task", scenarioProjectEditTask],
     ["memory driven task", scenarioMemoryDrivenTask],
     ["tool discovery task", scenarioToolDiscoveryTask],
-    ["cross-file verified edit task", scenarioCrossFileVerifiedEditTask]
+    ["cross-file verified edit task", scenarioCrossFileVerifiedEditTask],
+    ["patch strategy task", scenarioPatchStrategyTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

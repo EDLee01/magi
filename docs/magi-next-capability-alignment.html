@@ -236,8 +236,8 @@
           <tr>
             <td>Patch Engine</td>
             <td>用 hunk 级结构化 patch 替代脆弱的 old/new string 编辑。</td>
-            <td><span class="tag next">进行中</span> FilePatch v1 已支持 unified-diff hunk、唯一上下文匹配、approval diff preview、失败恢复反馈，并把多行编辑优先选择 FilePatch 的策略注入模型上下文；独立 patch engine eval 会记录 FilePatch 使用率、ToolSearch 排名、恢复链路和 approval diff preview 证据。</td>
-            <td><code>tests/tool-registry.test.ts</code>、<code>tests/tui-session.test.ts</code>、<code>tests/system-prompt.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run test:patch-eval</code></td>
+            <td><span class="tag next">进行中</span> FilePatch v1 已支持 unified-diff hunk、唯一上下文匹配、approval diff preview、失败恢复反馈，并把多行编辑优先选择 FilePatch 的策略注入模型上下文；独立 patch engine eval 会记录 FilePatch 使用率、ToolSearch 排名、恢复链路和 approval diff preview 证据；model task benchmark 已加入 patch_strategy 真实模型任务，检查多行编辑使用 FilePatch、精确单点替换使用 FileEdit、现有文件不走 FileWrite，并把 FilePatch 使用率纳入 capability report 门禁。</td>
+            <td><code>tests/tool-registry.test.ts</code>、<code>tests/tui-session.test.ts</code>、<code>tests/system-prompt.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>scripts/model-task-benchmark.mjs</code>、<code>npm run test:patch-eval</code>、<code>npm run test:model-tasks</code></td>
           </tr>
           <tr>
             <td>Eval Harness</td>
@@ -274,7 +274,7 @@
         <ul>
           <li>继续完成 Memory Graph v2：把冲突分组后的批量纠错结果接入更细的用户反馈和长期权重趋势。</li>
           <li>扩展真实 memory 业务测试：更多项目级 case、superseded/disputed 多节点清理、维护策略配置边界、权重变化、长期召回质量趋势和跨节点 workflow 召回质量。</li>
-          <li>推进 Patch Engine v1：把 patch eval 扩到真实模型 benchmark，观察复杂任务中 FilePatch、FileEdit、FileWrite 的实际选择比例。</li>
+          <li>推进 Patch Engine v1：继续扩大复杂任务中的 patch 失败恢复、多文件 patch 冲突和 approval preview 覆盖。</li>
         </ul>
       </div>
       <div class="panel" style="margin-top: 12px;">

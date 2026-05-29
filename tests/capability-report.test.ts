@@ -159,6 +159,12 @@ describe("capability report", () => {
         toolCallCount: 3,
         uniqueToolCount: 2,
         taskClasses: ["project_edit", "memory_driven", "tool_discovery"],
+        patchStrategy: {
+          filePatchCalls: 0,
+          fileEditCalls: 0,
+          fileWriteCalls: 1,
+          patchUsageRate: 0
+        },
         regressions: 1
       }),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -186,6 +192,10 @@ describe("capability report", () => {
         "filesVerified=1",
         "toolCallCount=3",
         "uniqueToolCount=2",
+        "patchStrategyTask=false",
+        "patchStrategyFilePatchCalls < 1",
+        "patchStrategyFileEditCalls != 1",
+        "patchStrategyRate=0",
         "regressions=1"
       ])
     );
@@ -442,6 +452,12 @@ function modelTaskReport(
     toolCallCount: number;
     uniqueToolCount: number;
     taskClasses: string[];
+    patchStrategy: {
+      filePatchCalls: number;
+      fileEditCalls: number;
+      fileWriteCalls: number;
+      patchUsageRate: number;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -449,16 +465,23 @@ function modelTaskReport(
     "project_edit",
     "memory_driven",
     "tool_discovery",
-    "cross_file_verified_edit"
+    "cross_file_verified_edit",
+    "patch_strategy"
   ];
+  const patchStrategy = overrides.patchStrategy ?? {
+    filePatchCalls: 1,
+    fileEditCalls: 1,
+    fileWriteCalls: 0,
+    patchUsageRate: 0.5
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
-    providerCalls: overrides.providerCalls ?? 11,
-    assertions: overrides.assertions ?? 14,
-    filesVerified: overrides.filesVerified ?? 6,
-    toolCallCount: overrides.toolCallCount ?? 12,
+    providerCalls: overrides.providerCalls ?? 14,
+    assertions: overrides.assertions ?? 19,
+    filesVerified: overrides.filesVerified ?? 7,
+    toolCallCount: overrides.toolCallCount ?? 15,
     uniqueToolCount: overrides.uniqueToolCount ?? 6,
     regressions: overrides.regressions ?? 0
   });
@@ -472,7 +495,17 @@ function modelTaskReport(
       failureKind: null,
       details: {
         taskClass: taskClasses[index],
-        provider: { callCount: 2 }
+        provider: { callCount: 2 },
+        ...(taskClasses[index] === "patch_strategy"
+          ? {
+              toolCounts: {
+                FilePatch: patchStrategy.filePatchCalls,
+                FileEdit: patchStrategy.fileEditCalls,
+                FileWrite: patchStrategy.fileWriteCalls
+              },
+              patchUsageRate: patchStrategy.patchUsageRate
+            }
+          : {})
       }
     }))
   };
