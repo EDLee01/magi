@@ -886,6 +886,182 @@ async function scenarioPatchStrategyTask() {
   });
 }
 
+async function scenarioDependencyRefactorTask() {
+  return await withWorkspace("dependency-refactor", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "src", "usage.js"),
+      [
+        "export function calculateUsage(events) {",
+        "  return events.length;",
+        "}",
+        "",
+        "export function usageLabel(events) {",
+        "  return `${calculateUsage(events)} events`;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "tests", "usage.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { calculateUsage, usageLabel } from "../src/usage.js";',
+        "",
+        "const events = [",
+        '  { type: "click", weight: 2 },',
+        '  { type: "view", weight: 1 }',
+        "];",
+        "",
+        "assert.equal(calculateUsage(events), 3);",
+        'assert.equal(usageLabel(events), "3 weighted events");',
+        'console.log("usage ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "usage.md"),
+      [
+        "# Usage",
+        "",
+        "Usage is currently reported as the number of events.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(
+            transcript.includes("use FilePatch for multi-line edits"),
+            "FilePatch guidance was not injected"
+          );
+          return toolResponse([
+            toolCall("run-usage-test-before", "Bash", {
+              command: "node tests/usage.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("read-usage-source", "FileRead", { file_path: "src/usage.js" }),
+            toolCall("read-usage-docs", "FileRead", { file_path: "docs/usage.md" })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing usage test was not visible");
+          assert(transcript.includes("calculateUsage"), "usage source was not visible");
+          assert(transcript.includes("number of events"), "usage docs were not visible");
+          return toolResponse([
+            toolCall("patch-usage-source", "FilePatch", {
+              file_path: "src/usage.js",
+              patch: [
+                "@@",
+                " export function calculateUsage(events) {",
+                "-  return events.length;",
+                "+  return events.reduce((total, event) => total + (event.weight ?? 1), 0);",
+                " }",
+                " ",
+                " export function usageLabel(events) {",
+                '-  return `${calculateUsage(events)} events`;',
+                '+  return `${calculateUsage(events)} weighted events`;',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-usage-docs", "FilePatch", {
+              file_path: "docs/usage.md",
+              patch: [
+                "@@",
+                " # Usage",
+                " ",
+                "-Usage is currently reported as the number of events.",
+                "+Usage is reported as the sum of event weights.",
+                "+Events without an explicit weight count as 1."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(transcript.includes("Patched src/usage.js"), "usage source patch was not visible");
+          assert(transcript.includes("Patched docs/usage.md"), "usage docs patch was not visible");
+          return toolResponse([
+            toolCall("run-usage-test-after", "Bash", {
+              command: "node tests/usage.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(transcript.includes("usage ok"), "passing usage test was not visible");
+        return messageText("Usage dependency refactor updated source and docs, then passed tests.");
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Refactor usage calculation across source and docs.",
+            "The tests now expect weighted usage, so run the focused usage test first,",
+            "update dependent source and docs with FilePatch, then rerun the focused test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "dependency refactor task"
+      });
+      assert(output.includes("session.completed"), "dependency refactor task did not complete");
+      const source = readFileSync(path.join(workDir, "src", "usage.js"), "utf8");
+      const docs = readFileSync(path.join(workDir, "docs", "usage.md"), "utf8");
+      assert(source.includes("event.weight ?? 1"), "weighted usage fallback missing");
+      assert(source.includes("weighted events"), "usage label was not updated");
+      assert(docs.includes("sum of event weights"), "usage docs did not describe weighted usage");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "dependency refactor should run focused test before and after");
+      assert(toolCounts.FilePatch === 2, "dependency refactor should patch source and docs");
+      assert(!toolCounts.FileWrite, "dependency refactor should not rewrite existing files");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing dependency test ran first",
+          "dependent source and docs read before edit",
+          "source dependency behavior patched",
+          "docs dependency contract patched",
+          "focused passing dependency test ran after edit",
+          "FileWrite avoided for existing files",
+          "final response completed"
+        ],
+        filesVerified: ["src/usage.js", "tests/usage.test.mjs", "docs/usage.md"],
+        provider: summary,
+        taskClass: "dependency_refactor",
+        toolCounts,
+        fileWriteAvoided: !toolCounts.FileWrite
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioTestDrivenRecoveryTask() {
   return await withWorkspace("test-driven-recovery", async ({ root, configDir, workDir }) => {
     mkdirSync(path.join(workDir, "src"), { recursive: true });
@@ -1128,6 +1304,7 @@ async function main() {
     ["tool discovery task", scenarioToolDiscoveryTask],
     ["cross-file verified edit task", scenarioCrossFileVerifiedEditTask],
     ["patch strategy task", scenarioPatchStrategyTask],
+    ["dependency refactor task", scenarioDependencyRefactorTask],
     ["test-driven recovery task", scenarioTestDrivenRecoveryTask]
   ];
   const results = [];

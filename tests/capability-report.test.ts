@@ -216,6 +216,7 @@ describe("capability report", () => {
         "uniqueToolCount=2",
         "patchStrategyTask=false",
         "testDrivenRecoveryTask=false",
+        "dependencyRefactorTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -514,6 +515,7 @@ function modelTaskReport(
     "tool_discovery",
     "cross_file_verified_edit",
     "patch_strategy",
+    "dependency_refactor",
     "test_driven_recovery"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
@@ -527,9 +529,9 @@ function modelTaskReport(
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 26,
-    filesVerified: overrides.filesVerified ?? 10,
-    toolCallCount: overrides.toolCallCount ?? 22,
+    assertions: overrides.assertions ?? 33,
+    filesVerified: overrides.filesVerified ?? 13,
+    toolCallCount: overrides.toolCallCount ?? 28,
     uniqueToolCount: overrides.uniqueToolCount ?? 6,
     regressions: overrides.regressions ?? 0
   });
