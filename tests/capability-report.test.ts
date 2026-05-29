@@ -203,6 +203,7 @@ describe("capability report", () => {
         completedGoalSuppressed: false,
         blockedGoalPersisted: false,
         planReviewPersisted: false,
+        crossSessionPlanReviewListed: false,
         planRevisionFeedbackSeen: false,
         planRevisionPersisted: false,
         planApprovalSeen: false,
@@ -219,6 +220,7 @@ describe("capability report", () => {
         "completedGoalSuppressed=false",
         "blockedGoalPersisted=false",
         "planReviewPersisted=false",
+        "crossSessionPlanReviewListed=false",
         "planRevisionFeedbackSeen=false",
         "planRevisionPersisted=false",
         "planApprovalSeen=false",
@@ -525,6 +527,7 @@ function goalPlanReport(
     writeDeniedInPlanMode: boolean;
     planSubmittedToModel: boolean;
     planReviewPersisted: boolean;
+    crossSessionPlanReviewListed: boolean;
     planRevisionFeedbackSeen: boolean;
     planRevisionPersisted: boolean;
     planApprovalSeen: boolean;
@@ -550,6 +553,7 @@ function goalPlanReport(
           writeDeniedInPlanMode: true,
           planSubmittedToModel: true,
           planReviewPersisted: true,
+          crossSessionPlanReviewListed: true,
           planRevisionFeedbackSeen: true,
           planRevisionPersisted: true,
           planApprovalSeen: true,

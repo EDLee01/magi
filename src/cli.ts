@@ -521,16 +521,21 @@ async function runCliUnsafeWithParsed(
     try {
       const sub = parsed.rest[0]?.toLowerCase();
       const isList = sub === "list";
+      const isAll = sub === "all" || sub === "global";
       const session = resolvePlanSessionForCommand({
         store,
-        sessionId: parsed.sessionId ?? parsed.resumeSessionId,
+        sessionId: isAll ? undefined : (parsed.sessionId ?? parsed.resumeSessionId),
         cwd,
         optional: true
       });
-      const records = listPlanReviews(paths.stateRoot, session?.id);
+      const records = listPlanReviews(paths.stateRoot, isAll ? undefined : session?.id);
       return {
         exitCode: 0,
-        stdout: `${isList ? formatPlanReviewList(records) : formatPlanReview(getLatestPlanReview(paths.stateRoot, session?.id))}\n`,
+        stdout: `${
+          isList || isAll
+            ? formatPlanReviewList(records)
+            : formatPlanReview(getLatestPlanReview(paths.stateRoot, session?.id))
+        }\n`,
         stderr: ""
       };
     } finally {
@@ -1815,7 +1820,7 @@ function helpText(): string {
     "  magi sessions",
     "  magi resume <session-id>",
     "  magi goal [objective] [--session-id <id>]",
-    "  magi plan [list] [--session-id <id>]",
+    "  magi plan [list|all] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",

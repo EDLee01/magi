@@ -326,6 +326,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.writeDeniedInPlanMode !== true) failures.push("writeDeniedInPlanMode=false");
   if (details.planSubmittedToModel !== true) failures.push("planSubmittedToModel=false");
   if (details.planReviewPersisted !== true) failures.push("planReviewPersisted=false");
+  if (details.crossSessionPlanReviewListed !== true) {
+    failures.push("crossSessionPlanReviewListed=false");
+  }
   if (details.planRevisionFeedbackSeen !== true) failures.push("planRevisionFeedbackSeen=false");
   if (details.planRevisionPersisted !== true) failures.push("planRevisionPersisted=false");
   if (details.planApprovalSeen !== true) failures.push("planApprovalSeen=false");
@@ -344,6 +347,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       writeDeniedInPlanMode: details.writeDeniedInPlanMode === true,
       planSubmittedToModel: details.planSubmittedToModel === true,
       planReviewPersisted: details.planReviewPersisted === true,
+      crossSessionPlanReviewListed: details.crossSessionPlanReviewListed === true,
       planRevisionFeedbackSeen: details.planRevisionFeedbackSeen === true,
       planRevisionPersisted: details.planRevisionPersisted === true,
       planApprovalSeen: details.planApprovalSeen === true,

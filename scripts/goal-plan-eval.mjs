@@ -20,6 +20,7 @@ const root = process.env.MAGI_KEEP_GOAL_PLAN_EVAL_TMP
 const configDir = path.join(root, "config");
 const workDir = path.join(root, "work");
 const sessionId = "goal-plan-eval-session";
+const secondSessionId = "goal-plan-eval-second-session";
 const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
 const blockedGoalObjective = "wait for Goal/Plan blocked audit";
 const completedGoalObjective = "complete Goal/Plan lifecycle eval";
@@ -115,6 +116,35 @@ try {
     const planList = await runCli(["plan", "list", "--session-id", sessionId], "plan list");
     assert(planList.includes("Submitted plans:"), "plan list did not show submitted plans");
     assert(planList.includes("submitted"), "plan list did not include submitted status");
+    await runCli(
+      [
+        "--session-id",
+        secondSessionId,
+        "--model",
+        "main",
+        "-p",
+        "Prepare second Goal/Plan eval session."
+      ],
+      "seed second session"
+    );
+    const scopedSecondPlanList = await runCli(
+      ["plan", "list", "--session-id", secondSessionId],
+      "second session scoped plan list"
+    );
+    assert(
+      scopedSecondPlanList.includes("No submitted plans."),
+      "second session unexpectedly saw first session plan"
+    );
+    const crossSessionPlanList = await runCli(["plan", "all"], "cross-session plan list");
+    assert(
+      crossSessionPlanList.includes("Submitted plans:"),
+      "plan all did not list submitted plans"
+    );
+    assert(crossSessionPlanList.includes("submitted"), "plan all missed submitted status");
+    assert(
+      crossSessionPlanList.includes("Inspect goal and plan state"),
+      "plan all missed first plan"
+    );
 
     const blockedGoal = await runCli(
       ["goal", blockedGoalObjective, "--session-id", sessionId],
@@ -196,6 +226,7 @@ try {
     const blockedGoalPersisted = assertGoalStoreBlocked();
     state.blockedGoalPersisted = blockedGoalPersisted;
     const planReviewPersisted = assertPlanStoreSubmitted();
+    const crossSessionPlanReviewListed = true;
     const planRevision = await runPlanRevisionApprovalFlow(tools.executeRegisteredTool);
     const planRevisionPersisted = assertPlanStoreRevisionPersisted(planRevision.revisionPlanId);
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
@@ -223,6 +254,7 @@ try {
             writeDeniedInPlanMode: state.writeDeniedInPlanMode,
             planSubmittedToModel: state.planSubmittedToModel,
             planReviewPersisted,
+            crossSessionPlanReviewListed,
             planRevisionFeedbackSeen: planRevision.revisionFeedbackSeen,
             planRevisionPersisted,
             planApprovalSeen: planRevision.approvalSeen,

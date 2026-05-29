@@ -324,6 +324,41 @@ describe("CLI entrypoint", () => {
     expect(list.stdout).toContain(plan.id);
   });
 
+  it("lists submitted plans across sessions from the CLI", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const firstSessionId = "33333333-3333-4333-8333-333333333334";
+    const secondSessionId = "33333333-3333-4333-8333-333333333335";
+    await runCli(["--session-id", firstSessionId, "-p", "prepare first plan session"], temp.env);
+    await runCli(["--session-id", secondSessionId, "-p", "prepare second plan session"], temp.env);
+    const { recordPlanReview } = await import("../src/plan-state.js");
+    const firstPlan = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: firstSessionId,
+      plan: "1. Inspect first session"
+    });
+    const secondPlan = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: secondSessionId,
+      plan: "1. Inspect second session"
+    });
+
+    const scoped = await runCli(
+      ["plan", "list", "--session-id", secondSessionId],
+      temp.env,
+      process.cwd()
+    );
+    expect(scoped.exitCode).toBe(0);
+    expect(scoped.stdout).toContain(secondPlan.id);
+    expect(scoped.stdout).not.toContain(firstPlan.id);
+
+    const all = await runCli(["plan", "all"], temp.env, process.cwd());
+    expect(all.exitCode).toBe(0);
+    expect(all.stdout).toContain("Submitted plans:");
+    expect(all.stdout).toContain(firstPlan.id);
+    expect(all.stdout).toContain(secondPlan.id);
+  });
+
   it("keeps CLI goals isolated by explicit session id", async () => {
     temp = makeTempRoot();
     const firstId = "11111111-1111-4111-8111-111111111111";
