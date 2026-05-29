@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +34,7 @@ try {
   seedBusinessMemory();
   const evalOutput = runMemoryEval("memory recall eval");
   assertRestartRecall();
+  await assertNaturalLanguageCorrectionLifecycle();
   assertDreamReviewLifecycle();
   assertMaintenanceLifecycle();
   writeLifecycleEvidence();
@@ -225,6 +227,64 @@ function assertRestartRecall() {
     "restart recall missed identity body"
   );
   recordAssertion("restart recall found durable user identity");
+}
+
+async function assertNaturalLanguageCorrectionLifecycle() {
+  const stale = seedTypedGraphNode({
+    type: "preference",
+    title: "Natural language stale verification preference",
+    summary: "The user prefers full terminal logs after verification.",
+    body: "The user prefers full terminal logs after verification.",
+    weight: 0.95
+  });
+  const provider = await startMemoryDecisionProvider({
+    stalePhrase: "full terminal logs",
+    replacement: "The user prefers concise verification summaries with key outcomes only."
+  });
+  try {
+    writeFileSync(path.join(configDir, "config.yaml"), renderMemoryDecisionConfig(provider.port));
+    const output = await runCliAsync(
+      [
+        "--model",
+        "main",
+        "-p",
+        "这个记忆不对，我不是喜欢 full terminal logs，我应该是偏好 concise verification summaries"
+      ],
+      "natural language memory correction"
+    );
+    assert(output.includes("记忆已纠正"), "natural correction provider did not finish");
+    const corrected = nodeById(stale.id);
+    assert(corrected.status === "disputed", "natural correction did not dispute stale node");
+    const replacement = nodeByTitle("Natural language corrected verification preference");
+    assert(
+      replacement.status === "active",
+      "natural correction replacement node was not active"
+    );
+    const search = runCli(
+      ["memory", "search", "full terminal logs verification"],
+      "natural correction search"
+    );
+    assert(
+      search.includes("concise verification summaries"),
+      "natural correction replacement was not recalled"
+    );
+    assert(
+      !search.includes("prefers full terminal logs"),
+      "natural correction still recalled stale memory"
+    );
+    const audit = JSON.stringify(readSessionAuditEvents(20));
+    assert(audit.includes("agent.memory.corrected"), "natural correction audit event missing");
+    assert(
+      provider.calls.some((call) => call.model === "mock-fast" && call.transcript.includes("action")),
+      "memory decision model was not called for natural correction"
+    );
+    recordAssertion("natural-language correction disputed stale memory");
+    recordAssertion("natural-language correction recalled replacement only");
+    recordAssertion("natural-language correction persisted agent audit");
+  } finally {
+    await provider.close();
+    removeConfigFile();
+  }
 }
 
 function assertDreamReviewLifecycle() {
@@ -589,6 +649,33 @@ function makeNodesStale(ids, timestamp) {
   }
 }
 
+function renderMemoryDecisionConfig(port) {
+  return [
+    "defaultProvider: openai",
+    "defaultModel: main",
+    "providers:",
+    "  openai:",
+    "    type: openai",
+    "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+    `    baseUrl: http://127.0.0.1:${port}/v1`,
+    "models:",
+    "  aliases:",
+    "    main: openai:mock-main",
+    "    fast: openai:mock-fast",
+    "  fallbacks: {}",
+    "memory:",
+    "  enabled: true",
+    "  autoWrite: explicit",
+    "  maxResults: 5",
+    "  selectionModel: fast",
+    "  scopes:",
+    "    - user",
+    "    - project",
+    "    - session",
+    ""
+  ].join("\n");
+}
+
 function runCli(args, label) {
   if (!existsSync(cliPath)) {
     throw new Error("dist/cli.js does not exist. Run npm run build first.");
@@ -611,10 +698,123 @@ function runCli(args, label) {
   return result.stdout;
 }
 
+function runCliAsync(args, label) {
+  if (!existsSync(cliPath)) {
+    throw new Error("dist/cli.js does not exist. Run npm run build first.");
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliPath, "--no-color", ...args], {
+      cwd: workDir,
+      env: {
+        ...process.env,
+        MAGI_CONFIG_DIR: configDir,
+        MAGI_OPENAI_API_KEY: "test-key",
+        NO_COLOR: "1"
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 2_000).unref?.();
+    }, 30_000);
+    timeout.unref?.();
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        resolve(stdout);
+        return;
+      }
+      reject(
+        new Error(
+          `${label} failed with exit ${code ?? signal}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
+        )
+      );
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+  });
+}
+
+function startMemoryDecisionProvider(input) {
+  const calls = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const body = JSON.parse(raw);
+      const transcript = (body.messages ?? [])
+        .map((message) =>
+          Array.isArray(message.content)
+            ? message.content.map((part) => part.text ?? "").join("\n")
+            : String(message.content ?? "")
+        )
+        .join("\n");
+      calls.push({ model: body.model, transcript });
+      response.writeHead(200, { "content-type": "application/json" });
+      if (body.model === "mock-fast") {
+        response.end(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    action: "correct",
+                    target: input.stalePhrase,
+                    reason: "User corrected the remembered verification output preference.",
+                    replacement: input.replacement,
+                    replacementTitle: "Natural language corrected verification preference",
+                    replacementSummary: "Natural language corrected verification preference.",
+                    replacementType: "preference",
+                    confidence: 0.93
+                  })
+                }
+              }
+            ],
+            usage: { prompt_tokens: 12, completion_tokens: 9 }
+          })
+        );
+        return;
+      }
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "记忆已纠正" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      assert(address && typeof address === "object", "memory decision provider did not bind");
+      resolve({
+        port: address.port,
+        calls,
+        close: () => new Promise((closeResolve) => server.close(closeResolve))
+      });
+    });
+  });
+}
+
 function draftId(output) {
   const match = /Created Memory Draft:\s+([a-z0-9_]+)/i.exec(output);
   assert(match, `could not parse memory draft id from output:\n${output}`);
   return match[1];
+}
+
+function removeConfigFile() {
+  rmSync(path.join(configDir, "config.yaml"), { force: true });
 }
 
 function dreamId(output) {
@@ -652,6 +852,17 @@ function nodeById(id) {
       .get(id);
     assert(row, `memory node not found by id: ${id}`);
     return row;
+  } finally {
+    db.close();
+  }
+}
+
+function readSessionAuditEvents(limit) {
+  const db = openDb();
+  try {
+    return db
+      .prepare("select action, target, metadata_json from audit_events order by id desc limit ?")
+      .all(limit);
   } finally {
     db.close();
   }

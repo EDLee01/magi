@@ -29,6 +29,7 @@ describe("memory-write-decision", () => {
 
     expect(adapter.complete).toHaveBeenCalledOnce();
     expect(decision).toMatchObject({
+      action: "write",
       method: "llm",
       scope: "user",
       type: "user_profile",
@@ -37,6 +38,47 @@ describe("memory-write-decision", () => {
       providerName: "test-provider",
       model: "test-model",
       usage: { inputTokens: 20, outputTokens: 12 }
+    });
+  });
+
+  it("uses an LLM decision for natural-language memory corrections", async () => {
+    const adapter = {
+      name: "memory-judge",
+      complete: vi.fn().mockResolvedValue({
+        text: JSON.stringify({
+          action: "correct",
+          target: "verbose terminal dumps",
+          reason: "User says the remembered verification preference is wrong.",
+          replacement: "The user prefers concise verification summaries.",
+          replacementType: "preference",
+          confidence: 0.91
+        }),
+        usage: { inputTokens: 25, outputTokens: 16 }
+      })
+    };
+
+    const decision = await decideMemoryWrite({
+      prompt:
+        "这个记忆不对，我不是喜欢 verbose terminal dumps，我应该是偏好 concise verification summaries",
+      route: {
+        adapter,
+        providerName: "test-provider",
+        model: "test-model"
+      }
+    });
+
+    expect(adapter.complete).toHaveBeenCalledOnce();
+    expect(decision).toMatchObject({
+      action: "correct",
+      method: "llm",
+      target: "verbose terminal dumps",
+      reason: "User says the remembered verification preference is wrong.",
+      replacement: "The user prefers concise verification summaries.",
+      replacementType: "preference",
+      confidence: 0.91,
+      providerName: "test-provider",
+      model: "test-model",
+      usage: { inputTokens: 25, outputTokens: 16 }
     });
   });
 
@@ -67,6 +109,7 @@ describe("memory-write-decision", () => {
     });
 
     expect(decision).toMatchObject({
+      action: "write",
       method: "explicit-parser",
       scope: "project",
       type: "project",

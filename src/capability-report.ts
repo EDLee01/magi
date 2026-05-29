@@ -273,7 +273,12 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const workflowGraphRecallSeen = resultNames.includes("workflow graph recalls second-hop habit");
   const conflictGroupViewSeen = details.conflictGroupViewSeen === true;
   const dreamConflictGroupLifecycleSeen = details.dreamConflictGroupLifecycleSeen === true;
-  const assertions = readStringList(details.assertions).length;
+  const assertionList = readStringList(details.assertions);
+  const naturalLanguageCorrectionSeen =
+    assertionList.includes("natural-language correction disputed stale memory") &&
+    assertionList.includes("natural-language correction recalled replacement only") &&
+    assertionList.includes("natural-language correction persisted agent audit");
+  const assertions = assertionList.length;
   const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
@@ -285,6 +290,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
   if (!dreamConflictGroupLifecycleSeen) failures.push("dreamConflictGroupLifecycleSeen=false");
+  if (!naturalLanguageCorrectionSeen) failures.push("naturalLanguageCorrectionSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -301,7 +307,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       maintenanceRecallSeen,
       workflowGraphRecallSeen,
       conflictGroupViewSeen,
-      dreamConflictGroupLifecycleSeen
+      dreamConflictGroupLifecycleSeen,
+      naturalLanguageCorrectionSeen
     },
     failures
   };

@@ -20,7 +20,11 @@ import { ActiveInteractionRegistry, interactionErrorStatus } from "../interactio
 import { appendMemory, MemoryScope } from "../memory.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "../memory-search.js";
 import { MemoryNode, MemoryNodeStore, MemoryNodeType } from "../memory-node-store.js";
-import { decideMemoryWrite } from "../memory-write-decision.js";
+import {
+  decideMemoryWrite,
+  type MemoryCorrectionDecision,
+  type MemoryWriteDecision
+} from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
@@ -29,6 +33,7 @@ import { checkPlanExecutionGuard } from "../plan-execution-guard.js";
 import { findSkill, listSkills, SkillRecord } from "../skills/loader.js";
 import { formatSessionRecallContext, searchSessions } from "../session-search.js";
 import { maybeProposePostTaskLearningDraft } from "../learning-draft.js";
+import { correctMemory } from "../memory-correction.js";
 
 export interface QueryEngineInput {
   store: SessionStore;
@@ -81,6 +86,10 @@ export interface QueryEngineResult extends AgentQueryResult {
   jobId: string;
   events: AgentQueryEvent[];
 }
+
+type MemoryOptionsWithPaths = NonNullable<QueryEngineInput["memoryOptions"]> & {
+  paths: import("../paths.js").MagiPaths;
+};
 
 export class QueryEngine {
   private readonly input: QueryEngineInput;
@@ -594,14 +603,28 @@ export class QueryEngine {
     if (!memory?.paths || memory.enabled === false || memory.autoWrite === "off") {
       return [];
     }
+    const memoryWithPaths: MemoryOptionsWithPaths = { ...memory, paths: memory.paths };
     const write = await decideMemoryWrite({
       prompt,
-      route: memory.writeDecisionRoute,
+      route: memoryWithPaths.writeDecisionRoute,
       signal: this.input.signal
     });
     if (!write) {
       return [];
     }
+    if (write.action === "correct") {
+      this.applyExplicitMemoryCorrection(write, jobId, memoryWithPaths);
+      return [];
+    }
+    this.writeExplicitMemoryNode(write, jobId, memoryWithPaths);
+    return [];
+  }
+
+  private writeExplicitMemoryNode(
+    write: MemoryWriteDecision,
+    jobId: string,
+    memory: MemoryOptionsWithPaths
+  ): void {
     const nodeStore = MemoryNodeStore.open(memory.paths);
     let node: MemoryNode;
     try {
@@ -662,7 +685,59 @@ export class QueryEngine {
         metadata: { purpose: "memory-write-decision" }
       });
     }
-    return [];
+  }
+
+  private applyExplicitMemoryCorrection(
+    correction: MemoryCorrectionDecision,
+    jobId: string,
+    memory: MemoryOptionsWithPaths
+  ): void {
+    const result = correctMemory({
+      appRoot: memory.paths.root,
+      root: memory.root,
+      paths: memory.paths,
+      sessionId: this.input.sessionId,
+      target: correction.target,
+      reason: correction.reason,
+      replacement: correction.replacement,
+      replacementTitle: correction.replacementTitle,
+      replacementSummary: correction.replacementSummary,
+      replacementType: correction.replacementType,
+      metadata: {
+        decisionMethod: correction.method,
+        confidence: correction.confidence,
+        providerName: correction.providerName,
+        model: correction.model
+      }
+    });
+    this.input.store.recordAudit({
+      sessionId: this.input.sessionId,
+      jobId,
+      action: "agent.memory.corrected",
+      target: result.disputed.id,
+      metadata: {
+        target: correction.target,
+        reason: correction.reason,
+        disputedNodeId: result.disputed.id,
+        replacementNodeId: result.replacement?.id,
+        edgeCount: result.edgeCount,
+        decisionMethod: correction.method,
+        confidence: correction.confidence,
+        providerName: correction.providerName,
+        model: correction.model
+      }
+    });
+    if (correction.usage) {
+      this.input.store.recordUsage({
+        sessionId: this.input.sessionId,
+        provider: correction.providerName ?? "memory-decision",
+        model: correction.model ?? "memory-decision",
+        inputTokens: correction.usage.inputTokens,
+        outputTokens: correction.usage.outputTokens,
+        costUsd: 0,
+        metadata: { purpose: "memory-correction-decision" }
+      });
+    }
   }
 
   private recordHotMemoryInjection(jobId: string, nodes: MemoryNode[]): void {

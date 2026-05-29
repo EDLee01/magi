@@ -2787,6 +2787,114 @@ describe("agent query loop", () => {
     }
   });
 
+  it("corrects existing memory through a natural-language correction decision", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    try {
+      const nodeStore = MemoryNodeStore.open(paths);
+      const stale = nodeStore.upsertNode({
+        type: "preference",
+        title: "Stale verification output preference",
+        summary: "The user prefers verbose terminal dumps after verification.",
+        body: "The user prefers verbose terminal dumps after verification.",
+        source: "explicit",
+        weight: 0.95
+      });
+      nodeStore.close();
+      const sessionId = store.createSession({ title: "memory correction", cwd: workspace });
+      const adapter: ProviderAdapter = {
+        name: "assistant-provider",
+        complete: async () => ({ text: "已更新记忆" })
+      };
+      const memoryJudge: ProviderAdapter = {
+        name: "memory-judge",
+        complete: async () => ({
+          text: JSON.stringify({
+            action: "correct",
+            target: "verbose terminal dumps",
+            reason: "User corrected the remembered verification preference.",
+            replacement: "The user prefers concise verification summaries with key outcomes only.",
+            replacementTitle: "Correct verification output preference",
+            replacementSummary: "Correct verification output preference.",
+            replacementType: "preference",
+            confidence: 0.92
+          }),
+          usage: { inputTokens: 17, outputTokens: 11 }
+        })
+      };
+
+      await new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-memory-natural-correction",
+        cwd: workspace,
+        routes: [{ providerName: "assistant", model: "main", adapter }],
+        memoryOptions: {
+          paths,
+          enabled: true,
+          autoWrite: "explicit",
+          maxResults: 4,
+          scopes: ["user", "project", "session"],
+          writeDecisionRoute: {
+            providerName: "judge",
+            model: "fast",
+            adapter: memoryJudge
+          }
+        }
+      }).submitMessage(
+        "这个记忆不对，我不是喜欢 verbose terminal dumps，我应该是偏好 concise verification summaries"
+      );
+
+      const checkStore = MemoryNodeStore.open(paths);
+      const disputed = checkStore.getNode(stale.id);
+      const hits = checkStore.searchGraph({
+        query: "verbose terminal dumps verification",
+        limit: 5
+      });
+      const replacement = hits.find((hit) =>
+        hit.node.body.includes("concise verification summaries")
+      )?.node;
+      checkStore.close();
+
+      expect(disputed).toMatchObject({
+        status: "disputed",
+        metadata: expect.objectContaining({
+          correction: expect.objectContaining({
+            reason: "User corrected the remembered verification preference.",
+            decisionMethod: "llm",
+            confidence: 0.92
+          })
+        })
+      });
+      expect(replacement).toMatchObject({
+        type: "preference",
+        title: "Correct verification output preference",
+        metadata: expect.objectContaining({
+          correctionFor: stale.id
+        })
+      });
+      expect(hits.map((hit) => hit.node.id)).toContain(replacement!.id);
+      expect(hits.map((hit) => hit.node.id)).not.toContain(stale.id);
+      expect(store.listJobAuditEvents("job-memory-natural-correction", 20)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.memory.corrected",
+          target: stale.id,
+          metadata: expect.objectContaining({
+            disputedNodeId: stale.id,
+            replacementNodeId: replacement!.id,
+            decisionMethod: "llm",
+            providerName: "judge",
+            model: "fast"
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("auto-compacts over-budget context and injects the new summary into the same query", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
