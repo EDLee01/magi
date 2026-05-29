@@ -670,6 +670,7 @@ describe("AGENTS rules and memory", () => {
     syncMemoryGraph({ appRoot: paths.root, paths });
 
     const store = MemoryNodeStore.open(paths);
+    let edgeId = 0;
     try {
       const source = store.getSourceByUri("memory/projects/magi.md");
       expect(source).toBeDefined();
@@ -678,12 +679,12 @@ describe("AGENTS rules and memory", () => {
       const workflow = chunks.find((chunk) => chunk.heading === "Verification workflow");
       expect(project).toBeDefined();
       expect(workflow).toBeDefined();
-      store.addEdge({
+      edgeId = store.addEdge({
         fromNodeId: project!.nodeId,
         toNodeId: workflow!.nodeId,
         relation: "relates_to",
         weight: 0.9
-      });
+      }).id;
     } finally {
       store.close();
     }
@@ -704,6 +705,18 @@ describe("AGENTS rules and memory", () => {
     expect(hits.map((hit) => hit.title)).toEqual(
       expect.arrayContaining(["Graph memory", "Verification workflow"])
     );
+
+    const reinforcedStore = MemoryNodeStore.open(paths);
+    try {
+      const edge = reinforcedStore.getEdge(edgeId);
+      expect(edge?.useCount).toBe(1);
+      expect(edge?.lastUsedAt).toBeDefined();
+      expect(edge?.weight).toBeCloseTo(0.92);
+      const neighborHit = hits.find((hit) => hit.title === "Verification workflow");
+      expect(neighborHit?.viaEdgeIds).toEqual([edgeId]);
+    } finally {
+      reinforcedStore.close();
+    }
   });
 
   it("runs memory recall quality evals from CLI case files", async () => {

@@ -278,6 +278,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("natural-language correction disputed stale memory") &&
     assertionList.includes("natural-language correction recalled replacement only") &&
     assertionList.includes("natural-language correction persisted agent audit");
+  const graphEdgeReinforcementSeen = assertionList.includes(
+    "memory graph recall reinforced traversed edges"
+  );
   const assertions = assertionList.length;
   const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
@@ -291,6 +294,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
   if (!dreamConflictGroupLifecycleSeen) failures.push("dreamConflictGroupLifecycleSeen=false");
   if (!naturalLanguageCorrectionSeen) failures.push("naturalLanguageCorrectionSeen=false");
+  if (!graphEdgeReinforcementSeen) failures.push("graphEdgeReinforcementSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -308,7 +312,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       workflowGraphRecallSeen,
       conflictGroupViewSeen,
       dreamConflictGroupLifecycleSeen,
-      naturalLanguageCorrectionSeen
+      naturalLanguageCorrectionSeen,
+      graphEdgeReinforcementSeen
     },
     failures
   };

@@ -170,6 +170,8 @@ export interface MemoryEdge {
   relation: MemoryEdgeRelation;
   weight: number;
   createdAt: string;
+  lastUsedAt?: string;
+  useCount: number;
   metadata: Record<string, unknown>;
 }
 
@@ -252,6 +254,7 @@ export interface MemoryGraphSearchHit {
   score: number;
   graphDistance?: number;
   viaNodeIds?: string[];
+  viaEdgeIds?: number[];
 }
 
 export function classifyMemoryNodeType(
@@ -1324,6 +1327,27 @@ export class MemoryNodeStore {
     txn(unique);
   }
 
+  markEdgesUsed(ids: number[], boost = 0.03): void {
+    const unique = Array.from(new Set(ids)).filter(
+      (id) => Number.isInteger(id) && Number.isFinite(id) && id > 0
+    );
+    if (unique.length === 0) return;
+    const now = nowIso();
+    const update = this.db.prepare(`
+      update memory_edges
+      set weight = min(1.0, weight + ?),
+          last_used_at = ?,
+          use_count = use_count + 1
+      where id = ?
+    `);
+    const txn = this.db.transaction((edgeIds: number[]) => {
+      for (const id of edgeIds) {
+        update.run(boost, now, id);
+      }
+    });
+    txn(unique);
+  }
+
   decayUnusedNodes(input: DecayUnusedMemoryInput = {}): DecayUnusedMemoryResult {
     const olderThanDays = clampNumber(input.olderThanDays ?? 45, 0, 3650);
     const decay = clampNumber(input.decay ?? 0.08, 0, 1);
@@ -1429,8 +1453,16 @@ export class MemoryNodeStore {
       relation: input.relation,
       weight: input.weight ?? 0.5,
       createdAt: now,
+      useCount: 0,
       metadata: input.metadata ?? {}
     };
+  }
+
+  getEdge(id: number): MemoryEdge | undefined {
+    const row = this.db.prepare("select * from memory_edges where id = ?").get(id) as
+      | DbMemoryEdge
+      | undefined;
+    return row ? toMemoryEdge(row) : undefined;
   }
 
   private fuseDuplicateIntoKeeper(input: {
@@ -1632,6 +1664,8 @@ export class MemoryNodeStore {
       relation: input.relation,
       weight: input.weight,
       createdAt: input.now,
+      lastUsedAt: input.sourceEdge.lastUsedAt,
+      useCount: input.sourceEdge.useCount,
       metadata: {
         ...input.sourceEdge.metadata,
         merge: mergeMetadata
@@ -1776,6 +1810,8 @@ export class MemoryNodeStore {
         relation text not null,
         weight real not null,
         created_at text not null,
+        last_used_at text,
+        use_count integer not null default 0,
         metadata_json text not null default '{}'
       );
 
@@ -1819,6 +1855,8 @@ export class MemoryNodeStore {
       create index if not exists idx_memory_chunks_node
         on memory_chunks(node_id);
     `);
+    this.ensureColumn("memory_edges", "last_used_at", "text");
+    this.ensureColumn("memory_edges", "use_count", "integer not null default 0");
     this.ensureColumn("memory_chunks", "uri", "text");
     this.ensureColumn("memory_chunks", "order_index", "integer not null default 0");
     this.db
@@ -1896,6 +1934,8 @@ interface DbMemoryEdge {
   relation: MemoryEdgeRelation;
   weight: number;
   created_at: string;
+  last_used_at: string | null;
+  use_count: number;
   metadata_json: string;
 }
 
@@ -1985,6 +2025,8 @@ function toMemoryEdge(row: DbMemoryEdge): MemoryEdge {
     relation: row.relation,
     weight: row.weight,
     createdAt: row.created_at,
+    lastUsedAt: row.last_used_at ?? undefined,
+    useCount: row.use_count,
     metadata: decodeJson(row.metadata_json)
   };
 }
@@ -2424,6 +2466,7 @@ function applyGraphEdges(
       direct.add(hit.node.id);
       hit.graphDistance = 0;
       hit.viaNodeIds = [];
+      hit.viaEdgeIds = [];
     }
     scored.set(hit.node.id, { ...hit });
   }
@@ -2550,6 +2593,7 @@ function promoteGraphHit(
   target.score = nextScore;
   target.graphDistance = distance;
   target.viaNodeIds = [...(source.viaNodeIds ?? []), source.node.id];
+  target.viaEdgeIds = [...(source.viaEdgeIds ?? []), edge.id];
   return true;
 }
 

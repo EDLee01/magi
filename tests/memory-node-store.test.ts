@@ -105,6 +105,51 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("tracks and reinforces graph edges used during recall", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const project = store.upsertNode({
+        type: "project",
+        title: "Release rollout project",
+        summary: "Release rollout project.",
+        body: "Release rollout project uses staged deployment gates.",
+        source: "test",
+        weight: 0.9
+      });
+      const workflow = store.upsertNode({
+        type: "workflow",
+        title: "Deployment gate workflow",
+        summary: "Deployment gate workflow.",
+        body: "Run smoke verification before deployment expansion.",
+        source: "test",
+        weight: 0.7
+      });
+      const edge = store.addEdge({
+        fromNodeId: project.id,
+        toNodeId: workflow.id,
+        relation: "depends_on",
+        weight: 0.5
+      });
+
+      const hits = store.searchGraph({ query: "staged deployment gates", limit: 4 });
+      const workflowHit = hits.find((hit) => hit.node.id === workflow.id);
+      expect(workflowHit).toMatchObject({
+        graphDistance: 1,
+        viaNodeIds: [project.id],
+        viaEdgeIds: [edge.id]
+      });
+
+      store.markEdgesUsed(workflowHit!.viaEdgeIds!, 0.04);
+      const updated = store.getEdge(edge.id);
+      expect(updated?.useCount).toBe(1);
+      expect(updated?.lastUsedAt).toBeDefined();
+      expect(updated?.weight).toBeCloseTo(0.54);
+    } finally {
+      store.close();
+    }
+  });
+
   it("decays active memory nodes that have not been used recently", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

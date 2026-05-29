@@ -33,6 +33,7 @@ try {
   runCli(["memory", "init"], "memory init");
   seedBusinessMemory();
   const evalOutput = runMemoryEval("memory recall eval");
+  assertGraphEdgeReinforcement();
   assertRestartRecall();
   await assertNaturalLanguageCorrectionLifecycle();
   assertDreamReviewLifecycle();
@@ -227,6 +228,28 @@ function assertRestartRecall() {
     "restart recall missed identity body"
   );
   recordAssertion("restart recall found durable user identity");
+}
+
+function assertGraphEdgeReinforcement() {
+  const db = openDb();
+  try {
+    const row = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_edges
+        where use_count > 0 and last_used_at is not null
+      `
+      )
+      .get();
+    assert(
+      row && row.count > 0,
+      "memory graph recall should reinforce traversed edges with usage metadata"
+    );
+  } finally {
+    db.close();
+  }
+  recordAssertion("memory graph recall reinforced traversed edges");
 }
 
 async function assertNaturalLanguageCorrectionLifecycle() {

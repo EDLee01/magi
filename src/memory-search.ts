@@ -20,6 +20,7 @@ export interface MemorySearchHit {
   sourceKind?: string;
   graphDistance?: number;
   viaNodeIds?: string[];
+  viaEdgeIds?: number[];
 }
 
 export function retrieveRelevantMemory(
@@ -172,6 +173,10 @@ function retrieveGraphMemory(
         hits.map((hit) => hit.node.id),
         0.03
       );
+      store.markEdgesUsed(
+        hits.flatMap((hit) => hit.viaEdgeIds ?? []),
+        0.02
+      );
       return hits.map((hit) => graphHitToMemorySearchHit(hit, terms));
     } finally {
       store.close();
@@ -193,7 +198,8 @@ function graphHitToMemorySearchHit(hit: MemoryGraphSearchHit, terms: string[]): 
     chunkId: hit.chunk.id,
     sourceKind: hit.source.kind,
     graphDistance: hit.graphDistance,
-    viaNodeIds: hit.viaNodeIds
+    viaNodeIds: hit.viaNodeIds,
+    viaEdgeIds: hit.viaEdgeIds
   };
 }
 

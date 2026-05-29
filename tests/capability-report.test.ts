@@ -129,6 +129,7 @@ describe("capability report", () => {
         conflictGroupViewSeen: false,
         dreamConflictGroupLifecycleSeen: false,
         naturalLanguageCorrectionSeen: false,
+        graphEdgeReinforcementSeen: false,
         assertions: 4,
         filesVerified: 1
       }),
@@ -157,6 +158,7 @@ describe("capability report", () => {
     expect(output).toContain("conflictGroupViewSeen=false");
     expect(output).toContain("dreamConflictGroupLifecycleSeen=false");
     expect(output).toContain("naturalLanguageCorrectionSeen=false");
+    expect(output).toContain("graphEdgeReinforcementSeen=false");
   });
 
   it("fails model task alignment when task coverage or scorer evidence is too thin", () => {
@@ -556,6 +558,7 @@ function memoryReport(input: {
   conflictGroupViewSeen?: boolean;
   dreamConflictGroupLifecycleSeen?: boolean;
   naturalLanguageCorrectionSeen?: boolean;
+  graphEdgeReinforcementSeen?: boolean;
   assertions?: number;
   filesVerified?: number;
 }): Record<string, unknown> {
@@ -587,6 +590,9 @@ function memoryReport(input: {
               "natural-language correction recalled replacement only",
               "natural-language correction persisted agent audit"
             ]),
+        ...(input.graphEdgeReinforcementSeen === false
+          ? []
+          : ["memory graph recall reinforced traversed edges"]),
         ...Array.from(
           { length: input.assertions ?? 16 },
           (_, index) => `memory assertion ${index + 1}`
