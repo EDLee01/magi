@@ -198,21 +198,33 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const continuousPatchBashCalls = readNumber(continuousPatchRecoveryToolCounts.Bash);
   const continuousPatchFileWriteCalls = readNumber(continuousPatchRecoveryToolCounts.FileWrite);
   const continuousPatchFileEditCalls = readNumber(continuousPatchRecoveryToolCounts.FileEdit);
+  const apiMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "api_migration"
+  );
+  const apiMigrationDetails = readRecord(apiMigration ? readRecord(apiMigration).details : {});
+  const apiMigrationToolCounts = readRecord(apiMigrationDetails.toolCounts);
+  const apiMigrationTaskSeen = taskClasses.has("api_migration");
+  const apiMigrationBashCalls = readNumber(apiMigrationToolCounts.Bash);
+  const apiMigrationToolSearchCalls = readNumber(apiMigrationToolCounts.ToolSearch);
+  const apiMigrationFileMoveCalls = readNumber(apiMigrationToolCounts.FileMove);
+  const apiMigrationFilePatchCalls = readNumber(apiMigrationToolCounts.FilePatch);
+  const apiMigrationFileWriteCalls = readNumber(apiMigrationToolCounts.FileWrite);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 8) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 8) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 9) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 9) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
   if (!continuousPatchRecoveryTaskSeen) failures.push("continuousPatchRecoveryTask=false");
-  if (assertions < 42) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 16) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 40) failures.push(`toolCallCount=${toolCallCount}`);
-  if (uniqueToolCount < 5) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (!apiMigrationTaskSeen) failures.push("apiMigrationTask=false");
+  if (assertions < 52) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 20) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 50) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
   if (patchStrategyFileWriteCalls !== 0) failures.push("patchStrategyFileWrite used");
@@ -231,6 +243,17 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   }
   if (continuousPatchRecoveryDetails.unrelatedFileUnchanged !== true) {
     failures.push("unrelatedFileUnchanged=false");
+  }
+  if (apiMigrationBashCalls !== 2) failures.push("apiMigrationBashCalls != 2");
+  if (apiMigrationToolSearchCalls !== 1) failures.push("apiMigrationToolSearchCalls != 1");
+  if (apiMigrationFileMoveCalls !== 1) failures.push("apiMigrationFileMoveCalls != 1");
+  if (apiMigrationFilePatchCalls < 3) failures.push("apiMigrationFilePatchCalls < 3");
+  if (apiMigrationFileWriteCalls !== 0) failures.push("apiMigrationFileWrite used");
+  if (apiMigrationDetails.fileMoveRevealed !== true) failures.push("fileMoveRevealed=false");
+  if (apiMigrationDetails.movedFileVerified !== true) failures.push("movedFileVerified=false");
+  if (apiMigrationDetails.oldPathRemoved !== true) failures.push("oldPathRemoved=false");
+  if (apiMigrationDetails.batchApiMigrationVerified !== true) {
+    failures.push("batchApiMigrationVerified=false");
   }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
@@ -266,6 +289,16 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
         continuousPatchRecoveryDetails.reReadAfterRepeatedPatchFailures === true,
       finalDiffQualityVerified: continuousPatchRecoveryDetails.finalDiffQualityVerified === true,
       unrelatedFileUnchanged: continuousPatchRecoveryDetails.unrelatedFileUnchanged === true,
+      apiMigrationTaskSeen,
+      apiMigrationBashCalls,
+      apiMigrationToolSearchCalls,
+      apiMigrationFileMoveCalls,
+      apiMigrationFilePatchCalls,
+      apiMigrationFileWriteCalls,
+      fileMoveRevealed: apiMigrationDetails.fileMoveRevealed === true,
+      movedFileVerified: apiMigrationDetails.movedFileVerified === true,
+      oldPathRemoved: apiMigrationDetails.oldPathRemoved === true,
+      batchApiMigrationVerified: apiMigrationDetails.batchApiMigrationVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

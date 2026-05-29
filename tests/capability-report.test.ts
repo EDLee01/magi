@@ -218,6 +218,7 @@ describe("capability report", () => {
         "testDrivenRecoveryTask=false",
         "dependencyRefactorTask=false",
         "continuousPatchRecoveryTask=false",
+        "apiMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -228,6 +229,14 @@ describe("capability report", () => {
         "reReadAfterRepeatedPatchFailures=false",
         "finalDiffQualityVerified=false",
         "unrelatedFileUnchanged=false",
+        "apiMigrationBashCalls != 2",
+        "apiMigrationToolSearchCalls != 1",
+        "apiMigrationFileMoveCalls != 1",
+        "apiMigrationFilePatchCalls < 3",
+        "fileMoveRevealed=false",
+        "movedFileVerified=false",
+        "oldPathRemoved=false",
+        "batchApiMigrationVerified=false",
         "regressions=1"
       ])
     );
@@ -541,6 +550,17 @@ function modelTaskReport(
       finalDiffQualityVerified: boolean;
       unrelatedFileUnchanged: boolean;
     };
+    apiMigration: {
+      bashCalls: number;
+      toolSearchCalls: number;
+      fileMoveCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileMoveRevealed: boolean;
+      movedFileVerified: boolean;
+      oldPathRemoved: boolean;
+      batchApiMigrationVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -552,7 +572,8 @@ function modelTaskReport(
     "patch_strategy",
     "dependency_refactor",
     "test_driven_recovery",
-    "continuous_patch_recovery"
+    "continuous_patch_recovery",
+    "api_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -571,15 +592,26 @@ function modelTaskReport(
     finalDiffQualityVerified: true,
     unrelatedFileUnchanged: true
   };
+  const apiMigration = overrides.apiMigration ?? {
+    bashCalls: 2,
+    toolSearchCalls: 1,
+    fileMoveCalls: 1,
+    filePatchCalls: 3,
+    fileWriteCalls: 0,
+    fileMoveRevealed: true,
+    movedFileVerified: true,
+    oldPathRemoved: true,
+    batchApiMigrationVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 42,
-    filesVerified: overrides.filesVerified ?? 16,
-    toolCallCount: overrides.toolCallCount ?? 40,
-    uniqueToolCount: overrides.uniqueToolCount ?? 6,
+    assertions: overrides.assertions ?? 52,
+    filesVerified: overrides.filesVerified ?? 20,
+    toolCallCount: overrides.toolCallCount ?? 50,
+    uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
   return {
@@ -617,6 +649,21 @@ function modelTaskReport(
                 continuousPatchRecovery.reReadAfterRepeatedPatchFailures,
               finalDiffQualityVerified: continuousPatchRecovery.finalDiffQualityVerified,
               unrelatedFileUnchanged: continuousPatchRecovery.unrelatedFileUnchanged
+            }
+          : {}),
+        ...(taskClasses[index] === "api_migration"
+          ? {
+              toolCounts: {
+                Bash: apiMigration.bashCalls,
+                ToolSearch: apiMigration.toolSearchCalls,
+                FileMove: apiMigration.fileMoveCalls,
+                FilePatch: apiMigration.filePatchCalls,
+                FileWrite: apiMigration.fileWriteCalls
+              },
+              fileMoveRevealed: apiMigration.fileMoveRevealed,
+              movedFileVerified: apiMigration.movedFileVerified,
+              oldPathRemoved: apiMigration.oldPathRemoved,
+              batchApiMigrationVerified: apiMigration.batchApiMigrationVerified
             }
           : {})
       }

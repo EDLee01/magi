@@ -1470,6 +1470,244 @@ async function scenarioContinuousPatchRecoveryTask() {
   });
 }
 
+async function scenarioApiMigrationTask() {
+  return await withWorkspace("api-migration", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "src", "billing"), { recursive: true });
+    mkdirSync(path.join(workDir, "src", "orders"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "src", "billing", "client.js"),
+      [
+        "export function charge(amount) {",
+        "  return { status: \"charged\", amount };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "src", "orders", "checkout.js"),
+      [
+        'import { charge } from "../billing/client.js";',
+        "",
+        "export function checkout(order) {",
+        "  const payment = charge(order.total);",
+        "  return { id: order.id, payment };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "tests", "checkout.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync, existsSync } from "node:fs";',
+        'import { checkout } from "../src/orders/checkout.js";',
+        "",
+        'const result = checkout({ id: "ord_1", total: 42 });',
+        "assert.deepEqual(result, {",
+        '  id: "ord_1",',
+        '  payment: { status: "processed", amount: 42, provider: "stripe" }',
+        "});",
+        "",
+        'assert.equal(existsSync("src/billing/client.js"), false);',
+        'assert.equal(existsSync("src/payments/gateway.js"), true);',
+        'assert.match(readFileSync("docs/payments.md", "utf8"), /payments\\/gateway\\.js/);',
+        'console.log("checkout migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "payments.md"),
+      ["# Payments", "", "Use src/billing/client.js and call charge(amount).", ""].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("ToolSearch"), "ToolSearch was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(!toolNames.includes("FileMove"), "FileMove should start deferred");
+          return toolResponse([
+            toolCall("run-checkout-before", "Bash", {
+              command: "node tests/checkout.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("find-move-tool", "ToolSearch", {
+              query: "select:FileMove"
+            }),
+            toolCall("read-billing-client", "FileRead", { file_path: "src/billing/client.js" }),
+            toolCall("read-checkout", "FileRead", { file_path: "src/orders/checkout.js" }),
+            toolCall("read-payments-docs", "FileRead", { file_path: "docs/payments.md" })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing checkout test was not visible");
+          assert(transcript.includes("Tool: FileMove"), "FileMove schema was not revealed");
+          assert(transcript.includes("charge(amount)"), "billing client source was not visible");
+          assert(transcript.includes("../billing/client.js"), "checkout import was not visible");
+          assert(transcript.includes("Use src/billing/client.js"), "payments docs were not visible");
+          return toolResponse([
+            toolCall("move-billing-client", "FileMove", {
+              source: "src/billing/client.js",
+              destination: "src/payments/gateway.js"
+            }),
+            toolCall("patch-payment-gateway", "FilePatch", {
+              file_path: "src/payments/gateway.js",
+              patch: [
+                "@@",
+                "-export function charge(amount) {",
+                "-  return { status: \"charged\", amount };",
+                "+export function processPayment(amount) {",
+                '+  return { status: "processed", amount, provider: "stripe" };',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-checkout-import", "FilePatch", {
+              file_path: "src/orders/checkout.js",
+              patch: [
+                "@@",
+                '-import { charge } from "../billing/client.js";',
+                '+import { processPayment } from "../payments/gateway.js";',
+                " ",
+                " export function checkout(order) {",
+                "-  const payment = charge(order.total);",
+                "+  const payment = processPayment(order.total);",
+                "   return { id: order.id, payment };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-payments-docs", "FilePatch", {
+              file_path: "docs/payments.md",
+              patch: [
+                "@@",
+                " # Payments",
+                " ",
+                "-Use src/billing/client.js and call charge(amount).",
+                "+Use src/payments/gateway.js and call processPayment(amount).",
+                "+The gateway returns the provider used for the transaction."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Moved src/billing/client.js"),
+            "FileMove result was not visible"
+          );
+          assert(
+            transcript.includes("Patched src/payments/gateway.js"),
+            "gateway patch result was not visible"
+          );
+          assert(
+            transcript.includes("Patched src/orders/checkout.js"),
+            "checkout patch result was not visible"
+          );
+          assert(
+            transcript.includes("Patched docs/payments.md"),
+            "docs patch result was not visible"
+          );
+          return toolResponse([
+            toolCall("run-checkout-after", "Bash", {
+              command: "node tests/checkout.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("checkout migration ok"),
+          "passing checkout migration test was not visible"
+        );
+        return messageText("Payment API migration completed with file move, patches, and tests.");
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Migrate the payment API from src/billing/client.js to src/payments/gateway.js.",
+            "Run the focused checkout test first, use ToolSearch to reveal the file move tool,",
+            "move the file, update source imports/API names and docs, then rerun the focused checkout test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "api migration task"
+      });
+      assert(output.includes("session.completed"), "api migration task did not complete");
+      const gateway = readFileSync(path.join(workDir, "src", "payments", "gateway.js"), "utf8");
+      const checkout = readFileSync(path.join(workDir, "src", "orders", "checkout.js"), "utf8");
+      const docs = readFileSync(path.join(workDir, "docs", "payments.md"), "utf8");
+      assert(!existsSync(path.join(workDir, "src", "billing", "client.js")), "old billing client still exists");
+      assert(gateway.includes("processPayment"), "gateway API rename missing");
+      assert(gateway.includes('provider: "stripe"'), "gateway provider metadata missing");
+      assert(checkout.includes("../payments/gateway.js"), "checkout import not migrated");
+      assert(checkout.includes("processPayment(order.total)"), "checkout call not migrated");
+      assert(docs.includes("src/payments/gateway.js"), "docs path not migrated");
+      assert(docs.includes("processPayment(amount)"), "docs API name not migrated");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "api migration should run focused test before and after");
+      assert(toolCounts.ToolSearch === 1, "api migration should reveal FileMove through ToolSearch");
+      assert(toolCounts.FileMove === 1, "api migration should move exactly one file");
+      assert(toolCounts.FilePatch === 3, "api migration should patch gateway, checkout, and docs");
+      assert(!toolCounts.FileWrite, "api migration should not rewrite existing files");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing checkout test ran first",
+          "FileMove revealed through ToolSearch",
+          "billing client moved to payments gateway",
+          "gateway API renamed with FilePatch",
+          "checkout import and call migrated with FilePatch",
+          "payments docs migrated with FilePatch",
+          "focused passing checkout test ran after migration",
+          "old billing client path removed",
+          "FileWrite avoided for existing files",
+          "final response completed"
+        ],
+        filesVerified: [
+          "src/payments/gateway.js",
+          "src/orders/checkout.js",
+          "tests/checkout.test.mjs",
+          "docs/payments.md"
+        ],
+        provider: summary,
+        taskClass: "api_migration",
+        toolCounts,
+        fileMoveRevealed: true,
+        movedFileVerified: true,
+        oldPathRemoved: true,
+        batchApiMigrationVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -1522,7 +1760,8 @@ async function main() {
     ["patch strategy task", scenarioPatchStrategyTask],
     ["dependency refactor task", scenarioDependencyRefactorTask],
     ["test-driven recovery task", scenarioTestDrivenRecoveryTask],
-    ["continuous patch recovery task", scenarioContinuousPatchRecoveryTask]
+    ["continuous patch recovery task", scenarioContinuousPatchRecoveryTask],
+    ["api migration task", scenarioApiMigrationTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {
