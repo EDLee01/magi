@@ -33,9 +33,13 @@ const planText = [
 const revisionPlanText = ["1. Edit immediately", "2. Verify later"].join("\n");
 const approvedPlanText = [
   "1. Inspect the plan feedback",
-  "2. Revise the implementation order",
-  "3. Proceed only after approval"
+  "2. Read inherited-plan-source.txt before editing",
+  "3. Write inherited-plan-output.txt only after reading"
 ].join("\n");
+const inheritedPlanSourcePath = "inherited-plan-source.txt";
+const inheritedPlanOutputPath = "inherited-plan-output.txt";
+const inheritedPlanSourceContent = "source inspected before inherited plan write\n";
+const inheritedPlanOutputContent = "inherited plan executed after read\n";
 
 let harnessReport;
 
@@ -53,6 +57,8 @@ try {
     writeDeniedInPlanMode: false,
     planSubmittedToModel: false,
     inheritedPlanContextSeen: false,
+    inheritedPlanReadBeforeWrite: false,
+    inheritedPlanExecutionCompleted: false,
     blockedGoalPersisted: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
@@ -62,6 +68,7 @@ try {
       renderConfig({ port: provider.port }),
       "utf8"
     );
+    writeFileSync(path.join(workDir, inheritedPlanSourcePath), inheritedPlanSourceContent, "utf8");
 
     await runCli(
       ["--session-id", sessionId, "--model", "main", "-p", "Prepare Goal/Plan eval session."],
@@ -256,12 +263,34 @@ try {
       inheritedPlanContext.includes("Inherited plan context is present"),
       "inherited plan context prompt failed"
     );
+    const inheritedPlanExecution = await runCli(
+      [
+        "--session-id",
+        sessionId,
+        "--permission-mode",
+        "acceptEdits",
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "Execute inherited plan using the persisted order."
+      ],
+      "inherited plan execution"
+    );
+    assert(
+      inheritedPlanExecution.includes("Inherited plan execution complete"),
+      "inherited plan execution final answer missing"
+    );
+    const inheritedPlanExecutionFollowed = assertInheritedPlanExecutionFollowed();
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
     assert(state.writeDeniedInPlanMode, "provider did not observe plan-mode write denial");
     assert(state.planSubmittedToModel, "provider did not observe submitted plan feedback");
     assert(state.inheritedPlanContextSeen, "provider did not see inherited plan context");
+    assert(state.inheritedPlanReadBeforeWrite, "provider did not read before writing");
+    assert(state.inheritedPlanExecutionCompleted, "provider did not complete inherited plan");
 
     const report = harnessReport.buildHarnessReport({
       name: "goal-plan-eval",
@@ -289,6 +318,7 @@ try {
             planRevisionChainLinked,
             planRevisionChainViewListed,
             inheritedPlanContextSeen: state.inheritedPlanContextSeen,
+            inheritedPlanExecutionFollowed,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -310,6 +340,7 @@ try {
 
 function createRouter(state) {
   let planTurns = 0;
+  let inheritedPlanExecutionTurns = 0;
   return ({ latestUser, systemPrompt, transcript, toolNames }) => {
     if (latestUser.includes("Prepare Goal/Plan eval session")) {
       return messageText("Goal/Plan eval session ready.");
@@ -387,6 +418,45 @@ function createRouter(state) {
       );
       state.inheritedPlanContextSeen = true;
       return messageText("Inherited plan context is present.");
+    }
+
+    if (latestUser.includes("Execute inherited plan using the persisted order")) {
+      inheritedPlanExecutionTurns += 1;
+      assert(systemPrompt.includes("<session_plan_context>"), "execution missed plan context");
+      assert(
+        systemPrompt.includes("Read inherited-plan-source.txt before editing"),
+        "execution missed read-before-write plan step"
+      );
+      assert(toolNames.includes("FileRead"), "FileRead was not available for inherited plan");
+      assert(toolNames.includes("FileWrite"), "FileWrite was not available for inherited plan");
+      if (inheritedPlanExecutionTurns === 1) {
+        return toolResponse([
+          toolCall("inherited-plan-read", "FileRead", { file_path: inheritedPlanSourcePath })
+        ]);
+      }
+      if (inheritedPlanExecutionTurns === 2) {
+        assert(
+          transcript.includes(inheritedPlanSourceContent.trim()),
+          "inherited plan source read result was not visible"
+        );
+        assert(
+          !transcript.includes(`Wrote ${inheritedPlanOutputPath}`),
+          "inherited plan wrote before read result"
+        );
+        state.inheritedPlanReadBeforeWrite = true;
+        return toolResponse([
+          toolCall("inherited-plan-write", "FileWrite", {
+            file_path: inheritedPlanOutputPath,
+            content: inheritedPlanOutputContent
+          })
+        ]);
+      }
+      assert(
+        transcript.includes(`Wrote ${inheritedPlanOutputPath}`),
+        "inherited plan write result was not visible"
+      );
+      state.inheritedPlanExecutionCompleted = true;
+      return messageText("Inherited plan execution complete.");
     }
 
     return messageText("OK");
@@ -612,6 +682,14 @@ function assertPlanRevisionChainLinked(revisionPlanId, approvedPlanId) {
   );
   assert(approved.revisesPlanId === revisionPlanId, "approved plan did not revise prior plan");
   assert(approved.rootPlanId === revisionPlanId, "approved plan missed root plan id");
+  return true;
+}
+
+function assertInheritedPlanExecutionFollowed() {
+  const outputPath = path.join(workDir, inheritedPlanOutputPath);
+  assert(existsSync(outputPath), "inherited plan execution did not create output file");
+  const output = readFileSync(outputPath, "utf8");
+  assert(output === inheritedPlanOutputContent, "inherited plan output content was wrong");
   return true;
 }
 

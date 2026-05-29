@@ -248,7 +248,7 @@
           <tr>
             <td>Goal / Plan Harness</td>
             <td>计划、todo、完成审计、阻塞审计由外层状态机维护。</td>
-            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划、跨 session 历史计划、单条 plan 详情和修订链聚合视图；修订和批准后的计划会保存 revises / revised-by / root plan 链路，并在恢复同 session 时把最新计划作为 session plan context 注入模型。独立 goal/plan eval 已覆盖 active goal 注入、completed/blocked 后不注入、plan mode 写入拒绝、plan review 持久化、跨 session plan review 检索、用户要求修订后的 needs_revision 状态、修订计划审批通过后的 approved 状态、修订链路持久化、修订链 CLI 检索、历史计划上下文继承、blocked audit 和 goal completion。</td>
+            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划、跨 session 历史计划、单条 plan 详情和修订链聚合视图；修订和批准后的计划会保存 revises / revised-by / root plan 链路，并在恢复同 session 时把最新计划作为 session plan context 注入模型。独立 goal/plan eval 已覆盖 active goal 注入、completed/blocked 后不注入、plan mode 写入拒绝、plan review 持久化、跨 session plan review 检索、用户要求修订后的 needs_revision 状态、修订计划审批通过后的 approved 状态、修订链路持久化、修订链 CLI 检索、历史计划上下文继承、继承计划驱动的 read-before-write 执行一致性、blocked audit 和 goal completion。</td>
             <td><code>tests/plan-state.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>tests/cli.test.ts</code>、<code>scripts/goal-plan-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
@@ -281,7 +281,7 @@
         <h3>v0.1.0-alpha.4</h3>
         <ul>
           <li>让 agent 编辑策略优先使用 FilePatch，并把 patch 失败恢复、真实模型评测做进业务级门禁。</li>
-          <li>继续扩展 goal/plan benchmark，覆盖多轮用户反馈、计划继承后的执行一致性，以及跨 session 计划迁移策略。</li>
+          <li>继续扩展 goal/plan benchmark，覆盖多轮用户反馈、跨 session 计划迁移策略，以及继承计划偏离时的纠偏反馈。</li>
           <li>继续扩展 capability report，把更多真实模型业务级 benchmark 纳入以后每次能力对齐的主门禁。</li>
         </ul>
       </div>
