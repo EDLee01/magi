@@ -155,6 +155,34 @@ export interface KeepMemoryNodesInput {
   metadata?: Record<string, unknown>;
 }
 
+export type MemoryFeedbackSignal = "useful" | "irrelevant" | "wrong" | "stale";
+
+export interface ApplyMemoryFeedbackInput {
+  nodeId: string;
+  signal: MemoryFeedbackSignal;
+  reason?: string;
+  replacement?: {
+    type?: MemoryNodeType;
+    title?: string;
+    summary?: string;
+    body: string;
+    weight?: number;
+    source?: string;
+    sourceSessionId?: string;
+    metadata?: Record<string, unknown>;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export interface ApplyMemoryFeedbackResult {
+  node: MemoryNode;
+  previousWeight: number;
+  nextWeight: number;
+  signal: MemoryFeedbackSignal;
+  replacement?: MemoryNode;
+  edges: MemoryEdge[];
+}
+
 export interface DecayUnusedMemoryResult {
   applied: boolean;
   olderThanDays: number;
@@ -1268,6 +1296,86 @@ export class MemoryNodeStore {
       return changed;
     })(ids);
     return kept;
+  }
+
+  applyFeedback(input: ApplyMemoryFeedbackInput): ApplyMemoryFeedbackResult {
+    const node = this.getNode(input.nodeId);
+    if (!node) {
+      throw new Error(`Memory node not found: ${input.nodeId}`);
+    }
+    if (node.status === "archived") {
+      throw new Error(`Cannot apply feedback to archived Memory node: ${input.nodeId}`);
+    }
+    const now = nowIso();
+    const reason = normalizeWhitespace(input.reason ?? "");
+    const previousWeight = node.weight;
+    if (input.signal === "wrong" || input.signal === "stale") {
+      const result = this.correctNode({
+        nodeId: node.id,
+        reason: reason || `User feedback marked Memory as ${input.signal}`,
+        replacement: input.replacement
+          ? {
+              ...input.replacement,
+              source: input.replacement.source ?? "explicit",
+              weight: input.replacement.weight ?? Math.max(0.75, previousWeight)
+            }
+          : undefined,
+        metadata: {
+          feedback: input.signal,
+          feedbackAt: now,
+          ...(input.metadata ?? {})
+        }
+      });
+      return {
+        node: result.disputed,
+        previousWeight,
+        nextWeight: result.disputed.weight,
+        signal: input.signal,
+        replacement: result.replacement,
+        edges: result.edges
+      };
+    }
+
+    const delta = input.signal === "useful" ? 0.08 : -0.18;
+    const nextWeight = Number(clampNumber(previousWeight + delta, 0, 1).toFixed(6));
+    const existingTrend = readRecord(node.metadata.feedbackTrend);
+    const useful = readNumber(existingTrend?.useful) ?? 0;
+    const irrelevant = readNumber(existingTrend?.irrelevant) ?? 0;
+    const update = this.db.prepare(`
+      update memory_nodes
+      set weight = ?,
+          use_count = use_count + ?,
+          last_used_at = ?,
+          updated_at = ?,
+          metadata_json = ?
+      where id = ? and status = 'active'
+    `);
+    update.run(
+      nextWeight,
+      input.signal === "useful" ? 1 : 0,
+      input.signal === "useful" ? now : (node.lastUsedAt ?? null),
+      now,
+      encodeJson({
+        ...node.metadata,
+        feedbackTrend: {
+          ...(existingTrend ?? {}),
+          useful: useful + (input.signal === "useful" ? 1 : 0),
+          irrelevant: irrelevant + (input.signal === "irrelevant" ? 1 : 0),
+          lastSignal: input.signal,
+          lastReason: reason || undefined,
+          lastFeedbackAt: now,
+          ...(input.metadata ?? {})
+        }
+      }),
+      node.id
+    );
+    return {
+      node: this.getNode(node.id)!,
+      previousWeight,
+      nextWeight,
+      signal: input.signal,
+      edges: []
+    };
   }
 
   getNode(id: string): MemoryNode | undefined {

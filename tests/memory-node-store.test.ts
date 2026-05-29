@@ -150,6 +150,52 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("applies explicit feedback signals to memory weight and trend metadata", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const node = store.upsertNode({
+        type: "preference",
+        title: "Verification output",
+        summary: "Verification output.",
+        body: "User prefers concise verification summaries.",
+        source: "explicit",
+        weight: 0.6
+      });
+
+      const useful = store.applyFeedback({
+        nodeId: node.id,
+        signal: "useful",
+        reason: "This helped answer the user."
+      });
+      expect(useful.previousWeight).toBe(0.6);
+      expect(useful.nextWeight).toBeCloseTo(0.68);
+      expect(useful.node.useCount).toBe(1);
+      expect(useful.node.metadata.feedbackTrend).toMatchObject({
+        useful: 1,
+        irrelevant: 0,
+        lastSignal: "useful",
+        lastReason: "This helped answer the user."
+      });
+
+      const irrelevant = store.applyFeedback({
+        nodeId: node.id,
+        signal: "irrelevant",
+        reason: "Wrong context for this task."
+      });
+      expect(irrelevant.previousWeight).toBeCloseTo(0.68);
+      expect(irrelevant.nextWeight).toBeCloseTo(0.5);
+      expect(irrelevant.node.metadata.feedbackTrend).toMatchObject({
+        useful: 1,
+        irrelevant: 1,
+        lastSignal: "irrelevant",
+        lastReason: "Wrong context for this task."
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("decays active memory nodes that have not been used recently", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

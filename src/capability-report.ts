@@ -281,6 +281,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const graphEdgeReinforcementSeen = assertionList.includes(
     "memory graph recall reinforced traversed edges"
   );
+  const userFeedbackTrendSeen =
+    assertionList.includes("user feedback increased useful memory weight") &&
+    assertionList.includes("user feedback persisted memory trend metadata");
   const assertions = assertionList.length;
   const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
@@ -295,6 +298,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!dreamConflictGroupLifecycleSeen) failures.push("dreamConflictGroupLifecycleSeen=false");
   if (!naturalLanguageCorrectionSeen) failures.push("naturalLanguageCorrectionSeen=false");
   if (!graphEdgeReinforcementSeen) failures.push("graphEdgeReinforcementSeen=false");
+  if (!userFeedbackTrendSeen) failures.push("userFeedbackTrendSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -313,7 +317,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       conflictGroupViewSeen,
       dreamConflictGroupLifecycleSeen,
       naturalLanguageCorrectionSeen,
-      graphEdgeReinforcementSeen
+      graphEdgeReinforcementSeen,
+      userFeedbackTrendSeen
     },
     failures
   };

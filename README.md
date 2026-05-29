@@ -55,8 +55,9 @@ and bail out cleanly.
   sub-agents with `target: 'peer-name'`.
 - **Mobile control** — start a LAN-bound daemon, run `magi pair`, open the
   printed `/panel` URL on your phone, then enter the Device ID and Token.
-- **Persistent memory** — durable facts written to `~/.magi-next/memdir/`
-  auto-load into future sessions.
+- **Persistent memory graph** — durable Memory is indexed into weighted nodes
+  and edges; recall reinforces useful paths, and `magi memory feedback` lets
+  users mark memories useful, irrelevant, stale, or wrong.
 - **Learning Loop v1** — recalls relevant prior sessions, memory, and skills
   before work; creates reviewable LearningDrafts after reusable lessons.
 - **Skills** — bundled `verify` / `debug` / `stuck` / `commit-msg` /
@@ -85,6 +86,7 @@ multi-machine, sub-agents). Press `q` to quit early.
 | `magi plan [list]`         | Show submitted plan reviews               |
 | `magi memory search <q>`   | Search durable Memory                     |
 | `magi memory link --from <node> --to <node>` | Link Memory graph nodes       |
+| `magi memory feedback --target <node> --signal useful` | Reinforce or dispute Memory |
 | `magi memory eval --case-file <file>` | Run Memory recall quality cases |
 | `magi learning list`       | List reviewable LearningDrafts            |
 | `magi learning draft <show|apply|reject> <id>` | Review or resolve a LearningDraft |

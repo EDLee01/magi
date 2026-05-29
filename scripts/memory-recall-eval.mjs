@@ -34,6 +34,7 @@ try {
   seedBusinessMemory();
   const evalOutput = runMemoryEval("memory recall eval");
   assertGraphEdgeReinforcement();
+  assertUserFeedbackTrendLifecycle();
   assertRestartRecall();
   await assertNaturalLanguageCorrectionLifecycle();
   assertDreamReviewLifecycle();
@@ -250,6 +251,36 @@ function assertGraphEdgeReinforcement() {
     db.close();
   }
   recordAssertion("memory graph recall reinforced traversed edges");
+}
+
+function assertUserFeedbackTrendLifecycle() {
+  const workflow = nodeByTitle("Deployment gate workflow");
+  const previousWeight = workflow.weight;
+  const feedback = runCli(
+    [
+      "memory",
+      "feedback",
+      "--target",
+      workflow.id,
+      "--signal",
+      "useful",
+      "--reason",
+      "Business eval confirmed this workflow was useful."
+    ],
+    "memory useful feedback"
+  );
+  assert(feedback.includes("Memory feedback applied"), "memory feedback did not run");
+  assert(feedback.includes("signal: useful"), "memory feedback did not record useful signal");
+  const updated = nodeById(workflow.id);
+  assert(
+    updated.weight > previousWeight,
+    `memory useful feedback should increase node weight, got ${previousWeight} -> ${updated.weight}`
+  );
+  const trend = feedbackTrendByNodeId(workflow.id);
+  assert(trend.useful >= 1, "memory feedback trend did not count useful feedback");
+  assert(trend.lastSignal === "useful", "memory feedback trend did not persist latest signal");
+  recordAssertion("user feedback increased useful memory weight");
+  recordAssertion("user feedback persisted memory trend metadata");
 }
 
 async function assertNaturalLanguageCorrectionLifecycle() {
@@ -875,6 +906,20 @@ function nodeById(id) {
       .get(id);
     assert(row, `memory node not found by id: ${id}`);
     return row;
+  } finally {
+    db.close();
+  }
+}
+
+function feedbackTrendByNodeId(id) {
+  const db = openDb();
+  try {
+    const row = db
+      .prepare("select metadata_json from memory_nodes where id = ?")
+      .get(id);
+    assert(row, `memory node metadata not found by id: ${id}`);
+    const metadata = JSON.parse(row.metadata_json);
+    return metadata.feedbackTrend ?? {};
   } finally {
     db.close();
   }

@@ -23,6 +23,7 @@ import {
 import { formatMemoryMerges, listMemoryMerges } from "./memory-merges.js";
 import { formatMemoryEvalReport, runMemoryEval, writeMemoryEvalReport } from "./memory-eval.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
+import { applyMemoryFeedback, formatMemoryFeedbackResult } from "./memory-feedback.js";
 import {
   configureMemoryMaintenance,
   formatMemoryMaintenancePolicy,
@@ -704,6 +705,22 @@ async function runCliUnsafeWithParsed(
         replacementType: options.replacementType
       });
       return { exitCode: 0, stdout: `${formatMemoryCorrectionResult(result)}\n`, stderr: "" };
+    }
+    if (subcommand === "feedback") {
+      const options = parseMemoryFeedbackArgs(parsed.rest.slice(1));
+      const result = applyMemoryFeedback({
+        ...rootInput,
+        paths,
+        sessionId: parsed.resumeSessionId ?? parsed.sessionId,
+        target: options.target,
+        signal: options.signal,
+        reason: options.reason,
+        replacement: options.replacement,
+        replacementTitle: options.replacementTitle,
+        replacementSummary: options.replacementSummary,
+        replacementType: options.replacementType
+      });
+      return { exitCode: 0, stdout: `${formatMemoryFeedbackResult(result)}\n`, stderr: "" };
     }
     if (subcommand === "conflicts") {
       const options = parseMemoryConflictsArgs(parsed.rest.slice(1));
@@ -1896,6 +1913,7 @@ function helpText(): string {
     "  magi memory search <query> [--session-id <id>]",
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
+    "  magi memory feedback --target <node|query> --signal <useful|irrelevant|wrong|stale> [--reason <text>] [--replacement <text>]",
     "  magi memory conflicts [--groups] [--limit <n>]",
     "  magi memory merges [--limit <n>]",
     "  magi memory eval --case-file <file> [--max-results <n>] [--min-score <0..1>] [--report <file>]",
@@ -2059,6 +2077,74 @@ function parseMemoryCorrectArgs(args: string[]): {
   return { target, reason, replacement, replacementTitle, replacementSummary, replacementType };
 }
 
+function parseMemoryFeedbackArgs(args: string[]): {
+  target: string;
+  signal: import("./memory-node-store.js").MemoryFeedbackSignal;
+  reason?: string;
+  replacement?: string;
+  replacementTitle?: string;
+  replacementSummary?: string;
+  replacementType?: import("./memory-node-store.js").MemoryNodeType;
+} {
+  let target = "";
+  let signal: import("./memory-node-store.js").MemoryFeedbackSignal | undefined;
+  let reason: string | undefined;
+  let replacement: string | undefined;
+  let replacementTitle: string | undefined;
+  let replacementSummary: string | undefined;
+  let replacementType: import("./memory-node-store.js").MemoryNodeType | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--target") {
+      target = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--signal") {
+      signal = readMemoryFeedbackSignal(args[++index]);
+      continue;
+    }
+    if (arg === "--reason") {
+      reason = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--replacement") {
+      replacement = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--replacement-title") {
+      replacementTitle = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--replacement-summary") {
+      replacementSummary = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--type") {
+      const value = args[++index] ?? "";
+      if (!isMemoryNodeType(value)) {
+        throw new MagiUsageError(`Invalid memory feedback --type: ${value}`);
+      }
+      replacementType = value;
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory feedback option: ${arg}`);
+  }
+  if (!target || !signal) {
+    throw new MagiUsageError(
+      "magi memory feedback requires --target <node|query> and --signal <useful|irrelevant|wrong|stale>"
+    );
+  }
+  return {
+    target,
+    signal,
+    reason,
+    replacement,
+    replacementTitle,
+    replacementSummary,
+    replacementType
+  };
+}
+
 function parseMemoryConflictsArgs(args: string[]): { groups?: boolean; limit?: number } {
   let groups = false;
   let limit: number | undefined;
@@ -2215,6 +2301,15 @@ function isMemoryNodeType(value: string): value is import("./memory-node-store.j
     value === "skill_ref" ||
     value === "session"
   );
+}
+
+function readMemoryFeedbackSignal(
+  value: string | undefined
+): import("./memory-node-store.js").MemoryFeedbackSignal {
+  if (value === "useful" || value === "irrelevant" || value === "wrong" || value === "stale") {
+    return value;
+  }
+  throw new MagiUsageError(`Invalid memory feedback --signal: ${value ?? ""}`);
 }
 
 interface ParsedArgs {

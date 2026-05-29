@@ -964,6 +964,96 @@ describe("AGENTS rules and memory", () => {
     expect(audit).toContain(wrong.id);
   });
 
+  it("applies user memory feedback through the CLI and records trend evidence", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const useful = nodeStore.upsertNode({
+      type: "workflow",
+      title: "Focused verification workflow",
+      summary: "Focused verification workflow.",
+      body: "Run focused checks before broad verification.",
+      source: "explicit",
+      weight: 0.6
+    });
+    const stale = nodeStore.upsertNode({
+      type: "user_profile",
+      title: "Stale user role",
+      summary: "Stale user role.",
+      body: "The user is only a temporary reviewer.",
+      source: "explicit",
+      weight: 0.95
+    });
+    nodeStore.close();
+
+    const helpful = await runCli(
+      [
+        "memory",
+        "feedback",
+        "--target",
+        useful.id,
+        "--signal",
+        "useful",
+        "--reason",
+        "This workflow matched the task."
+      ],
+      temp.env,
+      workspace
+    );
+    expect(helpful.exitCode).toBe(0);
+    expect(helpful.stdout).toContain("Memory feedback applied:");
+    expect(helpful.stdout).toContain("signal: useful");
+    expect(helpful.stdout).toContain("weight: 0.60 -> 0.68");
+
+    const wrong = await runCli(
+      [
+        "memory",
+        "feedback",
+        "--target",
+        stale.id,
+        "--signal",
+        "wrong",
+        "--reason",
+        "User corrected stale role feedback.",
+        "--replacement",
+        "The user is the creator of Magi.",
+        "--replacement-summary",
+        "Correct user role.",
+        "--type",
+        "user_profile"
+      ],
+      temp.env,
+      workspace
+    );
+    expect(wrong.exitCode).toBe(0);
+    expect(wrong.stdout).toContain("signal: wrong");
+    expect(wrong.stdout).toContain("replacement:");
+
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const boosted = store.getNode(useful.id);
+      expect(boosted?.weight).toBeCloseTo(0.68);
+      expect(boosted?.metadata.feedbackTrend).toMatchObject({
+        useful: 1,
+        lastSignal: "useful"
+      });
+      expect(store.getNode(stale.id)?.status).toBe("disputed");
+    } finally {
+      store.close();
+    }
+
+    const search = await runCli(["memory", "search", "temporary reviewer"], temp.env, workspace);
+    expect(search.exitCode).toBe(0);
+    expect(search.stdout).toContain("creator of Magi");
+    expect(search.stdout).not.toContain("only a temporary reviewer");
+
+    const audit = readFileSync(path.join(paths.root, "memory", "logs", "audit.jsonl"), "utf8");
+    expect(audit).toContain("memory.feedback.applied");
+    expect(audit).toContain("useful");
+    expect(audit).toContain("wrong");
+  });
+
   it("previews and applies memory maintenance decay through the CLI", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
