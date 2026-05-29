@@ -12,5 +12,8 @@ describe("system prompt", () => {
     expect(prompt).toContain("Read-only discovery does not require confirmation");
     expect(prompt).toContain("Only core tool schemas are loaded initially");
     expect(prompt).toContain("select:<tool_name>");
+    expect(prompt).toContain("use FilePatch for multi-line edits");
+    expect(prompt).toContain("use FileEdit only for one exact string replacement");
+    expect(prompt).toContain("If FilePatch fails, use its recovery feedback");
   });
 });

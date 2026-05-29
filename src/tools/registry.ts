@@ -781,7 +781,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "FileEdit",
-    description: "Replace text in a UTF-8 file inside the current workspace.",
+    description:
+      "Replace one exact string in an existing UTF-8 workspace file. Use FilePatch instead for multi-line edits, adjacent changes, or multiple hunks.",
     category: "files",
     tags: ["file", "edit", "workspace"],
     inputSchema: objectSchema(
@@ -811,7 +812,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   {
     name: "FilePatch",
     description:
-      "Apply one or more unified-diff hunks to an existing UTF-8 file inside the workspace. Prefer this over FileEdit for multi-line edits because context must match exactly and uniquely.",
+      "Apply one or more unified-diff hunks to an existing UTF-8 file inside the workspace. Prefer this over FileEdit for multi-line edits, adjacent changes, and multiple hunks because context must match exactly and uniquely.",
     category: "files",
     tags: ["file", "patch", "diff", "workspace"],
     inputSchema: objectSchema(

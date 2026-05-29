@@ -507,6 +507,9 @@ function createComplexRouter() {
       assert(transcript.includes("[Hot Memory]"), "complex task missed hot memory");
       assert(transcript.includes("focused CLI black-box verification"), "complex task missed user verification memory");
       assert(transcript.includes("Run focused CLI E2E before internal unit tests"), "complex task missed project workflow memory");
+      assert(transcript.includes("use FilePatch for multi-line edits"), "complex task missed FilePatch edit-shape guidance");
+      assert(transcript.includes("use FileEdit only for one exact string replacement"), "complex task missed FileEdit boundary guidance");
+      assert(transcript.includes("If FilePatch fails, use its recovery feedback"), "complex task missed FilePatch recovery guidance");
       assert(toolNames.includes("ToolSearch"), "ToolSearch was not available as a core tool");
       assert(toolNames.includes("FilePatch"), "FilePatch was not available as a core tool");
       assert(!toolNames.includes("LearningDraft"), "LearningDraft should start as a deferred tool");

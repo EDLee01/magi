@@ -1574,6 +1574,11 @@ describe("tool registry", () => {
         contains: ["FilePatch", "FileEdit"]
       },
       {
+        query: "edit adjacent blocks with multiple hunks",
+        top: "FilePatch",
+        contains: ["FilePatch", "FileEdit"]
+      },
+      {
         query: "find TypeScript symbol references",
         top: "LSP",
         contains: ["LSP"]
