@@ -351,6 +351,14 @@ describe("memory-node-store", () => {
       const hits = store.searchGraph({ query: "concise summaries", limit: 5 });
       expect(hits.map((hit) => hit.chunk.heading)).toContain("Concise summaries");
       expect(hits.map((hit) => hit.chunk.heading)).not.toContain("Verbose logs");
+      const conflicts = store.listConflicts();
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0]).toMatchObject({
+        from: expect.objectContaining({ id: concise.nodeId }),
+        to: expect.objectContaining({ id: verbose.nodeId }),
+        recommendation: "prefer_from"
+      });
+      expect(conflicts[0].reason).toContain("higher weight");
     } finally {
       store.close();
     }

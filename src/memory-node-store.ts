@@ -117,6 +117,14 @@ export interface MemoryEdge {
   metadata: Record<string, unknown>;
 }
 
+export interface MemoryConflictRecord {
+  edge: MemoryEdge;
+  from: MemoryNode;
+  to: MemoryNode;
+  recommendation: "prefer_from" | "prefer_to" | "needs_review";
+  reason: string;
+}
+
 export interface MemorySource {
   id: string;
   kind: MemorySourceKind;
@@ -837,6 +845,34 @@ export class MemoryNodeStore {
     return rows.map(toMemorySource);
   }
 
+  listConflicts(input: { limit?: number } = {}): MemoryConflictRecord[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
+    const rows = this.db
+      .prepare(
+        `
+      select e.*
+      from memory_edges e
+      join memory_nodes from_node on from_node.id = e.from_node_id
+      join memory_nodes to_node on to_node.id = e.to_node_id
+      where e.relation = 'conflicts_with'
+        and from_node.status != 'archived'
+        and to_node.status != 'archived'
+      order by e.weight desc, e.created_at desc
+      limit ?
+    `
+      )
+      .all(limit) as DbMemoryEdge[];
+    return rows.flatMap((row) => {
+      const edge = toMemoryEdge(row);
+      const from = this.getNode(edge.fromNodeId);
+      const to = this.getNode(edge.toNodeId);
+      if (!from || !to) {
+        return [];
+      }
+      return [{ edge, from, to, ...recommendConflictResolution(from, to) }];
+    });
+  }
+
   getNode(id: string): MemoryNode | undefined {
     const row = this.db.prepare("select * from memory_nodes where id = ?").get(id) as
       | DbMemoryNode
@@ -1263,6 +1299,40 @@ function toMemoryEdge(row: DbMemoryEdge): MemoryEdge {
     weight: row.weight,
     createdAt: row.created_at,
     metadata: decodeJson(row.metadata_json)
+  };
+}
+
+function recommendConflictResolution(
+  from: MemoryNode,
+  to: MemoryNode
+): Pick<MemoryConflictRecord, "recommendation" | "reason"> {
+  if (from.status === "active" && to.status === "disputed") {
+    return {
+      recommendation: "prefer_from",
+      reason: `${from.title} is active while ${to.title} is disputed.`
+    };
+  }
+  if (from.status === "disputed" && to.status === "active") {
+    return {
+      recommendation: "prefer_to",
+      reason: `${to.title} is active while ${from.title} is disputed.`
+    };
+  }
+  if (from.weight > to.weight + 0.05) {
+    return {
+      recommendation: "prefer_from",
+      reason: `${from.title} has higher weight (${from.weight.toFixed(2)} vs ${to.weight.toFixed(2)}).`
+    };
+  }
+  if (to.weight > from.weight + 0.05) {
+    return {
+      recommendation: "prefer_to",
+      reason: `${to.title} has higher weight (${to.weight.toFixed(2)} vs ${from.weight.toFixed(2)}).`
+    };
+  }
+  return {
+    recommendation: "needs_review",
+    reason: "Both nodes have similar status and weight; ask the user or use MemoryCorrect."
   };
 }
 

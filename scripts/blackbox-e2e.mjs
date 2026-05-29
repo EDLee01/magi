@@ -880,6 +880,15 @@ async function scenarioMemoryCorrection() {
     });
     assert(after.includes("concise verification summaries"), "replacement memory was not recalled");
     assert(!after.includes("prefers verbose terminal dumps"), "disputed stale memory was still recalled");
+    const conflicts = await runCli({
+      args: ["memory", "conflicts"],
+      cwd: workDir,
+      configDir,
+      label: "memory conflicts",
+    });
+    assert(conflicts.includes("Memory graph conflicts:"), "memory conflicts did not list graph conflicts");
+    assert(conflicts.includes("recommendation: prefer_from"), "memory conflicts did not recommend active replacement");
+    assert(conflicts.includes("edge reason:"), "memory conflicts did not include correction edge reason");
     const maintenanceConfig = await runCli({
       args: [
         "memory",
@@ -930,6 +939,7 @@ async function scenarioMemoryCorrection() {
         "memory correct disputed old node",
         "replacement memory recalled through graph search",
         "disputed stale memory excluded from search results",
+        "memory conflict audit view recommends active replacement",
         "memory maintenance policy persisted and reused",
         "memory maintenance decayed stale node weights",
         "memory correction and maintenance audit persisted"

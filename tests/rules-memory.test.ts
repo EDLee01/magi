@@ -391,6 +391,13 @@ describe("AGENTS rules and memory", () => {
     expect(search.stdout).toContain("creator of Magi");
     expect(search.stdout).not.toContain("only a documentation reviewer");
 
+    const conflicts = await runCli(["memory", "conflicts"], temp.env, workspace);
+    expect(conflicts.exitCode).toBe(0);
+    expect(conflicts.stdout).toContain("Memory graph conflicts: 1");
+    expect(conflicts.stdout).toContain("User role");
+    expect(conflicts.stdout).toContain("recommendation: prefer_from");
+    expect(conflicts.stdout).toContain("is active while");
+
     const audit = readFileSync(path.join(paths.root, "memory", "logs", "audit.jsonl"), "utf8");
     expect(audit).toContain("memory.corrected");
     expect(audit).toContain(wrong.id);

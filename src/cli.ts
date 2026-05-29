@@ -13,6 +13,7 @@ import { formatMemory, MemoryScope } from "./memory.js";
 import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
+import { formatMemoryConflicts, listMemoryConflicts } from "./memory-conflicts.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
 import {
   configureMemoryMaintenance,
@@ -636,6 +637,15 @@ async function runCliUnsafeWithParsed(
         replacementType: options.replacementType
       });
       return { exitCode: 0, stdout: `${formatMemoryCorrectionResult(result)}\n`, stderr: "" };
+    }
+    if (subcommand === "conflicts") {
+      const options = parseMemoryConflictsArgs(parsed.rest.slice(1));
+      const conflicts = listMemoryConflicts({
+        ...rootInput,
+        paths,
+        limit: options.limit
+      });
+      return { exitCode: 0, stdout: `${formatMemoryConflicts(conflicts)}\n`, stderr: "" };
     }
     if (subcommand === "maintain") {
       const rawMaintainArgs = parsed.rest.slice(1);
@@ -1754,6 +1764,7 @@ function helpText(): string {
     "  magi memory search <query> [--session-id <id>]",
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
+    "  magi memory conflicts [--limit <n>]",
     "  magi memory maintain [--apply] [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>]",
     "  magi memory maintain config [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>] [--limit <n>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
@@ -1912,6 +1923,19 @@ function parseMemoryCorrectArgs(args: string[]): {
     );
   }
   return { target, reason, replacement, replacementTitle, replacementSummary, replacementType };
+}
+
+function parseMemoryConflictsArgs(args: string[]): { limit?: number } {
+  let limit: number | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--limit") {
+      limit = readPositiveNumberArg(args[++index], "magi memory conflicts --limit");
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory conflicts option: ${arg}`);
+  }
+  return { limit };
 }
 
 function parseMemoryMaintainArgs(args: string[]): {

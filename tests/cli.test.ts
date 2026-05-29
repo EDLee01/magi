@@ -855,6 +855,7 @@ describe("CLI entrypoint", () => {
     expect(result.stdout).toContain("--output-format json");
     expect(result.stdout).toContain("workspace diagnose");
     expect(result.stdout).toContain("memory link --from");
+    expect(result.stdout).toContain("memory conflicts");
     expect(result.stdout).toContain("memory maintain config");
   });
 
