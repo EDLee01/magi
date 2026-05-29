@@ -206,6 +206,54 @@ describe("Control API", () => {
     );
   });
 
+  it("routes mobile panel auto model payloads through the provider loop", async () => {
+    const calls: Array<{ model: string; body: Record<string, unknown> }> = [];
+    modelServer = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as { model: string };
+      calls.push({ model: body.model, body: body as Record<string, unknown> });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "PANEL AUTO" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(modelServer);
+    await startTestServer({
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      configLines: providerControlConfig(baseUrl)
+    });
+    const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {
+      deviceId: string;
+      token: string;
+    };
+    const headers = authHeaders(pairing);
+
+    const result = (await postJson(
+      `${handle!.url}/jobs`,
+      {
+        content: "panel default auto route",
+        modelAlias: "auto"
+      },
+      headers
+    )) as { message: string; provider: string; model: string };
+
+    expect(result).toMatchObject({
+      message: "PANEL AUTO",
+      provider: "main",
+      model: "gpt-main"
+    });
+    expect(calls.map((call) => call.model)).toEqual(["gpt-main"]);
+    expect(JSON.stringify(calls[0].body)).toContain("panel default auto route");
+  });
+
   it("passes job model and session options through the Control API provider loop", async () => {
     const calls: Array<{ model: string; body: Record<string, unknown> }> = [];
     modelServer = http.createServer(async (request, response) => {

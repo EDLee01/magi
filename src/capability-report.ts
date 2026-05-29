@@ -361,7 +361,14 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "panelUiCancelControlSeen",
     "panelClientCreateSessionUnwrapped",
     "panelClientStartJobAccepted",
-    "panelSseJobStreamSeen"
+    "panelSseJobStreamSeen",
+    "mobileBrowserViewportSeen",
+    "mobileBrowserTokenStored",
+    "mobileBrowserTokenUrlCleaned",
+    "mobileBrowserMessageSent",
+    "mobileBrowserStreamRendered",
+    "mobileBrowserCancelRequested",
+    "mobileBrowserCancelRendered"
   ];
   for (const key of required) {
     if (details[key] !== true) {
@@ -398,7 +405,14 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       panelUiCancelControlSeen: details.panelUiCancelControlSeen === true,
       panelClientCreateSessionUnwrapped: details.panelClientCreateSessionUnwrapped === true,
       panelClientStartJobAccepted: details.panelClientStartJobAccepted === true,
-      panelSseJobStreamSeen: details.panelSseJobStreamSeen === true
+      panelSseJobStreamSeen: details.panelSseJobStreamSeen === true,
+      mobileBrowserViewportSeen: details.mobileBrowserViewportSeen === true,
+      mobileBrowserTokenStored: details.mobileBrowserTokenStored === true,
+      mobileBrowserTokenUrlCleaned: details.mobileBrowserTokenUrlCleaned === true,
+      mobileBrowserMessageSent: details.mobileBrowserMessageSent === true,
+      mobileBrowserStreamRendered: details.mobileBrowserStreamRendered === true,
+      mobileBrowserCancelRequested: details.mobileBrowserCancelRequested === true,
+      mobileBrowserCancelRendered: details.mobileBrowserCancelRendered === true
     },
     failures
   };

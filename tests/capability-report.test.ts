@@ -203,7 +203,10 @@ describe("capability report", () => {
         panelClientContractValid: false,
         panelUiApprovalControlsSeen: false,
         panelUiCancelControlSeen: false,
-        panelSseJobStreamSeen: false
+        panelSseJobStreamSeen: false,
+        mobileBrowserViewportSeen: false,
+        mobileBrowserStreamRendered: false,
+        mobileBrowserCancelRendered: false
       })
     });
 
@@ -218,7 +221,10 @@ describe("capability report", () => {
         "panelClientContractValid=false",
         "panelUiApprovalControlsSeen=false",
         "panelUiCancelControlSeen=false",
-        "panelSseJobStreamSeen=false"
+        "panelSseJobStreamSeen=false",
+        "mobileBrowserViewportSeen=false",
+        "mobileBrowserStreamRendered=false",
+        "mobileBrowserCancelRendered=false"
       ])
     );
   });
@@ -431,6 +437,13 @@ function controlApiReport(
     panelClientCreateSessionUnwrapped: boolean;
     panelClientStartJobAccepted: boolean;
     panelSseJobStreamSeen: boolean;
+    mobileBrowserViewportSeen: boolean;
+    mobileBrowserTokenStored: boolean;
+    mobileBrowserTokenUrlCleaned: boolean;
+    mobileBrowserMessageSent: boolean;
+    mobileBrowserStreamRendered: boolean;
+    mobileBrowserCancelRequested: boolean;
+    mobileBrowserCancelRendered: boolean;
   }> = {}
 ): Record<string, unknown> {
   return {
@@ -469,6 +482,13 @@ function controlApiReport(
           panelClientCreateSessionUnwrapped: true,
           panelClientStartJobAccepted: true,
           panelSseJobStreamSeen: true,
+          mobileBrowserViewportSeen: true,
+          mobileBrowserTokenStored: true,
+          mobileBrowserTokenUrlCleaned: true,
+          mobileBrowserMessageSent: true,
+          mobileBrowserStreamRendered: true,
+          mobileBrowserCancelRequested: true,
+          mobileBrowserCancelRendered: true,
           ...overrides
         }
       }

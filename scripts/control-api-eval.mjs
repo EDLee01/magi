@@ -6,6 +6,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(repoRoot, "dist", "cli.js");
@@ -54,7 +55,14 @@ try {
     panelUiCancelControlSeen: false,
     panelClientCreateSessionUnwrapped: false,
     panelClientStartJobAccepted: false,
-    panelSseJobStreamSeen: false
+    panelSseJobStreamSeen: false,
+    mobileBrowserViewportSeen: false,
+    mobileBrowserTokenStored: false,
+    mobileBrowserTokenUrlCleaned: false,
+    mobileBrowserMessageSent: false,
+    mobileBrowserStreamRendered: false,
+    mobileBrowserCancelRequested: false,
+    mobileBrowserCancelRendered: false
   };
   const controlPort = randomControlPort();
   const providerLog = path.join(root, "provider-log.json");
@@ -83,6 +91,7 @@ try {
     await exerciseApprovalCancelFlow({ serve, headers, workDir, state });
     await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
+    await exerciseMobilePanelBrowserFlow({ serve, pairing, state });
 
     assertAllState(state);
     const report = harnessReport.buildHarnessReport({
@@ -106,7 +115,7 @@ try {
     mkdirSync(path.dirname(reportPath), { recursive: true });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     console.log(
-      "Control API eval passed (pairing, approval, SSE, job cancel, approval cancel, session resume)."
+      "Control API eval passed (pairing, approval, SSE, job cancel, approval cancel, session resume, mobile browser panel)."
     );
     console.log(`Control API report: ${reportPath}`);
   } catch (error) {
@@ -422,9 +431,65 @@ async function exerciseWebPanelContract({ serve, headers, state }) {
     sse.includes("agent.query.completed");
 }
 
+async function exerciseMobilePanelBrowserFlow({ serve, pairing, state }) {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 3
+    });
+    const page = await context.newPage();
+    await page.goto(
+      `${serve.url}/panel?device=${encodeURIComponent(pairing.deviceId)}&token=${encodeURIComponent(pairing.token)}`,
+      { waitUntil: "domcontentloaded" }
+    );
+    state.mobileBrowserViewportSeen = await page.evaluate(
+      () => window.innerWidth <= 430 && window.innerHeight >= 700
+    );
+    state.mobileBrowserTokenStored =
+      (await page.evaluate(() => window.localStorage.getItem("MAGI_DEVICE_TOKEN"))) ===
+      pairing.token;
+    state.mobileBrowserTokenUrlCleaned = !page.url().includes("token=");
+
+    const input = page.locator("#input");
+    await input.fill("Panel mobile browser flow: keep token tulip-39.");
+    await page.locator("#send-btn").tap();
+    await page.locator(".msg.user", { hasText: "Panel mobile browser flow" }).waitFor({
+      timeout: 10_000
+    });
+    state.mobileBrowserMessageSent = true;
+    await page.locator(".msg.assistant", { hasText: "MOBILE PANEL OK" }).waitFor({
+      timeout: 10_000
+    });
+    state.mobileBrowserStreamRendered = true;
+
+    await input.fill("Panel mobile browser cancel flow");
+    await page.locator("#send-btn").tap();
+    await page.waitForFunction(
+      () => document.querySelector("#send-btn")?.textContent === "Stop",
+      undefined,
+      { timeout: 10_000 }
+    );
+    await page.locator("#send-btn").tap();
+    state.mobileBrowserCancelRequested = true;
+    await page.locator(".msg.system", { hasText: "Cancelled" }).waitFor({ timeout: 10_000 });
+    state.mobileBrowserCancelRendered = true;
+  } finally {
+    await browser.close();
+  }
+}
+
 function createRouter(state) {
   return ({ body, transcript }) => {
     const latestUser = latestUserFromBody(body);
+    if (latestUser.includes("Panel mobile browser cancel flow")) {
+      return streamTextResponse(["mobile ", "cancel "]);
+    }
+    if (latestUser.includes("Panel mobile browser flow")) {
+      return completedStreamTextResponse(["MOBILE ", "PANEL ", "OK"]);
+    }
     if (latestUser.includes("Stream and cancel via mobile control")) {
       return streamTextResponse(["live ", "delta "]);
     }

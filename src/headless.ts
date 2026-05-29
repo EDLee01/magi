@@ -381,7 +381,7 @@ function resolveAutoAlias(
   }
   if (alias === "auto") {
     const decision = routeAutoDetailed(config, prompt, context ?? {});
-    if (!decision) return undefined;
+    if (!decision) return hasProviderRoute(config, "main") ? "main" : undefined;
     // Emit telemetry to audit log so users can inspect routing decisions
     if (store && sessionId) {
       try {
