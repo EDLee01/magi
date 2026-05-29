@@ -451,6 +451,15 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     details.projectCaseRecallSeen === true &&
     assertionList.includes("project-level release owner recall passed") &&
     assertionList.includes("project-level incident handoff recall passed");
+  const multiProjectConflictRecallSeen =
+    details.multiProjectConflictRecallSeen === true &&
+    resultNames.includes("multi-project Magi release rule wins in Magi context") &&
+    resultNames.includes("multi-project Kira support rule wins in Kira context") &&
+    assertionList.includes("multi-project wiki sources indexed into sqlite") &&
+    assertionList.includes("multi-project conflict edges linked project rules") &&
+    assertionList.includes("multi-project Magi rule recalled without Kira rule") &&
+    assertionList.includes("multi-project Kira rule recalled without Magi rule") &&
+    assertionList.includes("shared user preference recalled across project rules");
   const multiNodeSupersededCleanupSeen =
     details.multiNodeSupersededCleanupSeen === true &&
     assertionList.includes("multi-node superseded cleanup candidates listed disputed nodes") &&
@@ -465,9 +474,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
-  if (results.length < 6) failures.push(`cases=${results.length}`);
-  if (assertions < 35) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
+  if (results.length < 8) failures.push(`cases=${results.length}`);
+  if (assertions < 40) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
@@ -478,6 +487,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!longCycleFeedbackTrendSeen) failures.push("longCycleFeedbackTrendSeen=false");
   if (!crossNodeRecommendationSeen) failures.push("crossNodeRecommendationSeen=false");
   if (!projectCaseRecallSeen) failures.push("projectCaseRecallSeen=false");
+  if (!multiProjectConflictRecallSeen) failures.push("multiProjectConflictRecallSeen=false");
   if (!multiNodeSupersededCleanupSeen) failures.push("multiNodeSupersededCleanupSeen=false");
   if (!maintenanceConfigBoundarySeen) failures.push("maintenanceConfigBoundarySeen=false");
   return {
@@ -503,6 +513,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       longCycleFeedbackTrendSeen,
       crossNodeRecommendationSeen,
       projectCaseRecallSeen,
+      multiProjectConflictRecallSeen,
       multiNodeSupersededCleanupSeen,
       maintenanceConfigBoundarySeen
     },

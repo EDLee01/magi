@@ -142,6 +142,7 @@ describe("capability report", () => {
         longCycleFeedbackTrendSeen: false,
         crossNodeRecommendationSeen: false,
         projectCaseRecallSeen: false,
+        multiProjectConflictRecallSeen: false,
         multiNodeSupersededCleanupSeen: false,
         maintenanceConfigBoundarySeen: false,
         assertions: 4,
@@ -177,6 +178,7 @@ describe("capability report", () => {
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
     expect(output).toContain("crossNodeRecommendationSeen=false");
     expect(output).toContain("projectCaseRecallSeen=false");
+    expect(output).toContain("multiProjectConflictRecallSeen=false");
     expect(output).toContain("multiNodeSupersededCleanupSeen=false");
     expect(output).toContain("maintenanceConfigBoundarySeen=false");
   });
@@ -760,6 +762,7 @@ function memoryReport(input: {
   longCycleFeedbackTrendSeen?: boolean;
   crossNodeRecommendationSeen?: boolean;
   projectCaseRecallSeen?: boolean;
+  multiProjectConflictRecallSeen?: boolean;
   multiNodeSupersededCleanupSeen?: boolean;
   maintenanceConfigBoundarySeen?: boolean;
   assertions?: number;
@@ -773,7 +776,13 @@ function memoryReport(input: {
     ...(input.maintenanceRecallSeen === false ? [] : ["protected workflow survives maintenance"]),
     ...(input.crossNodeRecommendationSeen === false
       ? []
-      : ["feedback trend recalls workflow neighborhood"])
+      : ["feedback trend recalls workflow neighborhood"]),
+    ...(input.multiProjectConflictRecallSeen === false
+      ? []
+      : [
+          "multi-project Magi release rule wins in Magi context",
+          "multi-project Kira support rule wins in Kira context"
+        ])
   ];
   const total = names.length;
   const results = [...names.map((name) => ({ name, passed: true }))];
@@ -821,6 +830,15 @@ function memoryReport(input: {
               "project-level release owner recall passed",
               "project-level incident handoff recall passed"
             ]),
+        ...(input.multiProjectConflictRecallSeen === false
+          ? []
+          : [
+              "multi-project wiki sources indexed into sqlite",
+              "multi-project conflict edges linked project rules",
+              "multi-project Magi rule recalled without Kira rule",
+              "multi-project Kira rule recalled without Magi rule",
+              "shared user preference recalled across project rules"
+            ]),
         ...(input.multiNodeSupersededCleanupSeen === false
           ? []
           : [
@@ -835,12 +853,12 @@ function memoryReport(input: {
               "maintenance config invalid values were rejected"
             ]),
         ...Array.from(
-          { length: input.assertions ?? 35 },
+          { length: input.assertions ?? 40 },
           (_, index) => `memory assertion ${index + 1}`
         )
       ],
       filesVerified: Array.from(
-        { length: input.filesVerified ?? 6 },
+        { length: input.filesVerified ?? 7 },
         (_, index) => `memory-file-${index + 1}.json`
       ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
@@ -848,6 +866,7 @@ function memoryReport(input: {
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
       crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
       projectCaseRecallSeen: input.projectCaseRecallSeen !== false,
+      multiProjectConflictRecallSeen: input.multiProjectConflictRecallSeen !== false,
       multiNodeSupersededCleanupSeen: input.multiNodeSupersededCleanupSeen !== false,
       maintenanceConfigBoundarySeen: input.maintenanceConfigBoundarySeen !== false
     }

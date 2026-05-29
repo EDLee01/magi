@@ -230,7 +230,7 @@
           <tr>
             <td>Memory Graph</td>
             <td>记忆节点、wiki chunk、edge、权重、冲突和替代关系共同决定召回。</td>
-            <td><span class="tag done">进行中</span> edge-aware retrieval、召回路径 edge 使用次数和权重增强、用户反馈趋势、趋势榜和权重调整、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、冲突审计视图、冲突分组视图、merge 审计视图、recall quality eval、项目级 recall eval case set、重启召回业务验证、Dream apply/reject 生命周期验证、可持久配置的长期未用节点降权维护，以及 Dream graph 清理候选、纠错后 superseded/disputed 节点审核归档、重复 graph 记忆 merge 候选、节点合并后的 edge 重定向、merge 后权重融合和 edge 冲突消解、冲突分组 Dream 批量审核、批量归档/保留审核闭环、工作流/习惯/技能类节点的维护保留策略、跨节点 workflow 邻域召回、维护后召回业务验证、跨 CLI 进程的用户反馈趋势累积、反馈趋势驱动的 workflow neighborhood 召回、真实项目级 recall case、多节点 superseded/disputed 清理和维护策略配置边界门禁已实现；memory eval 报告会输出业务断言、验证文件、冲突分组、Dream lifecycle、edge reinforcement、user feedback trend、long-cycle feedback trend、cross-node recommendation、project-level recall、multi-node cleanup 和 maintenance config boundary 证据，并由 capability report 门禁检查证据厚度。</td>
+            <td><span class="tag done">进行中</span> edge-aware retrieval、召回路径 edge 使用次数和权重增强、用户反馈趋势、趋势榜和权重调整、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、冲突审计视图、冲突分组视图、merge 审计视图、recall quality eval、项目级 recall eval case set、重启召回业务验证、Dream apply/reject 生命周期验证、可持久配置的长期未用节点降权维护，以及 Dream graph 清理候选、纠错后 superseded/disputed 节点审核归档、重复 graph 记忆 merge 候选、节点合并后的 edge 重定向、merge 后权重融合和 edge 冲突消解、冲突分组 Dream 批量审核、批量归档/保留审核闭环、工作流/习惯/技能类节点的维护保留策略、跨节点 workflow 邻域召回、维护后召回业务验证、跨 CLI 进程的用户反馈趋势累积、反馈趋势驱动的 workflow neighborhood 召回、真实项目级 recall case、多节点 superseded/disputed 清理、维护策略配置边界门禁，以及多项目长期协作下共享用户偏好和项目规则冲突的 wiki+SQLite graph 召回门禁已实现；memory eval 报告会输出业务断言、验证文件、冲突分组、Dream lifecycle、edge reinforcement、user feedback trend、long-cycle feedback trend、cross-node recommendation、project-level recall、multi-project conflict recall、multi-node cleanup 和 maintenance config boundary 证据，并由 capability report 门禁检查证据厚度。</td>
             <td><code>tests/memory-node-store.test.ts</code>、<code>tests/rules-memory.test.ts</code>、<code>tests/cli.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run test:memory-eval</code>、<code>magi memory eval --min-score --report</code></td>
           </tr>
           <tr>
@@ -272,8 +272,8 @@
       <div class="panel">
         <h3>v0.1.0-alpha.3</h3>
         <ul>
-          <li>Memory Graph v2 已把用户反馈趋势、真实项目级 recall、多节点 superseded/disputed 清理和维护策略配置边界接入业务级门禁；下一步扩展更长真实项目周期和多项目冲突场景。</li>
-          <li>扩展真实 memory 业务测试：多项目长期协作中的身份、偏好、项目规则、工作流和过期知识冲突处理。</li>
+          <li>Memory Graph v2 已把用户反馈趋势、真实项目级 recall、多节点 superseded/disputed 清理、维护策略配置边界，以及多项目共享偏好/项目规则冲突接入业务级门禁；下一步扩展更长真实项目周期中的过期知识和主动学习反馈。</li>
+          <li>扩展真实 memory 业务测试：多项目长期协作中的身份、偏好、项目规则、工作流、过期知识冲突和错误记忆反馈处理。</li>
           <li>推进 Patch Engine v1：继续扩大真实复杂任务中的连续 patch 失败后的策略恢复和最终 diff 质量评分。</li>
         </ul>
       </div>

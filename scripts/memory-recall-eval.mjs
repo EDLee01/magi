@@ -26,6 +26,7 @@ const lifecycleEvidence = {
   longCycleFeedbackTrendSeen: false,
   crossNodeRecommendationSeen: false,
   projectCaseRecallSeen: false,
+  multiProjectConflictRecallSeen: false,
   multiNodeSupersededCleanupSeen: false,
   maintenanceConfigBoundarySeen: false,
   assertions: [],
@@ -46,6 +47,7 @@ try {
   await assertNaturalLanguageCorrectionLifecycle();
   assertDreamReviewLifecycle();
   assertMaintenanceLifecycle();
+  assertMultiProjectConflictRecall();
   writeLifecycleEvidence();
   process.stdout.write(`${evalOutput.trim()}\nBusiness memory recall eval passed.\n`);
 } finally {
@@ -358,6 +360,58 @@ function assertProjectCaseRecall() {
   lifecycleEvidence.projectCaseRecallSeen = true;
   recordAssertion("project-level release owner recall passed");
   recordAssertion("project-level incident handoff recall passed");
+}
+
+function assertMultiProjectConflictRecall() {
+  const graph = seedMultiProjectWikiMemory();
+  const output = runMemoryEval(
+    "memory recall eval for multi-project conflicts",
+    writeMultiProjectConflictCaseFile()
+  );
+  assert(
+    output.includes("multi-project Magi release rule wins in Magi context"),
+    "multi-project Magi rule recall case did not run"
+  );
+  assert(
+    output.includes("multi-project Kira support rule wins in Kira context"),
+    "multi-project Kira rule recall case did not run"
+  );
+
+  const magiSearch = runCli(
+    ["memory", "search", "Magi release approval npm publish concise verification summary"],
+    "multi-project Magi policy search"
+  );
+  assert(magiSearch.includes("Magi release approval"), "Magi search missed Magi project rule");
+  assert(magiSearch.includes("GitHub checks before npm publish"), "Magi search missed approval rule");
+  assert(
+    magiSearch.includes("Shared concise verification style"),
+    "Magi search missed shared user preference"
+  );
+  assert(!magiSearch.includes("customer QA signoff"), "Magi search leaked Kira project rule");
+
+  const kiraSearch = runCli(
+    ["memory", "search", "Kira support approval deployment concise verification summary"],
+    "multi-project Kira policy search"
+  );
+  assert(kiraSearch.includes("Kira support approval"), "Kira search missed Kira project rule");
+  assert(kiraSearch.includes("customer QA signoff"), "Kira search missed customer QA rule");
+  assert(
+    kiraSearch.includes("Shared concise verification style"),
+    "Kira search missed shared user preference"
+  );
+  assert(!kiraSearch.includes("GitHub checks before npm publish"), "Kira search leaked Magi rule");
+
+  const conflicts = runCli(["memory", "conflicts", "--groups"], "multi-project conflict groups");
+  assert(conflicts.includes("Magi release approval"), "conflict groups missed Magi project rule");
+  assert(conflicts.includes("Kira support approval"), "conflict groups missed Kira project rule");
+  assertSqliteWikiGraphLinked(graph);
+
+  lifecycleEvidence.multiProjectConflictRecallSeen = true;
+  recordAssertion("multi-project wiki sources indexed into sqlite");
+  recordAssertion("multi-project conflict edges linked project rules");
+  recordAssertion("multi-project Magi rule recalled without Kira rule");
+  recordAssertion("multi-project Kira rule recalled without Magi rule");
+  recordAssertion("shared user preference recalled across project rules");
 }
 
 async function assertNaturalLanguageCorrectionLifecycle() {
@@ -815,6 +869,7 @@ function writeProjectCaseFile() {
       {
         ...suite,
         name: `${suite.name ?? "memory business recall"} with project cases`,
+        maxResults: Math.max(suite.maxResults ?? 0, 10),
         cases: [
           ...(Array.isArray(suite.cases) ? suite.cases : []),
           {
@@ -848,20 +903,10 @@ function writeMaintenanceCaseFile() {
       {
         ...suite,
         name: `${suite.name ?? "memory business recall"} with maintenance strategy`,
+        maxResults: Math.max(suite.maxResults ?? 0, 10),
         cases: [
           ...(Array.isArray(suite.cases) ? suite.cases : []),
-          {
-            name: "protected workflow survives maintenance",
-            query: "resilient memory verification workflow",
-            expect: ["Resilient memory verification workflow"],
-            minResults: 1
-          },
-          {
-            name: "feedback trend recalls workflow neighborhood",
-            query: "smoke gate rollout",
-            expect: ["Deployment gate workflow", "Concise deployment reporting"],
-            minResults: 2
-          }
+          ...maintenanceRecallCases()
         ]
       },
       null,
@@ -870,6 +915,224 @@ function writeMaintenanceCaseFile() {
     "utf8"
   );
   return file;
+}
+
+function writeMultiProjectConflictCaseFile() {
+  const suite = JSON.parse(readFileSync(options.caseFile, "utf8"));
+  const file = path.join(workDir, "memory-recall-multi-project-business.json");
+  writeFileSync(
+    file,
+    `${JSON.stringify(
+      {
+        ...suite,
+        name: `${suite.name ?? "memory business recall"} with maintenance and multi-project conflicts`,
+        maxResults: Math.max(suite.maxResults ?? 0, 10),
+        cases: [
+          ...(Array.isArray(suite.cases) ? suite.cases : []),
+          ...maintenanceRecallCases(),
+          ...multiProjectConflictCases()
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  return file;
+}
+
+function maintenanceRecallCases() {
+  return [
+    {
+      name: "protected workflow survives maintenance",
+      query: "resilient memory verification workflow",
+      expect: ["Resilient memory verification workflow"],
+      minResults: 1
+    },
+    {
+      name: "feedback trend recalls workflow neighborhood",
+      query: "smoke gate rollout",
+      expect: ["Deployment gate workflow", "Concise deployment reporting"],
+      minResults: 2
+    }
+  ];
+}
+
+function multiProjectConflictCases() {
+  return [
+    {
+      name: "multi-project Magi release rule wins in Magi context",
+      query: "Magi release approval npm publish concise verification summary",
+      expect: [
+        "Magi release approval",
+        "GitHub checks before npm publish",
+        "Shared concise verification style"
+      ],
+      forbid: ["customer QA signoff"],
+      minResults: 2
+    },
+    {
+      name: "multi-project Kira support rule wins in Kira context",
+      query: "Kira support approval deployment concise verification summary",
+      expect: [
+        "Kira support approval",
+        "customer QA signoff",
+        "Shared concise verification style"
+      ],
+      forbid: ["GitHub checks before npm publish"],
+      minResults: 2
+    }
+  ];
+}
+
+function seedMultiProjectWikiMemory() {
+  writeMemoryWikiFile(
+    "preferences.md",
+    [
+      "# Preferences",
+      "",
+      "## Shared concise verification style",
+      "Use concise verification summaries across projects unless a project-specific rule says otherwise."
+    ].join("\n")
+  );
+  writeMemoryWikiFile(
+    "projects/magi-release.md",
+    [
+      "## Magi release approval",
+      "Magi release project requires approval through GitHub checks before npm publish.",
+      "Use the shared concise verification style in release notes.",
+      "",
+      "## Magi release handoff",
+      "Magi release handoff keeps owner, risk, and verification outcome together."
+    ].join("\n")
+  );
+  writeMemoryWikiFile(
+    "projects/kira-support.md",
+    [
+      "## Kira support approval",
+      "Kira support project requires customer QA signoff before deployment.",
+      "Use the shared concise verification style in customer-facing updates.",
+      "",
+      "## Kira support handoff",
+      "Kira support handoff keeps customer impact, deployment window, and verification outcome together."
+    ].join("\n")
+  );
+  runCli(
+    ["memory", "search", "Magi release approval customer QA signoff"],
+    "sync multi-project wiki memory"
+  );
+
+  const shared = wikiChunkByHeading("memory/preferences.md", "Shared concise verification style");
+  const magi = wikiChunkByHeading("memory/projects/magi-release.md", "Magi release approval");
+  const kira = wikiChunkByHeading("memory/projects/kira-support.md", "Kira support approval");
+  seedGraphEdge({
+    fromNodeId: shared.nodeId,
+    toNodeId: magi.nodeId,
+    relation: "relates_to",
+    weight: 0.95,
+    reason: "Shared user preference applies to Magi release project."
+  });
+  seedGraphEdge({
+    fromNodeId: shared.nodeId,
+    toNodeId: kira.nodeId,
+    relation: "relates_to",
+    weight: 0.95,
+    reason: "Shared user preference applies to Kira support project."
+  });
+  seedConflictEdge({
+    fromNodeId: magi.nodeId,
+    toNodeId: kira.nodeId,
+    weight: 0.9,
+    reason: "Project-specific approval rules conflict and must resolve by project context."
+  });
+  return { shared, magi, kira };
+}
+
+function writeMemoryWikiFile(filePath, content) {
+  const absolutePath = path.join(configDir, "memory", filePath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, `${content.trimEnd()}\n`, "utf8");
+}
+
+function wikiChunkByHeading(sourceUri, heading) {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    const source = store.getSourceByUri(sourceUri);
+    assert(source, `memory source not found: ${sourceUri}`);
+    const chunk = store.listChunksForSource(source.id).find((item) => item.heading === heading);
+    assert(chunk, `memory chunk not found: ${sourceUri}#${heading}`);
+    return { sourceId: source.id, sourceUri, heading, nodeId: chunk.nodeId, chunkId: chunk.id };
+  } finally {
+    store.close();
+  }
+}
+
+function seedGraphEdge(input) {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    store.addEdge({
+      fromNodeId: input.fromNodeId,
+      toNodeId: input.toNodeId,
+      relation: input.relation,
+      weight: input.weight,
+      metadata: {
+        reason: input.reason,
+        evalSeed: "memory-recall-eval"
+      }
+    });
+  } finally {
+    store.close();
+  }
+}
+
+function assertSqliteWikiGraphLinked(graph) {
+  const db = openDb();
+  try {
+    const activeSources = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_sources
+        where status = 'active'
+          and uri in ('memory/preferences.md', 'memory/projects/magi-release.md', 'memory/projects/kira-support.md')
+      `
+      )
+      .get();
+    assert(activeSources.count === 3, "multi-project wiki sources were not active in sqlite");
+    const activeChunks = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_chunks
+        where status = 'active'
+          and node_id in (?, ?, ?)
+      `
+      )
+      .get(graph.shared.nodeId, graph.magi.nodeId, graph.kira.nodeId);
+    assert(activeChunks.count === 3, "multi-project wiki chunks were not active in sqlite");
+    const linkedEdges = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_edges
+        where
+          (from_node_id = ? and to_node_id = ? and relation = 'relates_to') or
+          (from_node_id = ? and to_node_id = ? and relation = 'relates_to') or
+          (from_node_id = ? and to_node_id = ? and relation = 'conflicts_with')
+      `
+      )
+      .get(
+        graph.shared.nodeId,
+        graph.magi.nodeId,
+        graph.shared.nodeId,
+        graph.kira.nodeId,
+        graph.magi.nodeId,
+        graph.kira.nodeId
+      );
+    assert(linkedEdges.count === 3, "multi-project wiki graph edges were not persisted");
+  } finally {
+    db.close();
+  }
 }
 
 function writeLifecycleEvidence() {
@@ -883,6 +1146,7 @@ function writeLifecycleEvidence() {
   recordFileVerified("state/sessions.sqlite");
   recordFileVerified("memory/dreams");
   recordFileVerified("memory-recall-project-business.json");
+  recordFileVerified("memory-recall-multi-project-business.json");
   recordFileVerified("memory-recall-maintenance-business.json");
   writeFileSync(
     reportFile,
