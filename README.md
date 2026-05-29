@@ -162,6 +162,16 @@ That eval runs a real headless CLI session against a mock provider and verifies
 core/deferred tool exposure, ToolSearch intent ranking, `select:<tool>` schema
 reveal, and persisted tool usage feedback affecting later ranking.
 
+Control API behavior can be checked with:
+
+```sh
+npm run test:control-api-eval
+```
+
+That eval starts `magi serve` from the built CLI, pairs a device, verifies SSE
+events, resolves a mobile approval for FileWrite, cancels a streaming background
+job, cancels an active approval, and checks durable audit evidence.
+
 After the eval scripts run, aggregate the current capability evidence with:
 
 ```sh
@@ -169,7 +179,8 @@ npm run report:capability
 ```
 
 `npm run verify` runs the aggregate report last and fails if blackbox, Memory,
-Patch Engine, Goal/Plan, or Tool Discovery gates miss their required thresholds.
+Patch Engine, Goal/Plan, Tool Discovery, or Control API gates miss their
+required thresholds.
 
 ## Configuration
 
@@ -276,6 +287,7 @@ npm run test:memory-eval
 npm run test:patch-eval
 npm run test:goal-plan-eval
 npm run test:tool-discovery-eval
+npm run test:control-api-eval
 npm run report:capability
 ```
 

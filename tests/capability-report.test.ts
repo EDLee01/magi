@@ -17,18 +17,20 @@ describe("capability report", () => {
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport(),
-      toolDiscovery: toolDiscoveryReport()
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport()
     });
 
     expect(report).toMatchObject({
       status: "passed",
-      summary: { total: 5, passed: 5, failed: 0, score: 1 },
+      summary: { total: 6, passed: 6, failed: 0, score: 1 },
       checks: [
         { id: "blackbox", status: "passed" },
         { id: "memory", status: "passed" },
         { id: "patch", status: "passed" },
         { id: "goal-plan", status: "passed" },
-        { id: "tool-discovery", status: "passed" }
+        { id: "tool-discovery", status: "passed" },
+        { id: "control-api", status: "passed" }
       ]
     });
   });
@@ -46,7 +48,8 @@ describe("capability report", () => {
         patchUsageRate: 1 / 3
       }),
       goalPlan: goalPlanReport(),
-      toolDiscovery: toolDiscoveryReport()
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport()
     });
 
     const patch = report.checks.find((check) => check.id === "patch");
@@ -75,7 +78,8 @@ describe("capability report", () => {
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport(),
-      toolDiscovery: toolDiscoveryReport()
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport()
     });
 
     const output = formatCapabilityReport(report);
@@ -97,7 +101,8 @@ describe("capability report", () => {
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport({ completedGoalSuppressed: false, planReviewPersisted: false }),
-      toolDiscovery: toolDiscoveryReport()
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport()
     });
 
     const goalPlan = report.checks.find((check) => check.id === "goal-plan");
@@ -125,7 +130,8 @@ describe("capability report", () => {
         feedbackRankingUsedUsage: false,
         revealedToolCount: 21,
         grepFailures: 2
-      })
+      }),
+      controlApi: controlApiReport()
     });
 
     const toolDiscovery = report.checks.find((check) => check.id === "tool-discovery");
@@ -136,6 +142,38 @@ describe("capability report", () => {
         "feedbackRankingUsedUsage=false",
         "grepFailures < 4",
         "revealedToolCount did not increase"
+      ])
+    );
+  });
+
+  it("fails control API alignment when mobile workflow evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 2,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        patchUsageRate: 2 / 3
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport({
+        approvalSseSeen: false,
+        jobCancelled: false,
+        cancelledApprovalDidNotWrite: false
+      })
+    });
+
+    const controlApi = report.checks.find((check) => check.id === "control-api");
+    expect(report.status).toBe("failed");
+    expect(controlApi?.failures).toEqual(
+      expect.arrayContaining([
+        "approvalSseSeen=false",
+        "jobCancelled=false",
+        "cancelledApprovalDidNotWrite=false"
       ])
     );
   });
@@ -283,6 +321,56 @@ function toolDiscoveryReport(
           revealedToolCount: 22,
           grepFailures: 4,
           globSuccesses: 4,
+          ...overrides
+        }
+      }
+    ]
+  };
+}
+
+function controlApiReport(
+  overrides: Partial<{
+    controlServeStarted: boolean;
+    pairingSucceeded: boolean;
+    approvalSseSeen: boolean;
+    approvalResolved: boolean;
+    approvalFileWritten: boolean;
+    backgroundJobCompleted: boolean;
+    approvalAuditPersisted: boolean;
+    streamDeltaSeen: boolean;
+    jobCancelRequested: boolean;
+    jobCancelled: boolean;
+    queryCancelledAuditPersisted: boolean;
+    approvalCancelResolved: boolean;
+    cancelledApprovalDidNotWrite: boolean;
+    approvalCancelledAuditPersisted: boolean;
+  }> = {}
+): Record<string, unknown> {
+  return {
+    ...harnessReport({ name: "control-api-eval", scenarios: 1, providerCalls: 5 }),
+    scenarios: [
+      {
+        name: "mobile control approval, stream, and cancel workflow",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          provider: { callCount: 5 },
+          controlServeStarted: true,
+          pairingSucceeded: true,
+          approvalSseSeen: true,
+          approvalResolved: true,
+          approvalFileWritten: true,
+          backgroundJobCompleted: true,
+          approvalAuditPersisted: true,
+          streamDeltaSeen: true,
+          jobCancelRequested: true,
+          jobCancelled: true,
+          queryCancelledAuditPersisted: true,
+          approvalCancelResolved: true,
+          cancelledApprovalDidNotWrite: true,
+          approvalCancelledAuditPersisted: true,
           ...overrides
         }
       }

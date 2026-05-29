@@ -7,6 +7,7 @@ export interface CapabilityReportInput {
   patch: Record<string, unknown>;
   goalPlan: Record<string, unknown>;
   toolDiscovery: Record<string, unknown>;
+  controlApi: Record<string, unknown>;
   generatedAt?: Date;
   sources?: Record<string, string>;
 }
@@ -47,7 +48,8 @@ export function buildCapabilityReport(input: CapabilityReportInput): CapabilityR
     checkMemoryReport(input.memory),
     checkPatchReport(input.patch),
     checkGoalPlanReport(input.goalPlan),
-    checkToolDiscoveryReport(input.toolDiscovery)
+    checkToolDiscoveryReport(input.toolDiscovery),
+    checkControlApiReport(input.controlApi)
   ];
   const failed = checks.filter((check) => check.status !== "passed");
   return {
@@ -79,13 +81,15 @@ export function buildCapabilityReportFromFiles(input: {
     patch: readJsonReport(reportPath("patch-engine-eval.json")),
     goalPlan: readJsonReport(reportPath("goal-plan-eval.json")),
     toolDiscovery: readJsonReport(reportPath("tool-discovery-eval.json")),
+    controlApi: readJsonReport(reportPath("control-api-eval.json")),
     generatedAt: input.generatedAt,
     sources: {
       blackbox: path.relative(input.repoRoot, reportPath("blackbox-e2e.json")),
       memory: path.relative(input.repoRoot, reportPath("memory-recall-eval.json")),
       patch: path.relative(input.repoRoot, reportPath("patch-engine-eval.json")),
       goalPlan: path.relative(input.repoRoot, reportPath("goal-plan-eval.json")),
-      toolDiscovery: path.relative(input.repoRoot, reportPath("tool-discovery-eval.json"))
+      toolDiscovery: path.relative(input.repoRoot, reportPath("tool-discovery-eval.json")),
+      controlApi: path.relative(input.repoRoot, reportPath("control-api-eval.json"))
     }
   });
 }
@@ -278,6 +282,64 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),
       globSuccesses: readNumber(details.globSuccesses)
+    },
+    failures
+  };
+}
+
+function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck {
+  const base = checkHarnessReport({
+    id: "control-api",
+    title: "Control API mobile workflow eval",
+    report,
+    minScore: 1,
+    minSuccessRate: 1
+  });
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
+  const scenario = readRecord(scenarios[0]);
+  const details = readRecord(scenario.details);
+  const failures = [...base.failures];
+  const required = [
+    "controlServeStarted",
+    "pairingSucceeded",
+    "approvalSseSeen",
+    "approvalResolved",
+    "approvalFileWritten",
+    "backgroundJobCompleted",
+    "approvalAuditPersisted",
+    "streamDeltaSeen",
+    "jobCancelRequested",
+    "jobCancelled",
+    "queryCancelledAuditPersisted",
+    "approvalCancelResolved",
+    "cancelledApprovalDidNotWrite",
+    "approvalCancelledAuditPersisted"
+  ];
+  for (const key of required) {
+    if (details[key] !== true) {
+      failures.push(`${key}=false`);
+    }
+  }
+  return {
+    ...base,
+    status: failures.length === 0 ? "passed" : "failed",
+    score: failures.length === 0 ? 1 : 0,
+    metrics: {
+      ...base.metrics,
+      controlServeStarted: details.controlServeStarted === true,
+      pairingSucceeded: details.pairingSucceeded === true,
+      approvalSseSeen: details.approvalSseSeen === true,
+      approvalResolved: details.approvalResolved === true,
+      approvalFileWritten: details.approvalFileWritten === true,
+      backgroundJobCompleted: details.backgroundJobCompleted === true,
+      approvalAuditPersisted: details.approvalAuditPersisted === true,
+      streamDeltaSeen: details.streamDeltaSeen === true,
+      jobCancelRequested: details.jobCancelRequested === true,
+      jobCancelled: details.jobCancelled === true,
+      queryCancelledAuditPersisted: details.queryCancelledAuditPersisted === true,
+      approvalCancelResolved: details.approvalCancelResolved === true,
+      cancelledApprovalDidNotWrite: details.cancelledApprovalDidNotWrite === true,
+      approvalCancelledAuditPersisted: details.approvalCancelledAuditPersisted === true
     },
     failures
   };
