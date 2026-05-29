@@ -8,20 +8,43 @@ import {
   formatCapabilityReport,
   writeCapabilityReport
 } from "../dist/capability-report.js";
+import {
+  appendCapabilityTrendHistory,
+  buildCapabilityTrendReport,
+  formatCapabilityTrendReport,
+  readCapabilityTrendHistory,
+  writeCapabilityTrendReport
+} from "../dist/capability-trend.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const reportsRoot = path.join(repoRoot, ".magi-reports");
 const outputPath =
   process.env.MAGI_CAPABILITY_REPORT ??
   path.join(reportsRoot, "capability-alignment-report.json");
+const trendOutputPath =
+  process.env.MAGI_CAPABILITY_TREND_REPORT ??
+  path.join(reportsRoot, "capability-trend-report.json");
+const trendHistoryPath =
+  process.env.MAGI_CAPABILITY_TREND_HISTORY ??
+  path.join(reportsRoot, "capability-trend-history.json");
 
 const report = buildCapabilityReportFromFiles({ repoRoot, reportsRoot });
 writeCapabilityReport(outputPath, report);
+const trend = buildCapabilityTrendReport({
+  current: report,
+  history: readCapabilityTrendHistory(trendHistoryPath)
+});
+writeCapabilityTrendReport(trendOutputPath, trend);
 
-if (report.status !== "passed") {
+if (report.status !== "passed" || trend.status !== "passed") {
   console.error(formatCapabilityReport(report));
+  console.error(formatCapabilityTrendReport(trend));
   process.exit(1);
 }
 
+appendCapabilityTrendHistory({ file: trendHistoryPath, report: trend });
+
 console.log(formatCapabilityReport(report));
+console.log(formatCapabilityTrendReport(trend));
 console.log(`Capability report: ${outputPath}`);
+console.log(`Capability trend report: ${trendOutputPath}`);
