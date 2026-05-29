@@ -558,7 +558,17 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
   const scenario = readRecord(scenarios[0]);
   const details = readRecord(scenario.details);
+  const summary = readRecord(report.summary);
+  const toolEfficiency = readRecord(summary.toolEfficiency);
   const failures = [...base.failures];
+  const assertions = readNumber(summary.assertions);
+  const filesVerified = readNumber(summary.filesVerified);
+  const toolCallCount = readNumber(toolEfficiency.toolCallCount);
+  const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
+  if (assertions < 35) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 4) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   const required = [
     "controlServeStarted",
     "pairingSucceeded",
@@ -618,6 +628,10 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     score: failures.length === 0 ? 1 : 0,
     metrics: {
       ...base.metrics,
+      assertions,
+      filesVerified,
+      toolCallCount,
+      uniqueToolCount,
       controlServeStarted: details.controlServeStarted === true,
       pairingSucceeded: details.pairingSucceeded === true,
       pairingUrlGenerated: details.pairingUrlGenerated === true,

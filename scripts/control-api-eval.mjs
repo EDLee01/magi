@@ -118,6 +118,55 @@ try {
     await exercisePeerDispatchFlow({ provider, state });
 
     assertAllState(state);
+    const assertions = [
+      "control server health endpoint passed",
+      "pairing credentials returned",
+      "pairing URL carried panel credentials",
+      "mDNS peer discovery found advertised control server",
+      "background approval job started",
+      "approval SSE pending and resolved events streamed",
+      "approval resolution accepted mobile responder",
+      "approved FileWrite created workspace file",
+      "approval audit events persisted",
+      "streaming job emitted text delta",
+      "job cancel request accepted",
+      "streaming job reached cancelled status",
+      "query cancellation audit events persisted",
+      "active approval cancellation accepted",
+      "cancelled approval avoided file write",
+      "approval cancellation audit events persisted",
+      "panel session created for resume",
+      "panel follow-up saw prior session context",
+      "resumed session messages persisted",
+      "panel HTML served app shell",
+      "panel client contract exported control methods",
+      "panel client createSession unwrapped response",
+      "panel client startJob accepted background job",
+      "panel SSE stream reached completion",
+      "mobile viewport rendered panel",
+      "mobile pairing token stored and URL cleaned",
+      "mobile browser sent message",
+      "mobile browser rendered assistant stream",
+      "mobile browser requested cancellation",
+      "mobile browser rendered cancellation",
+      "peer credentials saved locally",
+      "saved peer listed by CLI",
+      "Agent deferred tool revealed through ToolSearch",
+      "peer Agent dispatch called once",
+      "peer dispatch returned remote result",
+      "remote peer session created",
+      "remote peer job completed",
+      "remote peer audit persisted completion"
+    ];
+    const filesVerified = [
+      "mobile-control.txt",
+      "state/control-sessions.json",
+      "state/control-jobs.json",
+      "state/control-devices.json",
+      "state/peers.json",
+      "peer-config/state/control-sessions.json",
+      "peer-config/state/control-jobs.json"
+    ];
     const report = harnessReport.buildHarnessReport({
       name: "control-api-eval",
       startedAt,
@@ -130,6 +179,8 @@ try {
           failureKind: null,
           details: {
             ...state,
+            assertions,
+            filesVerified,
             control: { port: controlPort },
             provider: provider.summary()
           }
@@ -598,8 +649,7 @@ async function exercisePeerDispatchFlow({ provider, state }) {
     const peerSessions = await getJson(`${peerServe.url}/sessions`, peerHeaders);
     const remoteSession = (peerSessions.sessions ?? []).find(
       (session) =>
-        session.title?.includes("Return exactly PEER DISPATCH OK") ||
-        session.messageCount >= 2
+        session.title?.includes("Return exactly PEER DISPATCH OK") || session.messageCount >= 2
     );
     state.peerRemoteSessionCreated = Boolean(remoteSession);
 

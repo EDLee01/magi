@@ -382,7 +382,11 @@ describe("capability report", () => {
         peerDispatchResultReturned: false,
         peerRemoteSessionCreated: false,
         peerRemoteJobCompleted: false,
-        peerDispatchAuditPersisted: false
+        peerDispatchAuditPersisted: false,
+        assertions: 8,
+        filesVerified: 2,
+        toolCallCount: 2,
+        uniqueToolCount: 2
       })
     });
 
@@ -390,6 +394,10 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(controlApi?.failures).toEqual(
       expect.arrayContaining([
+        "assertions=8",
+        "filesVerified=2",
+        "toolCallCount=2",
+        "uniqueToolCount=2",
         "pairingUrlGenerated=false",
         "pairingUrlTokenHandoffSeen=false",
         "mdnsPeerDiscovered=false",
@@ -868,10 +876,22 @@ function controlApiReport(
     peerRemoteSessionCreated: boolean;
     peerRemoteJobCompleted: boolean;
     peerDispatchAuditPersisted: boolean;
+    assertions: number;
+    filesVerified: number;
+    toolCallCount: number;
+    uniqueToolCount: number;
   }> = {}
 ): Record<string, unknown> {
   return {
-    ...harnessReport({ name: "control-api-eval", scenarios: 1, providerCalls: 5 }),
+    ...harnessReport({
+      name: "control-api-eval",
+      scenarios: 1,
+      providerCalls: 5,
+      assertions: overrides.assertions ?? 38,
+      filesVerified: overrides.filesVerified ?? 7,
+      toolCallCount: overrides.toolCallCount ?? 4,
+      uniqueToolCount: overrides.uniqueToolCount ?? 3
+    }),
     scenarios: [
       {
         name: "mobile control approval, stream, and cancel workflow",
@@ -881,6 +901,19 @@ function controlApiReport(
         failureKind: null,
         details: {
           provider: { callCount: 5 },
+          assertions: Array.from(
+            { length: overrides.assertions ?? 38 },
+            (_, index) => `control-api assertion ${index + 1}`
+          ),
+          filesVerified: Array.from(
+            { length: overrides.filesVerified ?? 7 },
+            (_, index) => `control-api-file-${index + 1}.json`
+          ),
+          toolCounts: {
+            FileWrite: 2,
+            ToolSearch: 1,
+            Agent: 1
+          },
           controlServeStarted: true,
           pairingSucceeded: true,
           pairingUrlGenerated: true,
