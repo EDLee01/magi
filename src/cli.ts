@@ -15,6 +15,7 @@ import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js"
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
 import { formatMemoryConflicts, listMemoryConflicts } from "./memory-conflicts.js";
 import { formatMemoryMerges, listMemoryMerges } from "./memory-merges.js";
+import { formatMemoryEvalReport, runMemoryEval } from "./memory-eval.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
 import {
   configureMemoryMaintenance,
@@ -656,6 +657,24 @@ async function runCliUnsafeWithParsed(
         limit: options.limit
       });
       return { exitCode: 0, stdout: `${formatMemoryMerges(merges)}\n`, stderr: "" };
+    }
+    if (subcommand === "eval") {
+      const options = parseMemoryEvalArgs(parsed.rest.slice(1));
+      const sessionId = parsed.resumeSessionId ?? parsed.sessionId;
+      const report = runMemoryEval({
+        ...rootInput,
+        paths,
+        cwd,
+        caseFile: options.caseFile,
+        maxResults: options.maxResults,
+        sessionId,
+        scopes: config.memory.scopes
+      });
+      return {
+        exitCode: report.failed === 0 ? 0 : 1,
+        stdout: `${formatMemoryEvalReport(report)}\n`,
+        stderr: ""
+      };
     }
     if (subcommand === "maintain") {
       const rawMaintainArgs = parsed.rest.slice(1);
@@ -1786,6 +1805,7 @@ function helpText(): string {
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
     "  magi memory conflicts [--limit <n>]",
     "  magi memory merges [--limit <n>]",
+    "  magi memory eval --case-file <file> [--max-results <n>]",
     "  magi memory maintain [--apply] [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>]",
     "  magi memory maintain config [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>] [--limit <n>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
@@ -1970,6 +1990,27 @@ function parseMemoryMergesArgs(args: string[]): { limit?: number } {
     throw new MagiUsageError(`Unknown magi memory merges option: ${arg}`);
   }
   return { limit };
+}
+
+function parseMemoryEvalArgs(args: string[]): { caseFile: string; maxResults?: number } {
+  let caseFile = "";
+  let maxResults: number | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--case-file") {
+      caseFile = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--max-results") {
+      maxResults = readPositiveNumberArg(args[++index], "magi memory eval --max-results");
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory eval option: ${arg}`);
+  }
+  if (!caseFile) {
+    throw new MagiUsageError("magi memory eval requires --case-file <file>");
+  }
+  return { caseFile, maxResults };
 }
 
 function parseMemoryMaintainArgs(args: string[]): {

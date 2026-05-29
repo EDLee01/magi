@@ -698,6 +698,26 @@ async function scenarioComplexWorkflow() {
       assert(mergeAudit.includes("Focused CLI E2E workflow -> Focused CLI E2E workflow"), "memory merges did not show duplicate workflow titles");
       assert(mergeAudit.includes("redirected edges: 1"), "memory merges did not show redirected edge count");
       assert(mergeAudit.includes("dream:"), "memory merges did not include dream id");
+      const evalCaseFile = path.join(workDir, "memory-recall-eval.json");
+      writeFileSync(evalCaseFile, JSON.stringify({
+        name: "complex memory recall",
+        cases: [{
+          name: "workflow and preference recall",
+          query: "CLI E2E workflow verification preference",
+          expect: ["Focused CLI E2E workflow", "focused CLI black-box verification"],
+          forbid: ["verbose terminal dumps"],
+          minResults: 2,
+        }],
+      }, null, 2));
+      const memoryEval = await runCli({
+        args: ["memory", "eval", "--case-file", evalCaseFile, "--max-results", "5"],
+        cwd: workDir,
+        configDir,
+        label: "complex memory recall eval",
+      });
+      assert(memoryEval.includes("Memory recall eval: complex memory recall"), "memory eval did not run named suite");
+      assert(memoryEval.includes("1. PASS workflow and preference recall"), "memory eval did not pass complex recall case");
+      assert(memoryEval.includes("score: 1.00"), "memory eval did not report perfect score");
 
       await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
@@ -716,6 +736,7 @@ async function scenarioComplexWorkflow() {
           "Dream redirected duplicate workflow graph edge",
           "Dream fused duplicate workflow weight",
           "memory merge audit listed duplicate workflow",
+          "memory recall quality eval passed",
           "learning draft listed"
         ],
         filesVerified: ["reports/e2e-result.md", "state/todos.json"],

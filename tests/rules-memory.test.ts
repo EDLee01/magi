@@ -606,6 +606,90 @@ describe("AGENTS rules and memory", () => {
     );
   });
 
+  it("runs memory recall quality evals from CLI case files", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    appendMemoryFile({
+      appRoot: paths.root,
+      filePath: "projects/magi.md",
+      content: [
+        "## Graph memory",
+        "Magi stores durable facts as weighted graph memory.",
+        "",
+        "## Verification workflow",
+        "Run focused business checks before broad checks."
+      ].join("\n")
+    });
+    syncMemoryGraph({ appRoot: paths.root, paths });
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.getSourceByUri("memory/projects/magi.md");
+      const chunks = store.listChunksForSource(source!.id);
+      const project = chunks.find((chunk) => chunk.heading === "Graph memory");
+      const workflow = chunks.find((chunk) => chunk.heading === "Verification workflow");
+      store.addEdge({
+        fromNodeId: project!.nodeId,
+        toNodeId: workflow!.nodeId,
+        relation: "relates_to",
+        weight: 0.9
+      });
+    } finally {
+      store.close();
+    }
+    const caseFile = path.join(workspace, "memory-eval.json");
+    writeFileSync(
+      caseFile,
+      JSON.stringify(
+        {
+          name: "memory graph recall",
+          cases: [
+            {
+              name: "linked workflow recall",
+              query: "durable weighted graph",
+              expect: ["Graph memory", "Verification workflow"],
+              forbid: ["verbose terminal dumps"],
+              minResults: 2
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    const passed = await runCli(
+      ["memory", "eval", "--case-file", caseFile, "--max-results", "5"],
+      temp.env,
+      workspace
+    );
+    expect(passed.exitCode).toBe(0);
+    expect(passed.stdout).toContain("Memory recall eval: memory graph recall");
+    expect(passed.stdout).toContain("1. PASS linked workflow recall");
+    expect(passed.stdout).toContain("score: 1.00");
+
+    writeFileSync(
+      caseFile,
+      JSON.stringify(
+        {
+          cases: [
+            {
+              name: "missing memory",
+              query: "durable weighted graph",
+              expect: ["nonexistent recall marker"]
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    const failed = await runCli(["memory", "eval", "--case-file", caseFile], temp.env, workspace);
+    expect(failed.exitCode).toBe(1);
+    expect(failed.stdout).toContain("1. FAIL missing memory");
+    expect(failed.stdout).toContain("expected missing: nonexistent recall marker");
+  });
+
   it("links graph memory nodes through the CLI and retrieves the linked neighbor", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
