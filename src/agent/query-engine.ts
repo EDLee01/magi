@@ -8,7 +8,7 @@ import {
 } from "../providers/ir.js";
 import { SessionStore } from "../session-store.js";
 import { AgentRoute, AgentQueryEvent, AgentQueryResult, runAgentQuery } from "./query.js";
-import { ToolPermissionMode } from "./tools.js";
+import { AgentToolResult, ToolPermissionMode } from "./tools.js";
 import { HookDefinition, HookEvent, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
 import { compactSessionWithHooks } from "../context/compaction.js";
@@ -25,6 +25,7 @@ import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
 import { formatPlanContext, getLatestPlanReview } from "../plan-state.js";
+import { checkPlanExecutionGuard } from "../plan-execution-guard.js";
 import { findSkill, listSkills, SkillRecord } from "../skills/loader.js";
 import { formatSessionRecallContext, searchSessions } from "../session-search.js";
 import { maybeProposePostTaskLearningDraft } from "../learning-draft.js";
@@ -166,6 +167,7 @@ export class QueryEngine {
           }
         : undefined,
       onStreamEvent: this.input.onStreamEvent,
+      toolExecutionGuard: ({ toolUse }) => this.applyPlanExecutionGuard(jobId, toolUse),
       stream: this.input.stream
     });
 
@@ -1171,6 +1173,41 @@ export class QueryEngine {
         error: result.error
       }
     });
+  }
+
+  private applyPlanExecutionGuard(
+    jobId: string,
+    toolUse: MagiToolUsePart
+  ): AgentToolResult | undefined {
+    const paths = this.input.memoryOptions?.paths;
+    if (!paths) return undefined;
+    const plan = getLatestPlanReview(paths.stateRoot, this.input.sessionId);
+    if (!plan || plan.status !== "approved") return undefined;
+    const violation = checkPlanExecutionGuard({
+      plan,
+      session: this.input.store.getSession(this.input.sessionId),
+      toolUse
+    });
+    if (!violation) return undefined;
+    this.input.store.recordAudit({
+      sessionId: this.input.sessionId,
+      jobId,
+      action: "agent.plan.guard.blocked",
+      target: toolUse.name,
+      metadata: {
+        planId: plan.id,
+        requiredTool: violation.requiredTool,
+        requiredPath: violation.requiredPath,
+        attemptedTool: violation.attemptedTool,
+        attemptedPath: violation.attemptedPath
+      }
+    });
+    return {
+      toolCallId: toolUse.id,
+      toolName: toolUse.name,
+      content: violation.message,
+      isError: true
+    };
   }
 }
 

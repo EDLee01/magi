@@ -36,6 +36,11 @@ import {
   UserMessageSink
 } from "../tools/user-message.js";
 
+export interface ToolExecutionGuardRequest {
+  toolUse: MagiToolUsePart;
+  toolUses: MagiToolUsePart[];
+}
+
 export type AgentQueryEvent =
   | { type: "request_start" }
   | {
@@ -162,6 +167,7 @@ export interface AgentQueryInput {
     tokenRefresh?: (serverName: string) => Promise<string | undefined>;
   };
   onStreamEvent?: (event: AgentQueryEvent) => void;
+  toolExecutionGuard?: (request: ToolExecutionGuardRequest) => AgentToolResult | undefined;
   stream?: boolean;
 }
 
@@ -388,6 +394,7 @@ async function* runAgentQueryInner(
         return { text: response.text };
       };
       const prepared = await prepareToolUsesWithPreHooks(input, toolUses, promptModel);
+      applyToolExecutionGuard(input, prepared, toolUses);
       for (const hookResult of prepared.hookResults) {
         yield hookResult;
       }
@@ -697,6 +704,27 @@ async function prepareToolUsesWithPreHooks(
     allowed.push({ index, toolUse });
   }
   return { results, allowed, hookResults };
+}
+
+function applyToolExecutionGuard(
+  input: AgentQueryInput,
+  prepared: PreparedToolUses,
+  toolUses: MagiToolUsePart[]
+): void {
+  if (!input.toolExecutionGuard) return;
+  const allowed: PreparedToolUses["allowed"] = [];
+  for (const entry of prepared.allowed) {
+    const guardResult = input.toolExecutionGuard({
+      toolUse: entry.toolUse,
+      toolUses
+    });
+    if (guardResult) {
+      prepared.results[entry.index] = guardResult;
+    } else {
+      allowed.push(entry);
+    }
+  }
+  prepared.allowed = allowed;
 }
 
 async function executePreparedToolUses(

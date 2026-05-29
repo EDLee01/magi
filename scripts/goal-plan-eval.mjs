@@ -59,6 +59,7 @@ try {
     inheritedPlanContextSeen: false,
     inheritedPlanReadBeforeWrite: false,
     inheritedPlanExecutionCompleted: false,
+    inheritedPlanDeviationCorrected: false,
     blockedGoalPersisted: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
@@ -291,6 +292,7 @@ try {
     assert(state.inheritedPlanContextSeen, "provider did not see inherited plan context");
     assert(state.inheritedPlanReadBeforeWrite, "provider did not read before writing");
     assert(state.inheritedPlanExecutionCompleted, "provider did not complete inherited plan");
+    assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
 
     const report = harnessReport.buildHarnessReport({
       name: "goal-plan-eval",
@@ -319,6 +321,7 @@ try {
             planRevisionChainViewListed,
             inheritedPlanContextSeen: state.inheritedPlanContextSeen,
             inheritedPlanExecutionFollowed,
+            inheritedPlanDeviationCorrected: state.inheritedPlanDeviationCorrected,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -431,10 +434,31 @@ function createRouter(state) {
       assert(toolNames.includes("FileWrite"), "FileWrite was not available for inherited plan");
       if (inheritedPlanExecutionTurns === 1) {
         return toolResponse([
-          toolCall("inherited-plan-read", "FileRead", { file_path: inheritedPlanSourcePath })
+          toolCall("inherited-plan-write-too-soon", "FileWrite", {
+            file_path: inheritedPlanOutputPath,
+            content: inheritedPlanOutputContent
+          })
         ]);
       }
       if (inheritedPlanExecutionTurns === 2) {
+        assert(
+          transcript.includes("Plan execution guard"),
+          "plan deviation guard feedback was not visible"
+        );
+        assert(
+          transcript.includes(`Required first: FileRead ${inheritedPlanSourcePath}`),
+          "plan deviation guard did not name required read"
+        );
+        assert(
+          !existsSync(path.join(workDir, inheritedPlanOutputPath)),
+          "plan deviation guard allowed early write"
+        );
+        state.inheritedPlanDeviationCorrected = true;
+        return toolResponse([
+          toolCall("inherited-plan-read", "FileRead", { file_path: inheritedPlanSourcePath })
+        ]);
+      }
+      if (inheritedPlanExecutionTurns === 3) {
         assert(
           transcript.includes(inheritedPlanSourceContent.trim()),
           "inherited plan source read result was not visible"

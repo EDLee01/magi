@@ -341,6 +341,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.inheritedPlanExecutionFollowed !== true) {
     failures.push("inheritedPlanExecutionFollowed=false");
   }
+  if (details.inheritedPlanDeviationCorrected !== true) {
+    failures.push("inheritedPlanDeviationCorrected=false");
+  }
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -364,6 +367,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       planRevisionChainViewListed: details.planRevisionChainViewListed === true,
       inheritedPlanContextSeen: details.inheritedPlanContextSeen === true,
       inheritedPlanExecutionFollowed: details.inheritedPlanExecutionFollowed === true,
+      inheritedPlanDeviationCorrected: details.inheritedPlanDeviationCorrected === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },

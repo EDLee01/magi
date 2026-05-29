@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { QueryEngine } from "../src/agent/query-engine.js";
 import { AgentQueryEvent, runAgentQuery } from "../src/agent/query.js";
 import { ActiveInteractionRegistry } from "../src/interactions.js";
-import { ProviderAdapter, textMessage } from "../src/providers/ir.js";
+import { messageText, ProviderAdapter, textMessage } from "../src/providers/ir.js";
 import { ProviderError } from "../src/providers/errors.js";
 import { SessionStore } from "../src/session-store.js";
 import { appendMemory, readMemory } from "../src/memory.js";
@@ -2173,6 +2173,97 @@ describe("agent query loop", () => {
       expect(seen.at(-1)).toContain(`Revises plan: ${original.id}`);
       expect(seen.at(-1)).toContain("1. Inspect first");
       expect(seen.at(-1)).not.toContain("Skip inspection");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("blocks inherited plan writes until the required file read has happened", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    writeFileSync(path.join(workspace, "guarded.txt"), "before\n", "utf8");
+    const store = SessionStore.open(paths);
+    try {
+      const sessionId = store.createSession({ title: "plan guard", cwd: workspace });
+      const { recordPlanReview } = await import("../src/plan-state.js");
+      recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId,
+        plan: "1. Read guarded.txt before writing\n2. Write guarded.txt",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      let calls = 0;
+      const adapter: ProviderAdapter = {
+        name: "plan-guard-provider",
+        complete: async (request) => {
+          calls += 1;
+          const transcript = request.messages.map((message) => messageText(message)).join("\n");
+          if (calls === 1) {
+            return {
+              text: "",
+              toolUses: [
+                {
+                  type: "tool-use",
+                  id: "write-too-soon",
+                  name: "FileWrite",
+                  input: { file_path: "guarded.txt", content: "after\n" }
+                }
+              ]
+            };
+          }
+          if (calls === 2) {
+            expect(transcript).toContain("Plan execution guard");
+            return {
+              text: "",
+              toolUses: [
+                {
+                  type: "tool-use",
+                  id: "read-required",
+                  name: "FileRead",
+                  input: { file_path: "guarded.txt" }
+                }
+              ]
+            };
+          }
+          if (calls === 3) {
+            expect(transcript).toContain("Read guarded.txt");
+            return {
+              text: "",
+              toolUses: [
+                {
+                  type: "tool-use",
+                  id: "write-after-read",
+                  name: "FileWrite",
+                  input: { file_path: "guarded.txt", content: "after\n" }
+                }
+              ]
+            };
+          }
+          return { text: "guard fixed" };
+        }
+      };
+      const engine = new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-plan-guard",
+        cwd: workspace,
+        routes: [{ providerName: "guard", model: "mock", adapter }],
+        permissionMode: "acceptEdits",
+        memoryOptions: { paths, enabled: false }
+      });
+
+      const result = await engine.submitMessage("continue guarded plan");
+
+      expect(result.text).toBe("guard fixed");
+      await expect(readFile(path.join(workspace, "guarded.txt"), "utf8")).resolves.toBe("after\n");
+      expect(store.listSessionAuditEvents(sessionId, 20)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.plan.guard.blocked",
+          target: "FileWrite"
+        })
+      );
     } finally {
       store.close();
     }
