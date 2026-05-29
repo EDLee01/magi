@@ -21,6 +21,7 @@ const configDir = path.join(root, "config");
 const workDir = path.join(root, "work");
 const sessionId = "goal-plan-eval-session";
 const secondSessionId = "goal-plan-eval-second-session";
+const adoptedSessionId = "goal-plan-eval-adopted-session";
 const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
 const blockedGoalObjective = "wait for Goal/Plan blocked audit";
 const completedGoalObjective = "complete Goal/Plan lifecycle eval";
@@ -60,6 +61,8 @@ try {
     inheritedPlanReadBeforeWrite: false,
     inheritedPlanExecutionCompleted: false,
     inheritedPlanDeviationCorrected: false,
+    crossSessionPlanAdopted: false,
+    crossSessionAdoptedPlanContextSeen: false,
     blockedGoalPersisted: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
@@ -284,6 +287,26 @@ try {
       "inherited plan execution final answer missing"
     );
     const inheritedPlanExecutionFollowed = assertInheritedPlanExecutionFollowed();
+    const crossSessionPlanAdopted = await assertCrossSessionPlanAdopted(
+      planRevision.approvedPlanId
+    );
+    const adoptedPlanContext = await runCli(
+      [
+        "--session-id",
+        adoptedSessionId,
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "Verify adopted cross-session plan context is injected."
+      ],
+      "adopted plan context"
+    );
+    assert(
+      adoptedPlanContext.includes("Adopted cross-session plan context is present"),
+      "adopted plan context prompt failed"
+    );
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
@@ -293,6 +316,7 @@ try {
     assert(state.inheritedPlanReadBeforeWrite, "provider did not read before writing");
     assert(state.inheritedPlanExecutionCompleted, "provider did not complete inherited plan");
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
+    assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
     const report = harnessReport.buildHarnessReport({
       name: "goal-plan-eval",
@@ -322,6 +346,8 @@ try {
             inheritedPlanContextSeen: state.inheritedPlanContextSeen,
             inheritedPlanExecutionFollowed,
             inheritedPlanDeviationCorrected: state.inheritedPlanDeviationCorrected,
+            crossSessionPlanAdopted,
+            crossSessionAdoptedPlanContextSeen: state.crossSessionAdoptedPlanContextSeen,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -481,6 +507,21 @@ function createRouter(state) {
       );
       state.inheritedPlanExecutionCompleted = true;
       return messageText("Inherited plan execution complete.");
+    }
+
+    if (latestUser.includes("Verify adopted cross-session plan context is injected")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "adopted plan context missing");
+      assert(systemPrompt.includes(approvedPlanText), "adopted plan text was not injected");
+      assert(
+        systemPrompt.includes("Adopted from plan:"),
+        "adopted plan context missed source plan"
+      );
+      assert(
+        systemPrompt.includes(`Adopted from session: ${sessionId}`),
+        "adopted plan context missed source session"
+      );
+      state.crossSessionAdoptedPlanContextSeen = true;
+      return messageText("Adopted cross-session plan context is present.");
     }
 
     return messageText("OK");
@@ -727,6 +768,34 @@ async function assertPlanRevisionChainViewListed(revisionPlanId, approvedPlanId)
   assert(chain.includes(`2. approved ${approvedPlanId}`), "plan chain view missed approved plan");
   const show = await runCli(["plan", "show", revisionPlanId], "plan revision show view");
   assert(show.includes(`Revised by plan: ${approvedPlanId}`), "plan show missed revised-by link");
+  return true;
+}
+
+async function assertCrossSessionPlanAdopted(sourcePlanId) {
+  await runCli(
+    [
+      "--session-id",
+      adoptedSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare adopted Goal/Plan eval session."
+    ],
+    "seed adopted session"
+  );
+  const adopted = await runCli(
+    ["plan", "adopt", sourcePlanId, "--session-id", adoptedSessionId],
+    "adopt approved plan"
+  );
+  assert(adopted.includes("Plan adopted:"), "plan adopt did not confirm");
+  assert(adopted.includes(`Adopted from plan: ${sourcePlanId}`), "plan adopt missed source id");
+  const status = await runCli(["plan", "--session-id", adoptedSessionId], "adopted plan status");
+  assert(status.includes(`Adopted from plan: ${sourcePlanId}`), "adopted plan missed source plan");
+  assert(
+    status.includes(`Adopted from session: ${sessionId}`),
+    "adopted plan missed source session"
+  );
+  assert(status.includes(approvedPlanText), "adopted plan missed approved plan text");
   return true;
 }
 

@@ -19,6 +19,8 @@ export interface PlanReviewRecord {
   revisesPlanId?: string;
   revisedByPlanId?: string;
   rootPlanId?: string;
+  adoptedFromPlanId?: string;
+  adoptedFromSessionId?: string;
 }
 
 interface PlanStoreData {
@@ -39,6 +41,8 @@ export function recordPlanReview(input: {
   status?: PlanReviewStatus;
   response?: string;
   revisesPlanId?: string;
+  adoptedFromPlanId?: string;
+  adoptedFromSessionId?: string;
 }): PlanReviewRecord {
   const plan = input.plan.trim();
   if (!plan) {
@@ -67,7 +71,9 @@ export function recordPlanReview(input: {
     updatedAt: now,
     response: input.response?.trim() || undefined,
     revisesPlanId,
-    rootPlanId: predecessor ? (predecessor.rootPlanId ?? predecessor.id) : undefined
+    rootPlanId: predecessor ? (predecessor.rootPlanId ?? predecessor.id) : undefined,
+    adoptedFromPlanId: input.adoptedFromPlanId,
+    adoptedFromSessionId: input.adoptedFromSessionId
   };
   if (predecessor) {
     predecessor.revisedByPlanId = record.id;
@@ -75,6 +81,31 @@ export function recordPlanReview(input: {
   data.plans.push(record);
   writePlanStore(input.stateRoot, data);
   return record;
+}
+
+export function adoptPlanReview(input: {
+  stateRoot: string;
+  sourcePlanId: string;
+  targetSessionId: string;
+  response?: string;
+}): PlanReviewRecord {
+  const source = getPlanReview(input.stateRoot, input.sourcePlanId);
+  if (!source) {
+    throw new Error(`Cannot adopt unknown plan: ${input.sourcePlanId}`);
+  }
+  if (source.status !== "approved") {
+    throw new Error(`Can only adopt approved plans: ${input.sourcePlanId}`);
+  }
+  return recordPlanReview({
+    stateRoot: input.stateRoot,
+    sessionId: input.targetSessionId,
+    plan: source.plan,
+    status: "approved",
+    response: input.response ?? `Adopted from plan ${source.id}`,
+    adoptedFromPlanId: source.id,
+    adoptedFromSessionId: source.sessionId,
+    revisesPlanId: undefined
+  });
 }
 
 export function updatePlanReviewStatus(
@@ -156,6 +187,10 @@ export function formatPlanReview(record: PlanReviewRecord | undefined): string {
     record.revisesPlanId ? `Revises plan: ${record.revisesPlanId}` : undefined,
     record.revisedByPlanId ? `Revised by plan: ${record.revisedByPlanId}` : undefined,
     record.rootPlanId ? `Root plan: ${record.rootPlanId}` : undefined,
+    record.adoptedFromPlanId ? `Adopted from plan: ${record.adoptedFromPlanId}` : undefined,
+    record.adoptedFromSessionId
+      ? `Adopted from session: ${record.adoptedFromSessionId}`
+      : undefined,
     `Updated: ${record.updatedAt}`,
     record.response ? `Response: ${record.response}` : undefined,
     "",
@@ -195,6 +230,10 @@ export function formatPlanContext(record: PlanReviewRecord | undefined): string 
     record.revisesPlanId ? `Revises plan: ${record.revisesPlanId}` : undefined,
     record.revisedByPlanId ? `Revised by plan: ${record.revisedByPlanId}` : undefined,
     record.rootPlanId ? `Root plan: ${record.rootPlanId}` : undefined,
+    record.adoptedFromPlanId ? `Adopted from plan: ${record.adoptedFromPlanId}` : undefined,
+    record.adoptedFromSessionId
+      ? `Adopted from session: ${record.adoptedFromSessionId}`
+      : undefined,
     record.response ? `Last user response: ${record.response}` : undefined,
     "Implementation plan:",
     record.plan,
@@ -265,7 +304,11 @@ function normalizePlanReview(value: unknown): PlanReviewRecord | undefined {
     revisesPlanId: typeof record.revisesPlanId === "string" ? record.revisesPlanId : undefined,
     revisedByPlanId:
       typeof record.revisedByPlanId === "string" ? record.revisedByPlanId : undefined,
-    rootPlanId: typeof record.rootPlanId === "string" ? record.rootPlanId : undefined
+    rootPlanId: typeof record.rootPlanId === "string" ? record.rootPlanId : undefined,
+    adoptedFromPlanId:
+      typeof record.adoptedFromPlanId === "string" ? record.adoptedFromPlanId : undefined,
+    adoptedFromSessionId:
+      typeof record.adoptedFromSessionId === "string" ? record.adoptedFromSessionId : undefined
   };
 }
 
@@ -288,7 +331,8 @@ function firstLine(text: string): string {
 function formatPlanReviewLinks(record: PlanReviewRecord): string {
   const links = [
     record.revisesPlanId ? `revises:${record.revisesPlanId}` : undefined,
-    record.revisedByPlanId ? `revised-by:${record.revisedByPlanId}` : undefined
+    record.revisedByPlanId ? `revised-by:${record.revisedByPlanId}` : undefined,
+    record.adoptedFromPlanId ? `adopted-from:${record.adoptedFromPlanId}` : undefined
   ].filter((link): link is string => Boolean(link));
   return links.length > 0 ? ` ${links.join(" ")}` : "";
 }

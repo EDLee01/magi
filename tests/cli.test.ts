@@ -408,6 +408,37 @@ describe("CLI entrypoint", () => {
     expect(all.stdout).toContain(secondPlan.id);
   });
 
+  it("adopts an approved plan into another session from the CLI", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const sourceSessionId = "33333333-3333-4333-8333-333333333338";
+    const targetSessionId = "33333333-3333-4333-8333-333333333339";
+    await runCli(["--session-id", sourceSessionId, "-p", "prepare source plan session"], temp.env);
+    await runCli(["--session-id", targetSessionId, "-p", "prepare target plan session"], temp.env);
+    const { recordPlanReview } = await import("../src/plan-state.js");
+    const source = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: sourceSessionId,
+      plan: "1. Inspect source plan\n2. Carry plan into target",
+      status: "approved",
+      response: "Yes, proceed"
+    });
+
+    const adopted = await runCli(
+      ["plan", "adopt", source.id, "--session-id", targetSessionId],
+      temp.env
+    );
+    expect(adopted.exitCode).toBe(0);
+    expect(adopted.stdout).toContain("Plan adopted:");
+    expect(adopted.stdout).toContain(`Adopted from plan: ${source.id}`);
+
+    const show = await runCli(["plan", "--session-id", targetSessionId], temp.env);
+    expect(show.exitCode).toBe(0);
+    expect(show.stdout).toContain(`Adopted from plan: ${source.id}`);
+    expect(show.stdout).toContain(`Adopted from session: ${sourceSessionId}`);
+    expect(show.stdout).toContain("Carry plan into target");
+  });
+
   it("keeps CLI goals isolated by explicit session id", async () => {
     temp = makeTempRoot();
     const firstId = "11111111-1111-4111-8111-111111111111";

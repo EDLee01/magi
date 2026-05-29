@@ -212,7 +212,9 @@ describe("capability report", () => {
         planRevisionChainViewListed: false,
         inheritedPlanContextSeen: false,
         inheritedPlanExecutionFollowed: false,
-        inheritedPlanDeviationCorrected: false
+        inheritedPlanDeviationCorrected: false,
+        crossSessionPlanAdopted: false,
+        crossSessionAdoptedPlanContextSeen: false
       }),
       toolDiscovery: toolDiscoveryReport(),
       controlApi: controlApiReport()
@@ -234,7 +236,9 @@ describe("capability report", () => {
         "planRevisionChainViewListed=false",
         "inheritedPlanContextSeen=false",
         "inheritedPlanExecutionFollowed=false",
-        "inheritedPlanDeviationCorrected=false"
+        "inheritedPlanDeviationCorrected=false",
+        "crossSessionPlanAdopted=false",
+        "crossSessionAdoptedPlanContextSeen=false"
       ])
     );
   });
@@ -547,6 +551,8 @@ function goalPlanReport(
     inheritedPlanContextSeen: boolean;
     inheritedPlanExecutionFollowed: boolean;
     inheritedPlanDeviationCorrected: boolean;
+    crossSessionPlanAdopted: boolean;
+    crossSessionAdoptedPlanContextSeen: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
   }> = {}
@@ -578,6 +584,8 @@ function goalPlanReport(
           inheritedPlanContextSeen: true,
           inheritedPlanExecutionFollowed: true,
           inheritedPlanDeviationCorrected: true,
+          crossSessionPlanAdopted: true,
+          crossSessionAdoptedPlanContextSeen: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

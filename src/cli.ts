@@ -26,6 +26,7 @@ import {
   readMemoryMaintenancePolicy
 } from "./memory-maintenance.js";
 import {
+  adoptPlanReview,
   formatPlanReview,
   formatPlanReviewChain,
   formatPlanReviewList,
@@ -539,6 +540,40 @@ async function runCliUnsafeWithParsed(
           exitCode: planId ? 0 : 2,
           stdout: `${planId ? formatPlanReviewChain(getPlanReviewChain(paths.stateRoot, planId)) : ""}\n`,
           stderr: planId ? "" : "Usage: magi plan chain <plan-id>\n"
+        };
+      }
+      if (sub === "adopt" || sub === "migrate") {
+        const planId = parsed.rest[1];
+        const session = resolvePlanSessionForCommand({
+          store,
+          sessionId: parsed.sessionId ?? parsed.resumeSessionId,
+          cwd,
+          optional: false
+        });
+        if (!session) {
+          throw new MagiUsageError("No sessions found");
+        }
+        if (!planId) {
+          return {
+            exitCode: 2,
+            stdout: "",
+            stderr: "Usage: magi plan adopt <plan-id> --session-id <target-session>\n"
+          };
+        }
+        const adopted = adoptPlanReview({
+          stateRoot: paths.stateRoot,
+          sourcePlanId: planId,
+          targetSessionId: session.id
+        });
+        return {
+          exitCode: 0,
+          stdout: [
+            `Plan adopted: ${adopted.id}`,
+            `Session: ${adopted.sessionId}`,
+            `Adopted from plan: ${adopted.adoptedFromPlanId}`,
+            ""
+          ].join("\n"),
+          stderr: ""
         };
       }
       const session = resolvePlanSessionForCommand({
@@ -1839,7 +1874,7 @@ function helpText(): string {
     "  magi sessions",
     "  magi resume <session-id>",
     "  magi goal [objective] [--session-id <id>]",
-    "  magi plan [list|all|show <id>|chain <id>] [--session-id <id>]",
+    "  magi plan [list|all|show <id>|chain <id>|adopt <id>] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",

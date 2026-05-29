@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adoptPlanReview,
   formatPlanReview,
   formatPlanReviewList,
   getLatestPlanReview,
@@ -90,6 +91,39 @@ describe("plan review state", () => {
         original.id,
         revised.id
       ]);
+    } finally {
+      temp.cleanup();
+    }
+  });
+
+  it("adopts approved plans across sessions", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const source = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "source-session",
+        plan: "1. Inspect source\n2. Implement target",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      const adopted = adoptPlanReview({
+        stateRoot: paths.stateRoot,
+        sourcePlanId: source.id,
+        targetSessionId: "target-session"
+      });
+
+      expect(adopted).toMatchObject({
+        sessionId: "target-session",
+        status: "approved",
+        plan: source.plan,
+        adoptedFromPlanId: source.id,
+        adoptedFromSessionId: "source-session"
+      });
+      expect(formatPlanReview(adopted)).toContain(`Adopted from plan: ${source.id}`);
+      expect(formatPlanReviewList(listPlanReviews(paths.stateRoot, "target-session"))).toContain(
+        `adopted-from:${source.id}`
+      );
     } finally {
       temp.cleanup();
     }
