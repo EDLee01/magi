@@ -37,6 +37,8 @@ try {
     feedbackResultsReturned: false,
     feedbackRankingUsedUsage: false,
     intentScopedUsageRecorded: false,
+    failureKindRecorded: false,
+    failureKindShownInRanking: false,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -76,10 +78,19 @@ try {
     const globIntentSuccesses = readNumber(
       stats.tools?.Glob?.intents?.["workspace-search"]?.successes
     );
+    const grepPathFailures = readNumber(stats.tools?.Grep?.failureKinds?.path);
+    const grepIntentPathFailures = readNumber(
+      stats.tools?.Grep?.intents?.["workspace-search"]?.failureKinds?.path
+    );
     assert(grepFailures >= 4, "Grep failures were not recorded");
     assert(globSuccesses >= 4, "Glob successes were not recorded");
     assert(grepIntentFailures >= 4, "Grep workspace-search intent failures were not recorded");
     assert(globIntentSuccesses >= 4, "Glob workspace-search intent successes were not recorded");
+    assert(grepPathFailures >= 4, "Grep path failure kind was not recorded");
+    assert(
+      grepIntentPathFailures >= 4,
+      "Grep workspace-search path failure kind was not recorded"
+    );
 
     assert(state.coreToolsExposed, "core tool exposure was not verified");
     assert(state.deferredToolsHidden, "deferred tool hiding was not verified");
@@ -89,6 +100,8 @@ try {
     assert(state.feedbackResultsReturned, "tool feedback results were not returned to the model");
     assert(state.feedbackRankingUsedUsage, "ToolSearch usage feedback ranking was not verified");
     state.intentScopedUsageRecorded = grepIntentFailures >= 4 && globIntentSuccesses >= 4;
+    state.failureKindRecorded = grepPathFailures >= 4 && grepIntentPathFailures >= 4;
+    assert(state.failureKindShownInRanking, "ToolSearch did not expose failure kind feedback");
 
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
@@ -110,12 +123,16 @@ try {
             feedbackResultsReturned: state.feedbackResultsReturned,
             feedbackRankingUsedUsage: state.feedbackRankingUsedUsage,
             intentScopedUsageRecorded: state.intentScopedUsageRecorded,
+            failureKindRecorded: state.failureKindRecorded,
+            failureKindShownInRanking: state.failureKindShownInRanking,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
             globSuccesses,
             grepIntentFailures,
-            globIntentSuccesses
+            globIntentSuccesses,
+            grepPathFailures,
+            grepIntentPathFailures
           }
         }
       ]
@@ -224,7 +241,9 @@ function createRouter(state) {
     assert(transcript.includes("1. Glob"), "Glob was not ranked first after usage feedback");
     assert(transcript.includes("usage:+"), "positive usage feedback was not reported");
     assert(transcript.includes("usage:-"), "negative usage feedback was not reported");
+    assert(transcript.includes("failure:path"), "failure kind feedback was not reported");
     state.feedbackRankingUsedUsage = true;
+    state.failureKindShownInRanking = true;
     return messageText("Tool Discovery eval completed.");
   };
 }

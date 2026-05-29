@@ -9,6 +9,7 @@ export interface ToolUsageRecord {
   successes: number;
   failures: number;
   consecutiveFailures: number;
+  failureKinds: Record<string, number>;
   lastUsedAt?: string;
   lastSucceededAt?: string;
   lastFailedAt?: string;
@@ -21,6 +22,7 @@ export interface ToolUsageIntentRecord {
   successes: number;
   failures: number;
   consecutiveFailures: number;
+  failureKinds: Record<string, number>;
   lastUsedAt?: string;
   lastSucceededAt?: string;
   lastFailedAt?: string;
@@ -68,6 +70,7 @@ export function recordToolUsage(input: {
   toolName: string;
   success: boolean;
   intents?: string[];
+  failureKind?: string;
   now?: Date;
 }): ToolUsageRecord | undefined {
   if (!input.stateRoot) {
@@ -81,18 +84,20 @@ export function recordToolUsage(input: {
     successes: 0,
     failures: 0,
     consecutiveFailures: 0,
+    failureKinds: {},
     intents: {}
   };
-  const next = updateUsageRecord(current, input.success, now);
+  const next = updateUsageRecord(current, input.success, now, input.failureKind);
   for (const intent of uniqueIntents(input.intents ?? [])) {
     const currentIntent = next.intents[intent] ?? {
       intent,
       attempts: 0,
       successes: 0,
       failures: 0,
-      consecutiveFailures: 0
+      consecutiveFailures: 0,
+      failureKinds: {}
     };
-    next.intents[intent] = updateIntentRecord(currentIntent, input.success, now);
+    next.intents[intent] = updateIntentRecord(currentIntent, input.success, now, input.failureKind);
   }
   stats.tools[input.toolName] = next;
   writeToolUsageStats(input.stateRoot, stats);
@@ -170,7 +175,9 @@ export function formatToolUsageReason(
   const rate = Math.round((record.successes / Math.max(1, record.attempts)) * 100);
   const sign = score > 0 ? "+" : "";
   const scope = intent ? ` intent:${intent}` : "";
-  return `usage:${sign}${score}${scope} (${record.successes}/${record.attempts} success, ${rate}%)`;
+  const failureKind = dominantFailureKind(record);
+  const failureSuffix = failureKind ? `, failure:${failureKind}` : "";
+  return `usage:${sign}${score}${scope} (${record.successes}/${record.attempts} success, ${rate}%${failureSuffix})`;
 }
 
 export function writeToolUsageStats(stateRoot: string, stats: ToolUsageStats): void {
@@ -225,6 +232,7 @@ function normalizeRecord(name: string, value: unknown): ToolUsageRecord | undefi
     successes: readCount(value.successes),
     failures: readCount(value.failures),
     consecutiveFailures: readCount(value.consecutiveFailures),
+    failureKinds: readFailureKinds(value.failureKinds),
     lastUsedAt: readOptionalString(value.lastUsedAt),
     lastSucceededAt: readOptionalString(value.lastSucceededAt),
     lastFailedAt: readOptionalString(value.lastFailedAt),
@@ -250,6 +258,7 @@ function normalizeIntentRecord(
     successes: readCount(value.successes),
     failures: readCount(value.failures),
     consecutiveFailures: readCount(value.consecutiveFailures),
+    failureKinds: readFailureKinds(value.failureKinds),
     lastUsedAt: readOptionalString(value.lastUsedAt),
     lastSucceededAt: readOptionalString(value.lastSucceededAt),
     lastFailedAt: readOptionalString(value.lastFailedAt)
@@ -298,7 +307,8 @@ function normalizeContextStore(value: unknown): ToolUsageContextStore {
 function updateUsageRecord(
   current: ToolUsageRecord,
   success: boolean,
-  now: string
+  now: string,
+  failureKind?: string
 ): ToolUsageRecord {
   return {
     ...current,
@@ -307,6 +317,7 @@ function updateUsageRecord(
     successes: current.successes + (success ? 1 : 0),
     failures: current.failures + (success ? 0 : 1),
     consecutiveFailures: success ? 0 : current.consecutiveFailures + 1,
+    failureKinds: updateFailureKinds(current.failureKinds, success, failureKind),
     lastUsedAt: now,
     lastSucceededAt: success ? now : current.lastSucceededAt,
     lastFailedAt: success ? current.lastFailedAt : now
@@ -316,7 +327,8 @@ function updateUsageRecord(
 function updateIntentRecord(
   current: ToolUsageIntentRecord,
   success: boolean,
-  now: string
+  now: string,
+  failureKind?: string
 ): ToolUsageIntentRecord {
   return {
     ...current,
@@ -324,6 +336,7 @@ function updateIntentRecord(
     successes: current.successes + (success ? 1 : 0),
     failures: current.failures + (success ? 0 : 1),
     consecutiveFailures: success ? 0 : current.consecutiveFailures + 1,
+    failureKinds: updateFailureKinds(current.failureKinds, success, failureKind),
     lastUsedAt: now,
     lastSucceededAt: success ? now : current.lastSucceededAt,
     lastFailedAt: success ? current.lastFailedAt : now
@@ -342,6 +355,58 @@ function readStringList(value: unknown): string[] {
 
 function readCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function readFailureKinds(value: unknown): Record<string, number> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const result: Record<string, number> = {};
+  for (const [kind, count] of Object.entries(value)) {
+    const normalized = normalizeFailureKind(kind);
+    const valueCount = readCount(count);
+    if (normalized && valueCount > 0) {
+      result[normalized] = (result[normalized] ?? 0) + valueCount;
+    }
+  }
+  return result;
+}
+
+function updateFailureKinds(
+  current: Record<string, number> | undefined,
+  success: boolean,
+  failureKind?: string
+): Record<string, number> {
+  const base = { ...(current ?? {}) };
+  if (success) {
+    return base;
+  }
+  const normalized = normalizeFailureKind(failureKind);
+  base[normalized] = (base[normalized] ?? 0) + 1;
+  return base;
+}
+
+function dominantFailureKind(
+  record: ToolUsageRecord | ToolUsageIntentRecord | undefined
+): string | undefined {
+  const entries = Object.entries(record?.failureKinds ?? {});
+  if (entries.length === 0) {
+    return undefined;
+  }
+  entries.sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return entries[0][0];
+}
+
+function normalizeFailureKind(kind: unknown): string {
+  if (typeof kind !== "string") {
+    return "unknown";
+  }
+  const normalized = kind
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "unknown";
 }
 
 function readOptionalString(value: unknown): string | undefined {

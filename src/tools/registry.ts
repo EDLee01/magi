@@ -549,9 +549,11 @@ export async function executeRegisteredTool(input: {
     if (permission.decision === "ask") {
       const approved = await input.approvalResolver?.({ toolUse: input.toolUse, permission });
       if (!approved) {
+        recordFailedToolUsage(input, "permission");
         return errorResult(input.toolUse, `Permission ask: ${permission.reason}`, permission);
       }
     } else if (permission.decision !== "allow") {
+      recordFailedToolUsage(input, "permission");
       return errorResult(input.toolUse, `Permission ${permission.decision}: ${permission.reason}`);
     }
     const raw = await tool.call(input.toolUse.input, context);
@@ -588,6 +590,7 @@ export async function executeRegisteredTool(input: {
           stateRoot: input.stateRoot,
           toolName: input.toolUse.name,
           success: false,
+          failureKind: classifyToolFailure(recovery),
           intents: toolUsageIntentsForTool({
             stateRoot: input.stateRoot,
             toolName: input.toolUse.name
@@ -604,6 +607,7 @@ export async function executeRegisteredTool(input: {
       stateRoot: input.stateRoot,
       toolName: input.toolUse.name,
       success: false,
+      failureKind: classifyToolFailure(error),
       intents: toolUsageIntentsForTool({
         stateRoot: input.stateRoot,
         toolName: input.toolUse.name
@@ -611,6 +615,22 @@ export async function executeRegisteredTool(input: {
     });
     return result;
   }
+}
+
+function recordFailedToolUsage(
+  input: { stateRoot?: string; toolUse: MagiToolUsePart },
+  failureKind: string
+): void {
+  recordToolUsage({
+    stateRoot: input.stateRoot,
+    toolName: input.toolUse.name,
+    success: false,
+    failureKind,
+    intents: toolUsageIntentsForTool({
+      stateRoot: input.stateRoot,
+      toolName: input.toolUse.name
+    })
+  });
 }
 
 function shouldRethrowToolExecutionError(error: unknown): boolean {
@@ -625,6 +645,44 @@ function shouldRethrowToolExecutionError(error: unknown): boolean {
     error.name === "ActiveInteractionCancelledError" ||
     error.name === "ActiveInteractionTimeoutError"
   );
+}
+
+function classifyToolFailure(error: unknown): string {
+  const kind = isRecord(error) && typeof error.kind === "string" ? error.kind : undefined;
+  if (kind) {
+    if (kind === "outside-workspace") return "path";
+    if (kind === "approval-required") return "permission";
+    if (kind === "bad-input") return "input";
+    if (kind === "not-found") return "not-found";
+    if (kind === "binary-file") return "binary";
+    if (kind === "timeout") return "timeout";
+    if (kind === "command-failed") return "command";
+    return kind;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (/outside allowed directories|outside workspace|outside-workspace/i.test(message)) {
+    return "path";
+  }
+  if (/permission|approval|required|denied/i.test(message)) {
+    return "permission";
+  }
+  if (/unknown field|must be|invalid|unsupported|bad input/i.test(message)) {
+    return "input";
+  }
+  if (/not found|did not match|no such file/i.test(message)) {
+    return "not-found";
+  }
+  if (/timed out|timeout/i.test(message)) {
+    return "timeout";
+  }
+  if (/command failed|exit code/i.test(message)) {
+    return "command";
+  }
+  return "runtime";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function executeRegisteredTools(input: {

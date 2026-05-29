@@ -269,10 +269,18 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.intentScopedUsageRecorded !== true) {
     failures.push("intentScopedUsageRecorded=false");
   }
+  if (details.failureKindRecorded !== true) failures.push("failureKindRecorded=false");
+  if (details.failureKindShownInRanking !== true) {
+    failures.push("failureKindShownInRanking=false");
+  }
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
   if (readNumber(details.grepIntentFailures) < 4) failures.push("grepIntentFailures < 4");
   if (readNumber(details.globIntentSuccesses) < 4) failures.push("globIntentSuccesses < 4");
+  if (readNumber(details.grepPathFailures) < 4) failures.push("grepPathFailures < 4");
+  if (readNumber(details.grepIntentPathFailures) < 4) {
+    failures.push("grepIntentPathFailures < 4");
+  }
   if (readNumber(details.revealedToolCount) <= readNumber(details.initialToolCount)) {
     failures.push("revealedToolCount did not increase");
   }
@@ -290,12 +298,16 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       feedbackResultsReturned: details.feedbackResultsReturned === true,
       feedbackRankingUsedUsage: details.feedbackRankingUsedUsage === true,
       intentScopedUsageRecorded: details.intentScopedUsageRecorded === true,
+      failureKindRecorded: details.failureKindRecorded === true,
+      failureKindShownInRanking: details.failureKindShownInRanking === true,
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),
       globSuccesses: readNumber(details.globSuccesses),
       grepIntentFailures: readNumber(details.grepIntentFailures),
-      globIntentSuccesses: readNumber(details.globIntentSuccesses)
+      globIntentSuccesses: readNumber(details.globIntentSuccesses),
+      grepPathFailures: readNumber(details.grepPathFailures),
+      grepIntentPathFailures: readNumber(details.grepIntentPathFailures)
     },
     failures
   };

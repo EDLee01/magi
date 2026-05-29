@@ -143,9 +143,13 @@ describe("capability report", () => {
         learningDraftRevealed: false,
         feedbackRankingUsedUsage: false,
         intentScopedUsageRecorded: false,
+        failureKindRecorded: false,
+        failureKindShownInRanking: false,
         revealedToolCount: 21,
         grepFailures: 2,
-        grepIntentFailures: 2
+        grepIntentFailures: 2,
+        grepPathFailures: 2,
+        grepIntentPathFailures: 2
       }),
       controlApi: controlApiReport()
     });
@@ -157,8 +161,12 @@ describe("capability report", () => {
         "learningDraftRevealed=false",
         "feedbackRankingUsedUsage=false",
         "intentScopedUsageRecorded=false",
+        "failureKindRecorded=false",
+        "failureKindShownInRanking=false",
         "grepFailures < 4",
         "grepIntentFailures < 4",
+        "grepPathFailures < 4",
+        "grepIntentPathFailures < 4",
         "revealedToolCount did not increase"
       ])
     );
@@ -329,12 +337,16 @@ function toolDiscoveryReport(
     feedbackResultsReturned: boolean;
     feedbackRankingUsedUsage: boolean;
     intentScopedUsageRecorded: boolean;
+    failureKindRecorded: boolean;
+    failureKindShownInRanking: boolean;
     initialToolCount: number;
     revealedToolCount: number;
     grepFailures: number;
     globSuccesses: number;
     grepIntentFailures: number;
     globIntentSuccesses: number;
+    grepPathFailures: number;
+    grepIntentPathFailures: number;
   }> = {}
 ): Record<string, unknown> {
   return {
@@ -356,12 +368,16 @@ function toolDiscoveryReport(
           feedbackResultsReturned: true,
           feedbackRankingUsedUsage: true,
           intentScopedUsageRecorded: true,
+          failureKindRecorded: true,
+          failureKindShownInRanking: true,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,
           globSuccesses: 4,
           grepIntentFailures: 4,
           globIntentSuccesses: 4,
+          grepPathFailures: 4,
+          grepIntentPathFailures: 4,
           ...overrides
         }
       }

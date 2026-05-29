@@ -1657,7 +1657,8 @@ describe("tool registry", () => {
     expect(stats.tools.Grep).toMatchObject({
       attempts: 4,
       failures: 4,
-      consecutiveFailures: 4
+      consecutiveFailures: 4,
+      failureKinds: { path: 4 }
     });
     expect(stats.tools.Glob).toMatchObject({
       attempts: 4,
@@ -1680,6 +1681,7 @@ describe("tool registry", () => {
     expect(firstToolSearchResult(search.content)).toBe("Glob");
     expect(search.content).toContain("usage:+");
     expect(search.content).toContain("usage:-");
+    expect(search.content).toContain("failure:path");
   });
 
   it("uses task-intent tool feedback without letting unrelated usage dominate ranking", async () => {
@@ -1705,7 +1707,8 @@ describe("tool registry", () => {
         stateRoot,
         toolName: "Grep",
         success: false,
-        intents: ["workspace-search"]
+        intents: ["workspace-search"],
+        failureKind: "path"
       });
       recordToolUsage({
         stateRoot,
@@ -1740,6 +1743,7 @@ describe("tool registry", () => {
     expect(firstToolSearchResult(search.content)).toBe("Glob");
     expect(search.content).toContain("usage:+");
     expect(search.content).toContain("intent:workspace-search");
+    expect(search.content).toContain("failure:path");
   });
 
   it("diagnoses workspace manifests, scripts, languages, commands, and git state without executing commands", async () => {
