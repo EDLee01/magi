@@ -305,19 +305,34 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
     minScore: 1,
     minSuccessRate: 1
   });
-  const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
-  const scenario = readRecord(scenarios[0]);
-  const details = readRecord(scenario.details);
-  const toolCounts = readRecord(details.toolCounts);
+  const summary = readRecord(report.summary);
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios.map(readRecord) : [];
+  const details = readRecord(report.details);
+  const scenarioCount = readNumber(summary.total);
   const patchUsageRate = readNumber(details.patchUsageRate);
+  const filePatchCalls = readNumber(details.filePatchCalls);
+  const fileEditCalls = readNumber(details.fileEditCalls);
+  const fileWriteCalls = readNumber(details.fileWriteCalls);
+  const recoveryScenarioCount = readNumber(details.recoveryScenarioCount);
+  const multiFileRecoverySeen = details.multiFileRecoverySeen === true;
+  const toolSearchRankedFilePatch =
+    details.toolSearchRankedFilePatch === true ||
+    scenarios.some((scenario) => readRecord(scenario.details).toolSearchRankedFilePatch === true);
+  const approvalDiffPreviewSeen =
+    details.approvalDiffPreviewSeen === true ||
+    scenarios.some((scenario) => readRecord(scenario.details).approvalDiffPreviewSeen === true);
   const failures = [...base.failures];
-  if (readNumber(toolCounts.FilePatch) < 2) failures.push("FilePatch calls < 2");
-  if (readNumber(toolCounts.FileEdit) !== 1) failures.push("FileEdit calls != 1");
-  if (readNumber(toolCounts.FileWrite) !== 0) failures.push("FileWrite used");
-  if (details.recoverySeen !== true) failures.push("recoverySeen=false");
-  if (details.toolSearchRankedFilePatch !== true) failures.push("toolSearchRankedFilePatch=false");
-  if (details.approvalDiffPreviewSeen !== true) failures.push("approvalDiffPreviewSeen=false");
-  if (patchUsageRate < 0.5) failures.push(`patchUsageRate=${patchUsageRate}`);
+  if (scenarioCount < 2) {
+    failures.push(`scenarios=${scenarioCount}`);
+  }
+  if (filePatchCalls < 5) failures.push("FilePatch calls < 5");
+  if (fileEditCalls !== 1) failures.push("FileEdit calls != 1");
+  if (fileWriteCalls !== 0) failures.push("FileWrite used");
+  if (recoveryScenarioCount < 2) failures.push(`recoveryScenarioCount=${recoveryScenarioCount}`);
+  if (!multiFileRecoverySeen) failures.push("multiFileRecoverySeen=false");
+  if (!toolSearchRankedFilePatch) failures.push("toolSearchRankedFilePatch=false");
+  if (!approvalDiffPreviewSeen) failures.push("approvalDiffPreviewSeen=false");
+  if (patchUsageRate < 0.8) failures.push(`patchUsageRate=${patchUsageRate}`);
   return {
     ...base,
     status: failures.length === 0 ? "passed" : "failed",
@@ -325,12 +340,13 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
     metrics: {
       ...base.metrics,
       patchUsageRate,
-      filePatchCalls: readNumber(toolCounts.FilePatch),
-      fileEditCalls: readNumber(toolCounts.FileEdit),
-      fileWriteCalls: readNumber(toolCounts.FileWrite),
-      recoverySeen: details.recoverySeen === true,
-      toolSearchRankedFilePatch: details.toolSearchRankedFilePatch === true,
-      approvalDiffPreviewSeen: details.approvalDiffPreviewSeen === true
+      filePatchCalls,
+      fileEditCalls,
+      fileWriteCalls,
+      recoveryScenarioCount,
+      multiFileRecoverySeen,
+      toolSearchRankedFilePatch,
+      approvalDiffPreviewSeen
     },
     failures
   };

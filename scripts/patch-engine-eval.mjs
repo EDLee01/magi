@@ -28,10 +28,73 @@ try {
   mkdirSync(configDir, { recursive: true });
   mkdirSync(path.join(workDir, "src"), { recursive: true });
   writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }), "utf8");
-  writeFileSync(path.join(workDir, "src", "widget.ts"), initialWidget(), "utf8");
   const approvalDiffPreviewSeen = await verifyFilePatchApprovalDiffPreview();
 
-  const provider = await startProvider();
+  const scenarios = [
+    await runFilePatchRecoveryScenario({ approvalDiffPreviewSeen }),
+    await runMultiFilePatchRecoveryScenario()
+  ];
+  const report = addPatchSummary(
+    harnessReport.buildHarnessReport({
+      name: "patch-engine-eval",
+      startedAt,
+      scenarios
+    })
+  );
+  mkdirSync(path.dirname(reportPath), { recursive: true });
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  assert(report.status === "passed", "Patch Engine eval did not pass all scenarios");
+  console.log(
+    `Patch Engine eval passed (${report.scenarios.length} scenarios, FilePatch rate=${report.details.patchUsageRate.toFixed(2)}, provider calls=${report.summary.providerCalls}).`
+  );
+  console.log(`Patch Engine report: ${reportPath}`);
+} finally {
+  if (!process.env.MAGI_KEEP_PATCH_EVAL_TMP) {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function initialWidget() {
+  return [
+    "export function renderWidget(title: string, items: string[]): string {",
+    "  const header = `Widget: ${title}`;",
+    '  const body = items.map((item) => `- ${item}`).join("\\n");',
+    '  return [header, body].join("\\n");',
+    "}",
+    "",
+    'export const VERSION_LABEL = "widget-v1";',
+    ""
+  ].join("\n");
+}
+
+function initialPipeline() {
+  return [
+    "export interface Step {",
+    "  name: string;",
+    "  enabled: boolean;",
+    "}",
+    "",
+    "export function summarizePipeline(steps: Step[]): string {",
+    '  return steps.map((step) => step.name).join(", ");',
+    "}",
+    ""
+  ].join("\n");
+}
+
+function initialPipelineDocs() {
+  return [
+    "# Pipeline",
+    "",
+    "- All steps are listed.",
+    "- Disabled steps appear in output.",
+    ""
+  ].join("\n");
+}
+
+async function runFilePatchRecoveryScenario({ approvalDiffPreviewSeen }) {
+  writeFileSync(path.join(workDir, "src", "widget.ts"), initialWidget(), "utf8");
+  const started = Date.now();
+  const provider = await startProvider({ route: routePatchEval });
   try {
     writeFileSync(
       path.join(configDir, "config.yaml"),
@@ -75,60 +138,97 @@ try {
     assert(metrics.recoverySeen, "FilePatch recovery feedback was not returned to the model");
     assert(metrics.toolSearchRankedFilePatch, "ToolSearch did not rank FilePatch first");
     assert(approvalDiffPreviewSeen, "FilePatch approval diff preview was not generated");
-
-    const patchToolCalls =
-      (metrics.toolCounts.FilePatch ?? 0) +
-      (metrics.toolCounts.FileEdit ?? 0) +
-      (metrics.toolCounts.FileWrite ?? 0);
-    const patchUsageRate =
-      patchToolCalls === 0 ? 0 : (metrics.toolCounts.FilePatch ?? 0) / patchToolCalls;
-    const report = harnessReport.buildHarnessReport({
-      name: "patch-engine-eval",
-      startedAt,
-      scenarios: [
-        {
-          name: "filepatch recovery workflow",
-          status: "passed",
-          durationMs: Date.now() - startedAt.getTime(),
-          score: 1,
-          failureKind: null,
-          details: {
-            provider: { callCount: provider.calls.length },
-            toolCounts: metrics.toolCounts,
-            patchUsageRate,
-            recoverySeen: metrics.recoverySeen,
-            toolSearchRankedFilePatch: metrics.toolSearchRankedFilePatch,
-            approvalDiffPreviewSeen
-          }
-        }
-      ]
+    return passedScenario({
+      name: "filepatch recovery workflow",
+      started,
+      provider,
+      details: {
+        toolCounts: metrics.toolCounts,
+        patchUsageRate: patchUsageRate(metrics.toolCounts),
+        recoverySeen: metrics.recoverySeen,
+        toolSearchRankedFilePatch: metrics.toolSearchRankedFilePatch,
+        approvalDiffPreviewSeen,
+        assertions: [
+          "failed FilePatch surfaced recovery guidance",
+          "successful FilePatch updated multiline block",
+          "FileEdit handled exact version replacement",
+          "FileWrite avoided for existing file",
+          "approval diff preview generated"
+        ],
+        filesVerified: ["src/widget.ts"]
+      }
     });
-    mkdirSync(path.dirname(reportPath), { recursive: true });
-    writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-    console.log(
-      `Patch Engine eval passed (FilePatch rate=${patchUsageRate.toFixed(2)}, provider calls=${provider.calls.length}).`
-    );
-    console.log(`Patch Engine report: ${reportPath}`);
   } finally {
     await provider.close();
   }
-} finally {
-  if (!process.env.MAGI_KEEP_PATCH_EVAL_TMP) {
-    rmSync(root, { recursive: true, force: true });
-  }
 }
 
-function initialWidget() {
-  return [
-    "export function renderWidget(title: string, items: string[]): string {",
-    "  const header = `Widget: ${title}`;",
-    '  const body = items.map((item) => `- ${item}`).join("\\n");',
-    '  return [header, body].join("\\n");',
-    "}",
-    "",
-    'export const VERSION_LABEL = "widget-v1";',
-    ""
-  ].join("\n");
+async function runMultiFilePatchRecoveryScenario() {
+  writeFileSync(path.join(workDir, "src", "pipeline.ts"), initialPipeline(), "utf8");
+  mkdirSync(path.join(workDir, "docs"), { recursive: true });
+  writeFileSync(path.join(workDir, "docs", "pipeline.md"), initialPipelineDocs(), "utf8");
+  const started = Date.now();
+  const provider = await startProvider({ route: routePatchMultiFileEval });
+  try {
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig({ port: provider.port }),
+      "utf8"
+    );
+    const result = await runCli([
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      [
+        "Run the multi-file Patch Engine eval.",
+        "Update src/pipeline.ts and docs/pipeline.md with FilePatch.",
+        "Recover if the first docs patch fails.",
+        "Do not use FileWrite for existing files."
+      ].join(" ")
+    ]);
+    assert(result.includes("session.completed"), "multi-file patch eval did not complete");
+    const source = readFileSync(path.join(workDir, "src", "pipeline.ts"), "utf8");
+    const docs = readFileSync(path.join(workDir, "docs", "pipeline.md"), "utf8");
+    assert(source.includes("filter((step) => step.enabled)"), "source enabled filter missing");
+    assert(source.includes("`${step.name}: enabled`"), "source summary label missing");
+    assert(docs.includes("Only enabled steps appear in output."), "docs enabled behavior missing");
+    assert(
+      docs.includes("Summaries mark each listed step as enabled."),
+      "docs summary note missing"
+    );
+    const metrics = provider.metrics();
+    assert(
+      metrics.toolCounts.FilePatch === 3,
+      "expected one source patch, one failed docs patch, and one docs retry"
+    );
+    assert(!metrics.toolCounts.FileWrite, "FileWrite should not be used in multi-file patch eval");
+    assert(metrics.recoverySeen, "multi-file FilePatch recovery feedback was not visible");
+    return passedScenario({
+      name: "multi-file patch recovery workflow",
+      started,
+      provider,
+      details: {
+        toolCounts: metrics.toolCounts,
+        patchUsageRate: patchUsageRate(metrics.toolCounts),
+        multiFileRecoverySeen: metrics.recoverySeen,
+        fileWriteAvoided: !metrics.toolCounts.FileWrite,
+        assertions: [
+          "source file patched",
+          "docs patch failure surfaced recovery guidance",
+          "docs retry patch succeeded",
+          "FileWrite avoided across files",
+          "final response completed"
+        ],
+        filesVerified: ["src/pipeline.ts", "docs/pipeline.md"]
+      }
+    });
+  } finally {
+    await provider.close();
+  }
 }
 
 async function verifyFilePatchApprovalDiffPreview() {
@@ -144,9 +244,7 @@ async function verifyFilePatchApprovalDiffPreview() {
       name: "FilePatch",
       input: {
         file_path: "src/approval-preview.ts",
-        patch: ["@@", " const label = 'old';", "-const count = 1;", "+const count = 2;"].join(
-          "\n"
-        )
+        patch: ["@@", " const label = 'old';", "-const count = 1;", "+const count = 2;"].join("\n")
       }
     },
     permissionMode: "default",
@@ -159,7 +257,9 @@ async function verifyFilePatchApprovalDiffPreview() {
   const file = readFileSync(previewFile, "utf8");
   assert(result.isError === true, "FilePatch approval preview should stop when denied");
   assert(file.includes("const count = 1;"), "denied FilePatch approval should not edit the file");
-  return Boolean(capturedDiff?.includes("-const count = 1;") && capturedDiff.includes("+const count = 2;"));
+  return Boolean(
+    capturedDiff?.includes("-const count = 1;") && capturedDiff.includes("+const count = 2;")
+  );
 }
 
 function renderConfig({ port }) {
@@ -179,7 +279,7 @@ function renderConfig({ port }) {
   ].join("\n");
 }
 
-async function startProvider() {
+async function startProvider({ route }) {
   const calls = [];
   const plannedToolCounts = {};
   let turn = 0;
@@ -194,7 +294,7 @@ async function startProvider() {
         const transcript = transcriptFromBody(body);
         const toolNames = (body.tools ?? []).map((tool) => tool.function?.name).filter(Boolean);
         calls.push({ model: body.model, transcript, toolNames });
-        const result = routePatchEval({ transcript, toolNames, turn });
+        const result = route({ transcript, toolNames, turn });
         turn += 1;
         const responseBody = result.body ?? result;
         for (const call of responseBody.choices?.[0]?.message?.tool_calls ?? []) {
@@ -212,6 +312,9 @@ async function startProvider() {
         response.writeHead(result.status ?? 200, { "content-type": "application/json" });
         response.end(JSON.stringify(result.body ?? result));
       } catch (error) {
+        console.error(
+          `[patch-eval-provider] ${error instanceof Error ? error.message : String(error)}`
+        );
         response.writeHead(500, { "content-type": "application/json" });
         response.end(
           JSON.stringify({
@@ -318,6 +421,144 @@ function routePatchEval({ transcript, toolNames, turn }) {
     return messageText("Patch Engine eval completed with FilePatch recovery and exact FileEdit.");
   }
   return messageText("Patch Engine eval already completed.");
+}
+
+function routePatchMultiFileEval({ transcript, toolNames, turn }) {
+  if (turn === 0) {
+    assert(toolNames.includes("FilePatch"), "FilePatch was not exposed for multi-file eval");
+    assert(transcript.includes("use FilePatch for multi-line edits"), "missing FilePatch guidance");
+    return toolResponse([
+      toolCall("read-pipeline-source", "FileRead", { file_path: "src/pipeline.ts" }),
+      toolCall("read-pipeline-docs", "FileRead", { file_path: "docs/pipeline.md" })
+    ]);
+  }
+  if (turn === 1) {
+    assert(transcript.includes("summarizePipeline"), "pipeline source was not visible");
+    assert(transcript.includes("Disabled steps appear"), "pipeline docs were not visible");
+    return toolResponse([
+      toolCall("patch-pipeline-source", "FilePatch", {
+        file_path: "src/pipeline.ts",
+        patch: [
+          "@@",
+          " export function summarizePipeline(steps: Step[]): string {",
+          '-  return steps.map((step) => step.name).join(", ");',
+          "+  return steps",
+          "+    .filter((step) => step.enabled)",
+          "+    .map((step) => `${step.name}: enabled`)",
+          '+    .join(", ");',
+          " }"
+        ].join("\n")
+      }),
+      toolCall("bad-docs-patch", "FilePatch", {
+        file_path: "docs/pipeline.md",
+        patch: [
+          "@@",
+          " # Pipeline",
+          " ",
+          "- Disabled steps are always hidden.",
+          "+- Only enabled steps appear in output."
+        ].join("\n")
+      })
+    ]);
+  }
+  if (turn === 2) {
+    assert(transcript.includes("Patched src/pipeline.ts"), "source patch result was not visible");
+    assert(
+      transcript.includes("FilePatch failed for docs/pipeline.md"),
+      "docs patch failure was not visible"
+    );
+    assert(
+      transcript.includes("Recovery guidance:"),
+      "docs patch recovery guidance was not visible"
+    );
+    return toolResponse([
+      toolCall("retry-docs-patch", "FilePatch", {
+        file_path: "docs/pipeline.md",
+        patch: [
+          "@@",
+          " # Pipeline",
+          " ",
+          " - All steps are listed.",
+          "-- Disabled steps appear in output.",
+          "+- Only enabled steps appear in output.",
+          "+- Summaries mark each listed step as enabled."
+        ].join("\n")
+      })
+    ]);
+  }
+  if (turn === 3) {
+    assert(
+      transcript.includes("Patched docs/pipeline.md"),
+      "docs retry patch result was not visible"
+    );
+    return messageText("Multi-file Patch Engine eval completed with recovery.");
+  }
+  return messageText("Multi-file Patch Engine eval already completed.");
+}
+
+function passedScenario({ name, started, provider, details }) {
+  return {
+    name,
+    status: "passed",
+    durationMs: Date.now() - started,
+    score: 1,
+    failureKind: null,
+    details: {
+      provider: { callCount: provider.calls.length },
+      ...details
+    }
+  };
+}
+
+function patchUsageRate(toolCounts) {
+  const patchToolCalls =
+    (toolCounts.FilePatch ?? 0) + (toolCounts.FileEdit ?? 0) + (toolCounts.FileWrite ?? 0);
+  return patchToolCalls === 0 ? 0 : (toolCounts.FilePatch ?? 0) / patchToolCalls;
+}
+
+function addPatchSummary(report) {
+  let totalPatchUsageNumerator = 0;
+  let totalPatchUsageDenominator = 0;
+  let filePatchCalls = 0;
+  let fileEditCalls = 0;
+  let fileWriteCalls = 0;
+  let recoveryScenarioCount = 0;
+  let multiFileRecoverySeen = false;
+  let approvalDiffPreviewSeen = false;
+  let toolSearchRankedFilePatch = false;
+  for (const scenario of report.scenarios) {
+    const details = scenario.details ?? {};
+    const counts = details.toolCounts ?? {};
+    filePatchCalls += counts.FilePatch ?? 0;
+    fileEditCalls += counts.FileEdit ?? 0;
+    fileWriteCalls += counts.FileWrite ?? 0;
+    const denominator = (counts.FilePatch ?? 0) + (counts.FileEdit ?? 0) + (counts.FileWrite ?? 0);
+    totalPatchUsageNumerator += counts.FilePatch ?? 0;
+    totalPatchUsageDenominator += denominator;
+    if (details.recoverySeen || details.multiFileRecoverySeen) {
+      recoveryScenarioCount += 1;
+    }
+    multiFileRecoverySeen = multiFileRecoverySeen || details.multiFileRecoverySeen === true;
+    approvalDiffPreviewSeen = approvalDiffPreviewSeen || details.approvalDiffPreviewSeen === true;
+    toolSearchRankedFilePatch =
+      toolSearchRankedFilePatch || details.toolSearchRankedFilePatch === true;
+  }
+  return {
+    ...report,
+    details: {
+      filePatchCalls,
+      fileEditCalls,
+      fileWriteCalls,
+      patchUsageRate:
+        totalPatchUsageDenominator === 0
+          ? 0
+          : totalPatchUsageNumerator / totalPatchUsageDenominator,
+      recoveryScenarioCount,
+      multiFileRecoverySeen,
+      approvalDiffPreviewSeen,
+      toolSearchRankedFilePatch
+    }
+  };
 }
 
 function runCli(args, timeoutMs = 45_000) {
