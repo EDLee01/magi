@@ -343,6 +343,8 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
   const fileWriteCalls = readNumber(details.fileWriteCalls);
   const recoveryScenarioCount = readNumber(details.recoveryScenarioCount);
   const multiFileRecoverySeen = details.multiFileRecoverySeen === true;
+  const conflictExplanationSeen = details.conflictExplanationSeen === true;
+  const rollbackVerified = details.rollbackVerified === true;
   const toolSearchRankedFilePatch =
     details.toolSearchRankedFilePatch === true ||
     scenarios.some((scenario) => readRecord(scenario.details).toolSearchRankedFilePatch === true);
@@ -350,14 +352,16 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
     details.approvalDiffPreviewSeen === true ||
     scenarios.some((scenario) => readRecord(scenario.details).approvalDiffPreviewSeen === true);
   const failures = [...base.failures];
-  if (scenarioCount < 2) {
+  if (scenarioCount < 3) {
     failures.push(`scenarios=${scenarioCount}`);
   }
-  if (filePatchCalls < 5) failures.push("FilePatch calls < 5");
+  if (filePatchCalls < 6) failures.push("FilePatch calls < 6");
   if (fileEditCalls !== 1) failures.push("FileEdit calls != 1");
   if (fileWriteCalls !== 0) failures.push("FileWrite used");
-  if (recoveryScenarioCount < 2) failures.push(`recoveryScenarioCount=${recoveryScenarioCount}`);
+  if (recoveryScenarioCount < 3) failures.push(`recoveryScenarioCount=${recoveryScenarioCount}`);
   if (!multiFileRecoverySeen) failures.push("multiFileRecoverySeen=false");
+  if (!conflictExplanationSeen) failures.push("conflictExplanationSeen=false");
+  if (!rollbackVerified) failures.push("rollbackVerified=false");
   if (!toolSearchRankedFilePatch) failures.push("toolSearchRankedFilePatch=false");
   if (!approvalDiffPreviewSeen) failures.push("approvalDiffPreviewSeen=false");
   if (patchUsageRate < 0.8) failures.push(`patchUsageRate=${patchUsageRate}`);
@@ -373,6 +377,8 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
       fileWriteCalls,
       recoveryScenarioCount,
       multiFileRecoverySeen,
+      conflictExplanationSeen,
+      rollbackVerified,
       toolSearchRankedFilePatch,
       approvalDiffPreviewSeen
     },

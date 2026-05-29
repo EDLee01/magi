@@ -32,7 +32,8 @@ try {
 
   const scenarios = [
     await runFilePatchRecoveryScenario({ approvalDiffPreviewSeen }),
-    await runMultiFilePatchRecoveryScenario()
+    await runMultiFilePatchRecoveryScenario(),
+    await runPatchConflictExplanationScenario()
   ];
   const report = addPatchSummary(
     harnessReport.buildHarnessReport({
@@ -87,6 +88,17 @@ function initialPipelineDocs() {
     "",
     "- All steps are listed.",
     "- Disabled steps appear in output.",
+    ""
+  ].join("\n");
+}
+
+function initialConflictConfig() {
+  return [
+    "export const config = {",
+    '  mode: "safe",',
+    "  retries: 2,",
+    '  output: "summary"',
+    "};",
     ""
   ].join("\n");
 }
@@ -231,6 +243,66 @@ async function runMultiFilePatchRecoveryScenario() {
   }
 }
 
+async function runPatchConflictExplanationScenario() {
+  const filePath = path.join(workDir, "src", "conflict-config.ts");
+  const original = initialConflictConfig();
+  writeFileSync(filePath, original, "utf8");
+  const started = Date.now();
+  const provider = await startProvider({ route: routePatchConflictEval });
+  try {
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig({ port: provider.port }),
+      "utf8"
+    );
+    const result = await runCli([
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      [
+        "Run the Patch Engine conflict explanation eval.",
+        "Attempt the requested FilePatch against src/conflict-config.ts.",
+        "If the patch conflicts with the current file, explain the conflict and do not rewrite the file."
+      ].join(" ")
+    ]);
+    assert(result.includes("session.completed"), "patch conflict eval did not complete");
+    assert(result.includes("conflict explanation preserved file"), "final conflict report missing");
+    const after = readFileSync(filePath, "utf8");
+    assert(after === original, "failed FilePatch conflict should not change the file");
+    const metrics = provider.metrics();
+    assert(metrics.toolCounts.FilePatch === 1, "expected one failed FilePatch conflict attempt");
+    assert(!metrics.toolCounts.FileWrite, "conflict explanation should not use FileWrite");
+    assert(metrics.recoverySeen, "patch conflict recovery explanation was not visible");
+    assert(metrics.patchConflictExplained, "patch conflict explanation markers were not visible");
+    return passedScenario({
+      name: "patch conflict explanation workflow",
+      started,
+      provider,
+      details: {
+        toolCounts: metrics.toolCounts,
+        patchUsageRate: patchUsageRate(metrics.toolCounts),
+        recoverySeen: metrics.recoverySeen,
+        conflictExplanationSeen: metrics.patchConflictExplained,
+        rollbackVerified: true,
+        fileWriteAvoided: !metrics.toolCounts.FileWrite,
+        assertions: [
+          "failed conflicting patch explained mismatch",
+          "current file snippet included",
+          "failed patch left file unchanged",
+          "FileWrite avoided after conflict"
+        ],
+        filesVerified: ["src/conflict-config.ts"]
+      }
+    });
+  } finally {
+    await provider.close();
+  }
+}
+
 async function verifyFilePatchApprovalDiffPreview() {
   const previewFile = path.join(workDir, "src", "approval-preview.ts");
   writeFileSync(previewFile, "const label = 'old';\nconst count = 1;\n", "utf8");
@@ -285,6 +357,7 @@ async function startProvider({ route }) {
   let turn = 0;
   let recoverySeen = false;
   let toolSearchRankedFilePatch = false;
+  let patchConflictExplained = false;
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -305,6 +378,13 @@ async function startProvider({ route }) {
           transcript.includes("Current file snippet:")
         ) {
           recoverySeen = true;
+        }
+        if (
+          transcript.includes("Patch tried to match:") &&
+          transcript.includes('mode: "fast"') &&
+          transcript.includes('mode: "safe"')
+        ) {
+          patchConflictExplained = true;
         }
         if (transcript.includes("1. FilePatch") && transcript.includes("intent: file-edit")) {
           toolSearchRankedFilePatch = true;
@@ -334,7 +414,8 @@ async function startProvider({ route }) {
       return {
         toolCounts: plannedToolCounts,
         recoverySeen,
-        toolSearchRankedFilePatch
+        toolSearchRankedFilePatch,
+        patchConflictExplained
       };
     },
     close: () => new Promise((resolve) => server.close(resolve))
@@ -496,6 +577,45 @@ function routePatchMultiFileEval({ transcript, toolNames, turn }) {
   return messageText("Multi-file Patch Engine eval already completed.");
 }
 
+function routePatchConflictEval({ transcript, toolNames, turn }) {
+  if (turn === 0) {
+    assert(toolNames.includes("FilePatch"), "FilePatch was not exposed for conflict eval");
+    assert(transcript.includes("use FilePatch for multi-line edits"), "missing FilePatch guidance");
+    return toolResponse([
+      toolCall("read-conflict-config", "FileRead", { file_path: "src/conflict-config.ts" })
+    ]);
+  }
+  if (turn === 1) {
+    assert(transcript.includes('mode: "safe"'), "conflict config source was not visible");
+    return toolResponse([
+      toolCall("conflicting-config-patch", "FilePatch", {
+        file_path: "src/conflict-config.ts",
+        patch: [
+          "@@",
+          " export const config = {",
+          '-  mode: "fast",',
+          '-  retries: 1,',
+          '+  mode: "safe",',
+          "+  retries: 3,",
+          '   output: "summary"',
+          " };"
+        ].join("\n")
+      })
+    ]);
+  }
+  if (turn === 2) {
+    assert(
+      transcript.includes("Patch tried to match:"),
+      "conflict explanation did not include attempted patch context"
+    );
+    assert(transcript.includes("Current file snippet:"), "conflict explanation missed current file");
+    assert(transcript.includes('mode: "fast"'), "conflict explanation missed stale patch context");
+    assert(transcript.includes('mode: "safe"'), "conflict explanation missed current file context");
+    return messageText("Patch conflict explanation preserved file without rewrite.");
+  }
+  return messageText("Patch conflict eval already completed.");
+}
+
 function passedScenario({ name, started, provider, details }) {
   return {
     name,
@@ -526,6 +646,8 @@ function addPatchSummary(report) {
   let multiFileRecoverySeen = false;
   let approvalDiffPreviewSeen = false;
   let toolSearchRankedFilePatch = false;
+  let conflictExplanationSeen = false;
+  let rollbackVerified = false;
   for (const scenario of report.scenarios) {
     const details = scenario.details ?? {};
     const counts = details.toolCounts ?? {};
@@ -540,6 +662,9 @@ function addPatchSummary(report) {
     }
     multiFileRecoverySeen = multiFileRecoverySeen || details.multiFileRecoverySeen === true;
     approvalDiffPreviewSeen = approvalDiffPreviewSeen || details.approvalDiffPreviewSeen === true;
+    conflictExplanationSeen =
+      conflictExplanationSeen || details.conflictExplanationSeen === true;
+    rollbackVerified = rollbackVerified || details.rollbackVerified === true;
     toolSearchRankedFilePatch =
       toolSearchRankedFilePatch || details.toolSearchRankedFilePatch === true;
   }
@@ -556,6 +681,8 @@ function addPatchSummary(report) {
       recoveryScenarioCount,
       multiFileRecoverySeen,
       approvalDiffPreviewSeen,
+      conflictExplanationSeen,
+      rollbackVerified,
       toolSearchRankedFilePatch
     }
   };
