@@ -567,6 +567,174 @@ async function scenarioToolDiscoveryTask() {
   });
 }
 
+async function scenarioCrossFileVerifiedEditTask() {
+  return await withWorkspace("cross-file-edit", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "scripts"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "src", "pricing.ts"),
+      [
+        'export type Tier = "starter" | "pro";',
+        "",
+        "export function monthlyPrice(tier: Tier): number {",
+        '  if (tier === "starter") return 12;',
+        "  return 30;",
+        "}",
+        "",
+        "export function annualPrice(tier: Tier): number {",
+        "  return monthlyPrice(tier) * 12;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "pricing.md"),
+      ["# Pricing", "", "- Starter: $12/mo", "- Pro: $30/mo", ""].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "scripts", "check-pricing.mjs"),
+      [
+        'import { readFileSync } from "node:fs";',
+        "",
+        'const pricing = readFileSync("src/pricing.ts", "utf8");',
+        'const docs = readFileSync("docs/pricing.md", "utf8");',
+        "",
+        'if (!pricing.includes(\'return 10;\')) throw new Error("starter monthly price missing");',
+        'if (!pricing.includes("monthlyPrice(tier) * 10")) throw new Error("annual discount missing");',
+        'if (!docs.includes("Starter: $10/mo")) throw new Error("docs monthly price missing");',
+        'if (!docs.includes("10 months")) throw new Error("docs annual note missing");',
+        'console.log("pricing ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(
+            transcript.includes("use FilePatch for multi-line edits"),
+            "FilePatch edit guidance was not injected"
+          );
+          return toolResponse([
+            toolCall("read-pricing-source", "FileRead", { file_path: "src/pricing.ts" }),
+            toolCall("read-pricing-docs", "FileRead", { file_path: "docs/pricing.md" })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("monthlyPrice"), "source file was not visible");
+          assert(transcript.includes("Starter: $12/mo"), "pricing docs were not visible");
+          return toolResponse([
+            toolCall("patch-pricing-source", "FilePatch", {
+              file_path: "src/pricing.ts",
+              patch: [
+                "@@",
+                " export function monthlyPrice(tier: Tier): number {",
+                '-  if (tier === "starter") return 12;',
+                '+  if (tier === "starter") return 10;',
+                "   return 30;",
+                " }",
+                " ",
+                " export function annualPrice(tier: Tier): number {",
+                "-  return monthlyPrice(tier) * 12;",
+                "+  return monthlyPrice(tier) * 10;",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-pricing-docs", "FilePatch", {
+              file_path: "docs/pricing.md",
+              patch: [
+                "@@",
+                " # Pricing",
+                " ",
+                "-- Starter: $12/mo",
+                "+- Starter: $10/mo",
+                " - Pro: $30/mo",
+                "+- Annual plans charge 10 months for a yearly commitment."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched src/pricing.ts"),
+            "source FilePatch result was not visible"
+          );
+          assert(
+            transcript.includes("Patched docs/pricing.md"),
+            "docs FilePatch result was not visible"
+          );
+          return toolResponse([
+            toolCall("verify-pricing", "Bash", {
+              command: "node scripts/check-pricing.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(transcript.includes("pricing ok"), "Bash verification output was not visible");
+        return messageText("Pricing source and docs updated, then verified with focused check.");
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Update pricing across source and docs.",
+            "Starter should be 10 per month and annual billing should charge 10 months.",
+            "Use FilePatch for existing file edits and run the focused pricing check after editing."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "cross-file verified edit task"
+      });
+      assert(output.includes("session.completed"), "cross-file verified edit task did not complete");
+      const source = readFileSync(path.join(workDir, "src", "pricing.ts"), "utf8");
+      const docs = readFileSync(path.join(workDir, "docs", "pricing.md"), "utf8");
+      assert(source.includes("return 10;"), "source starter price was not updated");
+      assert(source.includes("monthlyPrice(tier) * 10"), "source annual multiplier was not updated");
+      assert(docs.includes("Starter: $10/mo"), "docs starter price was not updated");
+      assert(docs.includes("10 months"), "docs annual note was not updated");
+      return {
+        score: 1,
+        assertions: [
+          "source and docs read before edit",
+          "source updated with FilePatch",
+          "docs updated with FilePatch",
+          "focused Bash verification ran",
+          "final response completed"
+        ],
+        filesVerified: ["src/pricing.ts", "docs/pricing.md", "scripts/check-pricing.mjs"],
+        provider: provider.summary(),
+        taskClass: "cross_file_verified_edit"
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -614,7 +782,8 @@ async function main() {
   const scenarios = [
     ["project edit task", scenarioProjectEditTask],
     ["memory driven task", scenarioMemoryDrivenTask],
-    ["tool discovery task", scenarioToolDiscoveryTask]
+    ["tool discovery task", scenarioToolDiscoveryTask],
+    ["cross-file verified edit task", scenarioCrossFileVerifiedEditTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

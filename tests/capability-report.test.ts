@@ -147,12 +147,12 @@ describe("capability report", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
       modelTasks: modelTaskReport({
-        scenarios: 2,
+        scenarios: 3,
         assertions: 4,
         filesVerified: 1,
         toolCallCount: 3,
         uniqueToolCount: 2,
-        taskClasses: ["project_edit", "memory_driven"],
+        taskClasses: ["project_edit", "memory_driven", "tool_discovery"],
         regressions: 1
       }),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -174,8 +174,8 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(modelTasks?.failures).toEqual(
       expect.arrayContaining([
-        "scenarios=2",
-        "taskClasses=2",
+        "scenarios=3",
+        "taskClasses=3",
         "assertions=4",
         "filesVerified=1",
         "toolCallCount=3",
@@ -417,15 +417,20 @@ function modelTaskReport(
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
-  const taskClasses = overrides.taskClasses ?? ["project_edit", "memory_driven", "tool_discovery"];
+  const taskClasses = overrides.taskClasses ?? [
+    "project_edit",
+    "memory_driven",
+    "tool_discovery",
+    "cross_file_verified_edit"
+  ];
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
-    providerCalls: overrides.providerCalls ?? 8,
-    assertions: overrides.assertions ?? 9,
-    filesVerified: overrides.filesVerified ?? 3,
-    toolCallCount: overrides.toolCallCount ?? 7,
+    providerCalls: overrides.providerCalls ?? 11,
+    assertions: overrides.assertions ?? 14,
+    filesVerified: overrides.filesVerified ?? 6,
+    toolCallCount: overrides.toolCallCount ?? 12,
     uniqueToolCount: overrides.uniqueToolCount ?? 6,
     regressions: overrides.regressions ?? 0
   });

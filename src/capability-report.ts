@@ -176,11 +176,11 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 3) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 3) failures.push(`taskClasses=${taskClasses.size}`);
-  if (assertions < 9) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 3) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 6) failures.push(`toolCallCount=${toolCallCount}`);
+  if (readNumber(summary.total) < 4) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 4) failures.push(`taskClasses=${taskClasses.size}`);
+  if (assertions < 14) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 11) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 5) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
