@@ -693,6 +693,11 @@ async function scenarioComplexWorkflow() {
       assert(appliedDream.includes("Redirected graph edges: 1"), "memory dream did not redirect duplicate graph edges");
       assert(appliedDream.includes("Fused graph node weights: 1"), "memory dream did not fuse duplicate graph node weight");
       assert(appliedDream.includes("Resolved graph edge conflicts: 0"), "memory dream reported unexpected graph edge conflicts");
+      const mergeAudit = await runCli({ args: ["memory", "merges", "--limit", "5"], cwd: workDir, configDir, label: "complex memory merges" });
+      assert(mergeAudit.includes("Memory graph merges: 1"), "memory merges did not list duplicate workflow merge");
+      assert(mergeAudit.includes("Focused CLI E2E workflow -> Focused CLI E2E workflow"), "memory merges did not show duplicate workflow titles");
+      assert(mergeAudit.includes("redirected edges: 1"), "memory merges did not show redirected edge count");
+      assert(mergeAudit.includes("dream:"), "memory merges did not include dream id");
 
       await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
@@ -710,6 +715,7 @@ async function scenarioComplexWorkflow() {
           "Dream archived duplicate workflow memory",
           "Dream redirected duplicate workflow graph edge",
           "Dream fused duplicate workflow weight",
+          "memory merge audit listed duplicate workflow",
           "learning draft listed"
         ],
         filesVerified: ["reports/e2e-result.md", "state/todos.json"],

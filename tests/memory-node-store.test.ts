@@ -382,6 +382,17 @@ describe("memory-node-store", () => {
           duplicateUseCount: 1
         })
       });
+      expect(store.listMergeRecords()).toContainEqual(
+        expect.objectContaining({
+          keep: expect.objectContaining({ id: keep.id }),
+          duplicate: expect.objectContaining({ id: duplicate.id }),
+          previousWeight: keep.weight,
+          nextWeight: result.nextKeepWeight,
+          redirectedEdgeCount: 2,
+          resolvedEdgeConflictCount: 1,
+          dreamId: "dream_merge"
+        })
+      );
       expect(store.listConflicts()).toHaveLength(0);
       expect(
         store.searchGraph({ query: "package publishing", limit: 5 }).map((hit) => hit.node.id)

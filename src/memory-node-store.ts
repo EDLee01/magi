@@ -128,6 +128,20 @@ export interface MergeDuplicateMemoryNodeResult {
   resolvedEdgeConflictCount: number;
 }
 
+export interface MemoryMergeRecord {
+  keep: MemoryNode;
+  duplicate: MemoryNode;
+  mergedAt: string;
+  reason: string;
+  previousWeight?: number;
+  nextWeight?: number;
+  duplicateWeight?: number;
+  duplicateUseCount?: number;
+  redirectedEdgeCount: number;
+  resolvedEdgeConflictCount: number;
+  dreamId?: string;
+}
+
 export interface ArchiveMemoryNodesInput {
   ids: string[];
   reason?: string;
@@ -1018,6 +1032,59 @@ export class MemoryNodeStore {
       }
     }
     return candidates;
+  }
+
+  listMergeRecords(input: { limit?: number } = {}): MemoryMergeRecord[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
+    const rows = this.db
+      .prepare(
+        `
+      select duplicate.*
+      from memory_nodes duplicate
+      where duplicate.status = 'archived'
+        and json_extract(duplicate.metadata_json, '$.archive.mergedInto') is not null
+      order by coalesce(
+        json_extract(duplicate.metadata_json, '$.archive.archivedAt'),
+        duplicate.updated_at
+      ) desc
+      limit ?
+    `
+      )
+      .all(limit) as DbMemoryNode[];
+
+    const records: MemoryMergeRecord[] = [];
+    for (const row of rows) {
+      const duplicate = toMemoryNode(row);
+      const archive = readRecord(duplicate.metadata.archive);
+      if (!archive) {
+        continue;
+      }
+      const keepId = readString(archive.mergedInto);
+      if (!keepId) {
+        continue;
+      }
+      const keep = this.getNode(keepId);
+      if (!keep) {
+        continue;
+      }
+      const merge = findMergeEntry(keep, duplicate.id);
+      records.push({
+        keep,
+        duplicate,
+        mergedAt:
+          readString(merge?.mergedAt) ?? readString(archive.archivedAt) ?? duplicate.updatedAt,
+        reason:
+          readString(merge?.reason) ?? readString(archive.reason) ?? "Merged duplicate Memory node",
+        previousWeight: readNumber(merge?.previousWeight),
+        nextWeight: readNumber(merge?.nextWeight),
+        duplicateWeight: readNumber(merge?.duplicateWeight) ?? duplicate.weight,
+        duplicateUseCount: readNumber(merge?.duplicateUseCount),
+        redirectedEdgeCount: readNumber(archive.redirectedEdgeCount) ?? 0,
+        resolvedEdgeConflictCount: readNumber(archive.resolvedEdgeConflictCount) ?? 0,
+        dreamId: readString(archive.dreamId) ?? readString(merge?.dreamId)
+      });
+    }
+    return records;
   }
 
   archiveNodes(input: ArchiveMemoryNodesInput): MemoryNode[] {
@@ -1923,6 +1990,38 @@ function recommendConflictResolution(
     recommendation: "needs_review",
     reason: "Both nodes have similar status and weight; ask the user or use MemoryCorrect."
   };
+}
+
+function findMergeEntry(
+  keep: MemoryNode,
+  duplicateNodeId: string
+): Record<string, unknown> | undefined {
+  const current = readRecord(keep.metadata.merge);
+  if (current && readString(current.duplicateNodeId) === duplicateNodeId) {
+    return current;
+  }
+  const history = Array.isArray(keep.metadata.mergeHistory) ? keep.metadata.mergeHistory : [];
+  for (const item of history) {
+    const entry = readRecord(item);
+    if (entry && readString(entry.duplicateNodeId) === duplicateNodeId) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function graphRowToSource(row: DbGraphSearchRow): MemorySource {

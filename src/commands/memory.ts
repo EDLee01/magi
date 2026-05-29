@@ -11,6 +11,7 @@ import {
   rejectDraft
 } from "../memory-draft.js";
 import { runDream, listDreams, showDream, applyDream, rejectDream } from "../memory-dream.js";
+import { formatMemoryMerges, listMemoryMerges } from "../memory-merges.js";
 
 export const command = {
   name: "memory",
@@ -128,6 +129,11 @@ export const command = {
       ].join("\n");
     }
 
+    if (sub === "merges") {
+      const limit = readLimit(args.slice(1));
+      return formatMemoryMerges(listMemoryMerges({ ...rootInput, paths: input.paths, limit }));
+    }
+
     // Backwards compat: /memory <scope> with scope = user|project|session
     if (sub === "user" || sub === "project" || sub === "session") {
       return formatMemory({
@@ -238,4 +244,21 @@ function formatArchivedMemdirEntry(entry: {
     "",
     entry.body
   ].join("\n");
+}
+
+function readLimit(args: string[]): number | undefined {
+  let limit: number | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--limit") {
+      const parsed = Number(args[++index]);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new Error("/memory merges --limit must be a positive integer");
+      }
+      limit = parsed;
+      continue;
+    }
+    throw new Error(`Unknown /memory merges option: ${arg}`);
+  }
+  return limit;
 }

@@ -334,6 +334,17 @@ describe("AGENTS rules and memory", () => {
       afterApply.searchGraph({ query: "package publishing", limit: 5 }).map((hit) => hit.node.id)
     ).toContain(keep.id);
     afterApply.close();
+
+    const mergeAudit = await runCli(["memory", "merges", "--limit", "5"], temp.env, workspace);
+    expect(mergeAudit.exitCode).toBe(0);
+    expect(mergeAudit.stdout).toContain("Memory graph merges: 1");
+    expect(mergeAudit.stdout).toContain(
+      "Focused release verification -> Focused release verification"
+    );
+    expect(mergeAudit.stdout).toContain("weight: 0.90 ->");
+    expect(mergeAudit.stdout).toContain("redirected edges: 2");
+    expect(mergeAudit.stdout).toContain("resolved edge conflicts: 1");
+    expect(mergeAudit.stdout).toContain(dreams[0].id);
   });
 
   it("applies or rejects Dream graph cleanup through reviewable CLI actions", async () => {

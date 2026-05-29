@@ -230,7 +230,7 @@
           <tr>
             <td>Memory Graph</td>
             <td>记忆节点、wiki chunk、edge、权重、冲突和替代关系共同决定召回。</td>
-            <td><span class="tag done">进行中</span> edge-aware retrieval、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、冲突审计视图、可持久配置的长期未用节点降权维护，以及 Dream graph 清理候选、纠错后 superseded/disputed 节点审核归档、重复 graph 记忆 merge 候选、节点合并后的 edge 重定向、merge 后权重融合和 edge 冲突消解、批量归档/保留审核闭环已实现。</td>
+            <td><span class="tag done">进行中</span> edge-aware retrieval、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、冲突审计视图、merge 审计视图、可持久配置的长期未用节点降权维护，以及 Dream graph 清理候选、纠错后 superseded/disputed 节点审核归档、重复 graph 记忆 merge 候选、节点合并后的 edge 重定向、merge 后权重融合和 edge 冲突消解、批量归档/保留审核闭环已实现。</td>
             <td><code>tests/memory-node-store.test.ts</code>、<code>tests/rules-memory.test.ts</code>、<code>tests/cli.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
@@ -272,7 +272,7 @@
       <div class="panel">
         <h3>v0.1.0-alpha.3</h3>
         <ul>
-          <li>继续完成 Memory Graph v2：把 Dream graph 归档/保留审核接入更细的多节点冲突分组、工作流权重策略、merge 审计视图和召回质量评测。</li>
+          <li>继续完成 Memory Graph v2：把 Dream graph 归档/保留审核接入更细的多节点冲突分组、工作流权重策略和召回质量评测。</li>
           <li>扩展真实 memory 业务测试：写入、重启、召回、显式 link、用户纠错、superseded/disputed 清理、Dream apply/reject、维护策略配置、降权和权重变化。</li>
           <li>推进 Patch Engine v1：继续补真实模型 patch benchmark，观察复杂任务中 FilePatch、FileEdit、FileWrite 的实际选择比例。</li>
         </ul>
