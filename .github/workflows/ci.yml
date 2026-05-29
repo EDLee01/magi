@@ -41,6 +41,18 @@ jobs:
       - name: Run black-box CLI matrix
         run: npm run test:blackbox
 
+      - name: Run model task benchmark
+        run: npm run test:model-tasks
+
+      - name: Run capability eval gates
+        run: |
+          npm run test:memory-eval
+          npm run test:patch-eval
+          npm run test:goal-plan-eval
+          npm run test:tool-discovery-eval
+          npm run test:control-api-eval
+          npm run report:capability
+
       - name: Smoke test (Unix)
         if: runner.os != 'Windows'
         run: bash scripts/smoke.sh
