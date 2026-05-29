@@ -2594,18 +2594,31 @@ function scoreGraphHit(
 ): number {
   const text = `${input.source.uri}\n${input.source.title}\n${input.node.title}\n${input.node.summary}\n${input.chunk.heading}\n${input.chunk.body}`;
   const words = tokenizeSearch(text);
-  let score = 0;
+  let lexicalScore = 0;
   for (const term of terms) {
     if (words.includes(term)) {
-      score += 5;
+      lexicalScore += 5;
     } else if (words.some((word) => word.includes(term) || term.includes(word))) {
-      score += 1;
+      lexicalScore += 1;
     }
     if (input.source.uri.toLowerCase().includes(term)) {
-      score += 3;
+      lexicalScore += 3;
     }
   }
-  return score > 0 ? score + input.node.weight : 0;
+  if (lexicalScore <= 0) {
+    return 0;
+  }
+  return lexicalScore + memoryPriorityScore(input.node);
+}
+
+function memoryPriorityScore(node: MemoryNode): number {
+  const trend = readRecord(node.metadata.feedbackTrend);
+  const useful = readNumber(trend?.useful) ?? 0;
+  const irrelevant = readNumber(trend?.irrelevant) ?? 0;
+  const feedbackSignal = Math.max(-0.6, Math.min(0.6, (useful - irrelevant) * 0.18));
+  const useSignal = Math.min(0.8, node.useCount * 0.12);
+  const freshnessSignal = node.lastUsedAt ? 0.18 : 0;
+  return node.weight * 2 + useSignal + feedbackSignal + freshnessSignal;
 }
 
 function applyGraphEdges(
@@ -2743,6 +2756,12 @@ function promoteGraphHit(
   }
   const nextScore = relationBoostedScore(source.score, edge, direction, distance);
   if (nextScore <= target.score) {
+    if (shouldAttachComparableGraphPath(target, nextScore, distance)) {
+      target.graphDistance = distance;
+      target.viaNodeIds = [...(source.viaNodeIds ?? []), source.node.id];
+      target.viaEdgeIds = [...(source.viaEdgeIds ?? []), edge.id];
+      return true;
+    }
     return false;
   }
   target.score = nextScore;
@@ -2750,6 +2769,17 @@ function promoteGraphHit(
   target.viaNodeIds = [...(source.viaNodeIds ?? []), source.node.id];
   target.viaEdgeIds = [...(source.viaEdgeIds ?? []), edge.id];
   return true;
+}
+
+function shouldAttachComparableGraphPath(
+  target: MemoryGraphSearchHit,
+  nextScore: number,
+  distance: number
+): boolean {
+  if (distance !== 1) return false;
+  if ((target.viaEdgeIds?.length ?? 0) > 0) return false;
+  if ((target.graphDistance ?? 0) !== 0) return false;
+  return nextScore >= target.score * 0.9;
 }
 
 function relationBoostedScore(

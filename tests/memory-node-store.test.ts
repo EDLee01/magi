@@ -322,6 +322,71 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("prioritizes repeatedly useful current memory over stale keyword-heavy memory", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const stale = store.upsertNode({
+        type: "workflow",
+        title: "Legacy invoice export workflow",
+        summary: "Invoice export workflow.",
+        body: "Invoice export workflow uses legacy spreadsheet manual reconciliation with invoice export checklist and manual review.",
+        source: "explicit",
+        weight: 0.95
+      });
+      const current = store.upsertNode({
+        type: "workflow",
+        title: "Current invoice export workflow",
+        summary: "Invoice export workflow.",
+        body: "Invoice export workflow uses automated ledger reconciliation.",
+        source: "explicit",
+        weight: 0.45
+      });
+      const db = new Database(paths.sessionDbFile);
+      db.prepare("update memory_nodes set updated_at = ?, last_used_at = null where id = ?").run(
+        "2026-01-01T00:00:00.000Z",
+        stale.id
+      );
+      db.close();
+
+      store.decayUnusedNodes({
+        now: new Date("2026-05-29T00:00:00Z"),
+        olderThanDays: 1,
+        decay: 0.6,
+        minWeight: 0.2,
+        apply: true
+      });
+      store.applyFeedback({
+        nodeId: current.id,
+        signal: "useful",
+        reason: "Current workflow matched the task."
+      });
+      store.applyFeedback({
+        nodeId: current.id,
+        signal: "useful",
+        reason: "Current workflow matched the task again."
+      });
+
+      const hits = store.searchGraph({ query: "invoice export workflow", limit: 5 });
+      expect(hits[0]).toMatchObject({
+        node: expect.objectContaining({ id: current.id, title: "Current invoice export workflow" })
+      });
+      expect(hits.map((hit) => hit.node.id)).toContain(stale.id);
+      expect(store.getNode(current.id)).toMatchObject({
+        useCount: 2,
+        metadata: expect.objectContaining({
+          feedbackTrend: expect.objectContaining({ useful: 2 })
+        })
+      });
+      expect(store.getNode(stale.id)?.metadata.decay).toMatchObject({
+        previousWeight: 0.95,
+        effectiveDecay: 0.3
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("lists low-weight cleanup candidates from stale graph nodes", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

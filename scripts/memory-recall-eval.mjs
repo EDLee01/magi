@@ -24,6 +24,7 @@ const lifecycleEvidence = {
   conflictGroupViewSeen: false,
   dreamConflictGroupLifecycleSeen: false,
   longCycleFeedbackTrendSeen: false,
+  staleKnowledgeDemotionSeen: false,
   crossNodeRecommendationSeen: false,
   projectCaseRecallSeen: false,
   multiProjectConflictRecallSeen: false,
@@ -43,6 +44,7 @@ try {
   assertGraphEdgeReinforcement();
   assertUserFeedbackTrendLifecycle();
   assertLongCycleFeedbackTrendRecall();
+  assertStaleKnowledgeDemotionLifecycle();
   assertRestartRecall();
   await assertNaturalLanguageCorrectionLifecycle();
   assertDreamReviewLifecycle();
@@ -351,6 +353,104 @@ function assertLongCycleFeedbackTrendRecall() {
   recordAssertion("long-cycle feedback trend persisted across CLI process");
   recordAssertion("long-cycle feedback trend recalled hot workflow");
   recordAssertion("cross-node workflow recommendation surfaced related habit");
+}
+
+function assertStaleKnowledgeDemotionLifecycle() {
+  const stale = seedTypedGraphNode({
+    type: "workflow",
+    title: "Legacy invoice export workflow",
+    summary: "Invoice export workflow.",
+    body: "Invoice export workflow uses legacy spreadsheet manual reconciliation with invoice export checklist and manual review.",
+    weight: 0.95
+  });
+  const current = seedTypedGraphNode({
+    type: "workflow",
+    title: "Current invoice export workflow",
+    summary: "Invoice export workflow.",
+    body: "Invoice export workflow uses automated ledger reconciliation.",
+    weight: 0.45
+  });
+  makeNodesStale([stale.id], "2026-01-01T00:00:00.000Z");
+
+  const configured = runCli(
+    [
+      "memory",
+      "maintain",
+      "config",
+      "--older-than-days",
+      "30",
+      "--decay",
+      "0.6",
+      "--min-weight",
+      "0.2",
+      "--limit",
+      "20"
+    ],
+    "memory stale knowledge maintenance config"
+  );
+  assert(configured.includes("decay: 0.600"), "stale knowledge config did not persist decay");
+  assert(
+    configured.includes("olderThanDays: 30"),
+    "stale knowledge config did not persist bounded age window"
+  );
+
+  const maintained = runCli(["memory", "maintain", "--apply"], "memory stale knowledge decay");
+  assert(
+    maintained.includes("Legacy invoice export workflow"),
+    "stale knowledge maintenance did not decay legacy workflow"
+  );
+  assert(
+    nodeById(stale.id).weight < stale.weight,
+    "stale knowledge maintenance did not lower legacy workflow weight"
+  );
+
+  for (const reason of [
+    "Current invoice workflow matched this month's finance task.",
+    "Second finance task confirmed the current invoice workflow."
+  ]) {
+    const feedback = runCli(
+      [
+        "memory",
+        "feedback",
+        "--target",
+        current.id,
+        "--signal",
+        "useful",
+        "--reason",
+        reason
+      ],
+      "memory current invoice workflow useful feedback"
+    );
+    assert(feedback.includes("Memory feedback applied"), "current workflow feedback did not run");
+  }
+
+  const search = runCli(
+    ["memory", "search", "invoice export workflow"],
+    "memory stale knowledge demotion search"
+  );
+  const currentIndex = search.indexOf("Current invoice export workflow");
+  const legacyIndex = search.indexOf("Legacy invoice export workflow");
+  assert(currentIndex >= 0, "current invoice workflow was not recalled");
+  assert(legacyIndex >= 0, "legacy invoice workflow was not still available for review");
+  assert(
+    currentIndex < legacyIndex,
+    "current useful workflow should rank before stale keyword-heavy workflow"
+  );
+
+  const trends = runCli(
+    ["memory", "feedback", "trends", "--limit", "5", "--min-events", "2"],
+    "memory stale knowledge feedback trends"
+  );
+  assert(
+    trends.includes("Current invoice export workflow"),
+    "feedback trends missed current invoice workflow"
+  );
+  assert(trends.includes("useful=2"), "feedback trends missed repeated useful signal");
+
+  lifecycleEvidence.staleKnowledgeDemotionSeen = true;
+  recordAssertion("stale knowledge maintenance lowered old workflow weight");
+  recordAssertion("repeated useful feedback made current workflow hot");
+  recordAssertion("current workflow ranked before stale keyword-heavy workflow");
 }
 
 function assertProjectCaseRecall() {

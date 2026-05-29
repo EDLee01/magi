@@ -144,6 +144,7 @@ describe("capability report", () => {
         graphEdgeReinforcementSeen: false,
         userFeedbackTrendSeen: false,
         longCycleFeedbackTrendSeen: false,
+        staleKnowledgeDemotionSeen: false,
         crossNodeRecommendationSeen: false,
         projectCaseRecallSeen: false,
         multiProjectConflictRecallSeen: false,
@@ -180,6 +181,7 @@ describe("capability report", () => {
     expect(output).toContain("graphEdgeReinforcementSeen=false");
     expect(output).toContain("userFeedbackTrendSeen=false");
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
+    expect(output).toContain("staleKnowledgeDemotionSeen=false");
     expect(output).toContain("crossNodeRecommendationSeen=false");
     expect(output).toContain("projectCaseRecallSeen=false");
     expect(output).toContain("multiProjectConflictRecallSeen=false");
@@ -893,6 +895,7 @@ function memoryReport(input: {
   graphEdgeReinforcementSeen?: boolean;
   userFeedbackTrendSeen?: boolean;
   longCycleFeedbackTrendSeen?: boolean;
+  staleKnowledgeDemotionSeen?: boolean;
   crossNodeRecommendationSeen?: boolean;
   projectCaseRecallSeen?: boolean;
   multiProjectConflictRecallSeen?: boolean;
@@ -954,6 +957,13 @@ function memoryReport(input: {
               "long-cycle feedback trend persisted across CLI process",
               "long-cycle feedback trend recalled hot workflow"
             ]),
+        ...(input.staleKnowledgeDemotionSeen === false
+          ? []
+          : [
+              "stale knowledge maintenance lowered old workflow weight",
+              "repeated useful feedback made current workflow hot",
+              "current workflow ranked before stale keyword-heavy workflow"
+            ]),
         ...(input.crossNodeRecommendationSeen === false
           ? []
           : ["cross-node workflow recommendation surfaced related habit"]),
@@ -986,7 +996,7 @@ function memoryReport(input: {
               "maintenance config invalid values were rejected"
             ]),
         ...Array.from(
-          { length: input.assertions ?? 40 },
+          { length: input.assertions ?? 43 },
           (_, index) => `memory assertion ${index + 1}`
         )
       ],
@@ -997,6 +1007,7 @@ function memoryReport(input: {
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
+      staleKnowledgeDemotionSeen: input.staleKnowledgeDemotionSeen !== false,
       crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
       projectCaseRecallSeen: input.projectCaseRecallSeen !== false,
       multiProjectConflictRecallSeen: input.multiProjectConflictRecallSeen !== false,
