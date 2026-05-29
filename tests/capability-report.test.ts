@@ -127,7 +127,9 @@ describe("capability report", () => {
         maintenanceRecallSeen: false,
         workflowGraphRecallSeen: false,
         conflictGroupViewSeen: false,
-        dreamConflictGroupLifecycleSeen: false
+        dreamConflictGroupLifecycleSeen: false,
+        assertions: 4,
+        filesVerified: 1
       }),
       patch: patchReport({
         filePatchCalls: 5,
@@ -147,6 +149,8 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(output).toContain("- memory: failed");
     expect(output).toContain("thresholdPassed=false");
+    expect(output).toContain("assertions=4");
+    expect(output).toContain("filesVerified=1");
     expect(output).toContain("maintenanceRecallSeen=false");
     expect(output).toContain("workflowGraphRecallSeen=false");
     expect(output).toContain("conflictGroupViewSeen=false");
@@ -547,6 +551,8 @@ function memoryReport(input: {
   workflowGraphRecallSeen?: boolean;
   conflictGroupViewSeen?: boolean;
   dreamConflictGroupLifecycleSeen?: boolean;
+  assertions?: number;
+  filesVerified?: number;
 }): Record<string, unknown> {
   const names = [
     "linked workflow retrieves project neighbor",
@@ -568,6 +574,14 @@ function memoryReport(input: {
     thresholdPassed: input.thresholdPassed,
     results,
     details: {
+      assertions: Array.from(
+        { length: input.assertions ?? 16 },
+        (_, index) => `memory assertion ${index + 1}`
+      ),
+      filesVerified: Array.from(
+        { length: input.filesVerified ?? 5 },
+        (_, index) => `memory-file-${index + 1}.json`
+      ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false
     }

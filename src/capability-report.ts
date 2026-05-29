@@ -270,9 +270,14 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const workflowGraphRecallSeen = resultNames.includes("workflow graph recalls second-hop habit");
   const conflictGroupViewSeen = details.conflictGroupViewSeen === true;
   const dreamConflictGroupLifecycleSeen = details.dreamConflictGroupLifecycleSeen === true;
+  const assertions = readStringList(details.assertions).length;
+  const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
+  if (results.length < 5) failures.push(`cases=${results.length}`);
+  if (assertions < 15) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 5) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
@@ -288,6 +293,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       failed: readNumber(report.failed),
       score,
       minScore: readNumber(report.minScore),
+      assertions,
+      filesVerified,
       maintenanceRecallSeen,
       workflowGraphRecallSeen,
       conflictGroupViewSeen,
@@ -695,6 +702,10 @@ function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function readStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
 }
 
 function average(values: number[]): number {

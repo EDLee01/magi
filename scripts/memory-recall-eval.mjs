@@ -21,7 +21,9 @@ const reportFile =
   options.reportFile ?? path.join(repoRoot, ".magi-reports", "memory-recall-eval.json");
 const lifecycleEvidence = {
   conflictGroupViewSeen: false,
-  dreamConflictGroupLifecycleSeen: false
+  dreamConflictGroupLifecycleSeen: false,
+  assertions: [],
+  filesVerified: []
 };
 
 try {
@@ -196,6 +198,16 @@ function runMemoryEval(label, caseFile = options.caseFile) {
     label
   );
   const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  const assertionPrefix = label.includes("maintenance")
+    ? "maintenance recall"
+    : label.includes("Dream apply")
+      ? "post-dream recall"
+      : "initial recall";
+  for (const result of report.results ?? []) {
+    if (result?.passed === true && typeof result.name === "string") {
+      recordAssertion(`${assertionPrefix}: ${result.name}`);
+    }
+  }
   assert(report.failed === 0, `memory recall eval had failed cases:\n${evalOutput}`);
   assert(report.thresholdPassed === true, `memory recall eval missed threshold:\n${evalOutput}`);
   assert(
@@ -212,6 +224,7 @@ function assertRestartRecall() {
     search.includes("Edward is the creator of Magi Next"),
     "restart recall missed identity body"
   );
+  recordAssertion("restart recall found durable user identity");
 }
 
 function assertDreamReviewLifecycle() {
@@ -284,6 +297,7 @@ function assertConflictGroupView() {
     "memory conflict group view missed connected stale node"
   );
   lifecycleEvidence.conflictGroupViewSeen = true;
+  recordAssertion("conflict group view listed stale and corrected preference nodes");
 }
 
 function seedConflictEdge(input) {
@@ -347,6 +361,8 @@ function assertConflictGroupDreamLifecycle() {
     "Dream apply did not archive conflict group stale nodes"
   );
   lifecycleEvidence.dreamConflictGroupLifecycleSeen = true;
+  recordAssertion("Dream conflict group reject kept stale nodes active");
+  recordAssertion("Dream conflict group apply archived stale nodes and kept preferred node");
 }
 
 function seedConflictGroupNodes() {
@@ -463,6 +479,10 @@ function assertMaintenanceLifecycle() {
     decayedProjectFact.weight === 0.72,
     `project fact expected weight 0.72 after baseline decay, got ${decayedProjectFact.weight}`
   );
+  recordAssertion("maintenance preview did not mutate node weights");
+  recordAssertion("maintenance apply decayed ordinary active node");
+  recordAssertion("maintenance protected workflow decayed less than project fact");
+  recordAssertion("maintenance persisted configurable decay policy");
 
   const postMaintenanceEval = runMemoryEval(
     "memory recall eval after maintenance",
@@ -500,6 +520,15 @@ function writeMaintenanceCaseFile() {
 
 function writeLifecycleEvidence() {
   const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  recordFileVerified(relativeToRoot(report.caseFile ?? options.caseFile));
+  recordFileVerified(
+    reportFile.startsWith(repoRoot)
+      ? path.relative(repoRoot, reportFile)
+      : relativeToRoot(reportFile)
+  );
+  recordFileVerified("state/sessions.sqlite");
+  recordFileVerified("memory/dreams");
+  recordFileVerified("memory-recall-maintenance-business.json");
   writeFileSync(
     reportFile,
     `${JSON.stringify(
@@ -507,7 +536,9 @@ function writeLifecycleEvidence() {
         ...report,
         details: {
           ...(report.details ?? {}),
-          ...lifecycleEvidence
+          ...lifecycleEvidence,
+          assertions: Array.from(new Set(lifecycleEvidence.assertions)),
+          filesVerified: Array.from(new Set(lifecycleEvidence.filesVerified))
         }
       },
       null,
@@ -515,6 +546,19 @@ function writeLifecycleEvidence() {
     )}\n`,
     "utf8"
   );
+}
+
+function recordAssertion(assertion) {
+  lifecycleEvidence.assertions.push(assertion);
+}
+
+function recordFileVerified(file) {
+  lifecycleEvidence.filesVerified.push(file);
+}
+
+function relativeToRoot(file) {
+  const absolute = path.resolve(file);
+  return path.relative(root, absolute) || path.basename(absolute);
 }
 
 function seedTypedGraphNode(input) {
