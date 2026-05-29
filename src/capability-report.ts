@@ -6,6 +6,7 @@ export interface CapabilityReportInput {
   memory: Record<string, unknown>;
   patch: Record<string, unknown>;
   goalPlan: Record<string, unknown>;
+  toolDiscovery: Record<string, unknown>;
   generatedAt?: Date;
   sources?: Record<string, string>;
 }
@@ -45,7 +46,8 @@ export function buildCapabilityReport(input: CapabilityReportInput): CapabilityR
     }),
     checkMemoryReport(input.memory),
     checkPatchReport(input.patch),
-    checkGoalPlanReport(input.goalPlan)
+    checkGoalPlanReport(input.goalPlan),
+    checkToolDiscoveryReport(input.toolDiscovery)
   ];
   const failed = checks.filter((check) => check.status !== "passed");
   return {
@@ -76,12 +78,14 @@ export function buildCapabilityReportFromFiles(input: {
     memory: readJsonReport(reportPath("memory-recall-eval.json")),
     patch: readJsonReport(reportPath("patch-engine-eval.json")),
     goalPlan: readJsonReport(reportPath("goal-plan-eval.json")),
+    toolDiscovery: readJsonReport(reportPath("tool-discovery-eval.json")),
     generatedAt: input.generatedAt,
     sources: {
       blackbox: path.relative(input.repoRoot, reportPath("blackbox-e2e.json")),
       memory: path.relative(input.repoRoot, reportPath("memory-recall-eval.json")),
       patch: path.relative(input.repoRoot, reportPath("patch-engine-eval.json")),
-      goalPlan: path.relative(input.repoRoot, reportPath("goal-plan-eval.json"))
+      goalPlan: path.relative(input.repoRoot, reportPath("goal-plan-eval.json")),
+      toolDiscovery: path.relative(input.repoRoot, reportPath("tool-discovery-eval.json"))
     }
   });
 }
@@ -224,6 +228,56 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       planSubmittedToModel: details.planSubmittedToModel === true,
       planReviewPersisted: details.planReviewPersisted === true,
       goalCompleted: details.goalCompleted === true
+    },
+    failures
+  };
+}
+
+function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCheck {
+  const base = checkHarnessReport({
+    id: "tool-discovery",
+    title: "Tool Discovery eval",
+    report,
+    minScore: 1,
+    minSuccessRate: 1
+  });
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
+  const scenario = readRecord(scenarios[0]);
+  const details = readRecord(scenario.details);
+  const failures = [...base.failures];
+  if (details.coreToolsExposed !== true) failures.push("coreToolsExposed=false");
+  if (details.deferredToolsHidden !== true) failures.push("deferredToolsHidden=false");
+  if (details.fileEditIntentRankedFilePatch !== true) {
+    failures.push("fileEditIntentRankedFilePatch=false");
+  }
+  if (details.browserAutomationRankedBrowser !== true) {
+    failures.push("browserAutomationRankedBrowser=false");
+  }
+  if (details.learningDraftRevealed !== true) failures.push("learningDraftRevealed=false");
+  if (details.feedbackResultsReturned !== true) failures.push("feedbackResultsReturned=false");
+  if (details.feedbackRankingUsedUsage !== true) failures.push("feedbackRankingUsedUsage=false");
+  if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
+  if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
+  if (readNumber(details.revealedToolCount) <= readNumber(details.initialToolCount)) {
+    failures.push("revealedToolCount did not increase");
+  }
+  return {
+    ...base,
+    status: failures.length === 0 ? "passed" : "failed",
+    score: failures.length === 0 ? 1 : 0,
+    metrics: {
+      ...base.metrics,
+      coreToolsExposed: details.coreToolsExposed === true,
+      deferredToolsHidden: details.deferredToolsHidden === true,
+      fileEditIntentRankedFilePatch: details.fileEditIntentRankedFilePatch === true,
+      browserAutomationRankedBrowser: details.browserAutomationRankedBrowser === true,
+      learningDraftRevealed: details.learningDraftRevealed === true,
+      feedbackResultsReturned: details.feedbackResultsReturned === true,
+      feedbackRankingUsedUsage: details.feedbackRankingUsedUsage === true,
+      initialToolCount: readNumber(details.initialToolCount),
+      revealedToolCount: readNumber(details.revealedToolCount),
+      grepFailures: readNumber(details.grepFailures),
+      globSuccesses: readNumber(details.globSuccesses)
     },
     failures
   };

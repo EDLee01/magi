@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildCapabilityReport, formatCapabilityReport } from "../src/capability-report.js";
 
 describe("capability report", () => {
-  it("passes when blackbox, memory, patch, and goal-plan eval reports meet the gates", () => {
+  it("passes when all capability eval reports meet the gates", () => {
     const report = buildCapabilityReport({
       generatedAt: new Date("2026-05-29T00:00:00.000Z"),
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
@@ -16,17 +16,19 @@ describe("capability report", () => {
         toolSearchRankedFilePatch: true,
         patchUsageRate: 2 / 3
       }),
-      goalPlan: goalPlanReport()
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport()
     });
 
     expect(report).toMatchObject({
       status: "passed",
-      summary: { total: 4, passed: 4, failed: 0, score: 1 },
+      summary: { total: 5, passed: 5, failed: 0, score: 1 },
       checks: [
         { id: "blackbox", status: "passed" },
         { id: "memory", status: "passed" },
         { id: "patch", status: "passed" },
-        { id: "goal-plan", status: "passed" }
+        { id: "goal-plan", status: "passed" },
+        { id: "tool-discovery", status: "passed" }
       ]
     });
   });
@@ -43,7 +45,8 @@ describe("capability report", () => {
         toolSearchRankedFilePatch: false,
         patchUsageRate: 1 / 3
       }),
-      goalPlan: goalPlanReport()
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport()
     });
 
     const patch = report.checks.find((check) => check.id === "patch");
@@ -71,7 +74,8 @@ describe("capability report", () => {
         toolSearchRankedFilePatch: true,
         patchUsageRate: 2 / 3
       }),
-      goalPlan: goalPlanReport()
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport()
     });
 
     const output = formatCapabilityReport(report);
@@ -92,13 +96,47 @@ describe("capability report", () => {
         toolSearchRankedFilePatch: true,
         patchUsageRate: 2 / 3
       }),
-      goalPlan: goalPlanReport({ completedGoalSuppressed: false, planReviewPersisted: false })
+      goalPlan: goalPlanReport({ completedGoalSuppressed: false, planReviewPersisted: false }),
+      toolDiscovery: toolDiscoveryReport()
     });
 
     const goalPlan = report.checks.find((check) => check.id === "goal-plan");
     expect(report.status).toBe("failed");
     expect(goalPlan?.failures).toEqual(
       expect.arrayContaining(["completedGoalSuppressed=false", "planReviewPersisted=false"])
+    );
+  });
+
+  it("fails tool discovery alignment when reveal or usage feedback evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 2,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        patchUsageRate: 2 / 3
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport({
+        learningDraftRevealed: false,
+        feedbackRankingUsedUsage: false,
+        revealedToolCount: 21,
+        grepFailures: 2
+      })
+    });
+
+    const toolDiscovery = report.checks.find((check) => check.id === "tool-discovery");
+    expect(report.status).toBe("failed");
+    expect(toolDiscovery?.failures).toEqual(
+      expect.arrayContaining([
+        "learningDraftRevealed=false",
+        "feedbackRankingUsedUsage=false",
+        "grepFailures < 4",
+        "revealedToolCount did not increase"
+      ])
     );
   });
 });
@@ -201,6 +239,50 @@ function goalPlanReport(
           planSubmittedToModel: true,
           planReviewPersisted: true,
           goalCompleted: true,
+          ...overrides
+        }
+      }
+    ]
+  };
+}
+
+function toolDiscoveryReport(
+  overrides: Partial<{
+    coreToolsExposed: boolean;
+    deferredToolsHidden: boolean;
+    fileEditIntentRankedFilePatch: boolean;
+    browserAutomationRankedBrowser: boolean;
+    learningDraftRevealed: boolean;
+    feedbackResultsReturned: boolean;
+    feedbackRankingUsedUsage: boolean;
+    initialToolCount: number;
+    revealedToolCount: number;
+    grepFailures: number;
+    globSuccesses: number;
+  }> = {}
+): Record<string, unknown> {
+  return {
+    ...harnessReport({ name: "tool-discovery-eval", scenarios: 1, providerCalls: 4 }),
+    scenarios: [
+      {
+        name: "tool discovery ranking and feedback workflow",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          provider: { callCount: 4 },
+          coreToolsExposed: true,
+          deferredToolsHidden: true,
+          fileEditIntentRankedFilePatch: true,
+          browserAutomationRankedBrowser: true,
+          learningDraftRevealed: true,
+          feedbackResultsReturned: true,
+          feedbackRankingUsedUsage: true,
+          initialToolCount: 21,
+          revealedToolCount: 22,
+          grepFailures: 4,
+          globSuccesses: 4,
           ...overrides
         }
       }

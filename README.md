@@ -152,6 +152,16 @@ That eval runs a real headless CLI session against a mock provider and verifies
 active goal injection, completed-goal suppression, plan mode mutation denial,
 submitted plan persistence, and goal completion state.
 
+Tool Discovery behavior can be checked with:
+
+```sh
+npm run test:tool-discovery-eval
+```
+
+That eval runs a real headless CLI session against a mock provider and verifies
+core/deferred tool exposure, ToolSearch intent ranking, `select:<tool>` schema
+reveal, and persisted tool usage feedback affecting later ranking.
+
 After the eval scripts run, aggregate the current capability evidence with:
 
 ```sh
@@ -159,7 +169,7 @@ npm run report:capability
 ```
 
 `npm run verify` runs the aggregate report last and fails if blackbox, Memory,
-Patch Engine, or Goal/Plan gates miss their required thresholds.
+Patch Engine, Goal/Plan, or Tool Discovery gates miss their required thresholds.
 
 ## Configuration
 
@@ -265,6 +275,7 @@ npm test
 npm run test:memory-eval
 npm run test:patch-eval
 npm run test:goal-plan-eval
+npm run test:tool-discovery-eval
 npm run report:capability
 ```
 
