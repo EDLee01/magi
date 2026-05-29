@@ -27,8 +27,11 @@ import {
 } from "./memory-maintenance.js";
 import {
   formatPlanReview,
+  formatPlanReviewChain,
   formatPlanReviewList,
   getLatestPlanReview,
+  getPlanReview,
+  getPlanReviewChain,
   listPlanReviews
 } from "./plan-state.js";
 import {
@@ -522,6 +525,22 @@ async function runCliUnsafeWithParsed(
       const sub = parsed.rest[0]?.toLowerCase();
       const isList = sub === "list";
       const isAll = sub === "all" || sub === "global";
+      if (sub === "show") {
+        const planId = parsed.rest[1];
+        return {
+          exitCode: planId ? 0 : 2,
+          stdout: `${planId ? formatPlanReview(getPlanReview(paths.stateRoot, planId)) : ""}\n`,
+          stderr: planId ? "" : "Usage: magi plan show <plan-id>\n"
+        };
+      }
+      if (sub === "chain") {
+        const planId = parsed.rest[1];
+        return {
+          exitCode: planId ? 0 : 2,
+          stdout: `${planId ? formatPlanReviewChain(getPlanReviewChain(paths.stateRoot, planId)) : ""}\n`,
+          stderr: planId ? "" : "Usage: magi plan chain <plan-id>\n"
+        };
+      }
       const session = resolvePlanSessionForCommand({
         store,
         sessionId: isAll ? undefined : (parsed.sessionId ?? parsed.resumeSessionId),
@@ -1820,7 +1839,7 @@ function helpText(): string {
     "  magi sessions",
     "  magi resume <session-id>",
     "  magi goal [objective] [--session-id <id>]",
-    "  magi plan [list|all] [--session-id <id>]",
+    "  magi plan [list|all|show <id>|chain <id>] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",

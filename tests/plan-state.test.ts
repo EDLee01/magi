@@ -4,6 +4,7 @@ import {
   formatPlanReview,
   formatPlanReviewList,
   getLatestPlanReview,
+  getPlanReviewChain,
   listPlanReviews,
   recordPlanReview,
   updatePlanReviewStatus
@@ -85,6 +86,10 @@ describe("plan review state", () => {
       expect(formatPlanReview(plans[0])).toContain(`Root plan: ${original.id}`);
       expect(formatPlanReviewList(plans)).toContain(`revises:${original.id}`);
       expect(formatPlanReviewList(plans)).toContain(`revised-by:${revised.id}`);
+      expect(getPlanReviewChain(paths.stateRoot, revised.id).map((plan) => plan.id)).toEqual([
+        original.id,
+        revised.id
+      ]);
     } finally {
       temp.cleanup();
     }

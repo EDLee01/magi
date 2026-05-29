@@ -234,6 +234,10 @@ try {
       planRevision.revisionPlanId,
       planRevision.approvedPlanId
     );
+    const planRevisionChainViewListed = await assertPlanRevisionChainViewListed(
+      planRevision.revisionPlanId,
+      planRevision.approvedPlanId
+    );
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
@@ -264,6 +268,7 @@ try {
             planApprovalSeen: planRevision.approvalSeen,
             planApprovalPersisted,
             planRevisionChainLinked,
+            planRevisionChainViewListed,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -573,6 +578,19 @@ function assertPlanRevisionChainLinked(revisionPlanId, approvedPlanId) {
   );
   assert(approved.revisesPlanId === revisionPlanId, "approved plan did not revise prior plan");
   assert(approved.rootPlanId === revisionPlanId, "approved plan missed root plan id");
+  return true;
+}
+
+async function assertPlanRevisionChainViewListed(revisionPlanId, approvedPlanId) {
+  const chain = await runCli(["plan", "chain", approvedPlanId], "plan revision chain view");
+  assert(chain.includes(`Plan chain: ${revisionPlanId}`), "plan chain view missed root id");
+  assert(
+    chain.includes(`1. needs_revision ${revisionPlanId}`),
+    "plan chain view missed revision plan"
+  );
+  assert(chain.includes(`2. approved ${approvedPlanId}`), "plan chain view missed approved plan");
+  const show = await runCli(["plan", "show", revisionPlanId], "plan revision show view");
+  assert(show.includes(`Revised by plan: ${approvedPlanId}`), "plan show missed revised-by link");
   return true;
 }
 

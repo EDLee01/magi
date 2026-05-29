@@ -108,6 +108,10 @@ export function getLatestPlanReview(
   return listPlanReviews(stateRoot, sessionId)[0];
 }
 
+export function getPlanReview(stateRoot: string, id: string): PlanReviewRecord | undefined {
+  return readPlanStore(stateRoot).plans.find((plan) => plan.id === id);
+}
+
 export function getLatestPlanReviewNeedingRevision(
   stateRoot: string,
   sessionId: string
@@ -115,6 +119,30 @@ export function getLatestPlanReviewNeedingRevision(
   return listPlanReviews(stateRoot, sessionId).find(
     (plan) => plan.status === "needs_revision" && !plan.revisedByPlanId
   );
+}
+
+export function getPlanReviewChain(stateRoot: string, id: string): PlanReviewRecord[] {
+  const plans = readPlanStore(stateRoot).plans;
+  const byId = new Map(plans.map((plan) => [plan.id, plan]));
+  const start = byId.get(id);
+  if (!start) return [];
+  let head = start;
+  const seen = new Set<string>();
+  while (head.revisesPlanId && !seen.has(head.id)) {
+    seen.add(head.id);
+    const previous = byId.get(head.revisesPlanId);
+    if (!previous) break;
+    head = previous;
+  }
+  const chain: PlanReviewRecord[] = [];
+  let current: PlanReviewRecord | undefined = head;
+  seen.clear();
+  while (current && !seen.has(current.id)) {
+    chain.push(current);
+    seen.add(current.id);
+    current = current.revisedByPlanId ? byId.get(current.revisedByPlanId) : undefined;
+  }
+  return chain;
 }
 
 export function formatPlanReview(record: PlanReviewRecord | undefined): string {
@@ -136,6 +164,25 @@ export function formatPlanReview(record: PlanReviewRecord | undefined): string {
   ]
     .filter((line): line is string => line !== undefined)
     .join("\n");
+}
+
+export function formatPlanReviewChain(records: PlanReviewRecord[]): string {
+  if (records.length === 0) return "No submitted plan chain.";
+  return [
+    `Plan chain: ${records[0].rootPlanId ?? records[0].id}`,
+    ...records.map((record, index) =>
+      [
+        `${index + 1}. ${record.status} ${record.id}`,
+        `   Session: ${record.sessionId}`,
+        record.revisesPlanId ? `   Revises: ${record.revisesPlanId}` : undefined,
+        record.revisedByPlanId ? `   Revised by: ${record.revisedByPlanId}` : undefined,
+        record.response ? `   Response: ${record.response}` : undefined,
+        `   Plan: ${firstLine(record.plan)}`
+      ]
+        .filter((line): line is string => line !== undefined)
+        .join("\n")
+    )
+  ].join("\n");
 }
 
 export function formatPlanReviewList(records: PlanReviewRecord[]): string {

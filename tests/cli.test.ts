@@ -360,6 +360,17 @@ describe("CLI entrypoint", () => {
     expect(list.exitCode).toBe(0);
     expect(list.stdout).toContain(`revises:${original.id}`);
     expect(list.stdout).toContain(`revised-by:${revised.id}`);
+
+    const originalShow = await runCli(["plan", "show", original.id], temp.env);
+    expect(originalShow.exitCode).toBe(0);
+    expect(originalShow.stdout).toContain(`Plan: ${original.id}`);
+    expect(originalShow.stdout).toContain(`Revised by plan: ${revised.id}`);
+
+    const chain = await runCli(["plan", "chain", revised.id], temp.env);
+    expect(chain.exitCode).toBe(0);
+    expect(chain.stdout).toContain(`Plan chain: ${original.id}`);
+    expect(chain.stdout).toContain(`1. needs_revision ${original.id}`);
+    expect(chain.stdout).toContain(`2. approved ${revised.id}`);
   });
 
   it("lists submitted plans across sessions from the CLI", async () => {
