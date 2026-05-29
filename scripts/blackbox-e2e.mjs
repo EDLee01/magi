@@ -699,6 +699,7 @@ async function scenarioComplexWorkflow() {
       assert(mergeAudit.includes("redirected edges: 1"), "memory merges did not show redirected edge count");
       assert(mergeAudit.includes("dream:"), "memory merges did not include dream id");
       const evalCaseFile = path.join(workDir, "memory-recall-eval.json");
+      const evalReportFile = path.join(workDir, "memory-recall-eval-report.json");
       writeFileSync(evalCaseFile, JSON.stringify({
         name: "complex memory recall",
         cases: [{
@@ -710,7 +711,7 @@ async function scenarioComplexWorkflow() {
         }],
       }, null, 2));
       const memoryEval = await runCli({
-        args: ["memory", "eval", "--case-file", evalCaseFile, "--max-results", "5"],
+        args: ["memory", "eval", "--case-file", evalCaseFile, "--max-results", "5", "--report", evalReportFile],
         cwd: workDir,
         configDir,
         label: "complex memory recall eval",
@@ -718,6 +719,11 @@ async function scenarioComplexWorkflow() {
       assert(memoryEval.includes("Memory recall eval: complex memory recall"), "memory eval did not run named suite");
       assert(memoryEval.includes("1. PASS workflow and preference recall"), "memory eval did not pass complex recall case");
       assert(memoryEval.includes("score: 1.00"), "memory eval did not report perfect score");
+      assert(memoryEval.includes(`Report: ${evalReportFile}`), "memory eval did not report JSON output path");
+      const evalReport = JSON.parse(readFileSync(evalReportFile, "utf8"));
+      assert(evalReport.score === 1, "memory eval JSON report did not preserve score");
+      assert(evalReport.results?.[0]?.passed === true, "memory eval JSON report did not preserve case status");
+      assert(evalReport.results?.[0]?.forbiddenFound?.length === 0, "memory eval JSON report had forbidden recall");
 
       await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });

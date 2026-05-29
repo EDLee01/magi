@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+import { atomicWrite } from "./fs-utils.js";
 
 import { MemoryScope } from "./memory.js";
 import { MemoryRootOptions } from "./memory-files.js";
@@ -40,8 +43,10 @@ export interface MemoryEvalCaseResult {
 }
 
 export interface MemoryEvalReport {
+  version: 1;
   name: string;
   caseFile: string;
+  generatedAt: string;
   total: number;
   passed: number;
   failed: number;
@@ -82,14 +87,21 @@ export function runMemoryEval(input: RunMemoryEvalInput): MemoryEvalReport {
   const score =
     results.length === 0 ? 0 : results.reduce((sum, item) => sum + item.score, 0) / results.length;
   return {
+    version: 1,
     name: suite.name ?? "memory-recall",
     caseFile: input.caseFile,
+    generatedAt: new Date().toISOString(),
     total: results.length,
     passed,
     failed: results.length - passed,
     score,
     results
   };
+}
+
+export function writeMemoryEvalReport(file: string, report: MemoryEvalReport): void {
+  mkdirSync(path.dirname(file), { recursive: true });
+  atomicWrite(file, `${JSON.stringify(report, null, 2)}\n`);
 }
 
 export function formatMemoryEvalReport(report: MemoryEvalReport): string {
@@ -170,10 +182,7 @@ function evaluateMemoryCase(
   const forbiddenClear = forbidden.filter((text) => !containsText(haystacks, text));
   const minResultsPassed = item.minResults === undefined || hits.length >= item.minResults;
   const checkCount = expected.length + forbidden.length + (item.minResults === undefined ? 0 : 1);
-  const passedChecks =
-    expectedMatched.length +
-    forbiddenClear.length +
-    (item.minResults === undefined || minResultsPassed ? 0 : 0);
+  const passedChecks = expectedMatched.length + forbiddenClear.length;
   const minResultScore = item.minResults === undefined ? 0 : minResultsPassed ? 1 : 0;
   const score =
     checkCount === 0 ? (hits.length > 0 ? 1 : 0) : (passedChecks + minResultScore) / checkCount;

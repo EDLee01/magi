@@ -658,8 +658,9 @@ describe("AGENTS rules and memory", () => {
       )
     );
 
+    const reportFile = path.join(workspace, "memory-eval-report.json");
     const passed = await runCli(
-      ["memory", "eval", "--case-file", caseFile, "--max-results", "5"],
+      ["memory", "eval", "--case-file", caseFile, "--max-results", "5", "--report", reportFile],
       temp.env,
       workspace
     );
@@ -667,6 +668,23 @@ describe("AGENTS rules and memory", () => {
     expect(passed.stdout).toContain("Memory recall eval: memory graph recall");
     expect(passed.stdout).toContain("1. PASS linked workflow recall");
     expect(passed.stdout).toContain("score: 1.00");
+    expect(passed.stdout).toContain(`Report: ${reportFile}`);
+    expect(JSON.parse(readFileSync(reportFile, "utf8"))).toMatchObject({
+      version: 1,
+      name: "memory graph recall",
+      total: 1,
+      passed: 1,
+      failed: 0,
+      score: 1,
+      results: [
+        expect.objectContaining({
+          name: "linked workflow recall",
+          passed: true,
+          expectedMatched: ["Graph memory", "Verification workflow"],
+          forbiddenFound: []
+        })
+      ]
+    });
 
     writeFileSync(
       caseFile,
