@@ -139,6 +139,8 @@ describe("capability report", () => {
         naturalLanguageCorrectionSeen: false,
         graphEdgeReinforcementSeen: false,
         userFeedbackTrendSeen: false,
+        longCycleFeedbackTrendSeen: false,
+        crossNodeRecommendationSeen: false,
         assertions: 4,
         filesVerified: 1
       }),
@@ -169,6 +171,8 @@ describe("capability report", () => {
     expect(output).toContain("naturalLanguageCorrectionSeen=false");
     expect(output).toContain("graphEdgeReinforcementSeen=false");
     expect(output).toContain("userFeedbackTrendSeen=false");
+    expect(output).toContain("longCycleFeedbackTrendSeen=false");
+    expect(output).toContain("crossNodeRecommendationSeen=false");
   });
 
   it("fails model task alignment when task coverage or scorer evidence is too thin", () => {
@@ -682,6 +686,8 @@ function memoryReport(input: {
   naturalLanguageCorrectionSeen?: boolean;
   graphEdgeReinforcementSeen?: boolean;
   userFeedbackTrendSeen?: boolean;
+  longCycleFeedbackTrendSeen?: boolean;
+  crossNodeRecommendationSeen?: boolean;
   assertions?: number;
   filesVerified?: number;
 }): Record<string, unknown> {
@@ -690,7 +696,10 @@ function memoryReport(input: {
     ...(input.workflowGraphRecallSeen === false ? [] : ["workflow graph recalls second-hop habit"]),
     "corrected preference replaces stale memory",
     "durable user identity survives graph recall",
-    ...(input.maintenanceRecallSeen === false ? [] : ["protected workflow survives maintenance"])
+    ...(input.maintenanceRecallSeen === false ? [] : ["protected workflow survives maintenance"]),
+    ...(input.crossNodeRecommendationSeen === false
+      ? []
+      : ["feedback trend recalls workflow neighborhood"])
   ];
   const total = names.length;
   const results = [...names.map((name) => ({ name, passed: true }))];
@@ -723,6 +732,15 @@ function memoryReport(input: {
               "user feedback persisted memory trend metadata",
               "user feedback trend view rendered useful memory"
             ]),
+        ...(input.longCycleFeedbackTrendSeen === false
+          ? []
+          : [
+              "long-cycle feedback trend persisted across CLI process",
+              "long-cycle feedback trend recalled hot workflow"
+            ]),
+        ...(input.crossNodeRecommendationSeen === false
+          ? []
+          : ["cross-node workflow recommendation surfaced related habit"]),
         ...Array.from(
           { length: input.assertions ?? 16 },
           (_, index) => `memory assertion ${index + 1}`
@@ -733,7 +751,9 @@ function memoryReport(input: {
         (_, index) => `memory-file-${index + 1}.json`
       ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
-      dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false
+      dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
+      longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
+      crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false
     }
   };
 }

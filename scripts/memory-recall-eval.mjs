@@ -23,6 +23,8 @@ const reportFile =
 const lifecycleEvidence = {
   conflictGroupViewSeen: false,
   dreamConflictGroupLifecycleSeen: false,
+  longCycleFeedbackTrendSeen: false,
+  crossNodeRecommendationSeen: false,
   assertions: [],
   filesVerified: []
 };
@@ -35,6 +37,7 @@ try {
   const evalOutput = runMemoryEval("memory recall eval");
   assertGraphEdgeReinforcement();
   assertUserFeedbackTrendLifecycle();
+  assertLongCycleFeedbackTrendRecall();
   assertRestartRecall();
   await assertNaturalLanguageCorrectionLifecycle();
   assertDreamReviewLifecycle();
@@ -286,6 +289,62 @@ function assertUserFeedbackTrendLifecycle() {
   recordAssertion("user feedback increased useful memory weight");
   recordAssertion("user feedback persisted memory trend metadata");
   recordAssertion("user feedback trend view rendered useful memory");
+}
+
+function assertLongCycleFeedbackTrendRecall() {
+  const workflow = nodeByTitle("Deployment gate workflow");
+  const before = feedbackTrendByNodeId(workflow.id);
+  const feedback = runCli(
+    [
+      "memory",
+      "feedback",
+      "--target",
+      workflow.id,
+      "--signal",
+      "useful",
+      "--reason",
+      "Second independent CLI cycle confirmed this workflow should stay hot."
+    ],
+    "memory useful feedback second cycle"
+  );
+  assert(feedback.includes("Memory feedback applied"), "second memory feedback did not run");
+  const after = feedbackTrendByNodeId(workflow.id);
+  assert(
+    after.useful >= (before.useful ?? 0) + 1,
+    "long-cycle feedback trend did not persist additional useful feedback"
+  );
+  const restartedTrends = runCli(
+    ["memory", "feedback", "trends", "--limit", "3", "--min-events", "2"],
+    "memory feedback trends after CLI restart"
+  );
+  assert(
+    restartedTrends.includes("Deployment gate workflow"),
+    "restarted feedback trends missed hot workflow"
+  );
+  assert(
+    restartedTrends.includes("useful=2"),
+    "restarted feedback trends missed accumulated useful count"
+  );
+
+  const recalled = runCli(
+    ["memory", "search", "smoke gate rollout"],
+    "long-cycle feedback trend recall search"
+  );
+  assert(
+    recalled.includes("Deployment gate workflow"),
+    "long-cycle trend recall missed hot workflow"
+  );
+  assert(
+    recalled.includes("Concise deployment reporting"),
+    "long-cycle trend recall missed related workflow habit"
+  );
+  assert(recalled.includes("graph-distance:"), "long-cycle trend recall missed graph distance");
+
+  lifecycleEvidence.longCycleFeedbackTrendSeen = true;
+  lifecycleEvidence.crossNodeRecommendationSeen = true;
+  recordAssertion("long-cycle feedback trend persisted across CLI process");
+  recordAssertion("long-cycle feedback trend recalled hot workflow");
+  recordAssertion("cross-node workflow recommendation surfaced related habit");
 }
 
 async function assertNaturalLanguageCorrectionLifecycle() {
@@ -626,6 +685,12 @@ function writeMaintenanceCaseFile() {
             query: "resilient memory verification workflow",
             expect: ["Resilient memory verification workflow"],
             minResults: 1
+          },
+          {
+            name: "feedback trend recalls workflow neighborhood",
+            query: "smoke gate rollout",
+            expect: ["Deployment gate workflow", "Concise deployment reporting"],
+            minResults: 2
           }
         ]
       },

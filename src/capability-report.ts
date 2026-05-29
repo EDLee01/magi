@@ -364,6 +364,14 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("user feedback increased useful memory weight") &&
     assertionList.includes("user feedback persisted memory trend metadata") &&
     assertionList.includes("user feedback trend view rendered useful memory");
+  const longCycleFeedbackTrendSeen =
+    details.longCycleFeedbackTrendSeen === true &&
+    assertionList.includes("long-cycle feedback trend persisted across CLI process") &&
+    assertionList.includes("long-cycle feedback trend recalled hot workflow");
+  const crossNodeRecommendationSeen =
+    details.crossNodeRecommendationSeen === true &&
+    resultNames.includes("feedback trend recalls workflow neighborhood") &&
+    assertionList.includes("cross-node workflow recommendation surfaced related habit");
   const assertions = assertionList.length;
   const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
@@ -379,6 +387,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!naturalLanguageCorrectionSeen) failures.push("naturalLanguageCorrectionSeen=false");
   if (!graphEdgeReinforcementSeen) failures.push("graphEdgeReinforcementSeen=false");
   if (!userFeedbackTrendSeen) failures.push("userFeedbackTrendSeen=false");
+  if (!longCycleFeedbackTrendSeen) failures.push("longCycleFeedbackTrendSeen=false");
+  if (!crossNodeRecommendationSeen) failures.push("crossNodeRecommendationSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -398,7 +408,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       dreamConflictGroupLifecycleSeen,
       naturalLanguageCorrectionSeen,
       graphEdgeReinforcementSeen,
-      userFeedbackTrendSeen
+      userFeedbackTrendSeen,
+      longCycleFeedbackTrendSeen,
+      crossNodeRecommendationSeen
     },
     failures
   };
