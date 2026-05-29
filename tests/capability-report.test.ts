@@ -397,8 +397,15 @@ describe("capability report", () => {
         longCycleRepeatedSkillStable: false,
         longCycleRepeatedAgentStable: false,
         longCycleStrategyDriftStable: false,
+        mixedIntentFileEditRanked: false,
+        mixedIntentBrowserRanked: false,
+        mixedIntentMemoryRecallRanked: false,
+        mixedIntentAgentRanked: false,
+        mixedIntentSchemasRevealed: false,
+        mixedIntentDynamicExpansionSeen: false,
         crossTaskProviderCalls: 0,
         longCycleProviderCalls: 0,
+        mixedIntentProviderCalls: 0,
         assertions: 5,
         filesVerified: 0,
         toolCallCount: 8,
@@ -439,8 +446,15 @@ describe("capability report", () => {
         "longCycleRepeatedSkillStable=false",
         "longCycleRepeatedAgentStable=false",
         "longCycleStrategyDriftStable=false",
+        "mixedIntentFileEditRanked=false",
+        "mixedIntentBrowserRanked=false",
+        "mixedIntentMemoryRecallRanked=false",
+        "mixedIntentAgentRanked=false",
+        "mixedIntentSchemasRevealed=false",
+        "mixedIntentDynamicExpansionSeen=false",
         "crossTaskProviderCalls=0",
         "longCycleProviderCalls=0",
+        "mixedIntentProviderCalls=0",
         "grepFailures < 4",
         "grepIntentFailures < 4",
         "grepPathFailures < 4",
@@ -1201,8 +1215,15 @@ function toolDiscoveryReport(
     longCycleRepeatedSkillStable: boolean;
     longCycleRepeatedAgentStable: boolean;
     longCycleStrategyDriftStable: boolean;
+    mixedIntentFileEditRanked: boolean;
+    mixedIntentBrowserRanked: boolean;
+    mixedIntentMemoryRecallRanked: boolean;
+    mixedIntentAgentRanked: boolean;
+    mixedIntentSchemasRevealed: boolean;
+    mixedIntentDynamicExpansionSeen: boolean;
     crossTaskProviderCalls: number;
     longCycleProviderCalls: number;
+    mixedIntentProviderCalls: number;
     initialToolCount: number;
     revealedToolCount: number;
     grepFailures: number;
@@ -1222,7 +1243,7 @@ function toolDiscoveryReport(
       name: "tool-discovery-eval",
       scenarios: 1,
       providerCalls: 4,
-      assertions: overrides.assertions ?? 16,
+      assertions: overrides.assertions ?? 22,
       filesVerified: overrides.filesVerified ?? 1,
       toolCallCount: overrides.toolCallCount ?? 16,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1237,7 +1258,7 @@ function toolDiscoveryReport(
         details: {
           provider: { callCount: 4 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 16 },
+            { length: overrides.assertions ?? 22 },
             (_, index) => `tool-discovery assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1273,8 +1294,15 @@ function toolDiscoveryReport(
           longCycleRepeatedSkillStable: true,
           longCycleRepeatedAgentStable: true,
           longCycleStrategyDriftStable: true,
+          mixedIntentFileEditRanked: true,
+          mixedIntentBrowserRanked: true,
+          mixedIntentMemoryRecallRanked: true,
+          mixedIntentAgentRanked: true,
+          mixedIntentSchemasRevealed: true,
+          mixedIntentDynamicExpansionSeen: true,
           crossTaskProviderCalls: 2,
           longCycleProviderCalls: 2,
+          mixedIntentProviderCalls: 2,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,

@@ -741,7 +741,7 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 16) failures.push(`assertions=${assertions}`);
+  if (assertions < 22) failures.push(`assertions=${assertions}`);
   if (filesVerified < 1) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 16) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -805,8 +805,29 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.longCycleStrategyDriftStable !== true) {
     failures.push("longCycleStrategyDriftStable=false");
   }
+  if (details.mixedIntentFileEditRanked !== true) {
+    failures.push("mixedIntentFileEditRanked=false");
+  }
+  if (details.mixedIntentBrowserRanked !== true) {
+    failures.push("mixedIntentBrowserRanked=false");
+  }
+  if (details.mixedIntentMemoryRecallRanked !== true) {
+    failures.push("mixedIntentMemoryRecallRanked=false");
+  }
+  if (details.mixedIntentAgentRanked !== true) {
+    failures.push("mixedIntentAgentRanked=false");
+  }
+  if (details.mixedIntentSchemasRevealed !== true) {
+    failures.push("mixedIntentSchemasRevealed=false");
+  }
+  if (details.mixedIntentDynamicExpansionSeen !== true) {
+    failures.push("mixedIntentDynamicExpansionSeen=false");
+  }
   if (readNumber(details.crossTaskProviderCalls) <= 0) failures.push("crossTaskProviderCalls=0");
   if (readNumber(details.longCycleProviderCalls) <= 0) failures.push("longCycleProviderCalls=0");
+  if (readNumber(details.mixedIntentProviderCalls) <= 0) {
+    failures.push("mixedIntentProviderCalls=0");
+  }
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
   if (readNumber(details.grepIntentFailures) < 4) failures.push("grepIntentFailures < 4");
@@ -852,8 +873,15 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       longCycleRepeatedSkillStable: details.longCycleRepeatedSkillStable === true,
       longCycleRepeatedAgentStable: details.longCycleRepeatedAgentStable === true,
       longCycleStrategyDriftStable: details.longCycleStrategyDriftStable === true,
+      mixedIntentFileEditRanked: details.mixedIntentFileEditRanked === true,
+      mixedIntentBrowserRanked: details.mixedIntentBrowserRanked === true,
+      mixedIntentMemoryRecallRanked: details.mixedIntentMemoryRecallRanked === true,
+      mixedIntentAgentRanked: details.mixedIntentAgentRanked === true,
+      mixedIntentSchemasRevealed: details.mixedIntentSchemasRevealed === true,
+      mixedIntentDynamicExpansionSeen: details.mixedIntentDynamicExpansionSeen === true,
       crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
       longCycleProviderCalls: readNumber(details.longCycleProviderCalls),
+      mixedIntentProviderCalls: readNumber(details.mixedIntentProviderCalls),
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),

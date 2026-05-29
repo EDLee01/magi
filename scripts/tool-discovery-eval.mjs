@@ -53,6 +53,13 @@ try {
     longCycleRepeatedSkillStable: false,
     longCycleRepeatedAgentStable: false,
     longCycleStrategyDriftStable: false,
+    mixedIntentFileEditRanked: false,
+    mixedIntentBrowserRanked: false,
+    mixedIntentMemoryRecallRanked: false,
+    mixedIntentAgentRanked: false,
+    mixedIntentSchemasRevealed: false,
+    mixedIntentDynamicExpansionSeen: false,
+    mixedIntentProviderCalls: 0,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -117,6 +124,7 @@ try {
 
     const crossTask = await runCrossTaskRecoveryEval(provider, state);
     const longCycle = await runLongCycleStrategyEval(provider, state);
+    const mixedIntent = await runMixedIntentDynamicEval(provider, state);
     const assertions = [
       "ToolSearch exposed as core tool",
       "core file/search tools exposed initially",
@@ -141,7 +149,13 @@ try {
       "long-cycle memory recall ranking stayed stable after noisy feedback",
       "long-cycle skill ranking stayed stable after noisy feedback",
       "long-cycle agent ranking stayed stable after noisy feedback",
-      "long-cycle strategy drift remained bounded"
+      "long-cycle strategy drift remained bounded",
+      "mixed-intent task ranked FilePatch for edit step",
+      "mixed-intent task ranked Browser for UI step",
+      "mixed-intent task ranked SessionSearch for memory recall step",
+      "mixed-intent task ranked Agent for parallel dispatch step",
+      "mixed-intent task revealed schemas after ranking",
+      "mixed-intent task expanded visible tools dynamically"
     ];
     const filesVerified = ["state/tool-usage-stats.json"];
 
@@ -185,6 +199,13 @@ try {
             longCycleRepeatedAgentStable: longCycle.repeatedAgentStable,
             longCycleStrategyDriftStable: longCycle.strategyDriftStable,
             longCycleProviderCalls: longCycle.providerCalls,
+            mixedIntentFileEditRanked: mixedIntent.fileEditRanked,
+            mixedIntentBrowserRanked: mixedIntent.browserRanked,
+            mixedIntentMemoryRecallRanked: mixedIntent.memoryRecallRanked,
+            mixedIntentAgentRanked: mixedIntent.agentRanked,
+            mixedIntentSchemasRevealed: mixedIntent.schemasRevealed,
+            mixedIntentDynamicExpansionSeen: mixedIntent.dynamicExpansionSeen,
+            mixedIntentProviderCalls: mixedIntent.providerCalls,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
@@ -203,6 +224,10 @@ try {
       `Tool Discovery eval passed (initial tools=${state.initialToolCount}, revealed tools=${state.revealedToolCount}).`
     );
     console.log(`Tool Discovery report: ${reportPath}`);
+  } catch (error) {
+    console.error("\nTool Discovery provider calls:");
+    console.error(JSON.stringify(provider.calls.map(summarizeProviderCall), null, 2));
+    throw error;
   } finally {
     await provider.close();
   }
@@ -212,12 +237,21 @@ try {
   }
 }
 
+function summarizeProviderCall(call) {
+  return {
+    model: call.model,
+    latestUser: call.latestUser,
+    toolNames: call.toolNames,
+    transcriptTail: call.transcript.slice(-2_000)
+  };
+}
+
 function createRouter(state) {
   let turn = 0;
   let crossTaskTurn = 0;
   let longCycleTurn = 0;
-  return ({ transcript, toolNames }) => {
-    if (transcript.includes("Run long-cycle ToolSearch strategy regression checks.")) {
+  return ({ latestUser, transcript, toolNames }) => {
+    if (latestUser.includes("Run long-cycle ToolSearch strategy regression checks.")) {
       longCycleTurn += 1;
       if (longCycleTurn === 1) {
         return toolResponse([
@@ -316,8 +350,12 @@ function createRouter(state) {
       return messageText("Long-cycle Tool Discovery strategy verified.");
     }
 
+    if (latestUser.includes("Run mixed-intent dynamic ToolSearch selection checks.")) {
+      return routeMixedIntentDynamicSelection({ transcript, toolNames, state });
+    }
+
     if (
-      transcript.includes(
+      latestUser.includes(
         "Run a new independent ToolSearch task for workspace file search after prior feedback."
       )
     ) {
@@ -547,6 +585,115 @@ async function runLongCycleStrategyEval(provider, state) {
   }
 }
 
+async function runMixedIntentDynamicEval(provider, state) {
+  const output = await runCli([
+    "--model",
+    "main",
+    "--output-format",
+    "stream-json",
+    "-p",
+    "Run mixed-intent dynamic ToolSearch selection checks."
+  ]);
+  const matchingCalls = providerCallsForPrompt("Run mixed-intent dynamic ToolSearch selection");
+  assert(matchingCalls.length > 0, "mixed-intent ToolSearch prompt did not call provider");
+  assert(
+    output.includes("Mixed-intent Tool Discovery selection verified"),
+    "mixed-intent strategy final answer missing"
+  );
+  assert(state.mixedIntentFileEditRanked, "mixed-intent file-edit ranking was not verified");
+  assert(state.mixedIntentBrowserRanked, "mixed-intent browser ranking was not verified");
+  assert(
+    state.mixedIntentMemoryRecallRanked,
+    "mixed-intent memory-recall ranking was not verified"
+  );
+  assert(state.mixedIntentAgentRanked, "mixed-intent agent ranking was not verified");
+  assert(state.mixedIntentSchemasRevealed, "mixed-intent schema reveal was not verified");
+  assert(
+    state.mixedIntentDynamicExpansionSeen,
+    "mixed-intent dynamic tool expansion was not verified"
+  );
+  state.mixedIntentProviderCalls = matchingCalls.length;
+  return {
+    fileEditRanked: state.mixedIntentFileEditRanked,
+    browserRanked: state.mixedIntentBrowserRanked,
+    memoryRecallRanked: state.mixedIntentMemoryRecallRanked,
+    agentRanked: state.mixedIntentAgentRanked,
+    schemasRevealed: state.mixedIntentSchemasRevealed,
+    dynamicExpansionSeen: state.mixedIntentDynamicExpansionSeen,
+    providerCalls: matchingCalls.length
+  };
+
+  function providerCallsForPrompt(prompt) {
+    return provider.calls.filter((call) => call.transcript.includes(prompt));
+  }
+}
+
+function routeMixedIntentDynamicSelection({ transcript, toolNames, state }) {
+  const schemaRevealSeen =
+    transcript.includes("Tool: FilePatch") &&
+    transcript.includes("Tool: Browser") &&
+    transcript.includes("Tool: SessionSearch") &&
+    transcript.includes("Tool: Agent");
+  if (schemaRevealSeen) {
+    assert(toolNames.includes("Browser"), "Browser was not visible after mixed-intent select");
+    assert(
+      toolNames.includes("SessionSearch"),
+      "SessionSearch was not visible after mixed-intent select"
+    );
+    assert(toolNames.includes("Agent"), "Agent was not visible after mixed-intent select");
+    state.mixedIntentSchemasRevealed = true;
+    state.mixedIntentDynamicExpansionSeen = toolNames.length > state.initialToolCount;
+    return messageText("Mixed-intent Tool Discovery selection verified.");
+  }
+
+  if (
+    transcript.includes('ToolSearch results for "apply a multi-line patch to a file"') &&
+    transcript.includes('ToolSearch results for "automate browser click and screenshot"') &&
+    transcript.includes('ToolSearch results for "search previous session memory history"') &&
+    transcript.includes('ToolSearch results for "dispatch parallel agent to peer machine"')
+  ) {
+    assert(transcript.includes("1. FilePatch"), "mixed-intent FilePatch ranking missing");
+    assert(transcript.includes("1. Browser"), "mixed-intent Browser ranking missing");
+    assert(transcript.includes("1. SessionSearch"), "mixed-intent SessionSearch ranking missing");
+    assert(transcript.includes("1. Agent"), "mixed-intent Agent ranking missing");
+    state.mixedIntentFileEditRanked = true;
+    state.mixedIntentBrowserRanked = true;
+    state.mixedIntentMemoryRecallRanked = true;
+    state.mixedIntentAgentRanked = true;
+    return toolResponse([
+      toolCall("mixed-select-filepatch", "ToolSearch", { query: "select:FilePatch" }),
+      toolCall("mixed-select-browser", "ToolSearch", { query: "select:Browser" }),
+      toolCall("mixed-select-session-search", "ToolSearch", { query: "select:SessionSearch" }),
+      toolCall("mixed-select-agent", "ToolSearch", { query: "select:Agent" })
+    ]);
+  }
+
+  assert(!toolNames.includes("Browser"), "Browser should start deferred in mixed-intent task");
+  assert(
+    !toolNames.includes("SessionSearch"),
+    "SessionSearch should start deferred in mixed-intent task"
+  );
+  assert(!toolNames.includes("Agent"), "Agent should start deferred in mixed-intent task");
+  return toolResponse([
+    toolCall("mixed-file-edit-search", "ToolSearch", {
+      query: "apply a multi-line patch to a file",
+      max_results: 5
+    }),
+    toolCall("mixed-browser-search", "ToolSearch", {
+      query: "automate browser click and screenshot",
+      max_results: 5
+    }),
+    toolCall("mixed-memory-recall-search", "ToolSearch", {
+      query: "search previous session memory history",
+      max_results: 5
+    }),
+    toolCall("mixed-agent-search", "ToolSearch", {
+      query: "dispatch parallel agent to peer machine",
+      max_results: 5
+    })
+  ]);
+}
+
 function assertLongCycleRankings(transcript, { minimumOccurrences }) {
   assert(
     countOccurrences(transcript, 'ToolSearch results for "apply a multi-line patch to a file"') >=
@@ -644,6 +791,7 @@ async function startProvider({ routeRequest }) {
         const toolNames = (body.tools ?? []).map((tool) => tool.function?.name).filter(Boolean);
         const call = {
           model: body.model ?? "unknown",
+          latestUser: latestUserFromBody(body),
           transcript: transcriptFromBody(body),
           toolNames
         };
@@ -813,6 +961,16 @@ function toolCall(id, name, input) {
 function transcriptFromBody(body) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   return messages.map(textFromMessage).join("\n");
+}
+
+function latestUserFromBody(body) {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      return textFromMessage(messages[index]);
+    }
+  }
+  return "";
 }
 
 function textFromMessage(message) {
