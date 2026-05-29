@@ -299,6 +299,10 @@ describe("capability report", () => {
         crossTaskUnrelatedIntentIsolated: false,
         crossTaskProviderCalls: 0,
         longCycleProviderCalls: 0,
+        assertions: 5,
+        filesVerified: 0,
+        toolCallCount: 8,
+        uniqueToolCount: 2,
         revealedToolCount: 21,
         grepFailures: 2,
         grepIntentFailures: 2,
@@ -312,6 +316,10 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(toolDiscovery?.failures).toEqual(
       expect.arrayContaining([
+        "assertions=5",
+        "filesVerified=0",
+        "toolCallCount=8",
+        "uniqueToolCount=2",
         "learningDraftRevealed=false",
         "feedbackRankingUsedUsage=false",
         "intentScopedUsageRecorded=false",
@@ -742,10 +750,22 @@ function toolDiscoveryReport(
     globIntentSuccesses: number;
     grepPathFailures: number;
     grepIntentPathFailures: number;
+    assertions: number;
+    filesVerified: number;
+    toolCallCount: number;
+    uniqueToolCount: number;
   }> = {}
 ): Record<string, unknown> {
   return {
-    ...harnessReport({ name: "tool-discovery-eval", scenarios: 1, providerCalls: 4 }),
+    ...harnessReport({
+      name: "tool-discovery-eval",
+      scenarios: 1,
+      providerCalls: 4,
+      assertions: overrides.assertions ?? 16,
+      filesVerified: overrides.filesVerified ?? 1,
+      toolCallCount: overrides.toolCallCount ?? 16,
+      uniqueToolCount: overrides.uniqueToolCount ?? 3
+    }),
     scenarios: [
       {
         name: "tool discovery ranking and feedback workflow",
@@ -755,6 +775,19 @@ function toolDiscoveryReport(
         failureKind: null,
         details: {
           provider: { callCount: 4 },
+          assertions: Array.from(
+            { length: overrides.assertions ?? 16 },
+            (_, index) => `tool-discovery assertion ${index + 1}`
+          ),
+          filesVerified: Array.from(
+            { length: overrides.filesVerified ?? 1 },
+            (_, index) => `tool-discovery-file-${index + 1}.json`
+          ),
+          toolCounts: {
+            ToolSearch: 8,
+            Grep: 4,
+            Glob: 4
+          },
           coreToolsExposed: true,
           deferredToolsHidden: true,
           fileEditIntentRankedFilePatch: true,

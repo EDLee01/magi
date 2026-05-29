@@ -450,7 +450,17 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
   const scenario = readRecord(scenarios[0]);
   const details = readRecord(scenario.details);
+  const summary = readRecord(report.summary);
+  const toolEfficiency = readRecord(summary.toolEfficiency);
   const failures = [...base.failures];
+  const assertions = readNumber(summary.assertions);
+  const filesVerified = readNumber(summary.filesVerified);
+  const toolCallCount = readNumber(toolEfficiency.toolCallCount);
+  const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
+  if (assertions < 16) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 1) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 16) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.coreToolsExposed !== true) failures.push("coreToolsExposed=false");
   if (details.deferredToolsHidden !== true) failures.push("deferredToolsHidden=false");
   if (details.fileEditIntentRankedFilePatch !== true) {
@@ -503,6 +513,10 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
     score: failures.length === 0 ? 1 : 0,
     metrics: {
       ...base.metrics,
+      assertions,
+      filesVerified,
+      toolCallCount,
+      uniqueToolCount,
       coreToolsExposed: details.coreToolsExposed === true,
       deferredToolsHidden: details.deferredToolsHidden === true,
       fileEditIntentRankedFilePatch: details.fileEditIntentRankedFilePatch === true,

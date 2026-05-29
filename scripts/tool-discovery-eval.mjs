@@ -108,6 +108,25 @@ try {
 
     const crossTask = await runCrossTaskRecoveryEval(provider, state);
     const longCycle = await runLongCycleStrategyEval(provider, state);
+    const assertions = [
+      "ToolSearch exposed as core tool",
+      "core file/search tools exposed initially",
+      "deferred tools hidden initially",
+      "FilePatch ranked first for file-edit intent",
+      "Browser ranked first for browser automation intent",
+      "LearningDraft schema revealed through select",
+      "workspace ToolSearch result returned before feedback",
+      "Grep path failures returned to model",
+      "Glob successes returned to model",
+      "usage feedback persisted globally",
+      "usage feedback persisted by intent",
+      "failure kind persisted globally and by intent",
+      "ToolSearch ranking used usage feedback",
+      "ToolSearch ranking exposed failure recovery guidance",
+      "cross-task ToolSearch reused recovery feedback",
+      "long-cycle strategy isolated unrelated browser intent"
+    ];
+    const filesVerified = ["state/tool-usage-stats.json"];
 
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
@@ -121,6 +140,8 @@ try {
           failureKind: null,
           details: {
             provider: provider.summary(),
+            assertions,
+            filesVerified,
             coreToolsExposed: state.coreToolsExposed,
             deferredToolsHidden: state.deferredToolsHidden,
             fileEditIntentRankedFilePatch: state.fileEditIntentRankedFilePatch,
@@ -197,10 +218,7 @@ function createRouter(state) {
         transcript.includes("intent:workspace-search"),
         "long-cycle workspace intent feedback missing"
       );
-      assert(
-        transcript.includes("failure:path"),
-        "long-cycle workspace failure feedback missing"
-      );
+      assert(transcript.includes("failure:path"), "long-cycle workspace failure feedback missing");
       assert(
         transcript.includes("1. Browser"),
         "unrelated browser intent was polluted by search history"
@@ -386,7 +404,10 @@ async function runLongCycleStrategyEval(provider, state) {
     output.includes("Long-cycle Tool Discovery strategy verified"),
     "long-cycle strategy final answer missing"
   );
-  assert(state.crossTaskIntentScopedRankingSeen, "long-cycle intent scoped ranking was not verified");
+  assert(
+    state.crossTaskIntentScopedRankingSeen,
+    "long-cycle intent scoped ranking was not verified"
+  );
   assert(
     state.crossTaskUnrelatedIntentIsolated,
     "long-cycle unrelated intent isolation was not verified"
