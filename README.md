@@ -132,6 +132,16 @@ npm run test:memory-eval
 then checks recall after restart, graph links, correction replacement, Dream
 reject/apply behavior, and maintenance weight decay.
 
+Patch Engine behavior can be checked with:
+
+```sh
+npm run test:patch-eval
+```
+
+That eval runs a real headless CLI session against a mock provider and verifies
+FilePatch ranking, failed-patch recovery, successful retry, exact FileEdit use,
+and that FileWrite is not used for existing-file edits.
+
 ## Configuration
 
 `~/.magi-next/config.yaml`:
@@ -234,6 +244,7 @@ npm install
 npm run build
 npm test
 npm run test:memory-eval
+npm run test:patch-eval
 ```
 
 Requires Node ≥ 20.
