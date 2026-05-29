@@ -587,6 +587,7 @@ function createRouter(state) {
 
 async function startProvider({ logPath, routeRequest }) {
   const calls = [];
+  const toolCounts = {};
   const openStreams = new Set();
   const server = http.createServer((request, response) => {
     const chunks = [];
@@ -617,6 +618,12 @@ async function startProvider({ logPath, routeRequest }) {
         result = routeRequest({ body, transcript: call.transcript, toolNames: call.toolNames });
       } catch (error) {
         result = fail(500, error instanceof Error ? error.message : String(error));
+      }
+      for (const toolCall of (result.body ?? result).choices?.[0]?.message?.tool_calls ?? []) {
+        const toolName = toolCall.function?.name;
+        if (toolName) {
+          toolCounts[toolName] = (toolCounts[toolName] ?? 0) + 1;
+        }
       }
 
       if (result.stream) {
@@ -671,7 +678,8 @@ async function startProvider({ logPath, routeRequest }) {
         callCount: calls.length,
         models: Array.from(models).sort(),
         exposedToolCount: exposedTools.size,
-        exposedTools: Array.from(exposedTools).sort()
+        exposedTools: Array.from(exposedTools).sort(),
+        toolCounts
       };
     },
     close: () =>

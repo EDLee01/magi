@@ -242,8 +242,8 @@
           <tr>
             <td>Eval Harness</td>
             <td>真实模型运行业务级任务，记录成功率、工具效率、回归原因。</td>
-            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告和失败分类；capability report 会汇总 blackbox、Memory、Patch Engine、Goal/Plan、Tool Discovery 和 Control API 门禁。</td>
-            <td><code>npm run test:blackbox</code>、<code>npm run test:goal-plan-eval</code>、<code>npm run test:tool-discovery-eval</code>、<code>npm run test:control-api-eval</code>、<code>npm run report:capability</code>、<code>tests/harness-report.test.ts</code>；下一步补真实模型任务集和更细评分器。</td>
+            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告、失败分类、provider 调用效率、断言覆盖、文件验证数、实际工具调用分布和 regression 摘要；capability report 会把这些细粒度评分器和 blackbox、Memory、Patch Engine、Goal/Plan、Tool Discovery、Control API 门禁一起汇总。</td>
+            <td><code>npm run test:blackbox</code>、<code>npm run test:goal-plan-eval</code>、<code>npm run test:tool-discovery-eval</code>、<code>npm run test:control-api-eval</code>、<code>npm run report:capability</code>、<code>tests/harness-report.test.ts</code>、<code>tests/capability-report.test.ts</code>；下一步补真实模型任务集和跨版本趋势报告。</td>
           </tr>
           <tr>
             <td>Goal / Plan Harness</td>

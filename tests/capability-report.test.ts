@@ -68,6 +68,46 @@ describe("capability report", () => {
     );
   });
 
+  it("fails blackbox alignment when scorer evidence is too thin", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({
+        name: "blackbox-e2e",
+        scenarios: 9,
+        providerCalls: 118,
+        assertions: 4,
+        filesVerified: 0,
+        toolCallCount: 3,
+        uniqueToolCount: 2,
+        regressions: 1
+      }),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 2,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 2 / 3
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport()
+    });
+
+    const blackbox = report.checks.find((check) => check.id === "blackbox");
+    expect(report.status).toBe("failed");
+    expect(blackbox?.failures).toEqual(
+      expect.arrayContaining([
+        "assertions=4",
+        "filesVerified=0",
+        "toolCallCount=3",
+        "uniqueToolCount=2",
+        "regressions=1"
+      ])
+    );
+  });
+
   it("fails memory alignment when recall misses the threshold", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
@@ -240,7 +280,16 @@ function harnessReport(input: {
   name: string;
   scenarios: number;
   providerCalls: number;
+  assertions?: number;
+  filesVerified?: number;
+  toolCallCount?: number;
+  uniqueToolCount?: number;
+  regressions?: number;
 }): Record<string, unknown> {
+  const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
+    scenario: `regression ${index + 1}`,
+    failureKind: "assertion"
+  }));
   return {
     version: 1,
     name: input.name,
@@ -251,7 +300,20 @@ function harnessReport(input: {
       failed: 0,
       successRate: 1,
       score: 1,
-      providerCalls: input.providerCalls
+      providerCalls: input.providerCalls,
+      providerCallsPerScenario: input.providerCalls / input.scenarios,
+      assertions: input.assertions ?? 36,
+      filesVerified: input.filesVerified ?? 4,
+      toolEfficiency: {
+        toolCallCount: input.toolCallCount ?? 42,
+        uniqueToolCount: input.uniqueToolCount ?? 12,
+        toolCallsPerScenario: (input.toolCallCount ?? 42) / input.scenarios,
+        topTools: [
+          { name: "FilePatch", count: 5 },
+          { name: "ToolSearch", count: 5 }
+        ]
+      },
+      regressions
     },
     scenarios: []
   };

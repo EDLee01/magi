@@ -38,13 +38,7 @@ export interface CapabilityReport {
 
 export function buildCapabilityReport(input: CapabilityReportInput): CapabilityReport {
   const checks = [
-    checkHarnessReport({
-      id: "blackbox",
-      title: "Black-box CLI harness",
-      report: input.blackbox,
-      minScore: 1,
-      minSuccessRate: 1
-    }),
+    checkBlackboxReport(input.blackbox),
     checkMemoryReport(input.memory),
     checkPatchReport(input.patch),
     checkGoalPlanReport(input.goalPlan),
@@ -114,6 +108,48 @@ export function formatCapabilityReport(report: CapabilityReport): string {
   ].join("\n");
 }
 
+function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
+  const base = checkHarnessReport({
+    id: "blackbox",
+    title: "Black-box CLI harness",
+    report,
+    minScore: 1,
+    minSuccessRate: 1
+  });
+  const summary = readRecord(report.summary);
+  const toolEfficiency = readRecord(summary.toolEfficiency);
+  const failures = [...base.failures];
+  const assertions = readNumber(summary.assertions);
+  const filesVerified = readNumber(summary.filesVerified);
+  const toolCallCount = readNumber(toolEfficiency.toolCallCount);
+  const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
+  const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
+  if (assertions < 25) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 2) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
+  if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
+    failures.push(`regressions=${summary.regressions.length}`);
+  }
+  return {
+    ...base,
+    status: failures.length === 0 ? "passed" : "failed",
+    score: failures.length === 0 ? 1 : 0,
+    metrics: {
+      ...base.metrics,
+      providerCallsPerScenario,
+      assertions,
+      filesVerified,
+      toolCallCount,
+      uniqueToolCount,
+      topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
+      regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
+    },
+    failures
+  };
+}
+
 function checkHarnessReport(input: {
   id: string;
   title: string;
@@ -137,7 +173,13 @@ function checkHarnessReport(input: {
       scenarios: readNumber(summary.total),
       successRate,
       score,
-      providerCalls: readNumber(summary.providerCalls)
+      providerCalls: readNumber(summary.providerCalls),
+      providerCallsPerScenario: readNumber(summary.providerCallsPerScenario),
+      assertions: readNumber(summary.assertions),
+      filesVerified: readNumber(summary.filesVerified),
+      toolCallCount: readNumber(readRecord(summary.toolEfficiency).toolCallCount),
+      uniqueToolCount: readNumber(readRecord(summary.toolEfficiency).uniqueToolCount),
+      regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
   };

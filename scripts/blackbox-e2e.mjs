@@ -13,7 +13,8 @@ const cliPath = path.join(repoRoot, "dist", "cli.js");
 const harnessReportPath = path.join(repoRoot, "dist", "harness-report.js");
 const nodeBin = process.execPath;
 const startedAt = new Date();
-const reportPath = process.env.MAGI_BLACKBOX_REPORT || path.join(repoRoot, ".magi-reports", "blackbox-e2e.json");
+const reportPath =
+  process.env.MAGI_BLACKBOX_REPORT || path.join(repoRoot, ".magi-reports", "blackbox-e2e.json");
 let harnessReport;
 
 function assert(condition, message) {
@@ -26,11 +27,13 @@ function textFromMessage(message) {
   const content = message?.content;
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content.map((part) => {
-      if (typeof part === "string") return part;
-      if (part && typeof part.text === "string") return part.text;
-      return "";
-    }).join("\n");
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part.text === "string") return part.text;
+        return "";
+      })
+      .join("\n");
   }
   return "";
 }
@@ -45,12 +48,14 @@ function messageText(text, model = "mock-main") {
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [{
-      index: 0,
-      finish_reason: "stop",
-      message: { role: "assistant", content: text },
-    }],
-    usage: { prompt_tokens: 1, completion_tokens: 1 },
+    choices: [
+      {
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", content: text }
+      }
+    ],
+    usage: { prompt_tokens: 1, completion_tokens: 1 }
   };
 }
 
@@ -60,12 +65,14 @@ function toolResponse(toolCalls, model = "mock-main") {
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [{
-      index: 0,
-      finish_reason: "tool_calls",
-      message: { role: "assistant", content: "", tool_calls: toolCalls },
-    }],
-    usage: { prompt_tokens: 1, completion_tokens: 1 },
+    choices: [
+      {
+        index: 0,
+        finish_reason: "tool_calls",
+        message: { role: "assistant", content: "", tool_calls: toolCalls }
+      }
+    ],
+    usage: { prompt_tokens: 1, completion_tokens: 1 }
   };
 }
 
@@ -75,8 +82,8 @@ function toolCall(id, name, input) {
     type: "function",
     function: {
       name,
-      arguments: JSON.stringify(input),
-    },
+      arguments: JSON.stringify(input)
+    }
   };
 }
 
@@ -84,8 +91,8 @@ function fail(status, message) {
   return {
     status,
     body: {
-      error: { message, type: "mock_assertion_failed" },
-    },
+      error: { message, type: "mock_assertion_failed" }
+    }
   };
 }
 
@@ -108,7 +115,7 @@ function renderConfig({ port, fallbacks = false }) {
     "    backup: backup:mock-backup",
     "  fallbacks:",
     fallbacks ? "    main:\n      - backup:mock-backup" : "    {}",
-    "",
+    ""
   ].join("\n");
 }
 
@@ -129,6 +136,7 @@ async function withTempWorkspace(name, fn) {
 
 async function startProvider({ logPath, routeRequest }) {
   const calls = [];
+  const toolCounts = {};
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -155,6 +163,12 @@ async function startProvider({ logPath, routeRequest }) {
       } catch (error) {
         result = fail(500, error instanceof Error ? error.message : String(error));
       }
+      for (const call of (result.body ?? result).choices?.[0]?.message?.tool_calls ?? []) {
+        const toolName = call.function?.name;
+        if (toolName) {
+          toolCounts[toolName] = (toolCounts[toolName] ?? 0) + 1;
+        }
+      }
 
       response.writeHead(result.status ?? 200, { "content-type": "application/json" });
       response.end(JSON.stringify(result.body ?? result));
@@ -180,10 +194,11 @@ async function startProvider({ logPath, routeRequest }) {
         callCount: calls.length,
         models: Array.from(models).sort(),
         exposedToolCount: exposedTools.size,
-        exposedTools: Array.from(exposedTools).sort()
+        exposedTools: Array.from(exposedTools).sort(),
+        toolCounts
       };
     },
-    close: () => new Promise((resolve) => server.close(resolve)),
+    close: () => new Promise((resolve) => server.close(resolve))
   };
 }
 
@@ -200,9 +215,9 @@ async function requestJson(url, { method = "GET", body, headers = {}, expectedSt
     method,
     headers: {
       ...(body === undefined ? {} : { "content-type": "application/json" }),
-      ...headers,
+      ...headers
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body)
   });
   const text = await response.text();
   let parsed = {};
@@ -232,7 +247,7 @@ function postJson(url, body, headers = {}, expectedStatus = 200) {
 function authHeaders(pairing) {
   return {
     authorization: `Bearer ${pairing.token}`,
-    "x-magi-device-id": pairing.deviceId,
+    "x-magi-device-id": pairing.deviceId
   };
 }
 
@@ -300,10 +315,10 @@ async function startServe({ configDir, workDir, controlPort }) {
       MAGI_CONTROL_PORT: String(controlPort),
       MAGI_INTERACTION_TIMEOUT_MS: "10000",
       MAGI_OPENAI_API_KEY: "test-key",
-      NO_COLOR: "1",
+      NO_COLOR: "1"
     },
     detached: process.platform !== "win32",
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "pipe", "pipe"]
   });
 
   let stdout = "";
@@ -363,7 +378,7 @@ async function startServe({ configDir, workDir, controlPort }) {
     url: `http://127.0.0.1:${controlPort}`,
     stdout: () => stdout,
     stderr: () => stderr,
-    close,
+    close
   };
 }
 
@@ -377,10 +392,10 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
         ...process.env,
         MAGI_CONFIG_DIR: configDir,
         MAGI_OPENAI_API_KEY: "test-key",
-        NO_COLOR: "1",
+        NO_COLOR: "1"
       },
       detached,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"]
     });
 
     let stdout = "";
@@ -409,8 +424,12 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
     child.on("error", (error) => {
       clearTimeout(timer);
       reject(error);
@@ -418,7 +437,11 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
     child.on("close", (code, signal) => {
       clearTimeout(timer);
       if (timedOut) {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`));
+        reject(
+          new Error(
+            `${label} timed out after ${timeoutMs}ms\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
+          )
+        );
         return;
       }
       resolve({ code, signal, stdout, stderr });
@@ -439,10 +462,12 @@ async function runCli({ args, cwd, configDir, label, timeoutMs = 30_000, expectE
     cwd,
     configDir,
     label,
-    timeoutMs,
+    timeoutMs
   });
   if (result.code !== expectExit) {
-    throw new Error(`${label} failed with exit ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
+    throw new Error(
+      `${label} failed with exit ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+    );
   }
   if (result.stderr.trim()) {
     console.error(result.stderr.trim());
@@ -457,7 +482,7 @@ async function runCliAllowFailure(input) {
     cwd: input.cwd,
     configDir: input.configDir,
     label: input.label,
-    timeoutMs: input.timeoutMs ?? 30_000,
+    timeoutMs: input.timeoutMs ?? 30_000
   });
 }
 
@@ -475,30 +500,64 @@ function parseDreamId(output) {
 
 async function seedMemoryAndGoal({ workDir, configDir }) {
   await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory init" });
-  const userDraft = parseDraftId(await runCli({
-    args: ["memory", "append", "user", "User prefers focused CLI black-box verification for complex Magi work."],
+  const userDraft = parseDraftId(
+    await runCli({
+      args: [
+        "memory",
+        "append",
+        "user",
+        "User prefers focused CLI black-box verification for complex Magi work."
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory append user"
+    })
+  );
+  await runCli({
+    args: ["memory", "draft", "apply", userDraft],
     cwd: workDir,
     configDir,
-    label: "memory append user",
-  }));
-  await runCli({ args: ["memory", "draft", "apply", userDraft], cwd: workDir, configDir, label: "memory apply user" });
+    label: "memory apply user"
+  });
 
-  const projectDraft = parseDraftId(await runCli({
-    args: ["memory", "append", "project", "Run focused CLI E2E before internal unit tests for Magi changes."],
+  const projectDraft = parseDraftId(
+    await runCli({
+      args: [
+        "memory",
+        "append",
+        "project",
+        "Run focused CLI E2E before internal unit tests for Magi changes."
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory append project"
+    })
+  );
+  await runCli({
+    args: ["memory", "draft", "apply", projectDraft],
     cwd: workDir,
     configDir,
-    label: "memory append project",
-  }));
-  await runCli({ args: ["memory", "draft", "apply", projectDraft], cwd: workDir, configDir, label: "memory apply project" });
-  await runCli({ args: ["goal", "complex black-box E2E"], cwd: workDir, configDir, label: "goal start" });
+    label: "memory apply project"
+  });
+  await runCli({
+    args: ["goal", "complex black-box E2E"],
+    cwd: workDir,
+    configDir,
+    label: "goal start"
+  });
 }
 
 function createComplexRouter() {
   let complexTurns = 0;
   return ({ transcript, toolNames }) => {
     if (transcript.includes("What should you remember about my verification preference?")) {
-      assert(transcript.includes("focused CLI black-box verification"), "memory recall request did not receive hot user memory");
-      return messageText("You prefer focused CLI black-box verification for complex Magi work, with concise summaries.");
+      assert(
+        transcript.includes("focused CLI black-box verification"),
+        "memory recall request did not receive hot user memory"
+      );
+      return messageText(
+        "You prefer focused CLI black-box verification for complex Magi work, with concise summaries."
+      );
     }
 
     if (!transcript.includes("Run the complex Magi black-box E2E")) {
@@ -507,53 +566,93 @@ function createComplexRouter() {
 
     complexTurns += 1;
     if (complexTurns === 1) {
-      assert(transcript.includes("<active_thread_goal>"), "complex task missed active goal context");
-      assert(transcript.includes("Objective: complex black-box E2E"), "complex task missed goal objective");
+      assert(
+        transcript.includes("<active_thread_goal>"),
+        "complex task missed active goal context"
+      );
+      assert(
+        transcript.includes("Objective: complex black-box E2E"),
+        "complex task missed goal objective"
+      );
       assert(transcript.includes("[Relevant Memory]"), "complex task missed relevant memory");
       assert(transcript.includes("[Hot Memory]"), "complex task missed hot memory");
-      assert(transcript.includes("focused CLI black-box verification"), "complex task missed user verification memory");
-      assert(transcript.includes("Run focused CLI E2E before internal unit tests"), "complex task missed project workflow memory");
-      assert(transcript.includes("use FilePatch for multi-line edits"), "complex task missed FilePatch edit-shape guidance");
-      assert(transcript.includes("use FileEdit only for one exact string replacement"), "complex task missed FileEdit boundary guidance");
-      assert(transcript.includes("If FilePatch fails, use its recovery feedback"), "complex task missed FilePatch recovery guidance");
+      assert(
+        transcript.includes("focused CLI black-box verification"),
+        "complex task missed user verification memory"
+      );
+      assert(
+        transcript.includes("Run focused CLI E2E before internal unit tests"),
+        "complex task missed project workflow memory"
+      );
+      assert(
+        transcript.includes("use FilePatch for multi-line edits"),
+        "complex task missed FilePatch edit-shape guidance"
+      );
+      assert(
+        transcript.includes("use FileEdit only for one exact string replacement"),
+        "complex task missed FileEdit boundary guidance"
+      );
+      assert(
+        transcript.includes("If FilePatch fails, use its recovery feedback"),
+        "complex task missed FilePatch recovery guidance"
+      );
       assert(toolNames.includes("ToolSearch"), "ToolSearch was not available as a core tool");
       assert(toolNames.includes("FilePatch"), "FilePatch was not available as a core tool");
       assert(!toolNames.includes("LearningDraft"), "LearningDraft should start as a deferred tool");
       return toolResponse([
-        toolCall("tool-search-patch", "ToolSearch", { query: "apply a multi-line patch to a file", max_results: 3 }),
+        toolCall("tool-search-patch", "ToolSearch", {
+          query: "apply a multi-line patch to a file",
+          max_results: 3
+        }),
         toolCall("tool-select-learning", "ToolSearch", { query: "select:LearningDraft" }),
-        toolCall("workspace-diag", "WorkspaceDiagnostics", {}),
+        toolCall("workspace-diag", "WorkspaceDiagnostics", {})
       ]);
     }
 
     if (complexTurns === 2) {
-      assert(toolNames.includes("LearningDraft"), "LearningDraft was not revealed after ToolSearch");
-      assert(transcript.includes("1. FilePatch"), "ToolSearch did not rank FilePatch first for patch intent");
-      assert(transcript.includes("intent: file-edit"), "ToolSearch did not report file-edit intent");
-      assert(transcript.includes("Workspace Diagnostics"), "WorkspaceDiagnostics result was not returned");
+      assert(
+        toolNames.includes("LearningDraft"),
+        "LearningDraft was not revealed after ToolSearch"
+      );
+      assert(
+        transcript.includes("1. FilePatch"),
+        "ToolSearch did not rank FilePatch first for patch intent"
+      );
+      assert(
+        transcript.includes("intent: file-edit"),
+        "ToolSearch did not report file-edit intent"
+      );
+      assert(
+        transcript.includes("Workspace Diagnostics"),
+        "WorkspaceDiagnostics result was not returned"
+      );
       return toolResponse([
         toolCall("write-report", "FileWrite", {
           file_path: "reports/e2e-result.md",
-          content: "# Magi Black-Box E2E\n\nFocused CLI business flow passed.\n\n- goal context loaded\n- hot memory loaded\n- deferred tool revealed\n",
+          content:
+            "# Magi Black-Box E2E\n\nFocused CLI business flow passed.\n\n- goal context loaded\n- hot memory loaded\n- deferred tool revealed\n"
         }),
         toolCall("todo-update", "TodoWrite", {
           todos: [
             { id: "bb-1", content: "Create black-box report", status: "completed" },
-            { id: "bb-2", content: "Persist learned verification workflow", status: "completed" },
-          ],
+            { id: "bb-2", content: "Persist learned verification workflow", status: "completed" }
+          ]
         }),
         toolCall("memorize-workflow", "Memorize", {
           type: "workflow",
           name: "Focused CLI E2E workflow",
           description: "Run focused CLI E2E before internal unit tests for Magi changes.",
           body: "Run focused CLI E2E before internal unit tests for Magi changes, especially when validating harness behavior.",
-          weight: 0.92,
-        }),
+          weight: 0.92
+        })
       ]);
     }
 
     if (complexTurns === 3) {
-      assert(transcript.includes("Focused CLI business flow passed"), "FileWrite result was not visible");
+      assert(
+        transcript.includes("Focused CLI business flow passed"),
+        "FileWrite result was not visible"
+      );
       assert(transcript.includes("Todo list replaced"), "TodoWrite result was not visible");
       assert(transcript.includes("Wrote Memory node"), "Memorize result was not visible");
       return toolResponse([
@@ -562,7 +661,7 @@ function createComplexRouter() {
           name: "Focused CLI E2E workflow",
           description: "Run focused CLI E2E before internal unit tests for Magi changes.",
           body: "Run focused CLI E2E before internal unit tests for Magi changes, especially when checking harness regressions.",
-          weight: 0.43,
+          weight: 0.43
         }),
         toolCall("patch-report", "FilePatch", {
           file_path: "reports/e2e-result.md",
@@ -570,16 +669,25 @@ function createComplexRouter() {
             "@@",
             " - goal context loaded",
             "-stale patch context",
-            "+- FilePatch recovery first attempt",
-          ].join("\n"),
-        }),
+            "+- FilePatch recovery first attempt"
+          ].join("\n")
+        })
       ]);
     }
 
     if (complexTurns === 4) {
-      assert(transcript.includes("FilePatch failed for reports/e2e-result.md"), "FilePatch failure did not name the target");
-      assert(transcript.includes("Recovery guidance:"), "FilePatch failure did not include recovery guidance");
-      assert(transcript.includes("Current file snippet:"), "FilePatch failure did not include current file context");
+      assert(
+        transcript.includes("FilePatch failed for reports/e2e-result.md"),
+        "FilePatch failure did not name the target"
+      );
+      assert(
+        transcript.includes("Recovery guidance:"),
+        "FilePatch failure did not include recovery guidance"
+      );
+      assert(
+        transcript.includes("Current file snippet:"),
+        "FilePatch failure did not include current file context"
+      );
       return toolResponse([
         toolCall("patch-report-retry", "FilePatch", {
           file_path: "reports/e2e-result.md",
@@ -588,81 +696,132 @@ function createComplexRouter() {
             " - goal context loaded",
             " - hot memory loaded",
             " - deferred tool revealed",
-            "+- FilePatch core edit verified",
-          ].join("\n"),
-        }),
+            "+- FilePatch core edit verified"
+          ].join("\n")
+        })
       ]);
     }
 
     if (complexTurns === 5) {
-      assert(transcript.includes("Patched reports/e2e-result.md"), "FilePatch result was not visible");
+      assert(
+        transcript.includes("Patched reports/e2e-result.md"),
+        "FilePatch result was not visible"
+      );
       return toolResponse([
         toolCall("learning-propose", "LearningDraft", {
           action: "propose",
           kind: "memory",
           target: "workflows/focused-cli-e2e.md",
-          content: "# Focused CLI E2E workflow\n\nRun the real CLI with an isolated MAGI_CONFIG_DIR and a mock provider, then verify files, memory, goals, and learning drafts.\n",
-          reason: "Use real Magi CLI commands with a temp config and mock provider before relying on unit tests.",
+          content:
+            "# Focused CLI E2E workflow\n\nRun the real CLI with an isolated MAGI_CONFIG_DIR and a mock provider, then verify files, memory, goals, and learning drafts.\n",
+          reason:
+            "Use real Magi CLI commands with a temp config and mock provider before relying on unit tests.",
           evidence: ["Validated by scripts/blackbox-e2e.mjs"],
-          confidence: 0.91,
+          confidence: 0.91
         }),
-        toolCall("notify-user", "SendUserMessage", { message: "Complex black-box E2E finished." }),
+        toolCall("notify-user", "SendUserMessage", { message: "Complex black-box E2E finished." })
       ]);
     }
 
     assert(transcript.includes("Created LearningDraft"), "LearningDraft proposal was not created");
     assert(transcript.includes("User message delivered"), "SendUserMessage result was not visible");
-    return messageText("Complex black-box E2E completed with real CLI, memory, goal, tools, and learning draft.");
+    return messageText(
+      "Complex black-box E2E completed with real CLI, memory, goal, tools, and learning draft."
+    );
   };
 }
 
 async function scenarioComplexWorkflow() {
   return await withTempWorkspace("complex", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
-    const provider = await startProvider({ logPath: providerLog, routeRequest: createComplexRouter() });
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: createComplexRouter()
+    });
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
       await seedMemoryAndGoal({ workDir, configDir });
 
       const complexOutput = await runCli({
         args: [
-          "--permission-mode", "acceptEdits",
-          "--model", "main",
-          "--output-format", "stream-json",
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
           "-c",
           "-p",
-          "Run the complex Magi black-box E2E using focused CLI E2E workflow. Write a report, track todo state, memorize the workflow, and create a learning draft.",
+          "Run the complex Magi black-box E2E using focused CLI E2E workflow. Write a report, track todo state, memorize the workflow, and create a learning draft."
         ],
         cwd: workDir,
         configDir,
         label: "complex prompt",
-        timeoutMs: 45_000,
+        timeoutMs: 45_000
       });
-      assert(complexOutput.includes("session.completed") && complexOutput.includes("Complex black-box E2E completed"), "complex headless prompt did not complete");
+      assert(
+        complexOutput.includes("session.completed") &&
+          complexOutput.includes("Complex black-box E2E completed"),
+        "complex headless prompt did not complete"
+      );
 
       const reportPath = path.join(workDir, "reports", "e2e-result.md");
       assert(existsSync(reportPath), "complex task did not create report file");
-      assert(readFileSync(reportPath, "utf8").includes("Focused CLI business flow passed"), "report file content was not written correctly");
-      assert(readFileSync(reportPath, "utf8").includes("FilePatch core edit verified"), "FilePatch did not update the report file");
+      assert(
+        readFileSync(reportPath, "utf8").includes("Focused CLI business flow passed"),
+        "report file content was not written correctly"
+      );
+      assert(
+        readFileSync(reportPath, "utf8").includes("FilePatch core edit verified"),
+        "FilePatch did not update the report file"
+      );
 
       const todosPath = path.join(configDir, "state", "todos.json");
       assert(existsSync(todosPath), "TodoWrite did not persist todo state");
-      assert(readFileSync(todosPath, "utf8").includes("Persist learned verification workflow"), "todo state missing item");
+      assert(
+        readFileSync(todosPath, "utf8").includes("Persist learned verification workflow"),
+        "todo state missing item"
+      );
 
       const recall = await runCli({
-        args: ["--model", "main", "-c", "-p", "What should you remember about my verification preference?"],
+        args: [
+          "--model",
+          "main",
+          "-c",
+          "-p",
+          "What should you remember about my verification preference?"
+        ],
         cwd: workDir,
         configDir,
-        label: "memory recall",
+        label: "memory recall"
       });
-      assert(recall.includes("focused CLI black-box verification"), "memory recall answer missed verification preference");
+      assert(
+        recall.includes("focused CLI black-box verification"),
+        "memory recall answer missed verification preference"
+      );
 
-      const learningList = await runCli({ args: ["learning", "list"], cwd: workDir, configDir, label: "learning list" });
+      const learningList = await runCli({
+        args: ["learning", "list"],
+        cwd: workDir,
+        configDir,
+        label: "learning list"
+      });
       assert(learningList.includes("LearningDrafts:"), "learning draft list was empty");
-      assert(learningList.includes("workflows/focused-cli-e2e.md"), "learning draft target was not listed");
+      assert(
+        learningList.includes("workflows/focused-cli-e2e.md"),
+        "learning draft target was not listed"
+      );
 
-      const memorySearch = await runCli({ args: ["memory", "search", "CLI E2E workflow"], cwd: workDir, configDir, label: "memory search" });
-      assert(memorySearch.includes("focused CLI E2E"), "memory search did not find memorized workflow");
+      const memorySearch = await runCli({
+        args: ["memory", "search", "CLI E2E workflow"],
+        cwd: workDir,
+        configDir,
+        label: "memory search"
+      });
+      assert(
+        memorySearch.includes("focused CLI E2E"),
+        "memory search did not find memorized workflow"
+      );
       await runCli({
         args: [
           "memory",
@@ -674,42 +833,82 @@ async function scenarioComplexWorkflow() {
           "--relation",
           "relates_to",
           "--weight",
-          "0.8",
+          "0.8"
         ],
         cwd: workDir,
         configDir,
-        label: "complex duplicate memory link",
+        label: "complex duplicate memory link"
       });
-      const dream = await runCli({ args: ["memory", "dream"], cwd: workDir, configDir, label: "complex memory dream duplicate" });
+      const dream = await runCli({
+        args: ["memory", "dream"],
+        cwd: workDir,
+        configDir,
+        label: "complex memory dream duplicate"
+      });
       assert(dream.includes("duplicate"), "memory dream did not detect duplicate graph workflow");
       const dreamId = parseDreamId(dream);
       const appliedDream = await runCli({
         args: ["memory", "dream", "apply", dreamId],
         cwd: workDir,
         configDir,
-        label: "complex memory dream apply duplicate",
+        label: "complex memory dream apply duplicate"
       });
-      assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream did not archive duplicate graph workflow");
-      assert(appliedDream.includes("Redirected graph edges: 1"), "memory dream did not redirect duplicate graph edges");
-      assert(appliedDream.includes("Fused graph node weights: 1"), "memory dream did not fuse duplicate graph node weight");
-      assert(appliedDream.includes("Resolved graph edge conflicts: 0"), "memory dream reported unexpected graph edge conflicts");
-      const mergeAudit = await runCli({ args: ["memory", "merges", "--limit", "5"], cwd: workDir, configDir, label: "complex memory merges" });
-      assert(mergeAudit.includes("Memory graph merges: 1"), "memory merges did not list duplicate workflow merge");
-      assert(mergeAudit.includes("Focused CLI E2E workflow -> Focused CLI E2E workflow"), "memory merges did not show duplicate workflow titles");
-      assert(mergeAudit.includes("redirected edges: 1"), "memory merges did not show redirected edge count");
+      assert(
+        appliedDream.includes("Archived graph nodes: 1"),
+        "memory dream did not archive duplicate graph workflow"
+      );
+      assert(
+        appliedDream.includes("Redirected graph edges: 1"),
+        "memory dream did not redirect duplicate graph edges"
+      );
+      assert(
+        appliedDream.includes("Fused graph node weights: 1"),
+        "memory dream did not fuse duplicate graph node weight"
+      );
+      assert(
+        appliedDream.includes("Resolved graph edge conflicts: 0"),
+        "memory dream reported unexpected graph edge conflicts"
+      );
+      const mergeAudit = await runCli({
+        args: ["memory", "merges", "--limit", "5"],
+        cwd: workDir,
+        configDir,
+        label: "complex memory merges"
+      });
+      assert(
+        mergeAudit.includes("Memory graph merges: 1"),
+        "memory merges did not list duplicate workflow merge"
+      );
+      assert(
+        mergeAudit.includes("Focused CLI E2E workflow -> Focused CLI E2E workflow"),
+        "memory merges did not show duplicate workflow titles"
+      );
+      assert(
+        mergeAudit.includes("redirected edges: 1"),
+        "memory merges did not show redirected edge count"
+      );
       assert(mergeAudit.includes("dream:"), "memory merges did not include dream id");
       const evalCaseFile = path.join(workDir, "memory-recall-eval.json");
       const evalReportFile = path.join(workDir, "memory-recall-eval-report.json");
-      writeFileSync(evalCaseFile, JSON.stringify({
-        name: "complex memory recall",
-        cases: [{
-          name: "workflow and preference recall",
-          query: "CLI E2E workflow verification preference",
-          expect: ["Focused CLI E2E workflow", "focused CLI black-box verification"],
-          forbid: ["verbose terminal dumps"],
-          minResults: 2,
-        }],
-      }, null, 2));
+      writeFileSync(
+        evalCaseFile,
+        JSON.stringify(
+          {
+            name: "complex memory recall",
+            cases: [
+              {
+                name: "workflow and preference recall",
+                query: "CLI E2E workflow verification preference",
+                expect: ["Focused CLI E2E workflow", "focused CLI black-box verification"],
+                forbid: ["verbose terminal dumps"],
+                minResults: 2
+              }
+            ]
+          },
+          null,
+          2
+        )
+      );
       const memoryEval = await runCli({
         args: [
           "memory",
@@ -725,22 +924,50 @@ async function scenarioComplexWorkflow() {
         ],
         cwd: workDir,
         configDir,
-        label: "complex memory recall eval",
+        label: "complex memory recall eval"
       });
-      assert(memoryEval.includes("Memory recall eval: complex memory recall"), "memory eval did not run named suite");
-      assert(memoryEval.includes("1. PASS workflow and preference recall"), "memory eval did not pass complex recall case");
+      assert(
+        memoryEval.includes("Memory recall eval: complex memory recall"),
+        "memory eval did not run named suite"
+      );
+      assert(
+        memoryEval.includes("1. PASS workflow and preference recall"),
+        "memory eval did not pass complex recall case"
+      );
       assert(memoryEval.includes("score: 1.00"), "memory eval did not report perfect score");
       assert(memoryEval.includes("threshold: PASS"), "memory eval did not report threshold status");
-      assert(memoryEval.includes(`Report: ${evalReportFile}`), "memory eval did not report JSON output path");
+      assert(
+        memoryEval.includes(`Report: ${evalReportFile}`),
+        "memory eval did not report JSON output path"
+      );
       const evalReport = JSON.parse(readFileSync(evalReportFile, "utf8"));
       assert(evalReport.score === 1, "memory eval JSON report did not preserve score");
       assert(evalReport.minScore === 1, "memory eval JSON report did not preserve score threshold");
-      assert(evalReport.thresholdPassed === true, "memory eval JSON report did not preserve threshold status");
-      assert(evalReport.results?.[0]?.passed === true, "memory eval JSON report did not preserve case status");
-      assert(evalReport.results?.[0]?.forbiddenFound?.length === 0, "memory eval JSON report had forbidden recall");
+      assert(
+        evalReport.thresholdPassed === true,
+        "memory eval JSON report did not preserve threshold status"
+      );
+      assert(
+        evalReport.results?.[0]?.passed === true,
+        "memory eval JSON report did not preserve case status"
+      );
+      assert(
+        evalReport.results?.[0]?.forbiddenFound?.length === 0,
+        "memory eval JSON report had forbidden recall"
+      );
 
-      await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
-      const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
+      await runCli({
+        args: ["goal", "done", "verified"],
+        cwd: workDir,
+        configDir,
+        label: "goal done"
+      });
+      const goalStatus = await runCli({
+        args: ["goal"],
+        cwd: workDir,
+        configDir,
+        label: "goal status"
+      });
       assert(goalStatus.includes("No active goal"), "goal was not completed");
       assert(provider.calls.length >= 5, "provider was not exercised enough for a complex flow");
       return {
@@ -780,27 +1007,52 @@ async function scenarioDefaultPermissionDenied() {
       routeRequest: ({ transcript }) => {
         turn += 1;
         if (turn === 1) {
-          return toolResponse([toolCall("denied-write", "FileWrite", { file_path: "denied.txt", content: "no" })]);
+          return toolResponse([
+            toolCall("denied-write", "FileWrite", { file_path: "denied.txt", content: "no" })
+          ]);
         }
-        assert(transcript.includes("Permission ask: FileWrite requires approval"), "default permission denial was not returned to the model");
+        assert(
+          transcript.includes("Permission ask: FileWrite requires approval"),
+          "default permission denial was not returned to the model"
+        );
         return messageText("Default permission denial observed.");
-      },
+      }
     });
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
       const output = await runCli({
-        args: ["--model", "main", "--output-format", "stream-json", "-p", "Try to write a file without permission mode."],
+        args: [
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try to write a file without permission mode."
+        ],
         cwd: workDir,
         configDir,
-        label: "default permission denied",
+        label: "default permission denied"
       });
-      assert(output.includes("approval_request"), "default permission path did not emit approval_request");
-      assert(output.includes("Default permission denial observed"), "model did not observe permission denial");
-      assert(!existsSync(path.join(workDir, "denied.txt")), "denied write unexpectedly created a file");
+      assert(
+        output.includes("approval_request"),
+        "default permission path did not emit approval_request"
+      );
+      assert(
+        output.includes("Default permission denial observed"),
+        "model did not observe permission denial"
+      );
+      assert(
+        !existsSync(path.join(workDir, "denied.txt")),
+        "denied write unexpectedly created a file"
+      );
       assert(turn === 2, "permission denial scenario should complete in two provider turns");
       return {
         score: 1,
-        assertions: ["approval request emitted", "permission denial returned to model", "denied write did not mutate workspace"],
+        assertions: [
+          "approval request emitted",
+          "permission denial returned to model",
+          "denied write did not mutate workspace"
+        ],
         provider: provider.summary()
       };
     } catch (error) {
@@ -832,24 +1084,47 @@ async function scenarioRetryAndFallback() {
           return messageText("fallback recovered", "mock-backup");
         }
         return fail(400, `unexpected model ${model}`);
-      },
+      }
     });
     try {
-      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port, fallbacks: true }));
+      writeFileSync(
+        path.join(configDir, "config.yaml"),
+        renderConfig({ port: provider.port, fallbacks: true })
+      );
       const output = await runCli({
-        args: ["--model", "main", "--output-format", "stream-json", "-p", "Exercise retry and fallback."],
+        args: [
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Exercise retry and fallback."
+        ],
         cwd: workDir,
         configDir,
         label: "retry fallback",
-        timeoutMs: 45_000,
+        timeoutMs: 45_000
       });
-      assert(output.includes("fallback_switched"), "fallback event was not present in stream-json output");
-      assert(output.includes("fallback recovered"), "fallback route did not provide the final answer");
-      assert(primaryCalls === 3, `expected three fast attempts before fallback, got ${primaryCalls} primary calls`);
+      assert(
+        output.includes("fallback_switched"),
+        "fallback event was not present in stream-json output"
+      );
+      assert(
+        output.includes("fallback recovered"),
+        "fallback route did not provide the final answer"
+      );
+      assert(
+        primaryCalls === 3,
+        `expected three fast attempts before fallback, got ${primaryCalls} primary calls`
+      );
       assert(backupCalls === 1, `expected one backup call, got ${backupCalls}`);
       return {
         score: 1,
-        assertions: ["retry attempts exhausted on primary", "fallback event emitted", "backup model recovered"],
+        assertions: [
+          "retry attempts exhausted on primary",
+          "fallback event emitted",
+          "backup model recovered"
+        ],
         provider: provider.summary(),
         retry: { primaryCalls, backupCalls }
       };
@@ -866,24 +1141,31 @@ async function scenarioMemoryGraphLink() {
   return await withTempWorkspace("memory-graph-link", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory graph init" });
-    const draftId = parseDraftId(await runCli({
-      args: [
-        "memory",
-        "append",
-        "project",
-        [
-          "## Graph CLI anchor",
-          "Magi CLI exposes durable graph memory linking.",
-          "",
-          "## Linked workflow neighbor",
-          "Run business-level verification after graph memory changes.",
-        ].join("\n"),
-      ],
+    const draftId = parseDraftId(
+      await runCli({
+        args: [
+          "memory",
+          "append",
+          "project",
+          [
+            "## Graph CLI anchor",
+            "Magi CLI exposes durable graph memory linking.",
+            "",
+            "## Linked workflow neighbor",
+            "Run business-level verification after graph memory changes."
+          ].join("\n")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "memory graph append"
+      })
+    );
+    await runCli({
+      args: ["memory", "draft", "apply", draftId],
       cwd: workDir,
       configDir,
-      label: "memory graph append",
-    }));
-    await runCli({ args: ["memory", "draft", "apply", draftId], cwd: workDir, configDir, label: "memory graph apply" });
+      label: "memory graph apply"
+    });
     const linked = await runCli({
       args: [
         "memory",
@@ -895,26 +1177,36 @@ async function scenarioMemoryGraphLink() {
         "--relation",
         "relates_to",
         "--weight",
-        "0.9",
+        "0.9"
       ],
       cwd: workDir,
       configDir,
-      label: "memory graph link",
+      label: "memory graph link"
     });
     assert(linked.includes("Linked Memory nodes:"), "memory link did not create an edge");
-    assert(linked.includes("relates_to -> Linked workflow neighbor"), "memory link did not show the target node");
+    assert(
+      linked.includes("relates_to -> Linked workflow neighbor"),
+      "memory link did not show the target node"
+    );
 
     const search = await runCli({
       args: ["memory", "search", "durable graph memory linking"],
       cwd: workDir,
       configDir,
-      label: "memory graph search",
+      label: "memory graph search"
     });
     assert(search.includes("Graph CLI anchor"), "memory graph search missed direct anchor");
-    assert(search.includes("Linked workflow neighbor"), "memory graph search missed linked neighbor");
+    assert(
+      search.includes("Linked workflow neighbor"),
+      "memory graph search missed linked neighbor"
+    );
     return {
       score: 1,
-      assertions: ["memory draft applied", "graph edge created", "linked neighbor retrieved through graph search"]
+      assertions: [
+        "memory draft applied",
+        "graph edge created",
+        "linked neighbor retrieved through graph search"
+      ]
     };
   });
 }
@@ -922,26 +1214,41 @@ async function scenarioMemoryGraphLink() {
 async function scenarioMemoryCorrection() {
   return await withTempWorkspace("memory-correction", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
-    await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory correction init" });
-    const draftId = parseDraftId(await runCli({
-      args: [
-        "memory",
-        "append",
-        "user",
-        "The user prefers verbose terminal dumps after verification."
-      ],
+    await runCli({
+      args: ["memory", "init"],
       cwd: workDir,
       configDir,
-      label: "memory correction append",
-    }));
-    await runCli({ args: ["memory", "draft", "apply", draftId], cwd: workDir, configDir, label: "memory correction apply" });
+      label: "memory correction init"
+    });
+    const draftId = parseDraftId(
+      await runCli({
+        args: [
+          "memory",
+          "append",
+          "user",
+          "The user prefers verbose terminal dumps after verification."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "memory correction append"
+      })
+    );
+    await runCli({
+      args: ["memory", "draft", "apply", draftId],
+      cwd: workDir,
+      configDir,
+      label: "memory correction apply"
+    });
     const before = await runCli({
       args: ["memory", "search", "verbose terminal dumps verification"],
       cwd: workDir,
       configDir,
-      label: "memory correction search before",
+      label: "memory correction search before"
     });
-    assert(before.includes("verbose terminal dumps"), "correction precondition did not retrieve stale memory");
+    assert(
+      before.includes("verbose terminal dumps"),
+      "correction precondition did not retrieve stale memory"
+    );
 
     const corrected = await runCli({
       args: [
@@ -960,9 +1267,12 @@ async function scenarioMemoryCorrection() {
       ],
       cwd: workDir,
       configDir,
-      label: "memory correction correct",
+      label: "memory correction correct"
     });
-    assert(corrected.includes("Corrected Memory node:"), "memory correction did not dispute a node");
+    assert(
+      corrected.includes("Corrected Memory node:"),
+      "memory correction did not dispute a node"
+    );
     assert(corrected.includes("replacement:"), "memory correction did not create a replacement");
     const correctedNodeId = parseCorrectedNodeId(corrected);
 
@@ -970,35 +1280,53 @@ async function scenarioMemoryCorrection() {
       args: ["memory", "search", "verbose terminal dumps verification"],
       cwd: workDir,
       configDir,
-      label: "memory correction search after",
+      label: "memory correction search after"
     });
     assert(after.includes("concise verification summaries"), "replacement memory was not recalled");
-    assert(!after.includes("prefers verbose terminal dumps"), "disputed stale memory was still recalled");
+    assert(
+      !after.includes("prefers verbose terminal dumps"),
+      "disputed stale memory was still recalled"
+    );
     const conflicts = await runCli({
       args: ["memory", "conflicts"],
       cwd: workDir,
       configDir,
-      label: "memory conflicts",
+      label: "memory conflicts"
     });
-    assert(conflicts.includes("Memory graph conflicts:"), "memory conflicts did not list graph conflicts");
-    assert(conflicts.includes("recommendation: prefer_from"), "memory conflicts did not recommend active replacement");
-    assert(conflicts.includes("edge reason:"), "memory conflicts did not include correction edge reason");
+    assert(
+      conflicts.includes("Memory graph conflicts:"),
+      "memory conflicts did not list graph conflicts"
+    );
+    assert(
+      conflicts.includes("recommendation: prefer_from"),
+      "memory conflicts did not recommend active replacement"
+    );
+    assert(
+      conflicts.includes("edge reason:"),
+      "memory conflicts did not include correction edge reason"
+    );
     const dream = await runCli({
       args: ["memory", "dream"],
       cwd: workDir,
       configDir,
-      label: "memory dream graph cleanup",
+      label: "memory dream graph cleanup"
     });
-    assert(dream.includes("archive_candidate"), "memory dream did not include graph archive candidate");
+    assert(
+      dream.includes("archive_candidate"),
+      "memory dream did not include graph archive candidate"
+    );
     assert(dream.includes("Drafts:"), "memory dream did not create reviewable drafts");
     const dreamId = parseDreamId(dream);
     const appliedDream = await runCli({
       args: ["memory", "dream", "apply", dreamId],
       cwd: workDir,
       configDir,
-      label: "memory dream apply graph cleanup",
+      label: "memory dream apply graph cleanup"
     });
-    assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream apply did not archive graph node");
+    assert(
+      appliedDream.includes("Archived graph nodes: 1"),
+      "memory dream apply did not archive graph node"
+    );
     assertGraphNodeStatus(configDir, correctedNodeId, "archived");
     const maintenanceConfig = await runCli({
       args: [
@@ -1016,33 +1344,54 @@ async function scenarioMemoryCorrection() {
       ],
       cwd: workDir,
       configDir,
-      label: "memory maintenance config",
+      label: "memory maintenance config"
     });
-    assert(maintenanceConfig.includes("Memory maintenance policy"), "memory maintenance config did not run");
-    assert(maintenanceConfig.includes("decay: 0.100"), "memory maintenance config did not persist decay");
+    assert(
+      maintenanceConfig.includes("Memory maintenance policy"),
+      "memory maintenance config did not run"
+    );
+    assert(
+      maintenanceConfig.includes("decay: 0.100"),
+      "memory maintenance config did not persist decay"
+    );
     const maintenancePreview = await runCli({
       args: ["memory", "maintain"],
       cwd: workDir,
       configDir,
-      label: "memory maintenance preview",
+      label: "memory maintenance preview"
     });
-    assert(maintenancePreview.includes("Memory maintenance preview"), "memory maintenance preview did not run");
-    assert(maintenancePreview.includes("changed:"), "memory maintenance preview did not report changed count");
-    assert(maintenancePreview.includes("decay: 0.100"), "memory maintenance preview did not use configured policy");
+    assert(
+      maintenancePreview.includes("Memory maintenance preview"),
+      "memory maintenance preview did not run"
+    );
+    assert(
+      maintenancePreview.includes("changed:"),
+      "memory maintenance preview did not report changed count"
+    );
+    assert(
+      maintenancePreview.includes("decay: 0.100"),
+      "memory maintenance preview did not use configured policy"
+    );
     const maintenanceApply = await runCli({
       args: ["memory", "maintain", "--apply"],
       cwd: workDir,
       configDir,
-      label: "memory maintenance apply",
+      label: "memory maintenance apply"
     });
-    assert(maintenanceApply.includes("Memory maintenance applied"), "memory maintenance apply did not run");
+    assert(
+      maintenanceApply.includes("Memory maintenance applied"),
+      "memory maintenance apply did not run"
+    );
     assert(maintenanceApply.includes("->"), "memory maintenance did not report weight decay");
     const auditPath = path.join(configDir, "memory", "logs", "audit.jsonl");
     assert(existsSync(auditPath), "memory correction audit log was not written");
     const audit = readFileSync(auditPath, "utf8");
     assert(audit.includes("memory.corrected"), "memory correction audit event missing");
     assert(audit.includes("memory.dream.applied"), "memory dream apply audit event missing");
-    assert(audit.includes("memory.maintenance.configured"), "memory maintenance config audit event missing");
+    assert(
+      audit.includes("memory.maintenance.configured"),
+      "memory maintenance config audit event missing"
+    );
     assert(audit.includes("memory.maintenance.applied"), "memory maintenance audit event missing");
     return {
       score: 1,
@@ -1076,21 +1425,38 @@ function assertGraphNodeStatus(configDir, nodeId, expectedStatus) {
     "const row = db.prepare('select status from memory_nodes where id = ?').get(nodeId);",
     "db.close();",
     "if (!row) throw new Error(`node not found: ${nodeId}`);",
-    "if (row.status !== expectedStatus) throw new Error(`expected ${expectedStatus}, got ${row.status}`);",
+    "if (row.status !== expectedStatus) throw new Error(`expected ${expectedStatus}, got ${row.status}`);"
   ].join("\n");
-  const result = spawnSync(nodeBin, ["--input-type=module", "-e", script, path.join(configDir, "state", "sessions.sqlite"), nodeId, expectedStatus], {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      MAGI_CONFIG_DIR: configDir,
-      MAGI_OPENAI_API_KEY: "test-key",
-      NO_COLOR: "1",
-    },
-    encoding: "utf8",
-  });
+  const result = spawnSync(
+    nodeBin,
+    [
+      "--input-type=module",
+      "-e",
+      script,
+      path.join(configDir, "state", "sessions.sqlite"),
+      nodeId,
+      expectedStatus
+    ],
+    {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        MAGI_CONFIG_DIR: configDir,
+        MAGI_OPENAI_API_KEY: "test-key",
+        NO_COLOR: "1"
+      },
+      encoding: "utf8"
+    }
+  );
   if (result.status !== 0) {
-    throw new Error(`graph node status check failed\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
+    throw new Error(
+      `graph node status check failed\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+    );
   }
+}
+
+function outputLikeTranscriptHasToolSearchFeedback(transcript) {
+  return transcript.includes("1. Glob") && transcript.includes("failure:path");
 }
 
 async function scenarioToolFeedbackRanking() {
@@ -1110,36 +1476,62 @@ async function scenarioToolFeedbackRanking() {
             toolCall("glob-ok-1", "Glob", { pattern: "**/*.md" }),
             toolCall("glob-ok-2", "Glob", { pattern: "**/*.md" }),
             toolCall("glob-ok-3", "Glob", { pattern: "**/*.md" }),
-            toolCall("glob-ok-4", "Glob", { pattern: "**/*.md" }),
+            toolCall("glob-ok-4", "Glob", { pattern: "**/*.md" })
           ]);
         }
-        assert(transcript.includes("Search path is outside allowed directories"), "Grep failure was not visible to the model");
+        if (turn === 2) {
+          assert(
+            transcript.includes("Search path is outside allowed directories"),
+            "Grep failure was not visible to the model"
+          );
+          assert(transcript.includes("No matches"), "Glob success was not visible to the model");
+          return toolResponse([
+            toolCall("tool-search-after-feedback", "ToolSearch", {
+              query: "search workspace files",
+              max_results: 5
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("Search path is outside allowed directories"),
+          "Grep failure was not visible to the model"
+        );
         assert(transcript.includes("No matches"), "Glob success was not visible to the model");
-        return toolResponse([
-          toolCall("tool-search-after-feedback", "ToolSearch", { query: "search workspace files", max_results: 5 }),
-        ]);
-      },
+        assert(
+          outputLikeTranscriptHasToolSearchFeedback(transcript),
+          "ToolSearch feedback was not visible to the model"
+        );
+        return messageText("Tool feedback ranking completed.");
+      }
     });
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
       const output = await runCli({
         args: [
-          "--permission-mode", "acceptEdits",
-          "--model", "main",
-          "--output-format", "stream-json",
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
           "-p",
-          "Exercise tool feedback ranking by trying search tools, then ask ToolSearch for workspace file search.",
+          "Exercise tool feedback ranking by trying search tools, then ask ToolSearch for workspace file search."
         ],
         cwd: workDir,
         configDir,
-        label: "tool feedback ranking",
+        label: "tool feedback ranking"
       });
-      assert(output.includes("1. Glob"), "ToolSearch did not rank successful Glob ahead after feedback");
+      assert(
+        output.includes("1. Glob"),
+        "ToolSearch did not rank successful Glob ahead after feedback"
+      );
       assert(output.includes("usage:+"), "ToolSearch did not report positive usage feedback");
       assert(output.includes("usage:-"), "ToolSearch did not report negative usage feedback");
       assert(output.includes("failure:path"), "ToolSearch did not report failure kind feedback");
       assert(
-        output.includes("recovery:path=use Glob for broad search or pass a workspace-relative path"),
+        output.includes(
+          "recovery:path=use Glob for broad search or pass a workspace-relative path"
+        ),
         "ToolSearch did not report recovery guidance"
       );
       const statsPath = path.join(configDir, "state", "tool-usage-stats.json");
@@ -1175,42 +1567,78 @@ async function scenarioPlanMode() {
   return await withTempWorkspace("plan", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
     let turn = 0;
-    const plan = "1. Inspect the requested files\n2. Show this plan before implementation\n3. Wait for approval";
+    const plan =
+      "1. Inspect the requested files\n2. Show this plan before implementation\n3. Wait for approval";
     const provider = await startProvider({
       logPath: providerLog,
       routeRequest: ({ transcript }) => {
         turn += 1;
         if (turn === 1) {
-          return toolResponse([toolCall("plan-write-denied", "FileWrite", {
-            file_path: "should-not-edit.txt",
-            content: "plan mode should block this",
-          })]);
+          return toolResponse([
+            toolCall("plan-write-denied", "FileWrite", {
+              file_path: "should-not-edit.txt",
+              content: "plan mode should block this"
+            })
+          ]);
         }
         if (turn === 2) {
-          assert(transcript.includes("FileWrite is not allowed in plan mode"), "plan mode did not deny a write tool");
+          assert(
+            transcript.includes("FileWrite is not allowed in plan mode"),
+            "plan mode did not deny a write tool"
+          );
           return toolResponse([toolCall("submit-plan", "ExitPlanMode", { plan })]);
         }
-        assert(transcript.includes("Plan submitted for user approval"), "headless plan mode did not return a plan review result");
-        assert(transcript.includes("Show this plan before implementation"), "plan content was not visible after ExitPlanMode");
+        assert(
+          transcript.includes("Plan submitted for user approval"),
+          "headless plan mode did not return a plan review result"
+        );
+        assert(
+          transcript.includes("Show this plan before implementation"),
+          "plan content was not visible after ExitPlanMode"
+        );
         return messageText("Plan mode surfaced the plan and stopped before implementation.");
-      },
+      }
     });
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
       const output = await runCli({
-        args: ["--permission-mode", "plan", "--model", "main", "--output-format", "stream-json", "-p", "Plan a risky implementation before editing."],
+        args: [
+          "--permission-mode",
+          "plan",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Plan a risky implementation before editing."
+        ],
         cwd: workDir,
         configDir,
-        label: "plan mode",
+        label: "plan mode"
       });
       assert(output.includes("Plan mode surfaced the plan"), "plan mode final answer missing");
-      assert(!existsSync(path.join(workDir, "should-not-edit.txt")), "plan mode should not mutate workspace");
-      const planStatus = await runCli({ args: ["plan"], cwd: workDir, configDir, label: "plan status" });
+      assert(
+        !existsSync(path.join(workDir, "should-not-edit.txt")),
+        "plan mode should not mutate workspace"
+      );
+      const planStatus = await runCli({
+        args: ["plan"],
+        cwd: workDir,
+        configDir,
+        label: "plan status"
+      });
       assert(planStatus.includes("Status: submitted"), "submitted plan was not persisted");
-      assert(planStatus.includes("Show this plan before implementation"), "persisted plan did not include plan content");
+      assert(
+        planStatus.includes("Show this plan before implementation"),
+        "persisted plan did not include plan content"
+      );
       return {
         score: 1,
-        assertions: ["write denied in plan mode", "ExitPlanMode surfaced plan", "plan review persisted"],
+        assertions: [
+          "write denied in plan mode",
+          "ExitPlanMode surfaced plan",
+          "plan review persisted"
+        ],
         provider: provider.summary()
       };
     } catch (error) {
@@ -1235,8 +1663,8 @@ async function scenarioControlApprovalFlow() {
           return toolResponse([
             toolCall("approve-mobile", "FileWrite", {
               file_path: "mobile-control.txt",
-              content: "approved by mobile control",
-            }),
+              content: "approved by mobile control"
+            })
           ]);
         }
         assert(
@@ -1245,7 +1673,7 @@ async function scenarioControlApprovalFlow() {
           "control approval result was not returned to the model"
         );
         return messageText("CONTROL APPROVAL DONE");
-      },
+      }
     });
     let serve;
     try {
@@ -1263,7 +1691,7 @@ async function scenarioControlApprovalFlow() {
         {
           prompt: "Write a file through mobile Control API approval.",
           model: "main",
-          background: true,
+          background: true
         },
         headers,
         202
@@ -1275,8 +1703,7 @@ async function scenarioControlApprovalFlow() {
         `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}&limit=20`,
         headers,
         (text) =>
-          text.includes("agent.approval.pending") &&
-          text.includes("control.approval.resolved"),
+          text.includes("agent.approval.pending") && text.includes("control.approval.resolved"),
         (text) => {
           if (text.includes("event: ready")) {
             sseReady = true;
@@ -1309,13 +1736,17 @@ async function scenarioControlApprovalFlow() {
       assert(resolved.interaction?.approved === true, "control approval was not approved");
 
       const sse = await ssePromise;
-      await waitFor(async () => {
-        const response = await getJson(
-          `${serve.url}/jobs/${encodeURIComponent(started.jobId)}`,
-          headers
-        );
-        return response.job?.status === "completed";
-      }, "control job completion", 10_000);
+      await waitFor(
+        async () => {
+          const response = await getJson(
+            `${serve.url}/jobs/${encodeURIComponent(started.jobId)}`,
+            headers
+          );
+          return response.job?.status === "completed";
+        },
+        "control job completion",
+        10_000
+      );
       const job = await getJson(`${serve.url}/jobs/${encodeURIComponent(started.jobId)}`, headers);
       const events = await getJson(
         `${serve.url}/jobs/${encodeURIComponent(started.jobId)}/events?limit=50`,
@@ -1342,15 +1773,15 @@ async function scenarioControlApprovalFlow() {
           "background job exposed pending approval",
           "SSE streamed pending and resolved approval events",
           "phone approval unblocked FileWrite",
-          "control job completed and persisted audit events",
+          "control job completed and persisted audit events"
         ],
         control: {
           port: controlPort,
           jobId: started.jobId,
-          eventCount: events.events?.length ?? 0,
+          eventCount: events.events?.length ?? 0
         },
         provider: provider.summary(),
-        filesVerified: ["mobile-control.txt"],
+        filesVerified: ["mobile-control.txt"]
       };
     } catch (error) {
       printProviderLog(providerLog);
@@ -1375,29 +1806,42 @@ async function scenarioInteractiveTui() {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     const inputFile = path.join(workDir, "tui-input.txt");
     writeFileSync(inputFile, "/exit\r");
-    const result = process.platform === "darwin"
-      ? await runCommand({
-        command: "/bin/sh",
-        args: ["-c", `script -q /dev/null ${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color < ${shellQuote(inputFile)}`],
-        cwd: workDir,
-        configDir,
-        label: "interactive TUI",
-        timeoutMs: 15_000,
-      })
-      : await runCommand({
-        command: "/bin/sh",
-        args: ["-c", `script -q -e -c ${shellQuote(`${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color`)} /dev/null < ${shellQuote(inputFile)}`],
-        cwd: workDir,
-        configDir,
-        label: "interactive TUI",
-        timeoutMs: 15_000,
-      });
+    const result =
+      process.platform === "darwin"
+        ? await runCommand({
+            command: "/bin/sh",
+            args: [
+              "-c",
+              `script -q /dev/null ${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color < ${shellQuote(inputFile)}`
+            ],
+            cwd: workDir,
+            configDir,
+            label: "interactive TUI",
+            timeoutMs: 15_000
+          })
+        : await runCommand({
+            command: "/bin/sh",
+            args: [
+              "-c",
+              `script -q -e -c ${shellQuote(`${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color`)} /dev/null < ${shellQuote(inputFile)}`
+            ],
+            cwd: workDir,
+            configDir,
+            label: "interactive TUI",
+            timeoutMs: 15_000
+          });
 
-    assert(result.code === 0, `interactive TUI exited ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
+    assert(
+      result.code === 0,
+      `interactive TUI exited ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+    );
     const combined = `${result.stdout}\n${result.stderr}`;
     assert(combined.includes("Magi v"), "TUI banner did not render");
     assert(combined.includes("/help for commands"), "TUI help hint did not render");
-    assert(!combined.includes("Interactive terminal requires a TTY"), "TUI did not receive a pseudo-TTY");
+    assert(
+      !combined.includes("Interactive terminal requires a TTY"),
+      "TUI did not receive a pseudo-TTY"
+    );
     return {
       score: 1,
       assertions: ["TUI banner rendered", "help hint rendered", "pseudo-TTY accepted"]
@@ -1414,11 +1858,17 @@ async function scenarioTuiRequiresTty() {
       cwd: workDir,
       configDir,
       label: "TUI requires TTY",
-      timeoutMs: 15_000,
+      timeoutMs: 15_000
     });
 
-    assert(result.code === 2, `non-TTY TUI exited ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
-    assert(result.stdout.includes("Interactive terminal requires a TTY"), "non-TTY TUI did not explain the TTY requirement");
+    assert(
+      result.code === 2,
+      `non-TTY TUI exited ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+    );
+    assert(
+      result.stdout.includes("Interactive terminal requires a TTY"),
+      "non-TTY TUI did not explain the TTY requirement"
+    );
     return {
       score: 1,
       assertions: ["non-TTY TUI exits clearly", "TTY requirement message emitted"]
@@ -1476,7 +1926,10 @@ function writeReport(report) {
 
 async function main() {
   assert(existsSync(cliPath), "dist/cli.js not found; run npm run build first");
-  assert(existsSync(harnessReportPath), "dist/harness-report.js not found; run npm run build first");
+  assert(
+    existsSync(harnessReportPath),
+    "dist/harness-report.js not found; run npm run build first"
+  );
   harnessReport = await import("../dist/harness-report.js");
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
@@ -1487,10 +1940,16 @@ async function main() {
     ["tool feedback ranking", scenarioToolFeedbackRanking],
     ["plan mode", scenarioPlanMode],
     ["control approval flow", scenarioControlApprovalFlow],
-    ["TUI requires TTY", scenarioTuiRequiresTty],
+    ["TUI requires TTY", scenarioTuiRequiresTty]
   ];
-  if (process.env.MAGI_BLACKBOX_TUI === "1" && process.env.MAGI_BLACKBOX_TUI_FORCE !== "1" && process.env.CI === "true") {
-    console.log("\nSkipping interactive TUI scenario in CI; set MAGI_BLACKBOX_TUI_FORCE=1 to force it.");
+  if (
+    process.env.MAGI_BLACKBOX_TUI === "1" &&
+    process.env.MAGI_BLACKBOX_TUI_FORCE !== "1" &&
+    process.env.CI === "true"
+  ) {
+    console.log(
+      "\nSkipping interactive TUI scenario in CI; set MAGI_BLACKBOX_TUI_FORCE=1 to force it."
+    );
   } else if (process.env.MAGI_BLACKBOX_TUI === "1") {
     scenarios.push(["interactive TUI", scenarioInteractiveTui]);
   }
@@ -1501,14 +1960,18 @@ async function main() {
   const report = harnessReport.buildHarnessReport({
     name: "blackbox-e2e",
     startedAt,
-    scenarios: results,
+    scenarios: results
   });
   writeReport(report);
   if (report.status !== "passed") {
-    console.error(`\nBlack-box E2E matrix failed (${report.summary.failed}/${report.summary.total} scenarios).`);
+    console.error(
+      `\nBlack-box E2E matrix failed (${report.summary.failed}/${report.summary.total} scenarios).`
+    );
     process.exit(1);
   }
-  console.log(`\nBlack-box E2E matrix passed (${report.summary.passed} scenarios, score=${report.summary.score.toFixed(2)}).`);
+  console.log(
+    `\nBlack-box E2E matrix passed (${report.summary.passed} scenarios, score=${report.summary.score.toFixed(2)}).`
+  );
 }
 
 main().catch((error) => {

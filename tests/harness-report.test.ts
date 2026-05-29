@@ -19,7 +19,11 @@ describe("harness report", () => {
           durationMs: 1200,
           score: 1,
           failureKind: null,
-          details: { provider: { callCount: 5 } }
+          details: {
+            provider: { callCount: 5, toolCounts: { FileRead: 1, FilePatch: 2 } },
+            assertions: ["report written", "patch applied"],
+            filesVerified: ["reports/e2e-result.md"]
+          }
         },
         {
           name: "tool feedback ranking",
@@ -28,7 +32,11 @@ describe("harness report", () => {
           score: 0,
           failureKind: "tool",
           error: "ToolSearch did not rank successful Glob ahead after feedback",
-          details: { provider: { callCount: 2 } }
+          details: {
+            provider: { callCount: 2, toolCounts: { Grep: 4, Glob: 4 } },
+            toolCounts: { ToolSearch: 1 },
+            assertions: ["ranking checked"]
+          }
         }
       ]
     });
@@ -45,7 +53,29 @@ describe("harness report", () => {
         successRate: 0.5,
         score: 0.5,
         providerCalls: 7,
-        failureKinds: { tool: 1 }
+        providerCallsPerScenario: 3.5,
+        assertions: 3,
+        filesVerified: 1,
+        toolEfficiency: {
+          toolCallCount: 12,
+          uniqueToolCount: 5,
+          toolCallsPerScenario: 6,
+          topTools: [
+            { name: "Glob", count: 4 },
+            { name: "Grep", count: 4 },
+            { name: "FilePatch", count: 2 },
+            { name: "FileRead", count: 1 },
+            { name: "ToolSearch", count: 1 }
+          ]
+        },
+        failureKinds: { tool: 1 },
+        regressions: [
+          {
+            scenario: "tool feedback ranking",
+            failureKind: "tool",
+            error: "ToolSearch did not rank successful Glob ahead after feedback"
+          }
+        ]
       }
     });
   });

@@ -88,10 +88,7 @@ try {
     assert(grepIntentFailures >= 4, "Grep workspace-search intent failures were not recorded");
     assert(globIntentSuccesses >= 4, "Glob workspace-search intent successes were not recorded");
     assert(grepPathFailures >= 4, "Grep path failure kind was not recorded");
-    assert(
-      grepIntentPathFailures >= 4,
-      "Grep workspace-search path failure kind was not recorded"
-    );
+    assert(grepIntentPathFailures >= 4, "Grep workspace-search path failure kind was not recorded");
 
     assert(state.coreToolsExposed, "core tool exposure was not verified");
     assert(state.deferredToolsHidden, "deferred tool hiding was not verified");
@@ -260,6 +257,7 @@ function createRouter(state) {
 
 async function startProvider({ routeRequest }) {
   const calls = [];
+  const toolCounts = {};
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -274,6 +272,12 @@ async function startProvider({ routeRequest }) {
         };
         calls.push(call);
         const result = routeRequest(call);
+        for (const toolCall of (result.body ?? result).choices?.[0]?.message?.tool_calls ?? []) {
+          const toolName = toolCall.function?.name;
+          if (toolName) {
+            toolCounts[toolName] = (toolCounts[toolName] ?? 0) + 1;
+          }
+        }
         response.writeHead(result.status ?? 200, { "content-type": "application/json" });
         response.end(JSON.stringify(result.body ?? result));
       } catch (error) {
@@ -305,7 +309,8 @@ async function startProvider({ routeRequest }) {
         callCount: calls.length,
         models: Array.from(models).sort(),
         exposedToolCount: exposedTools.size,
-        exposedTools: Array.from(exposedTools).sort()
+        exposedTools: Array.from(exposedTools).sort(),
+        toolCounts
       };
     },
     close: () => new Promise((resolve) => server.close(resolve))

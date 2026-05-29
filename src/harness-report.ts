@@ -17,6 +17,13 @@ export interface HarnessScenarioResult {
   details?: Record<string, unknown>;
 }
 
+export interface HarnessToolEfficiency {
+  toolCallCount: number;
+  uniqueToolCount: number;
+  toolCallsPerScenario: number;
+  topTools: Array<{ name: string; count: number }>;
+}
+
 export interface HarnessReport {
   version: 1;
   name: string;
@@ -31,7 +38,12 @@ export interface HarnessReport {
     successRate: number;
     score: number;
     providerCalls: number;
+    providerCallsPerScenario: number;
+    assertions: number;
+    filesVerified: number;
+    toolEfficiency: HarnessToolEfficiency;
     failureKinds: Record<string, number>;
+    regressions: Array<{ scenario: string; failureKind: HarnessFailureKind; error?: string }>;
   };
   scenarios: HarnessScenarioResult[];
 }
@@ -71,17 +83,37 @@ export function buildHarnessReport(input: {
   const failureKinds: Record<string, number> = {};
   let providerCalls = 0;
   let score = 0;
+  let assertions = 0;
+  let filesVerified = 0;
+  const toolCounts = new Map<string, number>();
+  const regressions: Array<{ scenario: string; failureKind: HarnessFailureKind; error?: string }> =
+    [];
   for (const result of input.scenarios) {
     score += result.score;
     if (result.failureKind) {
       failureKinds[result.failureKind] = (failureKinds[result.failureKind] ?? 0) + 1;
+      regressions.push({
+        scenario: result.name,
+        failureKind: result.failureKind,
+        error: result.error
+      });
     }
     const calls = readProviderCallCount(result.details);
     if (calls !== undefined) {
       providerCalls += calls;
     }
+    assertions += readStringList(result.details?.assertions).length;
+    filesVerified += readStringList(result.details?.filesVerified).length;
+    for (const [toolName, count] of Object.entries(readToolCounts(result.details))) {
+      toolCounts.set(toolName, (toolCounts.get(toolName) ?? 0) + count);
+    }
   }
   const total = input.scenarios.length;
+  const toolCallCount = [...toolCounts.values()].reduce((sum, value) => sum + value, 0);
+  const topTools = [...toolCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8)
+    .map(([name, count]) => ({ name, count }));
   return {
     version: 1,
     name: input.name,
@@ -96,7 +128,17 @@ export function buildHarnessReport(input: {
       successRate: total === 0 ? 0 : passed / total,
       score: total === 0 ? 0 : score / total,
       providerCalls,
-      failureKinds
+      providerCallsPerScenario: total === 0 ? 0 : providerCalls / total,
+      assertions,
+      filesVerified,
+      toolEfficiency: {
+        toolCallCount,
+        uniqueToolCount: toolCounts.size,
+        toolCallsPerScenario: total === 0 ? 0 : toolCallCount / total,
+        topTools
+      },
+      failureKinds,
+      regressions
     },
     scenarios: input.scenarios
   };
@@ -109,4 +151,43 @@ function readProviderCallCount(details: Record<string, unknown> | undefined): nu
   }
   const callCount = (provider as Record<string, unknown>).callCount;
   return typeof callCount === "number" && Number.isFinite(callCount) ? callCount : undefined;
+}
+
+function readStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
+}
+
+function readToolCounts(details: Record<string, unknown> | undefined): Record<string, number> {
+  const fromDetails = readNumberRecord(details?.toolCounts);
+  const fromProvider = readNumberRecord(readRecord(details?.provider).toolCounts);
+  return mergeNumberRecords(fromProvider, fromDetails);
+}
+
+function readNumberRecord(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const output: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      output[key] = raw;
+    }
+  }
+  return output;
+}
+
+function mergeNumberRecords(...records: Array<Record<string, number>>): Record<string, number> {
+  const output: Record<string, number> = {};
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      output[key] = (output[key] ?? 0) + value;
+    }
+  }
+  return output;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
