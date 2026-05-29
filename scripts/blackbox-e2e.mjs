@@ -311,6 +311,7 @@ function createComplexRouter() {
       assert(toolNames.includes("FilePatch"), "FilePatch was not available as a core tool");
       assert(!toolNames.includes("LearningDraft"), "LearningDraft should start as a deferred tool");
       return toolResponse([
+        toolCall("tool-search-patch", "ToolSearch", { query: "apply a multi-line patch to a file", max_results: 3 }),
         toolCall("tool-select-learning", "ToolSearch", { query: "select:LearningDraft" }),
         toolCall("workspace-diag", "WorkspaceDiagnostics", {}),
       ]);
@@ -318,6 +319,8 @@ function createComplexRouter() {
 
     if (complexTurns === 2) {
       assert(toolNames.includes("LearningDraft"), "LearningDraft was not revealed after ToolSearch");
+      assert(transcript.includes("1. FilePatch"), "ToolSearch did not rank FilePatch first for patch intent");
+      assert(transcript.includes("intent: file-edit"), "ToolSearch did not report file-edit intent");
       assert(transcript.includes("Workspace Diagnostics"), "WorkspaceDiagnostics result was not returned");
       return toolResponse([
         toolCall("write-report", "FileWrite", {

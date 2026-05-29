@@ -1507,6 +1507,55 @@ describe("tool registry", () => {
     expect(missing.content).toContain("Tool not found: Nope");
   });
 
+  it("ranks ToolSearch results by task intent", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const cases = [
+      {
+        query: "apply a multi-line patch to a file",
+        top: "FilePatch",
+        contains: ["FilePatch", "FileEdit"]
+      },
+      {
+        query: "find TypeScript symbol references",
+        top: "LSP",
+        contains: ["LSP"]
+      },
+      {
+        query: "remember this workflow for future sessions",
+        top: "Memorize",
+        contains: ["Memorize", "SessionSearch"]
+      },
+      {
+        query: "automate browser click and screenshot",
+        top: "Browser",
+        contains: ["Browser"]
+      },
+      {
+        query: "run focused verification tests",
+        top: "VerifyPlanExecution",
+        contains: ["VerifyPlanExecution"]
+      }
+    ];
+
+    for (const item of cases) {
+      const result = await executeRegisteredTool({
+        cwd: workspace,
+        toolUse: {
+          type: "tool-use",
+          id: `tool-rank-${item.top}`,
+          name: "ToolSearch",
+          input: { query: item.query, max_results: 5 }
+        }
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain("intent:");
+      expect(firstToolSearchResult(result.content)).toBe(item.top);
+      for (const toolName of item.contains) {
+        expect(result.content).toContain(toolName);
+      }
+    }
+  });
+
   it("diagnoses workspace manifests, scripts, languages, commands, and git state without executing commands", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-diagnostics-"));
     initGitRepo(workspace);
@@ -1920,4 +1969,8 @@ function gitOutput(cwd: string, args: string[]): string {
     throw new Error(result.stderr || `git ${args.join(" ")} failed`);
   }
   return result.stdout;
+}
+
+function firstToolSearchResult(output: string): string | undefined {
+  return output.match(/^1\. (\S+)/m)?.[1];
 }
