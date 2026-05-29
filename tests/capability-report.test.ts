@@ -313,7 +313,18 @@ describe("capability report", () => {
         panelSseJobStreamSeen: false,
         mobileBrowserViewportSeen: false,
         mobileBrowserStreamRendered: false,
-        mobileBrowserCancelRendered: false
+        mobileBrowserCancelRendered: false,
+        peerCredentialsSaved: false,
+        peerSavedListed: false,
+        peerAgentToolSearched: false,
+        peerAgentSchemaRevealed: false,
+        peerAgentDispatched: false,
+        peerDispatchSingleAgentCall: false,
+        peerDispatchCompleted: false,
+        peerDispatchResultReturned: false,
+        peerRemoteSessionCreated: false,
+        peerRemoteJobCompleted: false,
+        peerDispatchAuditPersisted: false
       })
     });
 
@@ -334,7 +345,18 @@ describe("capability report", () => {
         "panelSseJobStreamSeen=false",
         "mobileBrowserViewportSeen=false",
         "mobileBrowserStreamRendered=false",
-        "mobileBrowserCancelRendered=false"
+        "mobileBrowserCancelRendered=false",
+        "peerCredentialsSaved=false",
+        "peerSavedListed=false",
+        "peerAgentToolSearched=false",
+        "peerAgentSchemaRevealed=false",
+        "peerAgentDispatched=false",
+        "peerDispatchSingleAgentCall=false",
+        "peerDispatchCompleted=false",
+        "peerDispatchResultReturned=false",
+        "peerRemoteSessionCreated=false",
+        "peerRemoteJobCompleted=false",
+        "peerDispatchAuditPersisted=false"
       ])
     );
   });
@@ -633,6 +655,17 @@ function controlApiReport(
     mobileBrowserStreamRendered: boolean;
     mobileBrowserCancelRequested: boolean;
     mobileBrowserCancelRendered: boolean;
+    peerCredentialsSaved: boolean;
+    peerSavedListed: boolean;
+    peerAgentToolSearched: boolean;
+    peerAgentSchemaRevealed: boolean;
+    peerAgentDispatched: boolean;
+    peerDispatchSingleAgentCall: boolean;
+    peerDispatchCompleted: boolean;
+    peerDispatchResultReturned: boolean;
+    peerRemoteSessionCreated: boolean;
+    peerRemoteJobCompleted: boolean;
+    peerDispatchAuditPersisted: boolean;
   }> = {}
 ): Record<string, unknown> {
   return {
@@ -681,6 +714,17 @@ function controlApiReport(
           mobileBrowserStreamRendered: true,
           mobileBrowserCancelRequested: true,
           mobileBrowserCancelRendered: true,
+          peerCredentialsSaved: true,
+          peerSavedListed: true,
+          peerAgentToolSearched: true,
+          peerAgentSchemaRevealed: true,
+          peerAgentDispatched: true,
+          peerDispatchSingleAgentCall: true,
+          peerDispatchCompleted: true,
+          peerDispatchResultReturned: true,
+          peerRemoteSessionCreated: true,
+          peerRemoteJobCompleted: true,
+          peerDispatchAuditPersisted: true,
           ...overrides
         }
       }

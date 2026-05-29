@@ -486,7 +486,18 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "mobileBrowserMessageSent",
     "mobileBrowserStreamRendered",
     "mobileBrowserCancelRequested",
-    "mobileBrowserCancelRendered"
+    "mobileBrowserCancelRendered",
+    "peerCredentialsSaved",
+    "peerSavedListed",
+    "peerAgentToolSearched",
+    "peerAgentSchemaRevealed",
+    "peerAgentDispatched",
+    "peerDispatchSingleAgentCall",
+    "peerDispatchCompleted",
+    "peerDispatchResultReturned",
+    "peerRemoteSessionCreated",
+    "peerRemoteJobCompleted",
+    "peerDispatchAuditPersisted"
   ];
   for (const key of required) {
     if (details[key] !== true) {
@@ -533,7 +544,18 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       mobileBrowserMessageSent: details.mobileBrowserMessageSent === true,
       mobileBrowserStreamRendered: details.mobileBrowserStreamRendered === true,
       mobileBrowserCancelRequested: details.mobileBrowserCancelRequested === true,
-      mobileBrowserCancelRendered: details.mobileBrowserCancelRendered === true
+      mobileBrowserCancelRendered: details.mobileBrowserCancelRendered === true,
+      peerCredentialsSaved: details.peerCredentialsSaved === true,
+      peerSavedListed: details.peerSavedListed === true,
+      peerAgentToolSearched: details.peerAgentToolSearched === true,
+      peerAgentSchemaRevealed: details.peerAgentSchemaRevealed === true,
+      peerAgentDispatched: details.peerAgentDispatched === true,
+      peerDispatchSingleAgentCall: details.peerDispatchSingleAgentCall === true,
+      peerDispatchCompleted: details.peerDispatchCompleted === true,
+      peerDispatchResultReturned: details.peerDispatchResultReturned === true,
+      peerRemoteSessionCreated: details.peerRemoteSessionCreated === true,
+      peerRemoteJobCompleted: details.peerRemoteJobCompleted === true,
+      peerDispatchAuditPersisted: details.peerDispatchAuditPersisted === true
     },
     failures
   };

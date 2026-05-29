@@ -65,7 +65,18 @@ try {
     mobileBrowserMessageSent: false,
     mobileBrowserStreamRendered: false,
     mobileBrowserCancelRequested: false,
-    mobileBrowserCancelRendered: false
+    mobileBrowserCancelRendered: false,
+    peerCredentialsSaved: false,
+    peerSavedListed: false,
+    peerAgentToolSearched: false,
+    peerAgentSchemaRevealed: false,
+    peerAgentDispatched: false,
+    peerDispatchSingleAgentCall: false,
+    peerDispatchCompleted: false,
+    peerDispatchResultReturned: false,
+    peerRemoteSessionCreated: false,
+    peerRemoteJobCompleted: false,
+    peerDispatchAuditPersisted: false
   };
   const controlPort = randomControlPort();
   const providerLog = path.join(root, "provider-log.json");
@@ -104,6 +115,7 @@ try {
     await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
     await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
+    await exercisePeerDispatchFlow({ provider, state });
 
     assertAllState(state);
     const report = harnessReport.buildHarnessReport({
@@ -127,7 +139,7 @@ try {
     mkdirSync(path.dirname(reportPath), { recursive: true });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     console.log(
-      "Control API eval passed (pairing URL, mDNS discovery, approval, SSE, job cancel, approval cancel, session resume, mobile browser panel)."
+      "Control API eval passed (pairing URL, mDNS discovery, approval, SSE, job cancel, approval cancel, session resume, mobile browser panel, peer dispatch)."
     );
     console.log(`Control API report: ${reportPath}`);
   } catch (error) {
@@ -525,9 +537,124 @@ async function exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state }) {
   }
 }
 
+async function exercisePeerDispatchFlow({ provider, state }) {
+  const peerConfigDir = path.join(root, "peer-config");
+  const peerWorkDir = path.join(root, "peer-work");
+  const peerControlPort = randomControlPort();
+  mkdirSync(peerConfigDir, { recursive: true });
+  mkdirSync(peerWorkDir, { recursive: true });
+  writeFileSync(
+    path.join(peerConfigDir, "config.yaml"),
+    renderConfig({ port: provider.port }),
+    "utf8"
+  );
+
+  let peerServe;
+  try {
+    peerServe = await startServe({
+      configDir: peerConfigDir,
+      workDir: peerWorkDir,
+      controlPort: peerControlPort
+    });
+    const peerHealth = await getJson(`${peerServe.url}/health`);
+    assert(peerHealth.ok === true, "peer control health check failed");
+
+    const peerPairing = await postJson(`${peerServe.url}/pairing`, {
+      name: "peer-dispatch-eval"
+    });
+    assert(peerPairing.deviceId && peerPairing.token, "peer pairing did not return credentials");
+    const peerHeaders = authHeaders(peerPairing);
+
+    await runCli([
+      "peers",
+      "add",
+      "peer-eval",
+      peerServe.url,
+      peerPairing.deviceId,
+      peerPairing.token
+    ]);
+    state.peerCredentialsSaved = true;
+
+    const saved = await runCli(["peers", "saved"]);
+    state.peerSavedListed = saved.includes("peer-eval") && saved.includes(peerServe.url);
+
+    const output = await runCli([
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Dispatch a sub-agent to peer-eval using Agent target and report its result."
+    ]);
+    state.peerDispatchCompleted = output.includes("CONTROL PEER DISPATCH DONE");
+    assert(state.peerDispatchCompleted, "peer dispatch final answer missing");
+
+    state.peerDispatchResultReturned = output.includes("PEER DISPATCH OK");
+    state.peerDispatchSingleAgentCall = provider.summary().toolCounts.Agent === 1;
+    assert(state.peerDispatchSingleAgentCall, "peer dispatch should call Agent exactly once");
+
+    const peerSessions = await getJson(`${peerServe.url}/sessions`, peerHeaders);
+    const remoteSession = (peerSessions.sessions ?? []).find(
+      (session) =>
+        session.title?.includes("Return exactly PEER DISPATCH OK") ||
+        session.messageCount >= 2
+    );
+    state.peerRemoteSessionCreated = Boolean(remoteSession);
+
+    const peerJobs = await getJson(`${peerServe.url}/jobs`, peerHeaders);
+    state.peerRemoteJobCompleted = (peerJobs.jobs ?? []).some((job) => job.status === "completed");
+
+    const audit = await getJson(`${peerServe.url}/events.json?limit=100`, peerHeaders);
+    state.peerDispatchAuditPersisted = (audit.events ?? []).some(
+      (event) => event.action === "agent.query.completed"
+    );
+  } finally {
+    if (peerServe) {
+      await peerServe.close();
+    }
+  }
+}
+
 function createRouter(state) {
   return ({ body, transcript }) => {
     const latestUser = latestUserFromBody(body);
+    if (latestUser.includes("Return exactly PEER DISPATCH OK")) {
+      return messageText("PEER DISPATCH OK");
+    }
+    if (transcript.includes("PEER DISPATCH OK") && transcript.includes("Agent")) {
+      state.peerDispatchResultReturned = true;
+      return messageText("CONTROL PEER DISPATCH DONE");
+    }
+    if (
+      latestUser.includes("Dispatch a sub-agent to peer-eval") &&
+      transcript.includes("Tool: Agent") &&
+      transcript.includes("peer-eval")
+    ) {
+      state.peerAgentSchemaRevealed = true;
+      state.peerAgentDispatched = true;
+      return toolResponse([
+        toolCall("dispatch-peer-agent", "Agent", {
+          description: "peer dispatch check",
+          prompt: "Return exactly PEER DISPATCH OK.",
+          subagent_type: "general",
+          target: "peer-eval"
+        })
+      ]);
+    }
+    if (latestUser.includes("Dispatch a sub-agent to peer-eval")) {
+      assert(
+        !body.tools?.some((tool) => tool.function?.name === "Agent"),
+        "Agent should start deferred"
+      );
+      state.peerAgentToolSearched = true;
+      return toolResponse([
+        toolCall("select-agent-tool", "ToolSearch", {
+          query: "select:Agent"
+        })
+      ]);
+    }
     if (latestUser.includes("Panel mobile browser cancel flow")) {
       return streamTextResponse(["mobile ", "cancel "]);
     }
@@ -791,6 +918,61 @@ async function startServe({ configDir, workDir, controlPort }) {
     stderr: () => stderr,
     close
   };
+}
+
+function runCli(args, timeoutMs = 45_000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(nodeBin, [cliPath, "--no-color", ...args], {
+      cwd: workDir,
+      env: {
+        ...process.env,
+        MAGI_CONFIG_DIR: configDir,
+        MAGI_INTERACTION_TIMEOUT_MS: "10000",
+        MAGI_OPENAI_API_KEY: "test-key",
+        NO_COLOR: "1"
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        reject(
+          new Error(
+            `control api eval command timed out after ${timeoutMs}ms\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
+          )
+        );
+        return;
+      }
+      if (code !== 0) {
+        reject(
+          new Error(
+            `control api eval command failed with exit ${code ?? signal}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
+          )
+        );
+        return;
+      }
+      resolve(stdout);
+    });
+  });
 }
 
 async function requestJson(url, { method = "GET", body, headers = {}, expectedStatus = 200 } = {}) {
