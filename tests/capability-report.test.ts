@@ -100,7 +100,11 @@ describe("capability report", () => {
         toolSearchRankedFilePatch: true,
         patchUsageRate: 2 / 3
       }),
-      goalPlan: goalPlanReport({ completedGoalSuppressed: false, planReviewPersisted: false }),
+      goalPlan: goalPlanReport({
+        completedGoalSuppressed: false,
+        blockedGoalPersisted: false,
+        planReviewPersisted: false
+      }),
       toolDiscovery: toolDiscoveryReport(),
       controlApi: controlApiReport()
     });
@@ -108,7 +112,11 @@ describe("capability report", () => {
     const goalPlan = report.checks.find((check) => check.id === "goal-plan");
     expect(report.status).toBe("failed");
     expect(goalPlan?.failures).toEqual(
-      expect.arrayContaining(["completedGoalSuppressed=false", "planReviewPersisted=false"])
+      expect.arrayContaining([
+        "completedGoalSuppressed=false",
+        "blockedGoalPersisted=false",
+        "planReviewPersisted=false"
+      ])
     );
   });
 
@@ -260,9 +268,11 @@ function goalPlanReport(
   overrides: Partial<{
     activeGoalContextSeen: boolean;
     completedGoalSuppressed: boolean;
+    blockedGoalSuppressed: boolean;
     writeDeniedInPlanMode: boolean;
     planSubmittedToModel: boolean;
     planReviewPersisted: boolean;
+    blockedGoalPersisted: boolean;
     goalCompleted: boolean;
   }> = {}
 ): Record<string, unknown> {
@@ -279,9 +289,11 @@ function goalPlanReport(
           provider: { callCount: 5 },
           activeGoalContextSeen: true,
           completedGoalSuppressed: true,
+          blockedGoalSuppressed: true,
           writeDeniedInPlanMode: true,
           planSubmittedToModel: true,
           planReviewPersisted: true,
+          blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides
         }

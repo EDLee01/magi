@@ -20,7 +20,9 @@ const root = process.env.MAGI_KEEP_GOAL_PLAN_EVAL_TMP
 const configDir = path.join(root, "config");
 const workDir = path.join(root, "work");
 const sessionId = "goal-plan-eval-session";
-const goalObjective = "deliver Goal/Plan lifecycle eval";
+const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
+const blockedGoalObjective = "wait for Goal/Plan blocked audit";
+const completedGoalObjective = "complete Goal/Plan lifecycle eval";
 const deniedWritePath = "blocked-plan-write.txt";
 const planText = [
   "1. Inspect goal and plan state",
@@ -39,24 +41,33 @@ try {
   const state = {
     activeGoalContextSeen: false,
     completedGoalSuppressed: false,
+    blockedGoalSuppressed: false,
     writeDeniedInPlanMode: false,
-    planSubmittedToModel: false
+    planSubmittedToModel: false,
+    blockedGoalPersisted: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
-    writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }), "utf8");
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig({ port: provider.port }),
+      "utf8"
+    );
 
     await runCli(
       ["--session-id", sessionId, "--model", "main", "-p", "Prepare Goal/Plan eval session."],
       "seed session"
     );
     const createdGoal = await runCli(
-      ["goal", goalObjective, "--session-id", sessionId],
+      ["goal", activeGoalObjective, "--session-id", sessionId],
       "goal start"
     );
-    assert(createdGoal.includes(`Goal started: ${goalObjective}`), "goal start did not confirm");
+    assert(
+      createdGoal.includes(`Goal started: ${activeGoalObjective}`),
+      "goal start did not confirm"
+    );
     const goalStatus = await runCli(["goal", "--session-id", sessionId], "goal status active");
-    assert(goalStatus.includes(`Goal: ${goalObjective}`), "active goal was not visible");
+    assert(goalStatus.includes(`Goal: ${activeGoalObjective}`), "active goal was not visible");
 
     const activeContext = await runCli(
       [
@@ -98,11 +109,58 @@ try {
     assert(planList.includes("Submitted plans:"), "plan list did not show submitted plans");
     assert(planList.includes("submitted"), "plan list did not include submitted status");
 
+    const blockedGoal = await runCli(
+      ["goal", blockedGoalObjective, "--session-id", sessionId],
+      "blocked goal start"
+    );
+    assert(
+      blockedGoal.includes(`Goal started: ${blockedGoalObjective}`),
+      "blocked goal start did not confirm"
+    );
+    const blocked = await runCli(
+      ["goal", "blocked", "waiting on external review", "--session-id", sessionId],
+      "goal blocked"
+    );
+    assert(blocked.includes(`Goal blocked: ${blockedGoalObjective}`), "goal blocked failed");
+    const blockedStatus = await runCli(["goal", "--session-id", sessionId], "goal status blocked");
+    assert(blockedStatus.includes("No active goal"), "blocked goal stayed active");
+    const blockedList = await runCli(["goal", "list", "--session-id", sessionId], "goal list");
+    assert(blockedList.includes("blocked"), "goal list missed blocked status");
+    assert(blockedList.includes(blockedGoalObjective), "goal list missed blocked objective");
+    const blockedContext = await runCli(
+      [
+        "--session-id",
+        sessionId,
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "Verify blocked goal is no longer injected."
+      ],
+      "blocked goal context"
+    );
+    assert(
+      blockedContext.includes("Blocked goal is no longer injected"),
+      "blocked goal prompt failed"
+    );
+
+    const newGoal = await runCli(
+      ["goal", completedGoalObjective, "--session-id", sessionId],
+      "completion goal start"
+    );
+    assert(
+      newGoal.includes(`Goal started: ${completedGoalObjective}`),
+      "completion goal start failed"
+    );
     const completed = await runCli(
       ["goal", "done", "verified by goal-plan eval", "--session-id", sessionId],
       "goal done"
     );
-    assert(completed.includes(`Goal completed: ${goalObjective}`), "goal completion failed");
+    assert(
+      completed.includes(`Goal completed: ${completedGoalObjective}`),
+      "goal completion failed"
+    );
     const inactiveGoalStatus = await runCli(
       ["goal", "--session-id", sessionId],
       "goal status completed"
@@ -128,9 +186,12 @@ try {
     );
 
     const goalCompleted = assertGoalStoreCompleted();
+    const blockedGoalPersisted = assertGoalStoreBlocked();
+    state.blockedGoalPersisted = blockedGoalPersisted;
     const planReviewPersisted = assertPlanStoreSubmitted();
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
+    assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
     assert(state.writeDeniedInPlanMode, "provider did not observe plan-mode write denial");
     assert(state.planSubmittedToModel, "provider did not observe submitted plan feedback");
 
@@ -148,9 +209,11 @@ try {
             provider: { callCount: provider.calls.length },
             activeGoalContextSeen: state.activeGoalContextSeen,
             completedGoalSuppressed: state.completedGoalSuppressed,
+            blockedGoalSuppressed: state.blockedGoalSuppressed,
             writeDeniedInPlanMode: state.writeDeniedInPlanMode,
             planSubmittedToModel: state.planSubmittedToModel,
             planReviewPersisted,
+            blockedGoalPersisted,
             goalCompleted
           }
         }
@@ -179,7 +242,7 @@ function createRouter(state) {
     if (latestUser.includes("Check active Goal/Plan eval context")) {
       assert(systemPrompt.includes("<active_thread_goal>"), "active goal was not injected");
       assert(
-        systemPrompt.includes(`Objective: ${goalObjective}`),
+        systemPrompt.includes(`Objective: ${activeGoalObjective}`),
         "active goal objective was not injected"
       );
       state.activeGoalContextSeen = true;
@@ -218,9 +281,22 @@ function createRouter(state) {
 
     if (latestUser.includes("Verify completed goal is no longer injected")) {
       assert(!systemPrompt.includes("<active_thread_goal>"), "completed goal was still injected");
-      assert(!systemPrompt.includes(goalObjective), "completed goal objective was still injected");
+      assert(
+        !systemPrompt.includes(completedGoalObjective),
+        "completed goal objective was still injected"
+      );
       state.completedGoalSuppressed = true;
       return messageText("Completed goal is no longer injected.");
+    }
+
+    if (latestUser.includes("Verify blocked goal is no longer injected")) {
+      assert(!systemPrompt.includes("<active_thread_goal>"), "blocked goal was still injected");
+      assert(
+        !systemPrompt.includes(blockedGoalObjective),
+        "blocked goal objective was still injected"
+      );
+      state.blockedGoalSuppressed = true;
+      return messageText("Blocked goal is no longer injected.");
     }
 
     return messageText("OK");
@@ -323,11 +399,21 @@ function runCli(args, label, timeoutMs = 30_000) {
 
 function assertGoalStoreCompleted() {
   const goals = JSON.parse(readFileSync(path.join(configDir, "state", "goals.json"), "utf8")).goals;
-  const goal = goals.find((candidate) => candidate.objective === goalObjective);
+  const goal = goals.find((candidate) => candidate.objective === completedGoalObjective);
   assert(goal, "goal record was not persisted");
   assert(goal.status === "completed", "goal record was not completed");
   assert(goal.completedAt, "goal record missed completedAt");
   assert(goal.note === "verified by goal-plan eval", "goal record missed completion note");
+  return true;
+}
+
+function assertGoalStoreBlocked() {
+  const goals = JSON.parse(readFileSync(path.join(configDir, "state", "goals.json"), "utf8")).goals;
+  const goal = goals.find((candidate) => candidate.objective === blockedGoalObjective);
+  assert(goal, "blocked goal record was not persisted");
+  assert(goal.status === "blocked", "blocked goal record was not blocked");
+  assert(goal.blockedAt, "blocked goal record missed blockedAt");
+  assert(goal.note === "waiting on external review", "blocked goal record missed blocked note");
   return true;
 }
 

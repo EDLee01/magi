@@ -248,7 +248,7 @@
           <tr>
             <td>Goal / Plan Harness</td>
             <td>计划、todo、完成审计、阻塞审计由外层状态机维护。</td>
-            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划；独立 goal/plan eval 已覆盖 active goal 注入、完成后不注入、plan mode 写入拒绝、plan review 持久化和 goal completion。</td>
+            <td><span class="tag next">进行中</span> ExitPlanMode 会持久化 plan review，CLI 可查看最近计划；独立 goal/plan eval 已覆盖 active goal 注入、completed/blocked 后不注入、plan mode 写入拒绝、plan review 持久化、blocked audit 和 goal completion。</td>
             <td><code>tests/plan-state.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>tests/cli.test.ts</code>、<code>scripts/goal-plan-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>

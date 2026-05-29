@@ -216,9 +216,11 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const failures = [...base.failures];
   if (details.activeGoalContextSeen !== true) failures.push("activeGoalContextSeen=false");
   if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
+  if (details.blockedGoalSuppressed !== true) failures.push("blockedGoalSuppressed=false");
   if (details.writeDeniedInPlanMode !== true) failures.push("writeDeniedInPlanMode=false");
   if (details.planSubmittedToModel !== true) failures.push("planSubmittedToModel=false");
   if (details.planReviewPersisted !== true) failures.push("planReviewPersisted=false");
+  if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
     ...base,
@@ -228,9 +230,11 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       ...base.metrics,
       activeGoalContextSeen: details.activeGoalContextSeen === true,
       completedGoalSuppressed: details.completedGoalSuppressed === true,
+      blockedGoalSuppressed: details.blockedGoalSuppressed === true,
       writeDeniedInPlanMode: details.writeDeniedInPlanMode === true,
       planSubmittedToModel: details.planSubmittedToModel === true,
       planReviewPersisted: details.planReviewPersisted === true,
+      blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },
     failures
