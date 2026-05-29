@@ -277,6 +277,8 @@ describe("capability report", () => {
         crossSessionPlanReviewListed: false,
         planRevisionFeedbackSeen: false,
         planRevisionPersisted: false,
+        multiRoundPlanFeedbackSeen: false,
+        secondPlanRevisionPersisted: false,
         planApprovalSeen: false,
         planApprovalPersisted: false,
         planRevisionChainLinked: false,
@@ -284,6 +286,9 @@ describe("capability report", () => {
         inheritedPlanContextSeen: false,
         inheritedPlanExecutionFollowed: false,
         inheritedPlanDeviationCorrected: false,
+        repeatedPlanDeviationBlocked: false,
+        multiStepPlanDeviationRecovered: false,
+        migrationPlanExecutionVerified: false,
         crossSessionPlanAdopted: false,
         crossSessionAdoptedPlanContextSeen: false,
         assertions: 3,
@@ -309,6 +314,8 @@ describe("capability report", () => {
         "crossSessionPlanReviewListed=false",
         "planRevisionFeedbackSeen=false",
         "planRevisionPersisted=false",
+        "multiRoundPlanFeedbackSeen=false",
+        "secondPlanRevisionPersisted=false",
         "planApprovalSeen=false",
         "planApprovalPersisted=false",
         "planRevisionChainLinked=false",
@@ -316,6 +323,9 @@ describe("capability report", () => {
         "inheritedPlanContextSeen=false",
         "inheritedPlanExecutionFollowed=false",
         "inheritedPlanDeviationCorrected=false",
+        "repeatedPlanDeviationBlocked=false",
+        "multiStepPlanDeviationRecovered=false",
+        "migrationPlanExecutionVerified=false",
         "crossSessionPlanAdopted=false",
         "crossSessionAdoptedPlanContextSeen=false"
       ])
@@ -922,6 +932,8 @@ function goalPlanReport(
     crossSessionPlanReviewListed: boolean;
     planRevisionFeedbackSeen: boolean;
     planRevisionPersisted: boolean;
+    multiRoundPlanFeedbackSeen: boolean;
+    secondPlanRevisionPersisted: boolean;
     planApprovalSeen: boolean;
     planApprovalPersisted: boolean;
     planRevisionChainLinked: boolean;
@@ -929,6 +941,9 @@ function goalPlanReport(
     inheritedPlanContextSeen: boolean;
     inheritedPlanExecutionFollowed: boolean;
     inheritedPlanDeviationCorrected: boolean;
+    repeatedPlanDeviationBlocked: boolean;
+    multiStepPlanDeviationRecovered: boolean;
+    migrationPlanExecutionVerified: boolean;
     crossSessionPlanAdopted: boolean;
     crossSessionAdoptedPlanContextSeen: boolean;
     blockedGoalPersisted: boolean;
@@ -944,9 +959,9 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 22,
+      assertions: overrides.assertions ?? 27,
       filesVerified: overrides.filesVerified ?? 4,
-      toolCallCount: overrides.toolCallCount ?? 7,
+      toolCallCount: overrides.toolCallCount ?? 10,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
     }),
     scenarios: [
@@ -959,7 +974,7 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 22 },
+            { length: overrides.assertions ?? 27 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -968,8 +983,9 @@ function goalPlanReport(
           ),
           toolCounts: {
             FileWrite: 3,
-            ExitPlanMode: 3,
-            FileRead: 1
+            ExitPlanMode: 4,
+            FileRead: 2,
+            FilePatch: 1
           },
           activeGoalContextSeen: true,
           completedGoalSuppressed: true,
@@ -980,6 +996,8 @@ function goalPlanReport(
           crossSessionPlanReviewListed: true,
           planRevisionFeedbackSeen: true,
           planRevisionPersisted: true,
+          multiRoundPlanFeedbackSeen: true,
+          secondPlanRevisionPersisted: true,
           planApprovalSeen: true,
           planApprovalPersisted: true,
           planRevisionChainLinked: true,
@@ -987,6 +1005,9 @@ function goalPlanReport(
           inheritedPlanContextSeen: true,
           inheritedPlanExecutionFollowed: true,
           inheritedPlanDeviationCorrected: true,
+          repeatedPlanDeviationBlocked: true,
+          multiStepPlanDeviationRecovered: true,
+          migrationPlanExecutionVerified: true,
           crossSessionPlanAdopted: true,
           crossSessionAdoptedPlanContextSeen: true,
           blockedGoalPersisted: true,

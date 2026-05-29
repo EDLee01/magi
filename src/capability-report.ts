@@ -570,9 +570,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 20) failures.push(`assertions=${assertions}`);
+  if (assertions < 27) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 7) failures.push(`toolCallCount=${toolCallCount}`);
+  if (toolCallCount < 10) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.activeGoalContextSeen !== true) failures.push("activeGoalContextSeen=false");
   if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
@@ -585,6 +585,12 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   }
   if (details.planRevisionFeedbackSeen !== true) failures.push("planRevisionFeedbackSeen=false");
   if (details.planRevisionPersisted !== true) failures.push("planRevisionPersisted=false");
+  if (details.multiRoundPlanFeedbackSeen !== true) {
+    failures.push("multiRoundPlanFeedbackSeen=false");
+  }
+  if (details.secondPlanRevisionPersisted !== true) {
+    failures.push("secondPlanRevisionPersisted=false");
+  }
   if (details.planApprovalSeen !== true) failures.push("planApprovalSeen=false");
   if (details.planApprovalPersisted !== true) failures.push("planApprovalPersisted=false");
   if (details.planRevisionChainLinked !== true) failures.push("planRevisionChainLinked=false");
@@ -597,6 +603,15 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   }
   if (details.inheritedPlanDeviationCorrected !== true) {
     failures.push("inheritedPlanDeviationCorrected=false");
+  }
+  if (details.repeatedPlanDeviationBlocked !== true) {
+    failures.push("repeatedPlanDeviationBlocked=false");
+  }
+  if (details.multiStepPlanDeviationRecovered !== true) {
+    failures.push("multiStepPlanDeviationRecovered=false");
+  }
+  if (details.migrationPlanExecutionVerified !== true) {
+    failures.push("migrationPlanExecutionVerified=false");
   }
   if (details.crossSessionPlanAdopted !== true) failures.push("crossSessionPlanAdopted=false");
   if (details.crossSessionAdoptedPlanContextSeen !== true) {
@@ -623,6 +638,8 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       crossSessionPlanReviewListed: details.crossSessionPlanReviewListed === true,
       planRevisionFeedbackSeen: details.planRevisionFeedbackSeen === true,
       planRevisionPersisted: details.planRevisionPersisted === true,
+      multiRoundPlanFeedbackSeen: details.multiRoundPlanFeedbackSeen === true,
+      secondPlanRevisionPersisted: details.secondPlanRevisionPersisted === true,
       planApprovalSeen: details.planApprovalSeen === true,
       planApprovalPersisted: details.planApprovalPersisted === true,
       planRevisionChainLinked: details.planRevisionChainLinked === true,
@@ -630,6 +647,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       inheritedPlanContextSeen: details.inheritedPlanContextSeen === true,
       inheritedPlanExecutionFollowed: details.inheritedPlanExecutionFollowed === true,
       inheritedPlanDeviationCorrected: details.inheritedPlanDeviationCorrected === true,
+      repeatedPlanDeviationBlocked: details.repeatedPlanDeviationBlocked === true,
+      multiStepPlanDeviationRecovered: details.multiStepPlanDeviationRecovered === true,
+      migrationPlanExecutionVerified: details.migrationPlanExecutionVerified === true,
       crossSessionPlanAdopted: details.crossSessionPlanAdopted === true,
       crossSessionAdoptedPlanContextSeen: details.crossSessionAdoptedPlanContextSeen === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,

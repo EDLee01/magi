@@ -31,16 +31,28 @@ const planText = [
   "2. Verify mutation denial before implementation",
   "3. Persist the plan review before editing"
 ].join("\n");
-const revisionPlanText = ["1. Edit immediately", "2. Verify later"].join("\n");
+const firstRevisionPlanText = ["1. Edit immediately", "2. Verify later"].join("\n");
+const secondRevisionPlanText = [
+  "1. Inspect feedback",
+  "2. Edit inherited-plan-output.txt",
+  "3. Verify later"
+].join("\n");
 const approvedPlanText = [
   "1. Inspect the plan feedback",
-  "2. Read inherited-plan-source.txt before editing",
-  "3. Write inherited-plan-output.txt only after reading"
+  "2. Read migration-source.txt before editing migration-target.txt",
+  "3. Patch migration-target.txt to the migrated policy",
+  "4. Re-read migration-target.txt after patching",
+  "5. Write inherited-plan-output.txt only after migration-target.txt is migrated"
 ].join("\n");
 const inheritedPlanSourcePath = "inherited-plan-source.txt";
 const inheritedPlanOutputPath = "inherited-plan-output.txt";
 const inheritedPlanSourceContent = "source inspected before inherited plan write\n";
 const inheritedPlanOutputContent = "inherited plan executed after read\n";
+const migrationSourcePath = "migration-source.txt";
+const migrationTargetPath = "migration-target.txt";
+const migrationSourceContent = "migration source: move legacy policy to migrated policy\n";
+const migrationTargetBefore = "status: legacy\nsource: old-policy\n";
+const migrationTargetAfter = "status: migrated\nsource: migration-source\n";
 
 let harnessReport;
 
@@ -63,7 +75,10 @@ try {
     inheritedPlanDeviationCorrected: false,
     crossSessionPlanAdopted: false,
     crossSessionAdoptedPlanContextSeen: false,
-    blockedGoalPersisted: false
+    blockedGoalPersisted: false,
+    repeatedPlanDeviationBlocked: false,
+    multiStepPlanDeviationRecovered: false,
+    migrationPlanExecutionVerified: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -73,6 +88,8 @@ try {
       "utf8"
     );
     writeFileSync(path.join(workDir, inheritedPlanSourcePath), inheritedPlanSourceContent, "utf8");
+    writeFileSync(path.join(workDir, migrationSourcePath), migrationSourceContent, "utf8");
+    writeFileSync(path.join(workDir, migrationTargetPath), migrationTargetBefore, "utf8");
 
     await runCli(
       ["--session-id", sessionId, "--model", "main", "-p", "Prepare Goal/Plan eval session."],
@@ -241,13 +258,18 @@ try {
     const crossSessionPlanReviewListed = true;
     const planRevision = await runPlanRevisionApprovalFlow(tools.executeRegisteredTool);
     const planRevisionPersisted = assertPlanStoreRevisionPersisted(planRevision.revisionPlanId);
+    const secondPlanRevisionPersisted = assertPlanStoreSecondRevisionPersisted(
+      planRevision.secondRevisionPlanId
+    );
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
     const planRevisionChainLinked = assertPlanRevisionChainLinked(
       planRevision.revisionPlanId,
+      planRevision.secondRevisionPlanId,
       planRevision.approvedPlanId
     );
     const planRevisionChainViewListed = await assertPlanRevisionChainViewListed(
       planRevision.revisionPlanId,
+      planRevision.secondRevisionPlanId,
       planRevision.approvedPlanId
     );
     const inheritedPlanContext = await runCli(
@@ -313,7 +335,10 @@ try {
     assert(state.writeDeniedInPlanMode, "provider did not observe plan-mode write denial");
     assert(state.planSubmittedToModel, "provider did not observe submitted plan feedback");
     assert(state.inheritedPlanContextSeen, "provider did not see inherited plan context");
-    assert(state.inheritedPlanReadBeforeWrite, "provider did not read before writing");
+    assert(state.repeatedPlanDeviationBlocked, "provider did not hit repeated plan guard blocks");
+    assert(state.inheritedPlanReadBeforeWrite, "provider did not read before mutation");
+    assert(state.multiStepPlanDeviationRecovered, "provider did not perform multi-step recovery");
+    assert(state.migrationPlanExecutionVerified, "provider did not verify migration execution");
     assert(state.inheritedPlanExecutionCompleted, "provider did not complete inherited plan");
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
@@ -332,21 +357,27 @@ try {
       "completed goal persisted with note",
       "completed goal suppressed from context",
       "revision feedback returned to tool caller",
-      "revision plan persisted as needs_revision",
+      "first revision plan persisted as needs_revision",
+      "second revision feedback returned to tool caller",
+      "second revision plan persisted as needs_revision",
       "approved plan persisted as approved",
-      "revision chain linked replacement plan",
-      "revision chain visible from CLI",
+      "multi-round revision chain linked replacement plan",
+      "multi-round revision chain visible from CLI",
       "inherited approved plan injected into context",
-      "plan execution guard blocked early write",
-      "required read result visible before write",
-      "inherited plan output written after read",
+      "plan execution guard blocked early patch",
+      "plan execution guard blocked second early write",
+      "required migration source read result visible before mutation",
+      "migration target patched after required read",
+      "migration target re-read after patch",
+      "inherited plan output written after migration verification",
       "approved plan adopted across sessions",
       "adopted plan context included source metadata"
     ];
     const filesVerified = [
       "state/goals.json",
       "state/plans.json",
-      inheritedPlanSourcePath,
+      migrationSourcePath,
+      migrationTargetPath,
       inheritedPlanOutputPath
     ];
 
@@ -374,6 +405,8 @@ try {
             crossSessionPlanReviewListed,
             planRevisionFeedbackSeen: planRevision.revisionFeedbackSeen,
             planRevisionPersisted,
+            multiRoundPlanFeedbackSeen: planRevision.multiRoundPlanFeedbackSeen,
+            secondPlanRevisionPersisted,
             planApprovalSeen: planRevision.approvalSeen,
             planApprovalPersisted,
             planRevisionChainLinked,
@@ -381,6 +414,9 @@ try {
             inheritedPlanContextSeen: state.inheritedPlanContextSeen,
             inheritedPlanExecutionFollowed,
             inheritedPlanDeviationCorrected: state.inheritedPlanDeviationCorrected,
+            repeatedPlanDeviationBlocked: state.repeatedPlanDeviationBlocked,
+            multiStepPlanDeviationRecovered: state.multiStepPlanDeviationRecovered,
+            migrationPlanExecutionVerified: state.migrationPlanExecutionVerified,
             crossSessionPlanAdopted,
             crossSessionAdoptedPlanContextSeen: state.crossSessionAdoptedPlanContextSeen,
             blockedGoalPersisted,
@@ -405,6 +441,7 @@ try {
 function createRouter(state) {
   let planTurns = 0;
   let inheritedPlanExecutionTurns = 0;
+  let deviationBlockCount = 0;
   return ({ latestUser, systemPrompt, transcript, toolNames }) => {
     if (latestUser.includes("Prepare Goal/Plan eval session")) {
       return messageText("Goal/Plan eval session ready.");
@@ -477,7 +514,8 @@ function createRouter(state) {
         "approved plan text was not injected into plan context"
       );
       assert(
-        !systemPrompt.includes(revisionPlanText),
+        !systemPrompt.includes(firstRevisionPlanText) &&
+          !systemPrompt.includes(secondRevisionPlanText),
         "superseded plan text leaked into latest plan context"
       );
       state.inheritedPlanContextSeen = true;
@@ -488,12 +526,40 @@ function createRouter(state) {
       inheritedPlanExecutionTurns += 1;
       assert(systemPrompt.includes("<session_plan_context>"), "execution missed plan context");
       assert(
-        systemPrompt.includes("Read inherited-plan-source.txt before editing"),
+        systemPrompt.includes(`Read ${migrationSourcePath} before editing ${migrationTargetPath}`),
         "execution missed read-before-write plan step"
       );
       assert(toolNames.includes("FileRead"), "FileRead was not available for inherited plan");
       assert(toolNames.includes("FileWrite"), "FileWrite was not available for inherited plan");
+      assert(toolNames.includes("FilePatch"), "FilePatch was not available for inherited plan");
       if (inheritedPlanExecutionTurns === 1) {
+        return toolResponse([
+          toolCall("migration-patch-too-soon", "FilePatch", {
+            file_path: migrationTargetPath,
+            patch: [
+              "@@",
+              "-status: legacy",
+              "-source: old-policy",
+              "+status: migrated",
+              "+source: migration-source"
+            ].join("\n")
+          })
+        ]);
+      }
+      if (inheritedPlanExecutionTurns === 2) {
+        assert(
+          transcript.includes("Plan execution guard"),
+          "first plan deviation guard feedback was not visible"
+        );
+        assert(
+          transcript.includes(`Required first: FileRead ${migrationSourcePath}`),
+          "first plan deviation guard did not name required migration read"
+        );
+        assert(
+          readFileSync(path.join(workDir, migrationTargetPath), "utf8") === migrationTargetBefore,
+          "plan deviation guard allowed early patch"
+        );
+        deviationBlockCount += 1;
         return toolResponse([
           toolCall("inherited-plan-write-too-soon", "FileWrite", {
             file_path: inheritedPlanOutputPath,
@@ -501,36 +567,75 @@ function createRouter(state) {
           })
         ]);
       }
-      if (inheritedPlanExecutionTurns === 2) {
+      if (inheritedPlanExecutionTurns === 3) {
         assert(
           transcript.includes("Plan execution guard"),
-          "plan deviation guard feedback was not visible"
+          "second plan deviation guard feedback was not visible"
         );
         assert(
-          transcript.includes(`Required first: FileRead ${inheritedPlanSourcePath}`),
-          "plan deviation guard did not name required read"
+          transcript.includes(`Required first: FileRead ${migrationSourcePath}`),
+          "second plan deviation guard did not preserve required migration read"
         );
         assert(
           !existsSync(path.join(workDir, inheritedPlanOutputPath)),
-          "plan deviation guard allowed early write"
+          "second plan deviation guard allowed early output write"
         );
+        deviationBlockCount += 1;
+        state.repeatedPlanDeviationBlocked = deviationBlockCount >= 2;
         state.inheritedPlanDeviationCorrected = true;
         return toolResponse([
-          toolCall("inherited-plan-read", "FileRead", { file_path: inheritedPlanSourcePath })
+          toolCall("migration-source-read", "FileRead", { file_path: migrationSourcePath })
         ]);
       }
-      if (inheritedPlanExecutionTurns === 3) {
+      if (inheritedPlanExecutionTurns === 4) {
         assert(
-          transcript.includes(inheritedPlanSourceContent.trim()),
-          "inherited plan source read result was not visible"
+          transcript.includes(migrationSourceContent.trim()),
+          "migration source read result was not visible"
         );
         assert(
           !transcript.includes(`Wrote ${inheritedPlanOutputPath}`),
-          "inherited plan wrote before read result"
+          "output was written before migration source read"
         );
         state.inheritedPlanReadBeforeWrite = true;
         return toolResponse([
-          toolCall("inherited-plan-write", "FileWrite", {
+          toolCall("migration-target-patch", "FilePatch", {
+            file_path: migrationTargetPath,
+            patch: [
+              "@@",
+              "-status: legacy",
+              "-source: old-policy",
+              "+status: migrated",
+              "+source: migration-source"
+            ].join("\n")
+          })
+        ]);
+      }
+      if (inheritedPlanExecutionTurns === 5) {
+        assert(
+          transcript.includes(`Patched ${migrationTargetPath}`),
+          "migration target patch result was not visible"
+        );
+        assert(
+          readFileSync(path.join(workDir, migrationTargetPath), "utf8") === migrationTargetAfter,
+          "migration target file was not migrated"
+        );
+        return toolResponse([
+          toolCall("migration-target-reread", "FileRead", { file_path: migrationTargetPath })
+        ]);
+      }
+      if (inheritedPlanExecutionTurns === 6) {
+        assert(
+          transcript.includes("status: migrated"),
+          "migration target re-read did not show migrated status"
+        );
+        assert(
+          transcript.includes("source: migration-source"),
+          "migration target re-read did not show migrated source"
+        );
+        state.multiStepPlanDeviationRecovered = true;
+        state.migrationPlanExecutionVerified = true;
+        return toolResponse([
+          toolCall("inherited-plan-write-after-migration", "FileWrite", {
             file_path: inheritedPlanOutputPath,
             content: inheritedPlanOutputContent
           })
@@ -711,31 +816,68 @@ function assertPlanStoreSubmitted() {
 }
 
 async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
-  const toolCounts = { ExitPlanMode: 2 };
-  const revision = await executeRegisteredTool({
+  const toolCounts = { ExitPlanMode: 3 };
+  const firstRevision = await executeRegisteredTool({
     cwd: workDir,
     stateRoot: path.join(configDir, "state"),
     sessionId,
     toolUse: {
       type: "tool-use",
-      id: "revise-goal-plan",
+      id: "revise-goal-plan-first",
       name: "ExitPlanMode",
-      input: { plan: revisionPlanText }
+      input: { plan: firstRevisionPlanText }
     },
     userQuestionResolver: ({ question }) => ({
       answers: [
         {
           question: question.questions[0].question,
-          selectedLabels: ["No, revise"],
+          selectedLabels: ["No, revise: inspect migration source before writing"],
           selectedOptions: [question.questions[0].options[1]]
         }
       ]
     })
   });
-  assert(!revision.isError, `revision plan tool errored: ${revision.content}`);
-  assert(revision.content.includes("Plan not approved."), "revision feedback was not visible");
-  assert(revision.content.includes("Stay in plan mode."), "revision guidance was not visible");
-  const revisionPlanId = parsePlanId(revision.content);
+  assert(!firstRevision.isError, `first revision plan tool errored: ${firstRevision.content}`);
+  assert(
+    firstRevision.content.includes("Plan not approved."),
+    "first revision feedback was not visible"
+  );
+  assert(
+    firstRevision.content.includes("Stay in plan mode."),
+    "first revision guidance was not visible"
+  );
+  const revisionPlanId = parsePlanId(firstRevision.content);
+
+  const secondRevision = await executeRegisteredTool({
+    cwd: workDir,
+    stateRoot: path.join(configDir, "state"),
+    sessionId,
+    toolUse: {
+      type: "tool-use",
+      id: "revise-goal-plan-second",
+      name: "ExitPlanMode",
+      input: { plan: secondRevisionPlanText }
+    },
+    userQuestionResolver: ({ question }) => ({
+      answers: [
+        {
+          question: question.questions[0].question,
+          selectedLabels: ["No, revise: include re-read verification after patch"],
+          selectedOptions: [question.questions[0].options[1]]
+        }
+      ]
+    })
+  });
+  assert(!secondRevision.isError, `second revision plan tool errored: ${secondRevision.content}`);
+  assert(
+    secondRevision.content.includes("Plan not approved."),
+    "second revision feedback was not visible"
+  );
+  assert(
+    secondRevision.content.includes("Stay in plan mode."),
+    "second revision guidance was not visible"
+  );
+  const secondRevisionPlanId = parsePlanId(secondRevision.content);
 
   const approved = await executeRegisteredTool({
     cwd: workDir,
@@ -764,8 +906,10 @@ async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
 
   return {
     revisionFeedbackSeen: true,
+    multiRoundPlanFeedbackSeen: true,
     approvalSeen: true,
     revisionPlanId,
+    secondRevisionPlanId,
     approvedPlanId,
     toolCounts
   };
@@ -777,9 +921,27 @@ function assertPlanStoreRevisionPersisted(planId) {
   assert(plan, "revision plan record was not persisted");
   assert(plan.sessionId === sessionId, "revision plan used the wrong session");
   assert(plan.status === "needs_revision", "revision plan should need revision");
-  assert(plan.toolUseId === "revise-goal-plan", "revision plan missed tool id");
-  assert(plan.response === "No, revise", "revision plan missed user feedback");
-  assert(plan.plan === revisionPlanText, "revision plan text was not persisted");
+  assert(plan.toolUseId === "revise-goal-plan-first", "revision plan missed tool id");
+  assert(
+    plan.response === "No, revise: inspect migration source before writing",
+    "revision plan missed user feedback"
+  );
+  assert(plan.plan === firstRevisionPlanText, "revision plan text was not persisted");
+  return true;
+}
+
+function assertPlanStoreSecondRevisionPersisted(planId) {
+  const plans = JSON.parse(readFileSync(path.join(configDir, "state", "plans.json"), "utf8")).plans;
+  const plan = plans.find((candidate) => candidate.id === planId);
+  assert(plan, "second revision plan record was not persisted");
+  assert(plan.sessionId === sessionId, "second revision plan used the wrong session");
+  assert(plan.status === "needs_revision", "second revision plan should need revision");
+  assert(plan.toolUseId === "revise-goal-plan-second", "second revision plan missed tool id");
+  assert(
+    plan.response === "No, revise: include re-read verification after patch",
+    "second revision plan missed user feedback"
+  );
+  assert(plan.plan === secondRevisionPlanText, "second revision plan text was not persisted");
   return true;
 }
 
@@ -795,17 +957,27 @@ function assertPlanStoreApprovalPersisted(planId) {
   return true;
 }
 
-function assertPlanRevisionChainLinked(revisionPlanId, approvedPlanId) {
+function assertPlanRevisionChainLinked(revisionPlanId, secondRevisionPlanId, approvedPlanId) {
   const plans = JSON.parse(readFileSync(path.join(configDir, "state", "plans.json"), "utf8")).plans;
   const revision = plans.find((candidate) => candidate.id === revisionPlanId);
+  const secondRevision = plans.find((candidate) => candidate.id === secondRevisionPlanId);
   const approved = plans.find((candidate) => candidate.id === approvedPlanId);
   assert(revision, "revision chain missed original revision plan");
+  assert(secondRevision, "revision chain missed second revision plan");
   assert(approved, "revision chain missed approved plan");
   assert(
-    revision.revisedByPlanId === approvedPlanId,
-    "revision plan was not linked to approved replacement"
+    revision.revisedByPlanId === secondRevisionPlanId,
+    "first revision plan was not linked to second revision"
   );
-  assert(approved.revisesPlanId === revisionPlanId, "approved plan did not revise prior plan");
+  assert(
+    secondRevision.revisesPlanId === revisionPlanId,
+    "second revision did not revise first revision"
+  );
+  assert(
+    secondRevision.revisedByPlanId === approvedPlanId,
+    "second revision was not linked to approved replacement"
+  );
+  assert(approved.revisesPlanId === secondRevisionPlanId, "approved plan did not revise prior plan");
   assert(approved.rootPlanId === revisionPlanId, "approved plan missed root plan id");
   return true;
 }
@@ -815,19 +987,42 @@ function assertInheritedPlanExecutionFollowed() {
   assert(existsSync(outputPath), "inherited plan execution did not create output file");
   const output = readFileSync(outputPath, "utf8");
   assert(output === inheritedPlanOutputContent, "inherited plan output content was wrong");
+  assert(
+    readFileSync(path.join(workDir, migrationTargetPath), "utf8") === migrationTargetAfter,
+    "migration target did not remain migrated after inherited plan execution"
+  );
   return true;
 }
 
-async function assertPlanRevisionChainViewListed(revisionPlanId, approvedPlanId) {
+async function assertPlanRevisionChainViewListed(revisionPlanId, secondRevisionPlanId, approvedPlanId) {
   const chain = await runCli(["plan", "chain", approvedPlanId], "plan revision chain view");
   assert(chain.includes(`Plan chain: ${revisionPlanId}`), "plan chain view missed root id");
   assert(
     chain.includes(`1. needs_revision ${revisionPlanId}`),
     "plan chain view missed revision plan"
   );
-  assert(chain.includes(`2. approved ${approvedPlanId}`), "plan chain view missed approved plan");
+  assert(
+    chain.includes(`2. needs_revision ${secondRevisionPlanId}`),
+    "plan chain view missed second revision plan"
+  );
+  assert(chain.includes(`3. approved ${approvedPlanId}`), "plan chain view missed approved plan");
   const show = await runCli(["plan", "show", revisionPlanId], "plan revision show view");
-  assert(show.includes(`Revised by plan: ${approvedPlanId}`), "plan show missed revised-by link");
+  assert(
+    show.includes(`Revised by plan: ${secondRevisionPlanId}`),
+    "plan show missed first revised-by link"
+  );
+  const secondShow = await runCli(
+    ["plan", "show", secondRevisionPlanId],
+    "second plan revision show view"
+  );
+  assert(
+    secondShow.includes(`Revises plan: ${revisionPlanId}`),
+    "second plan show missed revises link"
+  );
+  assert(
+    secondShow.includes(`Revised by plan: ${approvedPlanId}`),
+    "second plan show missed revised-by link"
+  );
   return true;
 }
 
