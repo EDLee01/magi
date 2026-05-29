@@ -7,6 +7,7 @@
  */
 
 import { browseMdns, DiscoveredPeer } from "./mdns.js";
+import { ToolPermissionMode } from "../agent/tools.js";
 
 export interface PeerEndpoint {
   /** e.g. "http://192.168.31.57:8765" */
@@ -100,6 +101,7 @@ export async function dispatchToPeer(input: {
   prompt: string;
   cwd?: string;
   modelAlias?: string;
+  permissionMode?: ToolPermissionMode;
   signal?: AbortSignal;
   onEvent?: (event: Record<string, unknown>) => void;
 }): Promise<PeerDispatchResult> {
@@ -110,7 +112,7 @@ export async function dispatchToPeer(input: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      cwd: input.cwd ?? "/tmp",
+      ...(input.cwd ? { cwd: input.cwd } : {}),
       title: input.prompt.slice(0, 80),
       metadata: { source: "remote-dispatch" }
     }),
@@ -149,7 +151,8 @@ export async function dispatchToPeer(input: {
       prompt: input.prompt,
       // Server reads `model` (not modelAlias). Send both for forward-compat.
       model: input.modelAlias ?? "main",
-      modelAlias: input.modelAlias ?? "main"
+      modelAlias: input.modelAlias ?? "main",
+      permissionMode: input.permissionMode
     }),
     signal: input.signal
   });

@@ -266,7 +266,8 @@ async function runPersistedHeadless(
         paths: input.paths,
         stateRoot: input.stateRoot,
         cwd: input.cwd,
-        modelAlias
+        modelAlias,
+        permissionMode: input.permissionMode
       }),
       contextOptions: {
         recentMessages: input.config.context.recentMessages,
@@ -438,6 +439,7 @@ function buildSpawnSubAgent(input: {
   stateRoot?: string;
   cwd: string;
   modelAlias?: string;
+  permissionMode?: ToolPermissionMode;
 }): (request: SubAgentRequest) => Promise<SubAgentResult> {
   return async (request: SubAgentRequest): Promise<SubAgentResult> => {
     const agentId = randomUUID();
@@ -481,8 +483,8 @@ function buildSpawnSubAgent(input: {
               token: peerToken?.accessToken
             },
             prompt: subAgentPrompt,
-            cwd: input.cwd,
-            modelAlias: subModelAlias
+            modelAlias: subModelAlias,
+            permissionMode: input.permissionMode
           });
           await fireSubAgentHook({
             event: "subagent_stop",

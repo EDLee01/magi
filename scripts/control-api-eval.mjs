@@ -76,6 +76,9 @@ try {
     peerDispatchResultReturned: false,
     peerRemoteSessionCreated: false,
     peerRemoteJobCompleted: false,
+    peerRemotePermissionModeInherited: false,
+    peerRemoteFileWritten: false,
+    peerLocalFileNotWritten: false,
     peerDispatchAuditPersisted: false
   };
   const controlPort = randomControlPort();
@@ -156,6 +159,9 @@ try {
       "peer dispatch returned remote result",
       "remote peer session created",
       "remote peer job completed",
+      "remote peer inherited acceptEdits permission mode",
+      "remote peer wrote requested file",
+      "local workspace did not receive remote file",
       "remote peer audit persisted completion"
     ];
     const filesVerified = [
@@ -164,6 +170,7 @@ try {
       "state/control-jobs.json",
       "state/control-devices.json",
       "state/peers.json",
+      "peer-work/peer-output.txt",
       "peer-config/state/control-sessions.json",
       "peer-config/state/control-jobs.json"
     ];
@@ -642,14 +649,21 @@ async function exercisePeerDispatchFlow({ provider, state }) {
     state.peerDispatchCompleted = output.includes("CONTROL PEER DISPATCH DONE");
     assert(state.peerDispatchCompleted, "peer dispatch final answer missing");
 
-    state.peerDispatchResultReturned = output.includes("PEER DISPATCH OK");
+    state.peerDispatchResultReturned =
+      output.includes("PEER DISPATCH OK") && output.includes("peer-output.txt");
     state.peerDispatchSingleAgentCall = provider.summary().toolCounts.Agent === 1;
     assert(state.peerDispatchSingleAgentCall, "peer dispatch should call Agent exactly once");
+
+    const remoteFile = path.join(peerWorkDir, "peer-output.txt");
+    const localFile = path.join(workDir, "peer-output.txt");
+    state.peerRemoteFileWritten =
+      existsSync(remoteFile) && readFileSync(remoteFile, "utf8") === "remote peer write ok";
+    state.peerLocalFileNotWritten = !existsSync(localFile);
 
     const peerSessions = await getJson(`${peerServe.url}/sessions`, peerHeaders);
     const remoteSession = (peerSessions.sessions ?? []).find(
       (session) =>
-        session.title?.includes("Return exactly PEER DISPATCH OK") || session.messageCount >= 2
+        session.title?.includes("Write peer-output.txt") || session.messageCount >= 2
     );
     state.peerRemoteSessionCreated = Boolean(remoteSession);
 
@@ -657,7 +671,19 @@ async function exercisePeerDispatchFlow({ provider, state }) {
     state.peerRemoteJobCompleted = (peerJobs.jobs ?? []).some((job) => job.status === "completed");
 
     const audit = await getJson(`${peerServe.url}/events.json?limit=100`, peerHeaders);
-    state.peerDispatchAuditPersisted = (audit.events ?? []).some(
+    const auditEvents = audit.events ?? [];
+    const remoteFileWriteRequested = auditEvents.some(
+      (event) =>
+        event.action === "agent.tool.use" &&
+        event.target === "FileWrite" &&
+        event.metadata?.input?.file_path === "peer-output.txt"
+    );
+    const remoteFileWriteCompleted = auditEvents.some(
+      (event) => event.action === "agent.tool.completed" && event.target === "FileWrite"
+    );
+    state.peerRemotePermissionModeInherited =
+      remoteFileWriteRequested && remoteFileWriteCompleted && state.peerRemoteFileWritten;
+    state.peerDispatchAuditPersisted = auditEvents.some(
       (event) => event.action === "agent.query.completed"
     );
   } finally {
@@ -670,8 +696,18 @@ async function exercisePeerDispatchFlow({ provider, state }) {
 function createRouter(state) {
   return ({ body, transcript }) => {
     const latestUser = latestUserFromBody(body);
-    if (latestUser.includes("Return exactly PEER DISPATCH OK")) {
-      return messageText("PEER DISPATCH OK");
+    if (latestUser.includes("Write peer-output.txt")) {
+      const hasToolMessage = (body.messages ?? []).some((message) => message.role === "tool");
+      if (!hasToolMessage) {
+        return toolResponse([
+          toolCall("remote-peer-write", "FileWrite", {
+            file_path: "peer-output.txt",
+            content: "remote peer write ok"
+          })
+        ]);
+      }
+      assert(transcript.includes("Wrote peer-output.txt"), "remote FileWrite result missing");
+      return messageText("PEER DISPATCH OK: peer-output.txt written on remote peer.");
     }
     if (transcript.includes("PEER DISPATCH OK") && transcript.includes("Agent")) {
       state.peerDispatchResultReturned = true;
@@ -686,8 +722,8 @@ function createRouter(state) {
       state.peerAgentDispatched = true;
       return toolResponse([
         toolCall("dispatch-peer-agent", "Agent", {
-          description: "peer dispatch check",
-          prompt: "Return exactly PEER DISPATCH OK.",
+          description: "peer remote write check",
+          prompt: "Write peer-output.txt with exactly: remote peer write ok. Then report PEER DISPATCH OK.",
           subagent_type: "general",
           target: "peer-eval"
         })

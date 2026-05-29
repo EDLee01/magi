@@ -420,6 +420,9 @@ describe("capability report", () => {
         peerDispatchResultReturned: false,
         peerRemoteSessionCreated: false,
         peerRemoteJobCompleted: false,
+        peerRemotePermissionModeInherited: false,
+        peerRemoteFileWritten: false,
+        peerLocalFileNotWritten: false,
         peerDispatchAuditPersisted: false,
         assertions: 8,
         filesVerified: 2,
@@ -460,6 +463,9 @@ describe("capability report", () => {
         "peerDispatchResultReturned=false",
         "peerRemoteSessionCreated=false",
         "peerRemoteJobCompleted=false",
+        "peerRemotePermissionModeInherited=false",
+        "peerRemoteFileWritten=false",
+        "peerLocalFileNotWritten=false",
         "peerDispatchAuditPersisted=false"
       ])
     );
@@ -1024,6 +1030,9 @@ function controlApiReport(
     peerDispatchResultReturned: boolean;
     peerRemoteSessionCreated: boolean;
     peerRemoteJobCompleted: boolean;
+    peerRemotePermissionModeInherited: boolean;
+    peerRemoteFileWritten: boolean;
+    peerLocalFileNotWritten: boolean;
     peerDispatchAuditPersisted: boolean;
     assertions: number;
     filesVerified: number;
@@ -1108,6 +1117,9 @@ function controlApiReport(
           peerDispatchResultReturned: true,
           peerRemoteSessionCreated: true,
           peerRemoteJobCompleted: true,
+          peerRemotePermissionModeInherited: true,
+          peerRemoteFileWritten: true,
+          peerLocalFileNotWritten: true,
           peerDispatchAuditPersisted: true,
           ...overrides
         }

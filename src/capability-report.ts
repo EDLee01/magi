@@ -715,6 +715,9 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "peerDispatchResultReturned",
     "peerRemoteSessionCreated",
     "peerRemoteJobCompleted",
+    "peerRemotePermissionModeInherited",
+    "peerRemoteFileWritten",
+    "peerLocalFileNotWritten",
     "peerDispatchAuditPersisted"
   ];
   for (const key of required) {
@@ -777,6 +780,9 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       peerDispatchResultReturned: details.peerDispatchResultReturned === true,
       peerRemoteSessionCreated: details.peerRemoteSessionCreated === true,
       peerRemoteJobCompleted: details.peerRemoteJobCompleted === true,
+      peerRemotePermissionModeInherited: details.peerRemotePermissionModeInherited === true,
+      peerRemoteFileWritten: details.peerRemoteFileWritten === true,
+      peerLocalFileNotWritten: details.peerLocalFileNotWritten === true,
       peerDispatchAuditPersisted: details.peerDispatchAuditPersisted === true
     },
     failures
