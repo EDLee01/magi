@@ -1708,6 +1708,298 @@ async function scenarioApiMigrationTask() {
   });
 }
 
+async function scenarioMonorepoGeneratedBoundaryTask() {
+  return await withWorkspace("monorepo-generated-boundary", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "packages", "shared", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "shared", "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "payments", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "storefront", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "packages", "shared", "src", "tax.js"),
+      [
+        "export function calculateTax(subtotal) {",
+        "  return Math.round(subtotal * 0.08 * 100) / 100;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "// AUTO-GENERATED FILE. DO NOT EDIT.",
+      "export const generatedTaxRate = 0.08;",
+      ""
+    ].join("\n");
+    writeFileSync(
+      path.join(workDir, "packages", "shared", "generated", "tax-client.js"),
+      generatedBefore,
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "storefront", "src", "cart.js"),
+      [
+        'import { calculateTax } from "../../shared/src/tax.js";',
+        "",
+        "export function cartTotal(items) {",
+        "  const subtotal = items.reduce((total, item) => total + item.price, 0);",
+        "  const tax = calculateTax(subtotal);",
+        "  return { subtotal, tax, total: subtotal + tax };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "tests", "cart.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { existsSync, readFileSync } from "node:fs";',
+        'import { cartTotal } from "../packages/storefront/src/cart.js";',
+        "",
+        "assert.deepEqual(cartTotal([{ price: 50 }, { price: 50 }]), {",
+        "  subtotal: 100,",
+        "  tax: 10,",
+        "  total: 110",
+        "});",
+        "",
+        'assert.equal(existsSync("packages/shared/src/tax.js"), false);',
+        'assert.equal(existsSync("packages/payments/src/taxPolicy.js"), true);',
+        'assert.match(readFileSync("docs/tax.md", "utf8"), /packages\\/payments\\/src\\/taxPolicy\\.js/);',
+        'assert.match(readFileSync("docs/tax.md", "utf8"), /generated clients stay untouched/i);',
+        'const generated = readFileSync("packages/shared/generated/tax-client.js", "utf8");',
+        'assert.match(generated, /AUTO-GENERATED FILE\\. DO NOT EDIT/);',
+        "assert.match(generated, /generatedTaxRate = 0\\.08/);",
+        'console.log("monorepo tax migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "tax.md"),
+      [
+        "# Tax",
+        "",
+        "Use packages/shared/src/tax.js and call calculateTax(subtotal).",
+        "Generated clients live under packages/shared/generated.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("ToolSearch"), "ToolSearch was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(!toolNames.includes("FileMove"), "FileMove should start deferred");
+          return toolResponse([
+            toolCall("run-cart-before", "Bash", {
+              command: "node tests/cart.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("find-move-tool", "ToolSearch", {
+              query: "select:FileMove"
+            }),
+            toolCall("read-shared-tax", "FileRead", {
+              file_path: "packages/shared/src/tax.js"
+            }),
+            toolCall("read-storefront-cart", "FileRead", {
+              file_path: "packages/storefront/src/cart.js"
+            }),
+            toolCall("read-tax-docs", "FileRead", { file_path: "docs/tax.md" }),
+            toolCall("read-generated-tax-client", "FileRead", {
+              file_path: "packages/shared/generated/tax-client.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing monorepo test was not visible");
+          assert(transcript.includes("Tool: FileMove"), "FileMove schema was not revealed");
+          assert(transcript.includes("calculateTax"), "shared tax source was not visible");
+          assert(transcript.includes("../../shared/src/tax.js"), "storefront import was not visible");
+          assert(transcript.includes("AUTO-GENERATED FILE"), "generated file boundary was not visible");
+          return toolResponse([
+            toolCall("move-shared-tax", "FileMove", {
+              source: "packages/shared/src/tax.js",
+              destination: "packages/payments/src/taxPolicy.js"
+            }),
+            toolCall("patch-tax-policy", "FilePatch", {
+              file_path: "packages/payments/src/taxPolicy.js",
+              patch: [
+                "@@",
+                "-export function calculateTax(subtotal) {",
+                "-  return Math.round(subtotal * 0.08 * 100) / 100;",
+                "+export function applyTaxPolicy(subtotal) {",
+                "+  return Math.round(subtotal * 0.1 * 100) / 100;",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-storefront-cart", "FilePatch", {
+              file_path: "packages/storefront/src/cart.js",
+              patch: [
+                "@@",
+                '-import { calculateTax } from "../../shared/src/tax.js";',
+                '+import { applyTaxPolicy } from "../../payments/src/taxPolicy.js";',
+                " ",
+                " export function cartTotal(items) {",
+                "   const subtotal = items.reduce((total, item) => total + item.price, 0);",
+                "-  const tax = calculateTax(subtotal);",
+                "+  const tax = applyTaxPolicy(subtotal);",
+                "   return { subtotal, tax, total: subtotal + tax };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-tax-docs", "FilePatch", {
+              file_path: "docs/tax.md",
+              patch: [
+                "@@",
+                " # Tax",
+                " ",
+                "-Use packages/shared/src/tax.js and call calculateTax(subtotal).",
+                "-Generated clients live under packages/shared/generated.",
+                "+Use packages/payments/src/taxPolicy.js and call applyTaxPolicy(subtotal).",
+                "+Generated clients stay untouched under packages/shared/generated."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Moved packages/shared/src/tax.js"),
+            "monorepo FileMove result was not visible"
+          );
+          assert(
+            transcript.includes("Patched packages/payments/src/taxPolicy.js"),
+            "tax policy patch result was not visible"
+          );
+          assert(
+            transcript.includes("Patched packages/storefront/src/cart.js"),
+            "storefront patch result was not visible"
+          );
+          assert(transcript.includes("Patched docs/tax.md"), "tax docs patch result was not visible");
+          return toolResponse([
+            toolCall("run-cart-after", "Bash", {
+              command: "node tests/cart.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("monorepo tax migration ok"),
+          "passing monorepo tax test was not visible"
+        );
+        return messageText(
+          "Monorepo tax migration completed while preserving generated client files."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Migrate tax policy in this monorepo from packages/shared/src/tax.js",
+            "to packages/payments/src/taxPolicy.js.",
+            "Run the focused cart test first, reveal FileMove with ToolSearch,",
+            "move only the source file, patch storefront and docs,",
+            "do not edit generated files under packages/shared/generated,",
+            "then rerun the focused cart test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "monorepo generated boundary task"
+      });
+      assert(
+        output.includes("session.completed"),
+        "monorepo generated boundary task did not complete"
+      );
+      const taxPolicy = readFileSync(
+        path.join(workDir, "packages", "payments", "src", "taxPolicy.js"),
+        "utf8"
+      );
+      const cart = readFileSync(
+        path.join(workDir, "packages", "storefront", "src", "cart.js"),
+        "utf8"
+      );
+      const docs = readFileSync(path.join(workDir, "docs", "tax.md"), "utf8");
+      const generatedAfter = readFileSync(
+        path.join(workDir, "packages", "shared", "generated", "tax-client.js"),
+        "utf8"
+      );
+      assert(!existsSync(path.join(workDir, "packages", "shared", "src", "tax.js")), "old shared tax source still exists");
+      assert(taxPolicy.includes("applyTaxPolicy"), "tax policy API rename missing");
+      assert(taxPolicy.includes("subtotal * 0.1"), "tax policy rate change missing");
+      assert(cart.includes("../../payments/src/taxPolicy.js"), "storefront import not migrated");
+      assert(cart.includes("applyTaxPolicy(subtotal)"), "storefront call not migrated");
+      assert(docs.includes("packages/payments/src/taxPolicy.js"), "tax docs path not migrated");
+      assert(docs.includes("Generated clients stay untouched"), "tax docs boundary note missing");
+      assert(generatedAfter === generatedBefore, "generated tax client was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "monorepo migration should run focused test before and after");
+      assert(toolCounts.ToolSearch === 1, "monorepo migration should reveal FileMove through ToolSearch");
+      assert(toolCounts.FileMove === 1, "monorepo migration should move exactly one source file");
+      assert(toolCounts.FilePatch === 3, "monorepo migration should patch tax policy, consumer, and docs");
+      assert(!toolCounts.FileWrite, "monorepo migration should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "monorepo migration should not use FileEdit for generated boundaries");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing cart test ran first",
+          "FileMove revealed through ToolSearch",
+          "source package file moved across monorepo packages",
+          "payments tax policy patched with new API",
+          "storefront package import and call migrated",
+          "tax docs migrated with generated boundary note",
+          "generated client file stayed unchanged",
+          "focused passing cart test ran after migration",
+          "old shared tax path removed",
+          "FileWrite avoided for existing files",
+          "FileEdit avoided for generated boundary task",
+          "final response completed"
+        ],
+        filesVerified: [
+          "packages/payments/src/taxPolicy.js",
+          "packages/storefront/src/cart.js",
+          "packages/shared/generated/tax-client.js",
+          "tests/cart.test.mjs",
+          "docs/tax.md"
+        ],
+        provider: summary,
+        taskClass: "monorepo_generated_boundary",
+        toolCounts,
+        fileMoveRevealed: true,
+        sourcePackageMoved: true,
+        oldSourcePackagePathRemoved: true,
+        generatedFileUntouched: true,
+        monorepoPackageMigrationVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -1761,7 +2053,8 @@ async function main() {
     ["dependency refactor task", scenarioDependencyRefactorTask],
     ["test-driven recovery task", scenarioTestDrivenRecoveryTask],
     ["continuous patch recovery task", scenarioContinuousPatchRecoveryTask],
-    ["api migration task", scenarioApiMigrationTask]
+    ["api migration task", scenarioApiMigrationTask],
+    ["monorepo generated boundary task", scenarioMonorepoGeneratedBoundaryTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

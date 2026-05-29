@@ -209,21 +209,48 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const apiMigrationFileMoveCalls = readNumber(apiMigrationToolCounts.FileMove);
   const apiMigrationFilePatchCalls = readNumber(apiMigrationToolCounts.FilePatch);
   const apiMigrationFileWriteCalls = readNumber(apiMigrationToolCounts.FileWrite);
+  const monorepoGeneratedBoundary = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "monorepo_generated_boundary"
+  );
+  const monorepoGeneratedBoundaryDetails = readRecord(
+    monorepoGeneratedBoundary ? readRecord(monorepoGeneratedBoundary).details : {}
+  );
+  const monorepoGeneratedBoundaryToolCounts = readRecord(
+    monorepoGeneratedBoundaryDetails.toolCounts
+  );
+  const monorepoGeneratedBoundaryTaskSeen = taskClasses.has("monorepo_generated_boundary");
+  const monorepoGeneratedBoundaryBashCalls = readNumber(monorepoGeneratedBoundaryToolCounts.Bash);
+  const monorepoGeneratedBoundaryToolSearchCalls = readNumber(
+    monorepoGeneratedBoundaryToolCounts.ToolSearch
+  );
+  const monorepoGeneratedBoundaryFileMoveCalls = readNumber(
+    monorepoGeneratedBoundaryToolCounts.FileMove
+  );
+  const monorepoGeneratedBoundaryFilePatchCalls = readNumber(
+    monorepoGeneratedBoundaryToolCounts.FilePatch
+  );
+  const monorepoGeneratedBoundaryFileWriteCalls = readNumber(
+    monorepoGeneratedBoundaryToolCounts.FileWrite
+  );
+  const monorepoGeneratedBoundaryFileEditCalls = readNumber(
+    monorepoGeneratedBoundaryToolCounts.FileEdit
+  );
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 9) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 9) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 10) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 10) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
   if (!continuousPatchRecoveryTaskSeen) failures.push("continuousPatchRecoveryTask=false");
   if (!apiMigrationTaskSeen) failures.push("apiMigrationTask=false");
-  if (assertions < 52) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 20) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 50) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!monorepoGeneratedBoundaryTaskSeen) failures.push("monorepoGeneratedBoundaryTask=false");
+  if (assertions < 64) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 25) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 60) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -254,6 +281,39 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (apiMigrationDetails.oldPathRemoved !== true) failures.push("oldPathRemoved=false");
   if (apiMigrationDetails.batchApiMigrationVerified !== true) {
     failures.push("batchApiMigrationVerified=false");
+  }
+  if (monorepoGeneratedBoundaryBashCalls !== 2) {
+    failures.push("monorepoGeneratedBoundaryBashCalls != 2");
+  }
+  if (monorepoGeneratedBoundaryToolSearchCalls !== 1) {
+    failures.push("monorepoGeneratedBoundaryToolSearchCalls != 1");
+  }
+  if (monorepoGeneratedBoundaryFileMoveCalls !== 1) {
+    failures.push("monorepoGeneratedBoundaryFileMoveCalls != 1");
+  }
+  if (monorepoGeneratedBoundaryFilePatchCalls < 3) {
+    failures.push("monorepoGeneratedBoundaryFilePatchCalls < 3");
+  }
+  if (monorepoGeneratedBoundaryFileWriteCalls !== 0) {
+    failures.push("monorepoGeneratedBoundaryFileWrite used");
+  }
+  if (monorepoGeneratedBoundaryFileEditCalls !== 0) {
+    failures.push("monorepoGeneratedBoundaryFileEdit used");
+  }
+  if (monorepoGeneratedBoundaryDetails.fileMoveRevealed !== true) {
+    failures.push("monorepoGeneratedBoundaryFileMoveRevealed=false");
+  }
+  if (monorepoGeneratedBoundaryDetails.sourcePackageMoved !== true) {
+    failures.push("sourcePackageMoved=false");
+  }
+  if (monorepoGeneratedBoundaryDetails.oldSourcePackagePathRemoved !== true) {
+    failures.push("oldSourcePackagePathRemoved=false");
+  }
+  if (monorepoGeneratedBoundaryDetails.generatedFileUntouched !== true) {
+    failures.push("generatedFileUntouched=false");
+  }
+  if (monorepoGeneratedBoundaryDetails.monorepoPackageMigrationVerified !== true) {
+    failures.push("monorepoPackageMigrationVerified=false");
   }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
@@ -299,6 +359,21 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       movedFileVerified: apiMigrationDetails.movedFileVerified === true,
       oldPathRemoved: apiMigrationDetails.oldPathRemoved === true,
       batchApiMigrationVerified: apiMigrationDetails.batchApiMigrationVerified === true,
+      monorepoGeneratedBoundaryTaskSeen,
+      monorepoGeneratedBoundaryBashCalls,
+      monorepoGeneratedBoundaryToolSearchCalls,
+      monorepoGeneratedBoundaryFileMoveCalls,
+      monorepoGeneratedBoundaryFilePatchCalls,
+      monorepoGeneratedBoundaryFileWriteCalls,
+      monorepoGeneratedBoundaryFileEditCalls,
+      monorepoGeneratedBoundaryFileMoveRevealed:
+        monorepoGeneratedBoundaryDetails.fileMoveRevealed === true,
+      sourcePackageMoved: monorepoGeneratedBoundaryDetails.sourcePackageMoved === true,
+      oldSourcePackagePathRemoved:
+        monorepoGeneratedBoundaryDetails.oldSourcePackagePathRemoved === true,
+      generatedFileUntouched: monorepoGeneratedBoundaryDetails.generatedFileUntouched === true,
+      monorepoPackageMigrationVerified:
+        monorepoGeneratedBoundaryDetails.monorepoPackageMigrationVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

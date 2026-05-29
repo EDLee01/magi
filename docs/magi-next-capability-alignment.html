@@ -242,7 +242,7 @@
           <tr>
             <td>Eval Harness</td>
             <td>真实模型运行业务级任务，记录成功率、工具效率、回归原因。</td>
-            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告、失败分类、provider 调用效率、断言覆盖、文件验证数、实际工具调用分布和 regression 摘要；model task benchmark 已把项目编辑、记忆驱动输出、工具发现检索、跨文件编辑后运行聚焦验证、patch strategy、跨文件依赖 refactor、测试驱动修复中的失败测试、FilePatch 恢复、复测和修复报告、连续两次 patch 失败后的重读恢复、最终 diff 质量和无关文件不变验证，以及 ToolSearch reveal FileMove 后的批量 API 迁移、文件移动、source/docs/tests 同步和旧路径移除验证做成固定任务集；live model smoke 已提供可选入口，能用真实 provider 执行一个失败测试修复、复测和报告写入任务，默认跳过以避免 CI 被上游波动污染；capability report 会把这些细粒度评分器和 blackbox、Model Tasks、Memory、Patch Engine、Goal/Plan、Tool Discovery、Control API 门禁一起汇总，并生成跨版本 trend report 跟踪 score、通过项、regression、provider/tool 调用变化。</td>
+            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告、失败分类、provider 调用效率、断言覆盖、文件验证数、实际工具调用分布和 regression 摘要；model task benchmark 已把项目编辑、记忆驱动输出、工具发现检索、跨文件编辑后运行聚焦验证、patch strategy、跨文件依赖 refactor、测试驱动修复中的失败测试、FilePatch 恢复、复测和修复报告、连续两次 patch 失败后的重读恢复、最终 diff 质量和无关文件不变验证，ToolSearch reveal FileMove 后的批量 API 迁移、文件移动、source/docs/tests 同步和旧路径移除验证，以及多包 monorepo 迁移中的 generated-code 边界保护做成固定任务集；live model smoke 已提供可选入口，能用真实 provider 执行一个失败测试修复、复测和报告写入任务，默认跳过以避免 CI 被上游波动污染；capability report 会把这些细粒度评分器和 blackbox、Model Tasks、Memory、Patch Engine、Goal/Plan、Tool Discovery、Control API 门禁一起汇总，并生成跨版本 trend report 跟踪 score、通过项、regression、provider/tool 调用变化。</td>
             <td><code>npm run test:blackbox</code>、<code>npm run test:model-tasks</code>、<code>npm run test:live-smoke</code>、<code>npm run test:goal-plan-eval</code>、<code>npm run test:tool-discovery-eval</code>、<code>npm run test:control-api-eval</code>、<code>npm run report:capability</code>、<code>.github/workflows/ci.yml</code>、<code>scripts/model-task-benchmark.mjs</code>、<code>scripts/live-model-smoke.mjs</code>、<code>tests/harness-report.test.ts</code>、<code>tests/capability-report.test.ts</code>、<code>tests/capability-trend.test.ts</code>、<code>src/capability-trend.ts</code>；下一步扩大真实任务集规模和难度。</td>
           </tr>
           <tr>
@@ -280,7 +280,7 @@
       <div class="panel" style="margin-top: 12px;">
         <h3>v0.1.0-alpha.4</h3>
         <ul>
-          <li>把 Patch Engine 继续推到更复杂的真实仓库任务：跨文件依赖、测试驱动修复、连续 patch 失败后的策略恢复、文件移动和批量 API 迁移已进入主门禁；下一步扩大到多包 monorepo 迁移和生成代码边界。</li>
+          <li>把 Patch Engine 继续推到更复杂的真实仓库任务：跨文件依赖、测试驱动修复、连续 patch 失败后的策略恢复、文件移动、批量 API 迁移、多包 monorepo 迁移和生成代码边界已进入主门禁；下一步扩大到更多真实仓库规模和混合语言边界。</li>
           <li>继续扩展 goal/plan benchmark，覆盖多轮用户反馈、迁移后计划执行质量，以及计划偏离后的多步恢复质量。</li>
           <li>继续扩展 capability report，把更多真实模型业务级 benchmark 纳入以后每次能力对齐的主门禁。</li>
         </ul>

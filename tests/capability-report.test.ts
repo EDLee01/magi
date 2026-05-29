@@ -223,6 +223,7 @@ describe("capability report", () => {
         "dependencyRefactorTask=false",
         "continuousPatchRecoveryTask=false",
         "apiMigrationTask=false",
+        "monorepoGeneratedBoundaryTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -241,6 +242,15 @@ describe("capability report", () => {
         "movedFileVerified=false",
         "oldPathRemoved=false",
         "batchApiMigrationVerified=false",
+        "monorepoGeneratedBoundaryBashCalls != 2",
+        "monorepoGeneratedBoundaryToolSearchCalls != 1",
+        "monorepoGeneratedBoundaryFileMoveCalls != 1",
+        "monorepoGeneratedBoundaryFilePatchCalls < 3",
+        "monorepoGeneratedBoundaryFileMoveRevealed=false",
+        "sourcePackageMoved=false",
+        "oldSourcePackagePathRemoved=false",
+        "generatedFileUntouched=false",
+        "monorepoPackageMigrationVerified=false",
         "regressions=1"
       ])
     );
@@ -565,6 +575,19 @@ function modelTaskReport(
       oldPathRemoved: boolean;
       batchApiMigrationVerified: boolean;
     };
+    monorepoGeneratedBoundary: {
+      bashCalls: number;
+      toolSearchCalls: number;
+      fileMoveCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      fileMoveRevealed: boolean;
+      sourcePackageMoved: boolean;
+      oldSourcePackagePathRemoved: boolean;
+      generatedFileUntouched: boolean;
+      monorepoPackageMigrationVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -577,7 +600,8 @@ function modelTaskReport(
     "dependency_refactor",
     "test_driven_recovery",
     "continuous_patch_recovery",
-    "api_migration"
+    "api_migration",
+    "monorepo_generated_boundary"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -607,14 +631,27 @@ function modelTaskReport(
     oldPathRemoved: true,
     batchApiMigrationVerified: true
   };
+  const monorepoGeneratedBoundary = overrides.monorepoGeneratedBoundary ?? {
+    bashCalls: 2,
+    toolSearchCalls: 1,
+    fileMoveCalls: 1,
+    filePatchCalls: 3,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    fileMoveRevealed: true,
+    sourcePackageMoved: true,
+    oldSourcePackagePathRemoved: true,
+    generatedFileUntouched: true,
+    monorepoPackageMigrationVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 52,
-    filesVerified: overrides.filesVerified ?? 20,
-    toolCallCount: overrides.toolCallCount ?? 50,
+    assertions: overrides.assertions ?? 64,
+    filesVerified: overrides.filesVerified ?? 25,
+    toolCallCount: overrides.toolCallCount ?? 60,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -668,6 +705,24 @@ function modelTaskReport(
               movedFileVerified: apiMigration.movedFileVerified,
               oldPathRemoved: apiMigration.oldPathRemoved,
               batchApiMigrationVerified: apiMigration.batchApiMigrationVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "monorepo_generated_boundary"
+          ? {
+              toolCounts: {
+                Bash: monorepoGeneratedBoundary.bashCalls,
+                ToolSearch: monorepoGeneratedBoundary.toolSearchCalls,
+                FileMove: monorepoGeneratedBoundary.fileMoveCalls,
+                FilePatch: monorepoGeneratedBoundary.filePatchCalls,
+                FileWrite: monorepoGeneratedBoundary.fileWriteCalls,
+                FileEdit: monorepoGeneratedBoundary.fileEditCalls
+              },
+              fileMoveRevealed: monorepoGeneratedBoundary.fileMoveRevealed,
+              sourcePackageMoved: monorepoGeneratedBoundary.sourcePackageMoved,
+              oldSourcePackagePathRemoved: monorepoGeneratedBoundary.oldSourcePackagePathRemoved,
+              generatedFileUntouched: monorepoGeneratedBoundary.generatedFileUntouched,
+              monorepoPackageMigrationVerified:
+                monorepoGeneratedBoundary.monorepoPackageMigrationVerified
             }
           : {})
       }
