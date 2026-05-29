@@ -1,0 +1,30 @@
+{
+  "name": "memory business recall",
+  "maxResults": 6,
+  "minScore": 1,
+  "cases": [
+    {
+      "name": "linked workflow retrieves project neighbor",
+      "query": "release verification rollout",
+      "expect": [
+        "Magi release verification",
+        "Run focused memory eval before broad verify"
+      ],
+      "forbid": ["verbose terminal dumps"],
+      "minResults": 2
+    },
+    {
+      "name": "corrected preference replaces stale memory",
+      "query": "terminal dumps verification preference",
+      "expect": ["concise verification summaries"],
+      "forbid": ["prefers verbose terminal dumps"],
+      "minResults": 1
+    },
+    {
+      "name": "durable user identity survives graph recall",
+      "query": "Edward creator Magi Next",
+      "expect": ["Edward is the creator of Magi Next"],
+      "minResults": 1
+    }
+  ]
+}

@@ -85,6 +85,7 @@ multi-machine, sub-agents). Press `q` to quit early.
 | `magi plan [list]`         | Show submitted plan reviews               |
 | `magi memory search <q>`   | Search durable Memory                     |
 | `magi memory link --from <node> --to <node>` | Link Memory graph nodes       |
+| `magi memory eval --case-file <file>` | Run Memory recall quality cases |
 | `magi learning list`       | List reviewable LearningDrafts            |
 | `magi learning draft <show|apply|reject> <id>` | Review or resolve a LearningDraft |
 | `magi ps`                 | List recent jobs                          |
@@ -119,6 +120,13 @@ magi learning draft reject <id>
 Agents can also discover the deferred `SessionSearch`, `LearningDraft`, and
 `SkillManage` tools through `ToolSearch`. `SkillManage` is path-limited to the
 configured skills root and requires normal write approval outside bypass modes.
+
+Memory recall quality can be checked with reusable case files:
+
+```sh
+magi memory eval --case-file tests/fixtures/memory-recall-business.json --min-score 1 --report .magi-reports/memory-recall-eval.json
+npm run test:memory-eval
+```
 
 ## Configuration
 
@@ -221,6 +229,7 @@ cd magi-next
 npm install
 npm run build
 npm test
+npm run test:memory-eval
 ```
 
 Requires Node ≥ 20.
