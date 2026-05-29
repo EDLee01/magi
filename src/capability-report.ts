@@ -184,6 +184,7 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
   if (readNumber(toolCounts.FileWrite) !== 0) failures.push("FileWrite used");
   if (details.recoverySeen !== true) failures.push("recoverySeen=false");
   if (details.toolSearchRankedFilePatch !== true) failures.push("toolSearchRankedFilePatch=false");
+  if (details.approvalDiffPreviewSeen !== true) failures.push("approvalDiffPreviewSeen=false");
   if (patchUsageRate < 0.5) failures.push(`patchUsageRate=${patchUsageRate}`);
   return {
     ...base,
@@ -196,7 +197,8 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
       fileEditCalls: readNumber(toolCounts.FileEdit),
       fileWriteCalls: readNumber(toolCounts.FileWrite),
       recoverySeen: details.recoverySeen === true,
-      toolSearchRankedFilePatch: details.toolSearchRankedFilePatch === true
+      toolSearchRankedFilePatch: details.toolSearchRankedFilePatch === true,
+      approvalDiffPreviewSeen: details.approvalDiffPreviewSeen === true
     },
     failures
   };

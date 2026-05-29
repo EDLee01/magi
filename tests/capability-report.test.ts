@@ -14,6 +14,7 @@ describe("capability report", () => {
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport(),
@@ -45,6 +46,7 @@ describe("capability report", () => {
         fileWriteCalls: 1,
         recoverySeen: false,
         toolSearchRankedFilePatch: false,
+        approvalDiffPreviewSeen: false,
         patchUsageRate: 1 / 3
       }),
       goalPlan: goalPlanReport(),
@@ -60,6 +62,7 @@ describe("capability report", () => {
         "FileWrite used",
         "recoverySeen=false",
         "toolSearchRankedFilePatch=false",
+        "approvalDiffPreviewSeen=false",
         "patchUsageRate=0.3333333333333333"
       ])
     );
@@ -75,6 +78,7 @@ describe("capability report", () => {
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport(),
@@ -98,6 +102,7 @@ describe("capability report", () => {
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport({
@@ -130,6 +135,7 @@ describe("capability report", () => {
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport(),
@@ -168,6 +174,7 @@ describe("capability report", () => {
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
         patchUsageRate: 2 / 3
       }),
       goalPlan: goalPlanReport(),
@@ -237,6 +244,7 @@ function patchReport(input: {
   fileWriteCalls: number;
   recoverySeen: boolean;
   toolSearchRankedFilePatch: boolean;
+  approvalDiffPreviewSeen: boolean;
   patchUsageRate: number;
 }): Record<string, unknown> {
   return {
@@ -257,7 +265,8 @@ function patchReport(input: {
           },
           patchUsageRate: input.patchUsageRate,
           recoverySeen: input.recoverySeen,
-          toolSearchRankedFilePatch: input.toolSearchRankedFilePatch
+          toolSearchRankedFilePatch: input.toolSearchRankedFilePatch,
+          approvalDiffPreviewSeen: input.approvalDiffPreviewSeen
         }
       }
     ]

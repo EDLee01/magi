@@ -29,6 +29,7 @@ try {
   mkdirSync(path.join(workDir, "src"), { recursive: true });
   writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }), "utf8");
   writeFileSync(path.join(workDir, "src", "widget.ts"), initialWidget(), "utf8");
+  const approvalDiffPreviewSeen = await verifyFilePatchApprovalDiffPreview();
 
   const provider = await startProvider();
   try {
@@ -73,6 +74,7 @@ try {
     assert(!metrics.toolCounts.FileWrite, "FileWrite should not be used for existing file edits");
     assert(metrics.recoverySeen, "FilePatch recovery feedback was not returned to the model");
     assert(metrics.toolSearchRankedFilePatch, "ToolSearch did not rank FilePatch first");
+    assert(approvalDiffPreviewSeen, "FilePatch approval diff preview was not generated");
 
     const patchToolCalls =
       (metrics.toolCounts.FilePatch ?? 0) +
@@ -95,7 +97,8 @@ try {
             toolCounts: metrics.toolCounts,
             patchUsageRate,
             recoverySeen: metrics.recoverySeen,
-            toolSearchRankedFilePatch: metrics.toolSearchRankedFilePatch
+            toolSearchRankedFilePatch: metrics.toolSearchRankedFilePatch,
+            approvalDiffPreviewSeen
           }
         }
       ]
@@ -126,6 +129,37 @@ function initialWidget() {
     'export const VERSION_LABEL = "widget-v1";',
     ""
   ].join("\n");
+}
+
+async function verifyFilePatchApprovalDiffPreview() {
+  const previewFile = path.join(workDir, "src", "approval-preview.ts");
+  writeFileSync(previewFile, "const label = 'old';\nconst count = 1;\n", "utf8");
+  const { executeRegisteredTool } = await import("../dist/tools/registry.js");
+  let capturedDiff;
+  const result = await executeRegisteredTool({
+    cwd: workDir,
+    toolUse: {
+      type: "tool-use",
+      id: "approval-preview",
+      name: "FilePatch",
+      input: {
+        file_path: "src/approval-preview.ts",
+        patch: ["@@", " const label = 'old';", "-const count = 1;", "+const count = 2;"].join(
+          "\n"
+        )
+      }
+    },
+    permissionMode: "default",
+    approvalResolver: async ({ permission }) => {
+      capturedDiff = permission.diff;
+      return false;
+    }
+  });
+
+  const file = readFileSync(previewFile, "utf8");
+  assert(result.isError === true, "FilePatch approval preview should stop when denied");
+  assert(file.includes("const count = 1;"), "denied FilePatch approval should not edit the file");
+  return Boolean(capturedDiff?.includes("-const count = 1;") && capturedDiff.includes("+const count = 2;"));
 }
 
 function renderConfig({ port }) {
