@@ -141,6 +141,9 @@ describe("capability report", () => {
         userFeedbackTrendSeen: false,
         longCycleFeedbackTrendSeen: false,
         crossNodeRecommendationSeen: false,
+        projectCaseRecallSeen: false,
+        multiNodeSupersededCleanupSeen: false,
+        maintenanceConfigBoundarySeen: false,
         assertions: 4,
         filesVerified: 1
       }),
@@ -173,6 +176,9 @@ describe("capability report", () => {
     expect(output).toContain("userFeedbackTrendSeen=false");
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
     expect(output).toContain("crossNodeRecommendationSeen=false");
+    expect(output).toContain("projectCaseRecallSeen=false");
+    expect(output).toContain("multiNodeSupersededCleanupSeen=false");
+    expect(output).toContain("maintenanceConfigBoundarySeen=false");
   });
 
   it("fails model task alignment when task coverage or scorer evidence is too thin", () => {
@@ -753,6 +759,9 @@ function memoryReport(input: {
   userFeedbackTrendSeen?: boolean;
   longCycleFeedbackTrendSeen?: boolean;
   crossNodeRecommendationSeen?: boolean;
+  projectCaseRecallSeen?: boolean;
+  multiNodeSupersededCleanupSeen?: boolean;
+  maintenanceConfigBoundarySeen?: boolean;
   assertions?: number;
   filesVerified?: number;
 }): Record<string, unknown> {
@@ -806,19 +815,41 @@ function memoryReport(input: {
         ...(input.crossNodeRecommendationSeen === false
           ? []
           : ["cross-node workflow recommendation surfaced related habit"]),
+        ...(input.projectCaseRecallSeen === false
+          ? []
+          : [
+              "project-level release owner recall passed",
+              "project-level incident handoff recall passed"
+            ]),
+        ...(input.multiNodeSupersededCleanupSeen === false
+          ? []
+          : [
+              "multi-node superseded cleanup candidates listed disputed nodes",
+              "Dream multi-node cleanup archived superseded project nodes",
+              "post-cleanup project recall excluded archived superseded nodes"
+            ]),
+        ...(input.maintenanceConfigBoundarySeen === false
+          ? []
+          : [
+              "maintenance config boundary values were clamped",
+              "maintenance config invalid values were rejected"
+            ]),
         ...Array.from(
-          { length: input.assertions ?? 16 },
+          { length: input.assertions ?? 35 },
           (_, index) => `memory assertion ${index + 1}`
         )
       ],
       filesVerified: Array.from(
-        { length: input.filesVerified ?? 5 },
+        { length: input.filesVerified ?? 6 },
         (_, index) => `memory-file-${index + 1}.json`
       ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
-      crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false
+      crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
+      projectCaseRecallSeen: input.projectCaseRecallSeen !== false,
+      multiNodeSupersededCleanupSeen: input.multiNodeSupersededCleanupSeen !== false,
+      maintenanceConfigBoundarySeen: input.maintenanceConfigBoundarySeen !== false
     }
   };
 }

@@ -447,14 +447,27 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     details.crossNodeRecommendationSeen === true &&
     resultNames.includes("feedback trend recalls workflow neighborhood") &&
     assertionList.includes("cross-node workflow recommendation surfaced related habit");
+  const projectCaseRecallSeen =
+    details.projectCaseRecallSeen === true &&
+    assertionList.includes("project-level release owner recall passed") &&
+    assertionList.includes("project-level incident handoff recall passed");
+  const multiNodeSupersededCleanupSeen =
+    details.multiNodeSupersededCleanupSeen === true &&
+    assertionList.includes("multi-node superseded cleanup candidates listed disputed nodes") &&
+    assertionList.includes("Dream multi-node cleanup archived superseded project nodes") &&
+    assertionList.includes("post-cleanup project recall excluded archived superseded nodes");
+  const maintenanceConfigBoundarySeen =
+    details.maintenanceConfigBoundarySeen === true &&
+    assertionList.includes("maintenance config boundary values were clamped") &&
+    assertionList.includes("maintenance config invalid values were rejected");
   const assertions = assertionList.length;
   const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
-  if (results.length < 5) failures.push(`cases=${results.length}`);
-  if (assertions < 15) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 5) failures.push(`filesVerified=${filesVerified}`);
+  if (results.length < 6) failures.push(`cases=${results.length}`);
+  if (assertions < 35) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
@@ -464,6 +477,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!userFeedbackTrendSeen) failures.push("userFeedbackTrendSeen=false");
   if (!longCycleFeedbackTrendSeen) failures.push("longCycleFeedbackTrendSeen=false");
   if (!crossNodeRecommendationSeen) failures.push("crossNodeRecommendationSeen=false");
+  if (!projectCaseRecallSeen) failures.push("projectCaseRecallSeen=false");
+  if (!multiNodeSupersededCleanupSeen) failures.push("multiNodeSupersededCleanupSeen=false");
+  if (!maintenanceConfigBoundarySeen) failures.push("maintenanceConfigBoundarySeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -485,7 +501,10 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       graphEdgeReinforcementSeen,
       userFeedbackTrendSeen,
       longCycleFeedbackTrendSeen,
-      crossNodeRecommendationSeen
+      crossNodeRecommendationSeen,
+      projectCaseRecallSeen,
+      multiNodeSupersededCleanupSeen,
+      maintenanceConfigBoundarySeen
     },
     failures
   };

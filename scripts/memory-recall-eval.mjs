@@ -25,6 +25,9 @@ const lifecycleEvidence = {
   dreamConflictGroupLifecycleSeen: false,
   longCycleFeedbackTrendSeen: false,
   crossNodeRecommendationSeen: false,
+  projectCaseRecallSeen: false,
+  multiNodeSupersededCleanupSeen: false,
+  maintenanceConfigBoundarySeen: false,
   assertions: [],
   filesVerified: []
 };
@@ -35,6 +38,7 @@ try {
   runCli(["memory", "init"], "memory init");
   seedBusinessMemory();
   const evalOutput = runMemoryEval("memory recall eval");
+  assertProjectCaseRecall();
   assertGraphEdgeReinforcement();
   assertUserFeedbackTrendLifecycle();
   assertLongCycleFeedbackTrendRecall();
@@ -347,6 +351,15 @@ function assertLongCycleFeedbackTrendRecall() {
   recordAssertion("cross-node workflow recommendation surfaced related habit");
 }
 
+function assertProjectCaseRecall() {
+  const output = runMemoryEval("memory recall eval for project cases", writeProjectCaseFile());
+  assert(output.includes("project case recalls release owner"), "project case owner recall failed");
+  assert(output.includes("project case recalls incident handoff"), "project case handoff recall failed");
+  lifecycleEvidence.projectCaseRecallSeen = true;
+  recordAssertion("project-level release owner recall passed");
+  recordAssertion("project-level incident handoff recall passed");
+}
+
 async function assertNaturalLanguageCorrectionLifecycle() {
   const stale = seedTypedGraphNode({
     type: "preference",
@@ -543,6 +556,89 @@ function assertConflictGroupDreamLifecycle() {
   recordAssertion("Dream conflict group apply archived stale nodes and kept preferred node");
 }
 
+function assertMultiNodeSupersededCleanupLifecycle() {
+  const replacement = seedTypedGraphNode({
+    type: "project",
+    title: "Current project release policy",
+    summary: "Current project release policy.",
+    body: "Project release policy uses focused validation and concise release notes.",
+    weight: 0.96,
+    metadata: { correctionFor: "project-release-policy-old" }
+  });
+  const staleManual = seedTypedGraphNode({
+    type: "project",
+    title: "Deprecated project release manual",
+    summary: "Deprecated project release manual.",
+    body: "Project release policy requires broad validation and raw release logs.",
+    weight: 0.28
+  });
+  const staleChecklist = seedTypedGraphNode({
+    type: "project",
+    title: "Deprecated project release checklist",
+    summary: "Deprecated project release checklist.",
+    body: "Project release checklist requires full terminal dumps during release.",
+    weight: 0.27
+  });
+  seedSupersedesEdge({
+    fromNodeId: replacement.id,
+    toNodeId: staleManual.id,
+    reason: "Current release policy supersedes the old manual."
+  });
+  seedSupersedesEdge({
+    fromNodeId: replacement.id,
+    toNodeId: staleChecklist.id,
+    reason: "Current release policy supersedes the old checklist."
+  });
+  disputeNodes([staleManual.id, staleChecklist.id]);
+
+  const candidates = cleanupCandidates();
+  assert(
+    candidates.filter((candidate) => candidate.node.status === "disputed").length >= 2,
+    "cleanup candidates missed multiple disputed superseded nodes"
+  );
+  assert(
+    candidates.some((candidate) => candidate.node.id === staleManual.id) &&
+      candidates.some((candidate) => candidate.node.id === staleChecklist.id),
+    "cleanup candidates missed seeded superseded project nodes"
+  );
+
+  const dreamPreview = runCli(["memory", "dream"], "memory dream multi-node cleanup preview");
+  assert(
+    dreamPreview.includes("archive_candidate"),
+    "Dream preview missed multi-node cleanup candidates"
+  );
+  const dreamIdValue = dreamId(dreamPreview);
+  const manifest = dreamManifest(dreamIdValue);
+  const cleanupNodeIds = new Set(
+    manifest.operations.flatMap((op) => (Array.isArray(op.graphNodeIds) ? op.graphNodeIds : []))
+  );
+  assert(cleanupNodeIds.has(staleManual.id), "Dream manifest missed superseded manual node");
+  assert(cleanupNodeIds.has(staleChecklist.id), "Dream manifest missed superseded checklist node");
+  const applied = runCli(
+    ["memory", "dream", "apply", dreamIdValue],
+    "memory dream apply multi-node cleanup"
+  );
+  assert(applied.includes("Applied Dream:"), "Dream apply for multi-node cleanup did not run");
+  assert(nodeById(replacement.id).status === "active", "Dream archived replacement node");
+  assert(nodeById(staleManual.id).status === "archived", "Dream did not archive stale manual");
+  assert(
+    nodeById(staleChecklist.id).status === "archived",
+    "Dream did not archive stale checklist"
+  );
+
+  const search = runCli(
+    ["memory", "search", "project release policy raw release logs"],
+    "post-cleanup project policy search"
+  );
+  assert(search.includes("focused validation"), "post-cleanup search missed current policy");
+  assert(!search.includes("raw release logs"), "post-cleanup search recalled archived stale policy");
+
+  lifecycleEvidence.multiNodeSupersededCleanupSeen = true;
+  recordAssertion("multi-node superseded cleanup candidates listed disputed nodes");
+  recordAssertion("Dream multi-node cleanup archived superseded project nodes");
+  recordAssertion("post-cleanup project recall excluded archived superseded nodes");
+}
+
 function seedConflictGroupNodes() {
   const current = seedTypedGraphNode({
     type: "preference",
@@ -662,11 +758,85 @@ function assertMaintenanceLifecycle() {
   recordAssertion("maintenance protected workflow decayed less than project fact");
   recordAssertion("maintenance persisted configurable decay policy");
 
+  const bounded = runCli(
+    [
+      "memory",
+      "maintain",
+      "config",
+      "--older-than-days",
+      "5000",
+      "--decay",
+      "1",
+      "--min-weight",
+      "0",
+      "--limit",
+      "2000"
+    ],
+    "memory maintenance boundary config"
+  );
+  assert(bounded.includes("olderThanDays: 3650"), "maintenance config did not clamp olderThanDays");
+  assert(bounded.includes("decay: 1.000"), "maintenance config did not clamp decay");
+  assert(bounded.includes("minWeight: 0.000"), "maintenance config did not clamp minWeight");
+  assert(bounded.includes("limit: 1000"), "maintenance config did not clamp limit");
+  assertCliFails(
+    [
+      "memory",
+      "maintain",
+      "config",
+      "--older-than-days",
+      "-1"
+    ],
+    "memory maintenance negative boundary config",
+    "must be a non-negative number"
+  );
+  assertCliFails(
+    ["memory", "maintain", "config", "--decay", "1.5"],
+    "memory maintenance invalid decay config",
+    "must be a number between 0 and 1"
+  );
+  lifecycleEvidence.maintenanceConfigBoundarySeen = true;
+  recordAssertion("maintenance config boundary values were clamped");
+  recordAssertion("maintenance config invalid values were rejected");
+
   const postMaintenanceEval = runMemoryEval(
     "memory recall eval after maintenance",
     writeMaintenanceCaseFile()
   );
   assert(postMaintenanceEval.includes("threshold: PASS"), "memory eval failed after maintenance");
+  assertMultiNodeSupersededCleanupLifecycle();
+}
+
+function writeProjectCaseFile() {
+  const suite = JSON.parse(readFileSync(options.caseFile, "utf8"));
+  const file = path.join(workDir, "memory-recall-project-business.json");
+  writeFileSync(
+    file,
+    `${JSON.stringify(
+      {
+        ...suite,
+        name: `${suite.name ?? "memory business recall"} with project cases`,
+        cases: [
+          ...(Array.isArray(suite.cases) ? suite.cases : []),
+          {
+            name: "project case recalls release owner",
+            query: "Magi release verification owner",
+            expect: ["Magi release verification", "business-level memory recall evals"],
+            minResults: 1
+          },
+          {
+            name: "project case recalls incident handoff",
+            query: "release rollout incident handoff concise deployment",
+            expect: ["Release rollout project", "Concise deployment reporting"],
+            minResults: 2
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  return file;
 }
 
 function writeMaintenanceCaseFile() {
@@ -712,6 +882,7 @@ function writeLifecycleEvidence() {
   );
   recordFileVerified("state/sessions.sqlite");
   recordFileVerified("memory/dreams");
+  recordFileVerified("memory-recall-project-business.json");
   recordFileVerified("memory-recall-maintenance-business.json");
   writeFileSync(
     reportFile,
@@ -730,6 +901,48 @@ function writeLifecycleEvidence() {
     )}\n`,
     "utf8"
   );
+}
+
+function seedSupersedesEdge(input) {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    store.addEdge({
+      fromNodeId: input.fromNodeId,
+      toNodeId: input.toNodeId,
+      relation: "supersedes",
+      weight: 1,
+      metadata: {
+        reason: input.reason,
+        evalSeed: "memory-recall-eval"
+      }
+    });
+  } finally {
+    store.close();
+  }
+}
+
+function disputeNodes(ids) {
+  const db = openDb(false);
+  try {
+    const update = db.prepare(
+      "update memory_nodes set status = 'disputed', updated_at = ? where id = ?"
+    );
+    const now = new Date().toISOString();
+    for (const id of ids) {
+      update.run(now, id);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+function cleanupCandidates() {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    return store.listCleanupCandidates({ olderThanDays: 0, maxWeight: 1, limit: 20 });
+  } finally {
+    store.close();
+  }
 }
 
 function recordAssertion(assertion) {
@@ -820,6 +1033,30 @@ function runCli(args, label) {
     );
   }
   return result.stdout;
+}
+
+function assertCliFails(args, label, expectedError) {
+  if (!existsSync(cliPath)) {
+    throw new Error("dist/cli.js does not exist. Run npm run build first.");
+  }
+  const result = spawnSync(process.execPath, [cliPath, "--no-color", ...args], {
+    cwd: workDir,
+    env: {
+      ...process.env,
+      MAGI_CONFIG_DIR: configDir,
+      MAGI_OPENAI_API_KEY: "test-key",
+      NO_COLOR: "1"
+    },
+    encoding: "utf8"
+  });
+  assert(
+    result.status !== 0,
+    `${label} unexpectedly succeeded\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+  );
+  assert(
+    result.stderr.includes(expectedError) || result.stdout.includes(expectedError),
+    `${label} did not include expected error "${expectedError}"\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+  );
 }
 
 function runCliAsync(args, label) {
