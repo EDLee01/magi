@@ -300,6 +300,7 @@ describe("memory-node-store", () => {
         source: "agent",
         weight: 0.45
       });
+      store.markUsed([duplicate.id], 0);
       const project = store.upsertNode({
         type: "project",
         title: "Release project",
@@ -330,6 +331,13 @@ describe("memory-node-store", () => {
         weight: 0.6,
         metadata: { source: "test" }
       });
+      store.addEdge({
+        fromNodeId: keep.id,
+        toNodeId: skill.id,
+        relation: "conflicts_with",
+        weight: 0.2,
+        metadata: { source: "stale-conflict" }
+      });
 
       const result = store.mergeDuplicateNode({
         keepId: keep.id,
@@ -339,6 +347,10 @@ describe("memory-node-store", () => {
       });
 
       expect(result.archived.map((node) => node.id)).toEqual([duplicate.id]);
+      expect(result.nextKeepWeight).toBeGreaterThan(result.previousKeepWeight);
+      expect(result.keep.weight).toBeGreaterThan(keep.weight);
+      expect(result.keep.useCount).toBe(1);
+      expect(result.resolvedEdgeConflictCount).toBe(1);
       expect(result.redirectedEdges).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -358,10 +370,19 @@ describe("memory-node-store", () => {
         metadata: expect.objectContaining({
           archive: expect.objectContaining({
             mergedInto: keep.id,
-            redirectedEdgeCount: 2
+            redirectedEdgeCount: 2,
+            resolvedEdgeConflictCount: 1
           })
         })
       });
+      expect(store.getNode(keep.id)?.metadata).toMatchObject({
+        merge: expect.objectContaining({
+          duplicateNodeId: duplicate.id,
+          previousWeight: keep.weight,
+          duplicateUseCount: 1
+        })
+      });
+      expect(store.listConflicts()).toHaveLength(0);
       expect(
         store.searchGraph({ query: "package publishing", limit: 5 }).map((hit) => hit.node.id)
       ).toContain(keep.id);

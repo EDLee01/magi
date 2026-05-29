@@ -691,6 +691,8 @@ async function scenarioComplexWorkflow() {
       });
       assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream did not archive duplicate graph workflow");
       assert(appliedDream.includes("Redirected graph edges: 1"), "memory dream did not redirect duplicate graph edges");
+      assert(appliedDream.includes("Fused graph node weights: 1"), "memory dream did not fuse duplicate graph node weight");
+      assert(appliedDream.includes("Resolved graph edge conflicts: 0"), "memory dream reported unexpected graph edge conflicts");
 
       await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
@@ -707,6 +709,7 @@ async function scenarioComplexWorkflow() {
           "memory search found learned workflow",
           "Dream archived duplicate workflow memory",
           "Dream redirected duplicate workflow graph edge",
+          "Dream fused duplicate workflow weight",
           "learning draft listed"
         ],
         filesVerified: ["reports/e2e-result.md", "state/todos.json"],

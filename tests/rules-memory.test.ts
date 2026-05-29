@@ -255,12 +255,34 @@ describe("AGENTS rules and memory", () => {
       source: "explicit",
       weight: 0.7
     });
+    const skill = nodeStore.upsertNode({
+      type: "skill_ref",
+      title: "Verification skill",
+      summary: "Verification skill.",
+      body: "Verification skill supports focused release checks.",
+      source: "explicit",
+      weight: 0.7
+    });
     nodeStore.addEdge({
       fromNodeId: project.id,
       toNodeId: duplicate.id,
       relation: "depends_on",
       weight: 0.8,
       metadata: { source: "test" }
+    });
+    nodeStore.addEdge({
+      fromNodeId: duplicate.id,
+      toNodeId: skill.id,
+      relation: "uses_skill",
+      weight: 0.6,
+      metadata: { source: "test" }
+    });
+    nodeStore.addEdge({
+      fromNodeId: keep.id,
+      toNodeId: skill.id,
+      relation: "conflicts_with",
+      weight: 0.2,
+      metadata: { source: "stale-conflict" }
     });
     nodeStore.close();
 
@@ -286,16 +308,28 @@ describe("AGENTS rules and memory", () => {
     const applied = await runCli(["memory", "dream", "apply", dreams[0].id], temp.env, workspace);
     expect(applied.exitCode).toBe(0);
     expect(applied.stdout).toContain("Archived graph nodes: 1");
-    expect(applied.stdout).toContain("Redirected graph edges: 1");
+    expect(applied.stdout).toContain("Redirected graph edges: 2");
+    expect(applied.stdout).toContain("Fused graph node weights: 1");
+    expect(applied.stdout).toContain("Resolved graph edge conflicts: 1");
     const afterApply = MemoryNodeStore.open(paths);
     expect(afterApply.getNode(keep.id)?.status).toBe("active");
+    expect(afterApply.getNode(keep.id)?.weight).toBeGreaterThan(keep.weight);
     expect(afterApply.getNode(duplicate.id)?.status).toBe("archived");
     expect(afterApply.getNode(duplicate.id)?.metadata).toMatchObject({
       archive: expect.objectContaining({
         mergedInto: keep.id,
-        redirectedEdgeCount: 1
+        redirectedEdgeCount: 2,
+        resolvedEdgeConflictCount: 1
       })
     });
+    expect(showDream({ appRoot: paths.root, id: dreams[0].id })).toMatchObject({
+      graphReview: expect.objectContaining({
+        redirectedEdgeCount: 2,
+        fusedWeightCount: 1,
+        resolvedEdgeConflictCount: 1
+      })
+    });
+    expect(afterApply.listConflicts()).toHaveLength(0);
     expect(
       afterApply.searchGraph({ query: "package publishing", limit: 5 }).map((hit) => hit.node.id)
     ).toContain(keep.id);

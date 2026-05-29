@@ -43,6 +43,8 @@ export interface DreamManifest {
     nodeIds: string[];
     reviewedAt: string;
     redirectedEdgeCount?: number;
+    resolvedEdgeConflictCount?: number;
+    fusedWeightCount?: number;
   };
 }
 
@@ -174,7 +176,9 @@ export function applyDream(
       decision: "archive",
       nodeIds: reviewedGraphNodeIds,
       reviewedAt: new Date().toISOString(),
-      redirectedEdgeCount: graphMergeResult.redirectedEdgeCount
+      redirectedEdgeCount: graphMergeResult.redirectedEdgeCount,
+      resolvedEdgeConflictCount: graphMergeResult.resolvedEdgeConflictCount,
+      fusedWeightCount: graphMergeResult.fusedWeightCount
     }
   };
   atomicWrite(file, JSON.stringify(applied, null, 2) + "\n");
@@ -188,7 +192,9 @@ export function applyDream(
       graphNodeIds,
       archivedGraphNodeIds: reviewedGraphNodeIds,
       graphMerges: graphMergeResult.mergedNodeIds,
-      redirectedEdgeCount: graphMergeResult.redirectedEdgeCount
+      redirectedEdgeCount: graphMergeResult.redirectedEdgeCount,
+      resolvedEdgeConflictCount: graphMergeResult.resolvedEdgeConflictCount,
+      fusedWeightCount: graphMergeResult.fusedWeightCount
     }
   });
   return applied;
@@ -330,15 +336,27 @@ function mergeDreamGraphDuplicates(input: {
   paths?: MagiPaths;
   dreamId: string;
   operations: DreamOperation[];
-}): { mergedNodeIds: string[]; redirectedEdgeCount: number } {
+}): {
+  mergedNodeIds: string[];
+  redirectedEdgeCount: number;
+  resolvedEdgeConflictCount: number;
+  fusedWeightCount: number;
+} {
   const mergeOperations = input.operations.filter((op) => op.graphMerge);
   if (!input.paths || mergeOperations.length === 0) {
-    return { mergedNodeIds: [], redirectedEdgeCount: 0 };
+    return {
+      mergedNodeIds: [],
+      redirectedEdgeCount: 0,
+      resolvedEdgeConflictCount: 0,
+      fusedWeightCount: 0
+    };
   }
   const store = MemoryNodeStore.open(input.paths);
   try {
     const mergedNodeIds: string[] = [];
     let redirectedEdgeCount = 0;
+    let resolvedEdgeConflictCount = 0;
+    let fusedWeightCount = 0;
     for (const op of mergeOperations) {
       const merge = op.graphMerge!;
       const result = store.mergeDuplicateNode({
@@ -351,8 +369,12 @@ function mergeDreamGraphDuplicates(input: {
         mergedNodeIds.push(result.duplicate.id);
       }
       redirectedEdgeCount += result.redirectedEdges.length;
+      resolvedEdgeConflictCount += result.resolvedEdgeConflictCount;
+      if (result.nextKeepWeight > result.previousKeepWeight) {
+        fusedWeightCount += 1;
+      }
     }
-    return { mergedNodeIds, redirectedEdgeCount };
+    return { mergedNodeIds, redirectedEdgeCount, resolvedEdgeConflictCount, fusedWeightCount };
   } finally {
     store.close();
   }

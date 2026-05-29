@@ -123,6 +123,9 @@ export interface MergeDuplicateMemoryNodeResult {
   duplicate: MemoryNode;
   redirectedEdges: MemoryEdge[];
   archived: MemoryNode[];
+  previousKeepWeight: number;
+  nextKeepWeight: number;
+  resolvedEdgeConflictCount: number;
 }
 
 export interface ArchiveMemoryNodesInput {
@@ -1084,10 +1087,25 @@ export class MemoryNodeStore {
         throw new Error(`Cannot merge into archived Memory node: ${keepId}`);
       }
       if (duplicate.status === "archived") {
-        return { keep, duplicate, redirectedEdges: [], archived: [] };
+        return {
+          keep,
+          duplicate,
+          redirectedEdges: [],
+          archived: [],
+          previousKeepWeight: keep.weight,
+          nextKeepWeight: keep.weight,
+          resolvedEdgeConflictCount: 0
+        };
       }
 
-      const redirectedEdges = this.redirectEdgesFromDuplicate({
+      const fusedKeep = this.fuseDuplicateIntoKeeper({
+        keep,
+        duplicate,
+        now,
+        reason: input.reason ?? "Merged duplicate Memory node",
+        metadata: input.metadata
+      });
+      const redirectResult = this.redirectEdgesFromDuplicate({
         keepId,
         duplicateId,
         now,
@@ -1100,10 +1118,19 @@ export class MemoryNodeStore {
         metadata: {
           ...input.metadata,
           mergedInto: keepId,
-          redirectedEdgeCount: redirectedEdges.length
+          redirectedEdgeCount: redirectResult.redirectedEdges.length,
+          resolvedEdgeConflictCount: redirectResult.resolvedEdgeConflictCount
         }
       });
-      return { keep: this.getNode(keepId) ?? keep, duplicate, redirectedEdges, archived };
+      return {
+        keep: fusedKeep,
+        duplicate,
+        redirectedEdges: redirectResult.redirectedEdges,
+        archived,
+        previousKeepWeight: keep.weight,
+        nextKeepWeight: fusedKeep.weight,
+        resolvedEdgeConflictCount: redirectResult.resolvedEdgeConflictCount
+      };
     })();
   }
 
@@ -1308,13 +1335,69 @@ export class MemoryNodeStore {
     };
   }
 
+  private fuseDuplicateIntoKeeper(input: {
+    keep: MemoryNode;
+    duplicate: MemoryNode;
+    now: string;
+    reason: string;
+    metadata?: Record<string, unknown>;
+  }): MemoryNode {
+    const previousWeight = input.keep.weight;
+    const duplicateSignal = Math.max(0, Math.min(input.duplicate.weight, 1)) * 0.35;
+    const nextWeight = Number(
+      Math.min(
+        1,
+        Math.max(previousWeight, 1 - (1 - previousWeight) * (1 - duplicateSignal))
+      ).toFixed(6)
+    );
+    const lastUsedAt = latestIso(input.keep.lastUsedAt, input.duplicate.lastUsedAt);
+    const mergeEntry = {
+      duplicateNodeId: input.duplicate.id,
+      duplicateWeight: input.duplicate.weight,
+      previousWeight,
+      nextWeight,
+      duplicateUseCount: input.duplicate.useCount,
+      reason: input.reason,
+      mergedAt: input.now,
+      ...(input.metadata ?? {})
+    };
+    const mergeHistory = Array.isArray(input.keep.metadata.mergeHistory)
+      ? [...input.keep.metadata.mergeHistory.slice(-9), mergeEntry]
+      : [mergeEntry];
+    this.db
+      .prepare(
+        `
+      update memory_nodes
+      set weight = ?,
+          use_count = use_count + ?,
+          last_used_at = ?,
+          updated_at = ?,
+          metadata_json = ?
+      where id = ? and status != 'archived'
+    `
+      )
+      .run(
+        nextWeight,
+        input.duplicate.useCount,
+        lastUsedAt ?? input.keep.lastUsedAt ?? null,
+        input.now,
+        encodeJson({
+          ...input.keep.metadata,
+          merge: mergeEntry,
+          mergeHistory
+        }),
+        input.keep.id
+      );
+    return this.getNode(input.keep.id) ?? input.keep;
+  }
+
   private redirectEdgesFromDuplicate(input: {
     keepId: string;
     duplicateId: string;
     now: string;
     reason: string;
     metadata?: Record<string, unknown>;
-  }): MemoryEdge[] {
+  }): { redirectedEdges: MemoryEdge[]; resolvedEdgeConflictCount: number } {
     const rows = this.db
       .prepare(
         `
@@ -1326,6 +1409,7 @@ export class MemoryNodeStore {
       )
       .all(input.duplicateId, input.duplicateId) as DbMemoryEdge[];
     const redirected: MemoryEdge[] = [];
+    let resolvedEdgeConflictCount = 0;
     for (const row of rows) {
       const edge = toMemoryEdge(row);
       const fromNodeId = edge.fromNodeId === input.duplicateId ? input.keepId : edge.fromNodeId;
@@ -1333,22 +1417,26 @@ export class MemoryNodeStore {
       if (fromNodeId === toNodeId) {
         continue;
       }
-      redirected.push(
-        this.upsertRedirectedEdge({
-          fromNodeId,
-          toNodeId,
-          relation: edge.relation,
-          weight: edge.weight,
-          now: input.now,
-          sourceEdge: edge,
-          keepId: input.keepId,
-          duplicateId: input.duplicateId,
-          reason: input.reason,
-          metadata: input.metadata
-        })
-      );
+      const result = this.upsertRedirectedEdge({
+        fromNodeId,
+        toNodeId,
+        relation: edge.relation,
+        weight: edge.weight,
+        now: input.now,
+        sourceEdge: edge,
+        keepId: input.keepId,
+        duplicateId: input.duplicateId,
+        reason: input.reason,
+        metadata: input.metadata
+      });
+      if (result.edge) {
+        redirected.push(result.edge);
+      }
+      if (result.resolvedConflict) {
+        resolvedEdgeConflictCount += 1;
+      }
     }
-    return redirected;
+    return { redirectedEdges: redirected, resolvedEdgeConflictCount };
   }
 
   private upsertRedirectedEdge(input: {
@@ -1362,7 +1450,7 @@ export class MemoryNodeStore {
     duplicateId: string;
     reason: string;
     metadata?: Record<string, unknown>;
-  }): MemoryEdge {
+  }): { edge?: MemoryEdge; resolvedConflict: boolean } {
     const existing = this.db
       .prepare(
         `
@@ -1403,7 +1491,23 @@ export class MemoryNodeStore {
       const updated = this.db
         .prepare("select * from memory_edges where id = ?")
         .get(existing.id) as DbMemoryEdge | undefined;
-      return toMemoryEdge(updated ?? existing);
+      return { edge: toMemoryEdge(updated ?? existing), resolvedConflict: false };
+    }
+    const conflicting = this.findConflictingEdge(input.fromNodeId, input.toNodeId, input.relation);
+    if (conflicting) {
+      const keepExisting = conflicting.weight >= input.weight;
+      const conflictMetadata = {
+        ...mergeMetadata,
+        keptEdgeId: keepExisting ? conflicting.id : undefined,
+        removedEdgeId: keepExisting ? undefined : conflicting.id,
+        keptRelation: keepExisting ? conflicting.relation : input.relation,
+        skippedRelation: keepExisting ? input.relation : conflicting.relation
+      };
+      if (keepExisting) {
+        this.markEdgeMergeConflictResolved(conflicting, conflictMetadata);
+        return { resolvedConflict: true };
+      }
+      this.db.prepare("delete from memory_edges where id = ?").run(conflicting.id);
     }
     const result = this.db
       .prepare(
@@ -1423,7 +1527,7 @@ export class MemoryNodeStore {
           merge: mergeMetadata
         })
       );
-    return {
+    const edge = {
       id: Number(result.lastInsertRowid),
       fromNodeId: input.fromNodeId,
       toNodeId: input.toNodeId,
@@ -1435,6 +1539,67 @@ export class MemoryNodeStore {
         merge: mergeMetadata
       }
     };
+    return { edge, resolvedConflict: Boolean(conflicting) };
+  }
+
+  private findConflictingEdge(
+    fromNodeId: string,
+    toNodeId: string,
+    relation: MemoryEdgeRelation
+  ): DbMemoryEdge | undefined {
+    if (relation === "conflicts_with") {
+      return this.db
+        .prepare(
+          `
+        select *
+        from memory_edges
+        where relation != 'conflicts_with'
+          and (
+            (from_node_id = ? and to_node_id = ?)
+            or (from_node_id = ? and to_node_id = ?)
+          )
+        order by weight desc, id asc
+        limit 1
+      `
+        )
+        .get(fromNodeId, toNodeId, toNodeId, fromNodeId) as DbMemoryEdge | undefined;
+    }
+    return this.db
+      .prepare(
+        `
+      select *
+      from memory_edges
+      where relation = 'conflicts_with'
+        and (
+          (from_node_id = ? and to_node_id = ?)
+          or (from_node_id = ? and to_node_id = ?)
+        )
+      order by weight desc, id asc
+      limit 1
+    `
+      )
+      .get(fromNodeId, toNodeId, toNodeId, fromNodeId) as DbMemoryEdge | undefined;
+  }
+
+  private markEdgeMergeConflictResolved(
+    edge: DbMemoryEdge,
+    metadata: Record<string, unknown>
+  ): void {
+    this.db
+      .prepare(
+        `
+      update memory_edges
+      set metadata_json = ?
+      where id = ?
+    `
+      )
+      .run(
+        encodeJson({
+          ...decodeJson(edge.metadata_json),
+          mergeConflict: metadata
+        }),
+        edge.id
+      );
   }
 
   private listActiveEdges(): MemoryEdge[] {
@@ -2159,6 +2324,12 @@ function decodeJson(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function latestIso(left?: string, right?: string): string | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) >= Date.parse(right) ? left : right;
 }
 
 function nowIso(): string {

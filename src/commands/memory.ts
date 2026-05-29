@@ -102,7 +102,7 @@ export const command = {
           paths: input.paths,
           applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId })
         });
-        return `Applied Dream: ${dream.id}\nArchived graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}\nRedirected graph edges: ${dream.graphReview?.redirectedEdgeCount ?? 0}`;
+        return `Applied Dream: ${dream.id}\nArchived graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}\nRedirected graph edges: ${dream.graphReview?.redirectedEdgeCount ?? 0}\nFused graph node weights: ${dream.graphReview?.fusedWeightCount ?? 0}\nResolved graph edge conflicts: ${dream.graphReview?.resolvedEdgeConflictCount ?? 0}`;
       }
       if (action === "reject") {
         const dream = rejectDream({
