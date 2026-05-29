@@ -27,6 +27,7 @@
     "test:control-api-eval": "npm run build && node scripts/control-api-eval.mjs",
     "test:blackbox": "npm run build && node scripts/blackbox-e2e.mjs",
     "test:model-tasks": "npm run build && node scripts/model-task-benchmark.mjs",
+    "test:live-smoke": "npm run build && node scripts/live-model-smoke.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "scan:licenses": "node scripts/scan-licenses.mjs",
     "sbom": "node scripts/generate-sbom.mjs",

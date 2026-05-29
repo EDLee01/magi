@@ -210,7 +210,7 @@
         <article class="card">
           <span class="tag risk">仍需补强</span>
           <h3>真实任务稳定性</h3>
-          <p>当前黑盒测试主要使用 mock provider，能证明 harness 管道，但还不能证明真实 LLM 的复杂任务稳定性。</p>
+          <p>当前主门禁仍以 mock provider 保持稳定；已新增可选 live smoke 入口，用真实模型执行改代码、复测和报告写入任务。</p>
         </article>
       </div>
     </section>
@@ -242,8 +242,8 @@
           <tr>
             <td>Eval Harness</td>
             <td>真实模型运行业务级任务，记录成功率、工具效率、回归原因。</td>
-            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告、失败分类、provider 调用效率、断言覆盖、文件验证数、实际工具调用分布和 regression 摘要；model task benchmark 已把项目编辑、记忆驱动输出、工具发现检索、跨文件编辑后运行聚焦验证、patch strategy，以及测试驱动修复中的失败测试、FilePatch 恢复、复测和修复报告做成固定任务集；capability report 会把这些细粒度评分器和 blackbox、Model Tasks、Memory、Patch Engine、Goal/Plan、Tool Discovery、Control API 门禁一起汇总，并生成跨版本 trend report 跟踪 score、通过项、regression、provider/tool 调用变化。</td>
-            <td><code>npm run test:blackbox</code>、<code>npm run test:model-tasks</code>、<code>npm run test:goal-plan-eval</code>、<code>npm run test:tool-discovery-eval</code>、<code>npm run test:control-api-eval</code>、<code>npm run report:capability</code>、<code>.github/workflows/ci.yml</code>、<code>scripts/model-task-benchmark.mjs</code>、<code>tests/harness-report.test.ts</code>、<code>tests/capability-report.test.ts</code>、<code>tests/capability-trend.test.ts</code>、<code>src/capability-trend.ts</code>；下一步扩大真实任务集规模和难度。</td>
+            <td><span class="tag next">进行中</span> blackbox 已覆盖真实 CLI 的 FilePatch、memory graph link/search、goal、learning、retry/fallback，并输出结构化报告、失败分类、provider 调用效率、断言覆盖、文件验证数、实际工具调用分布和 regression 摘要；model task benchmark 已把项目编辑、记忆驱动输出、工具发现检索、跨文件编辑后运行聚焦验证、patch strategy，以及测试驱动修复中的失败测试、FilePatch 恢复、复测和修复报告做成固定任务集；live model smoke 已提供可选入口，能用真实 provider 执行一个失败测试修复、复测和报告写入任务，默认跳过以避免 CI 被上游波动污染；capability report 会把这些细粒度评分器和 blackbox、Model Tasks、Memory、Patch Engine、Goal/Plan、Tool Discovery、Control API 门禁一起汇总，并生成跨版本 trend report 跟踪 score、通过项、regression、provider/tool 调用变化。</td>
+            <td><code>npm run test:blackbox</code>、<code>npm run test:model-tasks</code>、<code>npm run test:live-smoke</code>、<code>npm run test:goal-plan-eval</code>、<code>npm run test:tool-discovery-eval</code>、<code>npm run test:control-api-eval</code>、<code>npm run report:capability</code>、<code>.github/workflows/ci.yml</code>、<code>scripts/model-task-benchmark.mjs</code>、<code>scripts/live-model-smoke.mjs</code>、<code>tests/harness-report.test.ts</code>、<code>tests/capability-report.test.ts</code>、<code>tests/capability-trend.test.ts</code>、<code>src/capability-trend.ts</code>；下一步扩大真实任务集规模和难度。</td>
           </tr>
           <tr>
             <td>Goal / Plan Harness</td>

@@ -173,6 +173,17 @@ events, resolves a mobile approval for FileWrite, cancels a streaming background
 job, cancels an active approval, resumes a panel session, and checks durable
 audit evidence.
 
+Live provider behavior can be checked with an opt-in smoke task:
+
+```sh
+MAGI_LIVE_SMOKE=1 MAGI_OPENAI_API_KEY=... npm run test:live-smoke
+```
+
+The live smoke creates an isolated fixture, asks the configured model to fix a
+failing test, reruns that test, and writes a short report. Without
+`MAGI_LIVE_SMOKE=1`, the script skips and writes a skipped report so normal CI
+does not depend on upstream model availability.
+
 After the eval scripts run, aggregate the current capability evidence with:
 
 ```sh
@@ -289,6 +300,7 @@ npm run test:patch-eval
 npm run test:goal-plan-eval
 npm run test:tool-discovery-eval
 npm run test:control-api-eval
+npm run test:live-smoke
 npm run report:capability
 ```
 
