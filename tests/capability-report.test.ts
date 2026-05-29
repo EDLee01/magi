@@ -217,9 +217,17 @@ describe("capability report", () => {
         "patchStrategyTask=false",
         "testDrivenRecoveryTask=false",
         "dependencyRefactorTask=false",
+        "continuousPatchRecoveryTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
+        "continuousPatchFailedAttempts < 2",
+        "continuousPatchFilePatchCalls < 3",
+        "continuousPatchFileReadCalls < 2",
+        "continuousPatchBashCalls != 2",
+        "reReadAfterRepeatedPatchFailures=false",
+        "finalDiffQualityVerified=false",
+        "unrelatedFileUnchanged=false",
         "regressions=1"
       ])
     );
@@ -516,6 +524,17 @@ function modelTaskReport(
       fileWriteCalls: number;
       patchUsageRate: number;
     };
+    continuousPatchRecovery: {
+      failedPatchAttempts: number;
+      filePatchCalls: number;
+      fileReadCalls: number;
+      bashCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      reReadAfterRepeatedPatchFailures: boolean;
+      finalDiffQualityVerified: boolean;
+      unrelatedFileUnchanged: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -526,7 +545,8 @@ function modelTaskReport(
     "cross_file_verified_edit",
     "patch_strategy",
     "dependency_refactor",
-    "test_driven_recovery"
+    "test_driven_recovery",
+    "continuous_patch_recovery"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -534,14 +554,25 @@ function modelTaskReport(
     fileWriteCalls: 0,
     patchUsageRate: 0.5
   };
+  const continuousPatchRecovery = overrides.continuousPatchRecovery ?? {
+    failedPatchAttempts: 2,
+    filePatchCalls: 3,
+    fileReadCalls: 2,
+    bashCalls: 2,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    reReadAfterRepeatedPatchFailures: true,
+    finalDiffQualityVerified: true,
+    unrelatedFileUnchanged: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 33,
-    filesVerified: overrides.filesVerified ?? 13,
-    toolCallCount: overrides.toolCallCount ?? 28,
+    assertions: overrides.assertions ?? 42,
+    filesVerified: overrides.filesVerified ?? 16,
+    toolCallCount: overrides.toolCallCount ?? 40,
     uniqueToolCount: overrides.uniqueToolCount ?? 6,
     regressions: overrides.regressions ?? 0
   });
@@ -564,6 +595,22 @@ function modelTaskReport(
                 FileWrite: patchStrategy.fileWriteCalls
               },
               patchUsageRate: patchStrategy.patchUsageRate
+            }
+          : {}),
+        ...(taskClasses[index] === "continuous_patch_recovery"
+          ? {
+              toolCounts: {
+                FilePatch: continuousPatchRecovery.filePatchCalls,
+                FileRead: continuousPatchRecovery.fileReadCalls,
+                Bash: continuousPatchRecovery.bashCalls,
+                FileWrite: continuousPatchRecovery.fileWriteCalls,
+                FileEdit: continuousPatchRecovery.fileEditCalls
+              },
+              failedPatchAttempts: continuousPatchRecovery.failedPatchAttempts,
+              reReadAfterRepeatedPatchFailures:
+                continuousPatchRecovery.reReadAfterRepeatedPatchFailures,
+              finalDiffQualityVerified: continuousPatchRecovery.finalDiffQualityVerified,
+              unrelatedFileUnchanged: continuousPatchRecovery.unrelatedFileUnchanged
             }
           : {})
       }

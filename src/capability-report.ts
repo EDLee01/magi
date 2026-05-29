@@ -182,24 +182,56 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const patchStrategyFileWriteCalls = readNumber(patchStrategyToolCounts.FileWrite);
   const testDrivenRecoveryTaskSeen = taskClasses.has("test_driven_recovery");
   const dependencyRefactorTaskSeen = taskClasses.has("dependency_refactor");
+  const continuousPatchRecovery = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "continuous_patch_recovery"
+  );
+  const continuousPatchRecoveryDetails = readRecord(
+    continuousPatchRecovery ? readRecord(continuousPatchRecovery).details : {}
+  );
+  const continuousPatchRecoveryToolCounts = readRecord(continuousPatchRecoveryDetails.toolCounts);
+  const continuousPatchRecoveryTaskSeen = taskClasses.has("continuous_patch_recovery");
+  const continuousPatchFailedAttempts = readNumber(
+    continuousPatchRecoveryDetails.failedPatchAttempts
+  );
+  const continuousPatchFilePatchCalls = readNumber(continuousPatchRecoveryToolCounts.FilePatch);
+  const continuousPatchFileReadCalls = readNumber(continuousPatchRecoveryToolCounts.FileRead);
+  const continuousPatchBashCalls = readNumber(continuousPatchRecoveryToolCounts.Bash);
+  const continuousPatchFileWriteCalls = readNumber(continuousPatchRecoveryToolCounts.FileWrite);
+  const continuousPatchFileEditCalls = readNumber(continuousPatchRecoveryToolCounts.FileEdit);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 7) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 7) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 8) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 8) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
-  if (assertions < 33) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 13) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 27) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!continuousPatchRecoveryTaskSeen) failures.push("continuousPatchRecoveryTask=false");
+  if (assertions < 42) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 16) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 40) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 5) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
   if (patchStrategyFileWriteCalls !== 0) failures.push("patchStrategyFileWrite used");
   if (patchStrategyRate < 0.5) failures.push(`patchStrategyRate=${patchStrategyRate}`);
+  if (continuousPatchFailedAttempts < 2) failures.push("continuousPatchFailedAttempts < 2");
+  if (continuousPatchFilePatchCalls < 3) failures.push("continuousPatchFilePatchCalls < 3");
+  if (continuousPatchFileReadCalls < 2) failures.push("continuousPatchFileReadCalls < 2");
+  if (continuousPatchBashCalls !== 2) failures.push("continuousPatchBashCalls != 2");
+  if (continuousPatchFileWriteCalls !== 0) failures.push("continuousPatchFileWrite used");
+  if (continuousPatchFileEditCalls !== 0) failures.push("continuousPatchFileEdit used");
+  if (continuousPatchRecoveryDetails.reReadAfterRepeatedPatchFailures !== true) {
+    failures.push("reReadAfterRepeatedPatchFailures=false");
+  }
+  if (continuousPatchRecoveryDetails.finalDiffQualityVerified !== true) {
+    failures.push("finalDiffQualityVerified=false");
+  }
+  if (continuousPatchRecoveryDetails.unrelatedFileUnchanged !== true) {
+    failures.push("unrelatedFileUnchanged=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -223,6 +255,17 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       patchStrategyFileWriteCalls,
       testDrivenRecoveryTaskSeen,
       dependencyRefactorTaskSeen,
+      continuousPatchRecoveryTaskSeen,
+      continuousPatchFailedAttempts,
+      continuousPatchFilePatchCalls,
+      continuousPatchFileReadCalls,
+      continuousPatchBashCalls,
+      continuousPatchFileWriteCalls,
+      continuousPatchFileEditCalls,
+      reReadAfterRepeatedPatchFailures:
+        continuousPatchRecoveryDetails.reReadAfterRepeatedPatchFailures === true,
+      finalDiffQualityVerified: continuousPatchRecoveryDetails.finalDiffQualityVerified === true,
+      unrelatedFileUnchanged: continuousPatchRecoveryDetails.unrelatedFileUnchanged === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
