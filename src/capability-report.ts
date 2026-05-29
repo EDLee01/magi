@@ -1112,7 +1112,7 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 48) failures.push(`assertions=${assertions}`);
+  if (assertions < 53) failures.push(`assertions=${assertions}`);
   if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 4) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -1145,6 +1145,11 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "panelClientCreateSessionUnwrapped",
     "panelClientStartJobAccepted",
     "panelSseJobStreamSeen",
+    "sseDisconnectSimulated",
+    "sseReconnectUsedAfterId",
+    "sseReconnectCompletionSeen",
+    "sseReconnectNoDuplicateReplay",
+    "sseReconnectAuditPersisted",
     "mobileBrowserViewportSeen",
     "mobileBrowserTokenStored",
     "mobileBrowserTokenUrlCleaned",
@@ -1225,6 +1230,11 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       panelClientCreateSessionUnwrapped: details.panelClientCreateSessionUnwrapped === true,
       panelClientStartJobAccepted: details.panelClientStartJobAccepted === true,
       panelSseJobStreamSeen: details.panelSseJobStreamSeen === true,
+      sseDisconnectSimulated: details.sseDisconnectSimulated === true,
+      sseReconnectUsedAfterId: details.sseReconnectUsedAfterId === true,
+      sseReconnectCompletionSeen: details.sseReconnectCompletionSeen === true,
+      sseReconnectNoDuplicateReplay: details.sseReconnectNoDuplicateReplay === true,
+      sseReconnectAuditPersisted: details.sseReconnectAuditPersisted === true,
       mobileBrowserViewportSeen: details.mobileBrowserViewportSeen === true,
       mobileBrowserTokenStored: details.mobileBrowserTokenStored === true,
       mobileBrowserTokenUrlCleaned: details.mobileBrowserTokenUrlCleaned === true,

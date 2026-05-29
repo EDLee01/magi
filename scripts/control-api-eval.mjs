@@ -59,6 +59,11 @@ try {
     panelClientCreateSessionUnwrapped: false,
     panelClientStartJobAccepted: false,
     panelSseJobStreamSeen: false,
+    sseDisconnectSimulated: false,
+    sseReconnectUsedAfterId: false,
+    sseReconnectCompletionSeen: false,
+    sseReconnectNoDuplicateReplay: false,
+    sseReconnectAuditPersisted: false,
     mobileBrowserViewportSeen: false,
     mobileBrowserTokenStored: false,
     mobileBrowserTokenUrlCleaned: false,
@@ -133,6 +138,7 @@ try {
     await exerciseApprovalCancelFlow({ serve, headers, workDir, state });
     await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
+    await exerciseSseReconnectFlow({ serve, headers, state });
     await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
     const lanSmoke = await exerciseLanDeviceSmoke({ controlPort, pairing, state });
     const peerDispatch = await exercisePeerDispatchFlow({ provider, state });
@@ -163,6 +169,11 @@ try {
       "panel client createSession unwrapped response",
       "panel client startJob accepted background job",
       "panel SSE stream reached completion",
+      "SSE disconnect simulated after ready event",
+      "SSE reconnect used after id cursor",
+      "SSE reconnect observed job completion",
+      "SSE reconnect avoided duplicate replay",
+      "SSE reconnect completion persisted in audit",
       "mobile viewport rendered panel",
       "mobile pairing token stored and URL cleaned",
       "mobile browser sent message",
@@ -231,7 +242,7 @@ try {
     mkdirSync(path.dirname(reportPath), { recursive: true });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     console.log(
-      "Control API eval passed (pairing URL, mDNS discovery, approval, SSE, job cancel, approval cancel, session resume, mobile browser panel, peer dispatch)."
+      "Control API eval passed (pairing URL, mDNS discovery, approval, SSE reconnect, job cancel, approval cancel, session resume, mobile browser panel, peer dispatch)."
     );
     console.log(`Control API report: ${reportPath}`);
   } catch (error) {
@@ -545,6 +556,73 @@ async function exerciseWebPanelContract({ serve, headers, state }) {
     sse.includes("event: ready") &&
     sse.includes("agent.text.delta") &&
     sse.includes("agent.query.completed");
+}
+
+async function exerciseSseReconnectFlow({ serve, headers, state }) {
+  const started = await postJson(
+    `${serve.url}/jobs`,
+    {
+      prompt: "Panel reconnect stream: keep token cedar-58.",
+      model: "main",
+      background: true
+    },
+    headers,
+    202
+  );
+  assert(started.jobId, "SSE reconnect job did not start");
+
+  const firstConnect = await readSseUntilAndCancel(
+    `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}&limit=50`,
+    headers,
+    (text) => text.includes("event: ready") && text.includes("agent.query.started")
+  );
+  assert(firstConnect.lastEventId, "SSE disconnect did not capture an audit cursor");
+  state.sseDisconnectSimulated =
+    firstConnect.cancelled === true &&
+    firstConnect.text.includes("event: ready") &&
+    firstConnect.text.includes("agent.query.started");
+
+  await waitFor(
+    async () => {
+      const response = await getJson(
+        `${serve.url}/jobs/${encodeURIComponent(started.jobId)}`,
+        headers
+      );
+      return response.job?.status === "completed";
+    },
+    "SSE reconnect job completion",
+    10_000
+  );
+
+  const reconnectUrl =
+    `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}` +
+    `&limit=50&after=${encodeURIComponent(String(firstConnect.lastEventId ?? 0))}`;
+  const reconnected = await readSseUntil(
+    reconnectUrl,
+    headers,
+    (text) =>
+      text.includes("agent.query.completed") &&
+      text.includes("CONTROL ") &&
+      text.includes("RECONNECT ") &&
+      text.includes("DONE")
+  );
+  state.sseReconnectUsedAfterId = reconnectUrl.includes("after=");
+  state.sseReconnectCompletionSeen =
+    reconnected.includes("agent.query.completed") &&
+    reconnected.includes("CONTROL ") &&
+    reconnected.includes("RECONNECT ") &&
+    reconnected.includes("DONE");
+  state.sseReconnectNoDuplicateReplay = !reconnected.includes("agent.query.started");
+
+  const events = await getJson(
+    `${serve.url}/jobs/${encodeURIComponent(started.jobId)}/events?limit=50`,
+    headers
+  );
+  state.sseReconnectAuditPersisted = (events.events ?? []).some(
+    (event) =>
+      event.action === "agent.query.completed" &&
+      Number(event.id) > Number(firstConnect.lastEventId)
+  );
 }
 
 async function exerciseMdnsDiscovery({ controlPort, state }) {
@@ -951,6 +1029,9 @@ function createRouter(state) {
     }
     if (latestUser.includes("Panel mobile browser cancel flow")) {
       return streamTextResponse(["mobile ", "cancel "]);
+    }
+    if (latestUser.includes("Panel reconnect stream")) {
+      return completedStreamTextResponse(["CONTROL ", "RECONNECT ", "DONE"]);
     }
     if (latestUser.includes("Panel mobile browser flow")) {
       return completedStreamTextResponse(["MOBILE ", "PANEL ", "OK"]);
@@ -1464,6 +1545,52 @@ async function readSseUntil(url, headers, predicate, onChunk, timeoutMs = 10_000
     controller.abort();
   }
   throw new Error(`SSE predicate was not satisfied. Received:\n${text}`);
+}
+
+async function readSseUntilAndCancel(url, headers, predicate, timeoutMs = 10_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let text = "";
+  let lastEventId;
+  try {
+    const response = await fetch(url, { headers, signal: controller.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(`SSE request failed: ${response.status}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    try {
+      for (;;) {
+        const result = await reader.read();
+        if (result.done) {
+          break;
+        }
+        text += decoder.decode(result.value, { stream: true });
+        lastEventId = latestSseId(text) ?? lastEventId;
+        if (predicate(text)) {
+          await reader.cancel();
+          return { text, lastEventId, cancelled: true };
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Timed out waiting for SSE event from ${url}\nReceived:\n${text}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+  }
+  throw new Error(`SSE predicate was not satisfied. Received:\n${text}`);
+}
+
+function latestSseId(text) {
+  const matches = [...text.matchAll(/^id:\s*(\d+)$/gm)];
+  const last = matches.at(-1)?.[1];
+  return last === undefined ? undefined : Number(last);
 }
 
 async function waitFor(predicate, label, timeoutMs = 5_000) {

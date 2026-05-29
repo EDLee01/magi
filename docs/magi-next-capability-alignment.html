@@ -260,8 +260,8 @@
           <tr>
             <td>TUI / Mobile Control</td>
             <td>终端、手机、远程控制能一致处理 stream、approval、cancel 和 resume。</td>
-            <td><span class="tag next">进行中</span> Control API 已有独立真实 CLI serve eval 覆盖：pairing URL/二维码语义、mDNS 网络发现、SSE、background job、手机审批解锁 FileWrite、stream job cancel、active approval cancel、panel session resume、真实 panel HTML/client contract、panel approval/cancel 控制、移动 viewport 浏览器面板发送/流式渲染/取消操作、<code>0.0.0.0</code> 绑定下的局域网设备 smoke（独立进程访问 health、tokenized panel 和鉴权 API）、保存 peer 凭证、ToolSearch reveal Agent 后跨 daemon peer dispatch、通过局域网 URL 访问远端 peer、父任务 acceptEdits 权限传递到远端 peer、远端文件写入只落在 peer workspace、长耗时 peer dispatch benchmark 中观察远端 running job 后等待完成，以及远端 session/job/audit 持久审计；报告会输出业务断言、验证文件和远程工具调用分布，并由 capability report 门禁检查证据厚度。</td>
-            <td><code>scripts/control-api-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>tests/control-api.test.ts</code>、<code>tests/cli.test.ts</code>、<code>npm run report:capability</code>；下一步补物理多机网络抖动、断连恢复和更长任务时长的手动/夜间 benchmark。</td>
+            <td><span class="tag next">进行中</span> Control API 已有独立真实 CLI serve eval 覆盖：pairing URL/二维码语义、mDNS 网络发现、SSE、background job、手机审批解锁 FileWrite、stream job cancel、active approval cancel、panel session resume、真实 panel HTML/client contract、panel approval/cancel 控制、移动 viewport 浏览器面板发送/流式渲染/取消操作、SSE 断连后用 after cursor 重连并观察同一 job 完成且不重复回放旧事件、<code>0.0.0.0</code> 绑定下的局域网设备 smoke（独立进程访问 health、tokenized panel 和鉴权 API）、保存 peer 凭证、ToolSearch reveal Agent 后跨 daemon peer dispatch、通过局域网 URL 访问远端 peer、父任务 acceptEdits 权限传递到远端 peer、远端文件写入只落在 peer workspace、长耗时 peer dispatch benchmark 中观察远端 running job 后等待完成，以及远端 session/job/audit 持久审计；报告会输出业务断言、验证文件和远程工具调用分布，并由 capability report 门禁检查证据厚度。</td>
+            <td><code>scripts/control-api-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>tests/control-api.test.ts</code>、<code>tests/cli.test.ts</code>、<code>npm run report:capability</code>；下一步补物理多机网络抖动和更长任务时长的手动/夜间 benchmark。</td>
           </tr>
         </tbody>
       </table>

@@ -528,6 +528,11 @@ describe("capability report", () => {
         panelUiApprovalControlsSeen: false,
         panelUiCancelControlSeen: false,
         panelSseJobStreamSeen: false,
+        sseDisconnectSimulated: false,
+        sseReconnectUsedAfterId: false,
+        sseReconnectCompletionSeen: false,
+        sseReconnectNoDuplicateReplay: false,
+        sseReconnectAuditPersisted: false,
         mobileBrowserViewportSeen: false,
         mobileBrowserStreamRendered: false,
         mobileBrowserCancelRendered: false,
@@ -586,6 +591,11 @@ describe("capability report", () => {
         "panelUiApprovalControlsSeen=false",
         "panelUiCancelControlSeen=false",
         "panelSseJobStreamSeen=false",
+        "sseDisconnectSimulated=false",
+        "sseReconnectUsedAfterId=false",
+        "sseReconnectCompletionSeen=false",
+        "sseReconnectNoDuplicateReplay=false",
+        "sseReconnectAuditPersisted=false",
         "mobileBrowserViewportSeen=false",
         "mobileBrowserStreamRendered=false",
         "mobileBrowserCancelRendered=false",
@@ -1556,6 +1566,11 @@ function controlApiReport(
     panelClientCreateSessionUnwrapped: boolean;
     panelClientStartJobAccepted: boolean;
     panelSseJobStreamSeen: boolean;
+    sseDisconnectSimulated: boolean;
+    sseReconnectUsedAfterId: boolean;
+    sseReconnectCompletionSeen: boolean;
+    sseReconnectNoDuplicateReplay: boolean;
+    sseReconnectAuditPersisted: boolean;
     mobileBrowserViewportSeen: boolean;
     mobileBrowserTokenStored: boolean;
     mobileBrowserTokenUrlCleaned: boolean;
@@ -1603,7 +1618,7 @@ function controlApiReport(
       name: "control-api-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 51,
+      assertions: overrides.assertions ?? 56,
       filesVerified: overrides.filesVerified ?? 7,
       toolCallCount: overrides.toolCallCount ?? 4,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1618,7 +1633,7 @@ function controlApiReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 51 },
+            { length: overrides.assertions ?? 56 },
             (_, index) => `control-api assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1658,6 +1673,11 @@ function controlApiReport(
           panelClientCreateSessionUnwrapped: true,
           panelClientStartJobAccepted: true,
           panelSseJobStreamSeen: true,
+          sseDisconnectSimulated: true,
+          sseReconnectUsedAfterId: true,
+          sseReconnectCompletionSeen: true,
+          sseReconnectNoDuplicateReplay: true,
+          sseReconnectAuditPersisted: true,
           mobileBrowserViewportSeen: true,
           mobileBrowserTokenStored: true,
           mobileBrowserTokenUrlCleaned: true,
