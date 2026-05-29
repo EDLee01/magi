@@ -72,6 +72,8 @@ try {
     lanSmokeAuthenticatedApiSeen: false,
     peerCredentialsSaved: false,
     peerSavedListed: false,
+    peerDispatchBoundAllInterfaces: false,
+    peerDispatchExternalUrlReachable: false,
     peerAgentToolSearched: false,
     peerAgentSchemaRevealed: false,
     peerAgentDispatched: false,
@@ -83,7 +85,16 @@ try {
     peerRemotePermissionModeInherited: false,
     peerRemoteFileWritten: false,
     peerLocalFileNotWritten: false,
-    peerDispatchAuditPersisted: false
+    peerDispatchAuditPersisted: false,
+    peerLongAgentDispatched: false,
+    peerLongDispatchRunningObserved: false,
+    peerLongDispatchCompleted: false,
+    peerLongDispatchResultReturned: false,
+    peerLongDispatchSecondAgentCall: false,
+    peerLongRemoteFileWritten: false,
+    peerLongRemoteFileIsolated: false,
+    peerLongRemoteJobCompleted: false,
+    peerLongRemoteAuditPersisted: false
   };
   const controlPort = randomControlPort();
   const providerLog = path.join(root, "provider-log.json");
@@ -124,7 +135,7 @@ try {
     await exerciseWebPanelContract({ serve, headers, state });
     await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
     const lanSmoke = await exerciseLanDeviceSmoke({ controlPort, pairing, state });
-    await exercisePeerDispatchFlow({ provider, state });
+    const peerDispatch = await exercisePeerDispatchFlow({ provider, state });
 
     assertAllState(state);
     const assertions = [
@@ -164,6 +175,8 @@ try {
       "LAN device smoke authenticated API request",
       "peer credentials saved locally",
       "saved peer listed by CLI",
+      "peer daemon bound all interfaces for LAN dispatch",
+      "peer dispatch external URL reached health endpoint",
       "Agent deferred tool revealed through ToolSearch",
       "peer Agent dispatch called once",
       "peer dispatch returned remote result",
@@ -172,7 +185,16 @@ try {
       "remote peer inherited acceptEdits permission mode",
       "remote peer wrote requested file",
       "local workspace did not receive remote file",
-      "remote peer audit persisted completion"
+      "remote peer audit persisted completion",
+      "long peer Agent dispatch issued",
+      "long peer running job observed remotely",
+      "long peer dispatch completed",
+      "long peer dispatch returned remote benchmark result",
+      "long peer dispatch used second Agent call",
+      "long peer wrote requested file remotely",
+      "long peer file stayed out of local workspace",
+      "long peer remote job completed",
+      "long peer remote audit persisted completion"
     ];
     const filesVerified = [
       "mobile-control.txt",
@@ -200,6 +222,7 @@ try {
             filesVerified,
             control: { port: controlPort },
             lanSmoke,
+            peerDispatch,
             provider: provider.summary()
           }
         }
@@ -607,14 +630,13 @@ async function exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state }) {
 }
 
 async function exerciseLanDeviceSmoke({ controlPort, pairing, state }) {
-  const candidates = lanAddressCandidates();
+  const candidates = controlUrlCandidates({ controlPort });
   let lastError;
-  for (const host of candidates) {
-    const baseUrl = `http://${host}:${controlPort}`;
-    const pairingUrl = buildPairingUrl(baseUrl, pairing);
+  for (const candidate of candidates) {
+    const pairingUrl = buildPairingUrl(candidate.baseUrl, pairing);
     try {
       const result = await runLanDeviceSmoke({
-        baseUrl,
+        baseUrl: candidate.baseUrl,
         pairingUrl,
         deviceId: pairing.deviceId,
         token: pairing.token
@@ -622,12 +644,15 @@ async function exerciseLanDeviceSmoke({ controlPort, pairing, state }) {
       state.lanSmokeHealthSeen = result.healthOk === true;
       state.lanSmokePanelLoaded = result.panelOk === true;
       state.lanSmokeAuthenticatedApiSeen = result.authOk === true;
-      assert(state.lanSmokeHealthSeen, `LAN smoke health failed through ${host}`);
-      assert(state.lanSmokePanelLoaded, `LAN smoke panel failed through ${host}`);
-      assert(state.lanSmokeAuthenticatedApiSeen, `LAN smoke auth failed through ${host}`);
+      assert(state.lanSmokeHealthSeen, `LAN smoke health failed through ${candidate.host}`);
+      assert(state.lanSmokePanelLoaded, `LAN smoke panel failed through ${candidate.host}`);
+      assert(
+        state.lanSmokeAuthenticatedApiSeen,
+        `LAN smoke auth failed through ${candidate.host}`
+      );
       return {
-        host,
-        usedLoopbackFallback: host === "127.0.0.1",
+        host: candidate.host,
+        usedLoopbackFallback: candidate.usedLoopbackFallback,
         healthOk: result.healthOk,
         panelOk: result.panelOk,
         authOk: result.authOk
@@ -637,7 +662,7 @@ async function exerciseLanDeviceSmoke({ controlPort, pairing, state }) {
     }
   }
   throw new Error(
-    `LAN device smoke failed for ${candidates.join(", ")}\n${
+    `LAN device smoke failed for ${candidates.map((candidate) => candidate.host).join(", ")}\n${
       lastError instanceof Error ? lastError.message : String(lastError)
     }`
   );
@@ -660,10 +685,18 @@ async function exercisePeerDispatchFlow({ provider, state }) {
     peerServe = await startServe({
       configDir: peerConfigDir,
       workDir: peerWorkDir,
-      controlPort: peerControlPort
+      controlPort: peerControlPort,
+      controlBind: "0.0.0.0"
     });
+    state.peerDispatchBoundAllInterfaces = peerServe.bind === "0.0.0.0";
     const peerHealth = await getJson(`${peerServe.url}/health`);
     assert(peerHealth.ok === true, "peer control health check failed");
+    const externalPeer = await resolveReachableControlUrl({
+      controlPort: peerControlPort,
+      path: "/health"
+    });
+    const externalPeerHealth = await getJson(new URL("/health", externalPeer.baseUrl).toString());
+    state.peerDispatchExternalUrlReachable = externalPeerHealth.ok === true;
 
     const peerPairing = await postJson(`${peerServe.url}/pairing`, {
       name: "peer-dispatch-eval"
@@ -675,14 +708,14 @@ async function exercisePeerDispatchFlow({ provider, state }) {
       "peers",
       "add",
       "peer-eval",
-      peerServe.url,
+      externalPeer.baseUrl,
       peerPairing.deviceId,
       peerPairing.token
     ]);
     state.peerCredentialsSaved = true;
 
     const saved = await runCli(["peers", "saved"]);
-    state.peerSavedListed = saved.includes("peer-eval") && saved.includes(peerServe.url);
+    state.peerSavedListed = saved.includes("peer-eval") && saved.includes(externalPeer.baseUrl);
 
     const output = await runCli([
       "--permission-mode",
@@ -734,6 +767,82 @@ async function exercisePeerDispatchFlow({ provider, state }) {
     state.peerDispatchAuditPersisted = auditEvents.some(
       (event) => event.action === "agent.query.completed"
     );
+
+    const longOutputPromise = runCli(
+      [
+        "--permission-mode",
+        "acceptEdits",
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "Dispatch a long-running benchmark sub-agent to peer-eval using Agent target and report its result."
+      ],
+      60_000
+    );
+
+    let observedLongJobId;
+    await waitFor(
+      async () => {
+        const peerJobsDuringRun = await getJson(`${peerServe.url}/jobs`, peerHeaders);
+        const peerSessionsDuringRun = await getJson(`${peerServe.url}/sessions`, peerHeaders);
+        const longSessionIds = new Set(
+          (peerSessionsDuringRun.sessions ?? [])
+            .filter((session) =>
+              String(session.title ?? "").includes("Write peer-long-output.txt")
+            )
+            .map((session) => session.id)
+        );
+        const job = (peerJobsDuringRun.jobs ?? []).find(
+          (candidate) =>
+            candidate.status === "running" &&
+            longSessionIds.has(candidate.sessionId)
+        );
+        observedLongJobId = job?.id;
+        return Boolean(observedLongJobId);
+      },
+      "long-running peer dispatch job",
+      15_000
+    );
+    state.peerLongDispatchRunningObserved = true;
+
+    const longOutput = await longOutputPromise;
+    state.peerLongDispatchCompleted = longOutput.includes("CONTROL PEER LONG DISPATCH DONE");
+    assert(state.peerLongDispatchCompleted, "long peer dispatch final answer missing");
+    state.peerLongDispatchResultReturned =
+      longOutput.includes("PEER LONG DISPATCH OK") && longOutput.includes("peer-long-output.txt");
+    state.peerLongDispatchSecondAgentCall = provider.summary().toolCounts.Agent === 2;
+    assert(state.peerLongDispatchSecondAgentCall, "long peer dispatch should call Agent twice total");
+
+    const longRemoteFile = path.join(peerWorkDir, "peer-long-output.txt");
+    const longLocalFile = path.join(workDir, "peer-long-output.txt");
+    state.peerLongRemoteFileWritten =
+      existsSync(longRemoteFile) &&
+      readFileSync(longRemoteFile, "utf8") === "long remote peer benchmark ok";
+    state.peerLongRemoteFileIsolated = !existsSync(longLocalFile);
+
+    const longPeerJobs = await getJson(`${peerServe.url}/jobs`, peerHeaders);
+    state.peerLongRemoteJobCompleted = (longPeerJobs.jobs ?? []).some(
+      (job) => job.id === observedLongJobId && job.status === "completed"
+    );
+    const longAudit = await getJson(
+      `${peerServe.url}/jobs/${encodeURIComponent(observedLongJobId)}/events?limit=100`,
+      peerHeaders
+    );
+    const longAuditEvents = longAudit.events ?? [];
+    state.peerLongRemoteAuditPersisted =
+      longAuditEvents.some((event) => event.action === "agent.query.started") &&
+      longAuditEvents.some(
+        (event) => event.action === "agent.tool.completed" && event.target === "FileWrite"
+      ) &&
+      longAuditEvents.some((event) => event.action === "agent.query.completed");
+
+    return {
+      baseUrl: externalPeer.baseUrl,
+      usedLoopbackFallback: externalPeer.usedLoopbackFallback,
+      longJobId: observedLongJobId
+    };
   } finally {
     if (peerServe) {
       await peerServe.close();
@@ -744,6 +853,25 @@ async function exercisePeerDispatchFlow({ provider, state }) {
 function createRouter(state) {
   return ({ body, transcript }) => {
     const latestUser = latestUserFromBody(body);
+    if (latestUser.includes("Write peer-long-output.txt")) {
+      const hasToolMessage = (body.messages ?? []).some((message) => message.role === "tool");
+      if (!hasToolMessage) {
+        return toolResponse([
+          toolCall("remote-peer-long-write", "FileWrite", {
+            file_path: "peer-long-output.txt",
+            content: "long remote peer benchmark ok"
+          })
+        ]);
+      }
+      assert(
+        transcript.includes("Wrote peer-long-output.txt"),
+        "long remote FileWrite result missing"
+      );
+      return delayedMessageText(
+        "PEER LONG DISPATCH OK: peer-long-output.txt written.",
+        1_500
+      );
+    }
     if (latestUser.includes("Write peer-output.txt")) {
       const hasToolMessage = (body.messages ?? []).some((message) => message.role === "tool");
       if (!hasToolMessage) {
@@ -760,6 +888,38 @@ function createRouter(state) {
     if (transcript.includes("PEER DISPATCH OK") && transcript.includes("Agent")) {
       state.peerDispatchResultReturned = true;
       return messageText("CONTROL PEER DISPATCH DONE");
+    }
+    if (transcript.includes("PEER LONG DISPATCH OK") && transcript.includes("Agent")) {
+      state.peerLongDispatchResultReturned = true;
+      return messageText("CONTROL PEER LONG DISPATCH DONE");
+    }
+    if (
+      latestUser.includes("Dispatch a long-running benchmark sub-agent to peer-eval") &&
+      transcript.includes("Tool: Agent") &&
+      transcript.includes("peer-eval")
+    ) {
+      state.peerLongAgentDispatched = true;
+      return toolResponse([
+        toolCall("dispatch-peer-long-agent", "Agent", {
+          description: "peer long benchmark",
+          prompt:
+            "Write peer-long-output.txt with exactly: long remote peer benchmark ok. Then stream PEER LONG DISPATCH OK.",
+          subagent_type: "general",
+          target: "peer-eval"
+        })
+      ]);
+    }
+    if (latestUser.includes("Dispatch a long-running benchmark sub-agent to peer-eval")) {
+      assert(
+        !body.tools?.some((tool) => tool.function?.name === "Agent"),
+        "Agent should start deferred"
+      );
+      state.peerAgentToolSearched = true;
+      return toolResponse([
+        toolCall("select-agent-tool-for-long-dispatch", "ToolSearch", {
+          query: "select:Agent"
+        })
+      ]);
     }
     if (
       latestUser.includes("Dispatch a sub-agent to peer-eval") &&
@@ -853,7 +1013,7 @@ async function startProvider({ logPath, routeRequest }) {
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
-    request.on("end", () => {
+    request.on("end", async () => {
       const raw = Buffer.concat(chunks).toString("utf8");
       let body;
       try {
@@ -902,6 +1062,9 @@ async function startProvider({ logPath, routeRequest }) {
           openStreams.delete(response);
         });
         for (const text of result.chunks) {
+          if (result.delayMs > 0) {
+            await sleep(result.delayMs);
+          }
           response.write(
             `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`
           );
@@ -913,6 +1076,9 @@ async function startProvider({ logPath, routeRequest }) {
         return;
       }
 
+      if (result.delayMs > 0) {
+        await sleep(result.delayMs);
+      }
       response.writeHead(result.status ?? 200, { "content-type": "application/json" });
       response.end(JSON.stringify(result.body ?? result));
     });
@@ -1338,6 +1504,32 @@ function lanAddressCandidates() {
   return [...new Set(hosts)];
 }
 
+function controlUrlCandidates({ controlPort }) {
+  return lanAddressCandidates().map((host) => ({
+    host,
+    baseUrl: `http://${host}:${controlPort}`,
+    usedLoopbackFallback: host === "127.0.0.1"
+  }));
+}
+
+async function resolveReachableControlUrl({ controlPort, path: requestPath }) {
+  const candidates = controlUrlCandidates({ controlPort });
+  let lastError;
+  for (const candidate of candidates) {
+    try {
+      await getJson(new URL(requestPath, candidate.baseUrl).toString());
+      return candidate;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(
+    `No reachable control URL for ${requestPath} on ${candidates
+      .map((candidate) => candidate.host)
+      .join(", ")}\n${lastError instanceof Error ? lastError.message : String(lastError)}`
+  );
+}
+
 function pathToFileUrl(file) {
   let resolved = path.resolve(file).replace(/\\/g, "/");
   if (!resolved.startsWith("/")) {
@@ -1361,6 +1553,10 @@ function messageText(text, model = "mock-main") {
     ],
     usage: { prompt_tokens: 1, completion_tokens: 1 }
   };
+}
+
+function delayedMessageText(text, delayMs, model = "mock-main") {
+  return { ...messageText(text, model), delayMs };
 }
 
 function toolResponse(toolCalls, model = "mock-main") {
@@ -1391,12 +1587,12 @@ function toolCall(id, name, input) {
   };
 }
 
-function streamTextResponse(chunks) {
-  return { stream: true, chunks };
+function streamTextResponse(chunks, delayMs = 0) {
+  return { stream: true, chunks, delayMs };
 }
 
-function completedStreamTextResponse(chunks) {
-  return { stream: true, chunks, end: true };
+function completedStreamTextResponse(chunks, delayMs = 0) {
+  return { stream: true, chunks, delayMs, end: true };
 }
 
 function fail(status, message) {

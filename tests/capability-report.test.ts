@@ -487,6 +487,8 @@ describe("capability report", () => {
         lanSmokeAuthenticatedApiSeen: false,
         peerCredentialsSaved: false,
         peerSavedListed: false,
+        peerDispatchBoundAllInterfaces: false,
+        peerDispatchExternalUrlReachable: false,
         peerAgentToolSearched: false,
         peerAgentSchemaRevealed: false,
         peerAgentDispatched: false,
@@ -499,6 +501,15 @@ describe("capability report", () => {
         peerRemoteFileWritten: false,
         peerLocalFileNotWritten: false,
         peerDispatchAuditPersisted: false,
+        peerLongAgentDispatched: false,
+        peerLongDispatchRunningObserved: false,
+        peerLongDispatchCompleted: false,
+        peerLongDispatchResultReturned: false,
+        peerLongDispatchSecondAgentCall: false,
+        peerLongRemoteFileWritten: false,
+        peerLongRemoteFileIsolated: false,
+        peerLongRemoteJobCompleted: false,
+        peerLongRemoteAuditPersisted: false,
         assertions: 8,
         filesVerified: 2,
         toolCallCount: 2,
@@ -534,6 +545,8 @@ describe("capability report", () => {
         "lanSmokeAuthenticatedApiSeen=false",
         "peerCredentialsSaved=false",
         "peerSavedListed=false",
+        "peerDispatchBoundAllInterfaces=false",
+        "peerDispatchExternalUrlReachable=false",
         "peerAgentToolSearched=false",
         "peerAgentSchemaRevealed=false",
         "peerAgentDispatched=false",
@@ -545,7 +558,16 @@ describe("capability report", () => {
         "peerRemotePermissionModeInherited=false",
         "peerRemoteFileWritten=false",
         "peerLocalFileNotWritten=false",
-        "peerDispatchAuditPersisted=false"
+        "peerDispatchAuditPersisted=false",
+        "peerLongAgentDispatched=false",
+        "peerLongDispatchRunningObserved=false",
+        "peerLongDispatchCompleted=false",
+        "peerLongDispatchResultReturned=false",
+        "peerLongDispatchSecondAgentCall=false",
+        "peerLongRemoteFileWritten=false",
+        "peerLongRemoteFileIsolated=false",
+        "peerLongRemoteJobCompleted=false",
+        "peerLongRemoteAuditPersisted=false"
       ])
     );
   });
@@ -1311,6 +1333,8 @@ function controlApiReport(
     lanSmokeAuthenticatedApiSeen: boolean;
     peerCredentialsSaved: boolean;
     peerSavedListed: boolean;
+    peerDispatchBoundAllInterfaces: boolean;
+    peerDispatchExternalUrlReachable: boolean;
     peerAgentToolSearched: boolean;
     peerAgentSchemaRevealed: boolean;
     peerAgentDispatched: boolean;
@@ -1323,6 +1347,15 @@ function controlApiReport(
     peerRemoteFileWritten: boolean;
     peerLocalFileNotWritten: boolean;
     peerDispatchAuditPersisted: boolean;
+    peerLongAgentDispatched: boolean;
+    peerLongDispatchRunningObserved: boolean;
+    peerLongDispatchCompleted: boolean;
+    peerLongDispatchResultReturned: boolean;
+    peerLongDispatchSecondAgentCall: boolean;
+    peerLongRemoteFileWritten: boolean;
+    peerLongRemoteFileIsolated: boolean;
+    peerLongRemoteJobCompleted: boolean;
+    peerLongRemoteAuditPersisted: boolean;
     assertions: number;
     filesVerified: number;
     toolCallCount: number;
@@ -1334,7 +1367,7 @@ function controlApiReport(
       name: "control-api-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 42,
+      assertions: overrides.assertions ?? 51,
       filesVerified: overrides.filesVerified ?? 7,
       toolCallCount: overrides.toolCallCount ?? 4,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1349,7 +1382,7 @@ function controlApiReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 42 },
+            { length: overrides.assertions ?? 51 },
             (_, index) => `control-api assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1402,6 +1435,8 @@ function controlApiReport(
           lanSmokeAuthenticatedApiSeen: true,
           peerCredentialsSaved: true,
           peerSavedListed: true,
+          peerDispatchBoundAllInterfaces: true,
+          peerDispatchExternalUrlReachable: true,
           peerAgentToolSearched: true,
           peerAgentSchemaRevealed: true,
           peerAgentDispatched: true,
@@ -1414,6 +1449,15 @@ function controlApiReport(
           peerRemoteFileWritten: true,
           peerLocalFileNotWritten: true,
           peerDispatchAuditPersisted: true,
+          peerLongAgentDispatched: true,
+          peerLongDispatchRunningObserved: true,
+          peerLongDispatchCompleted: true,
+          peerLongDispatchResultReturned: true,
+          peerLongDispatchSecondAgentCall: true,
+          peerLongRemoteFileWritten: true,
+          peerLongRemoteFileIsolated: true,
+          peerLongRemoteJobCompleted: true,
+          peerLongRemoteAuditPersisted: true,
           ...overrides
         }
       }

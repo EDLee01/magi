@@ -885,7 +885,7 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 39) failures.push(`assertions=${assertions}`);
+  if (assertions < 48) failures.push(`assertions=${assertions}`);
   if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 4) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -931,6 +931,8 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "lanSmokeAuthenticatedApiSeen",
     "peerCredentialsSaved",
     "peerSavedListed",
+    "peerDispatchBoundAllInterfaces",
+    "peerDispatchExternalUrlReachable",
     "peerAgentToolSearched",
     "peerAgentSchemaRevealed",
     "peerAgentDispatched",
@@ -942,7 +944,16 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "peerRemotePermissionModeInherited",
     "peerRemoteFileWritten",
     "peerLocalFileNotWritten",
-    "peerDispatchAuditPersisted"
+    "peerDispatchAuditPersisted",
+    "peerLongAgentDispatched",
+    "peerLongDispatchRunningObserved",
+    "peerLongDispatchCompleted",
+    "peerLongDispatchResultReturned",
+    "peerLongDispatchSecondAgentCall",
+    "peerLongRemoteFileWritten",
+    "peerLongRemoteFileIsolated",
+    "peerLongRemoteJobCompleted",
+    "peerLongRemoteAuditPersisted"
   ];
   for (const key of required) {
     if (details[key] !== true) {
@@ -1000,6 +1011,8 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       lanSmokeAuthenticatedApiSeen: details.lanSmokeAuthenticatedApiSeen === true,
       peerCredentialsSaved: details.peerCredentialsSaved === true,
       peerSavedListed: details.peerSavedListed === true,
+      peerDispatchBoundAllInterfaces: details.peerDispatchBoundAllInterfaces === true,
+      peerDispatchExternalUrlReachable: details.peerDispatchExternalUrlReachable === true,
       peerAgentToolSearched: details.peerAgentToolSearched === true,
       peerAgentSchemaRevealed: details.peerAgentSchemaRevealed === true,
       peerAgentDispatched: details.peerAgentDispatched === true,
@@ -1011,7 +1024,16 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       peerRemotePermissionModeInherited: details.peerRemotePermissionModeInherited === true,
       peerRemoteFileWritten: details.peerRemoteFileWritten === true,
       peerLocalFileNotWritten: details.peerLocalFileNotWritten === true,
-      peerDispatchAuditPersisted: details.peerDispatchAuditPersisted === true
+      peerDispatchAuditPersisted: details.peerDispatchAuditPersisted === true,
+      peerLongAgentDispatched: details.peerLongAgentDispatched === true,
+      peerLongDispatchRunningObserved: details.peerLongDispatchRunningObserved === true,
+      peerLongDispatchCompleted: details.peerLongDispatchCompleted === true,
+      peerLongDispatchResultReturned: details.peerLongDispatchResultReturned === true,
+      peerLongDispatchSecondAgentCall: details.peerLongDispatchSecondAgentCall === true,
+      peerLongRemoteFileWritten: details.peerLongRemoteFileWritten === true,
+      peerLongRemoteFileIsolated: details.peerLongRemoteFileIsolated === true,
+      peerLongRemoteJobCompleted: details.peerLongRemoteJobCompleted === true,
+      peerLongRemoteAuditPersisted: details.peerLongRemoteAuditPersisted === true
     },
     failures
   };
