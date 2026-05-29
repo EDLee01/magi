@@ -493,6 +493,11 @@ describe("tool registry", () => {
     });
     expect(failed.isError).toBe(true);
     expect(failed.content).toContain("Patch context did not match file");
+    expect(failed.content).toContain("Recovery guidance:");
+    expect(failed.content).toContain("Patch tried to match:");
+    expect(failed.content).toContain("Current file snippet:");
+    expect(failed.content).toContain("one");
+    expect(failed.content).toContain("TWO");
   });
 
   it("supports glob and grep options", async () => {

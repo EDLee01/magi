@@ -236,8 +236,8 @@
           <tr>
             <td>Patch Engine</td>
             <td>用 hunk 级结构化 patch 替代脆弱的 old/new string 编辑。</td>
-            <td><span class="tag next">进行中</span> FilePatch v1 已支持 unified-diff hunk、唯一上下文匹配和 approval diff preview。</td>
-            <td><code>tests/tool-registry.test.ts</code>、<code>tests/tui-session.test.ts</code></td>
+            <td><span class="tag next">进行中</span> FilePatch v1 已支持 unified-diff hunk、唯一上下文匹配、approval diff preview 和失败恢复反馈。</td>
+            <td><code>tests/tool-registry.test.ts</code>、<code>tests/tui-session.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
             <td>Eval Harness</td>
@@ -274,7 +274,7 @@
         <ul>
           <li>继续完成 Memory Graph v2：冲突审计可视化、记忆维护策略配置、长期节点清理建议。</li>
           <li>扩展真实 memory 业务测试：写入、重启、召回、显式 link、用户纠错、维护降权和权重变化。</li>
-          <li>推进 Patch Engine v1：FilePatch 进入核心工具，黑盒 E2E 覆盖 hunk 编辑。</li>
+          <li>推进 Patch Engine v1：让 agent 编辑策略更稳定地选择 FilePatch，并继续补真实模型 patch benchmark。</li>
         </ul>
       </div>
       <div class="panel" style="margin-top: 12px;">

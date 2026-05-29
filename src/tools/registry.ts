@@ -20,6 +20,7 @@ import {
 import {
   createUnifiedDiff,
   editWorkspaceFile,
+  explainPatchFailure,
   patchWorkspaceFile,
   previewPatchedContent,
   readWorkspaceFile,
@@ -566,6 +567,18 @@ export async function executeRegisteredTool(input: {
   } catch (error) {
     if (shouldRethrowToolExecutionError(error)) {
       throw error;
+    }
+    if (input.toolUse.name === "FilePatch") {
+      const recovery = filePatchRecoveryResult({ cwd: input.cwd, toolUse: input.toolUse, error });
+      if (recovery) {
+        const result = errorResult(input.toolUse, recovery);
+        recordToolUsage({
+          stateRoot: input.stateRoot,
+          toolName: input.toolUse.name,
+          success: false
+        });
+        return result;
+      }
     }
     const result = errorResult(
       input.toolUse,
@@ -3080,6 +3093,33 @@ function errorResult(
   permission?: ToolPermissionResult
 ): RegisteredToolResult {
   return { toolCallId: toolUse.id, toolName: toolUse.name, content, isError: true, permission };
+}
+
+function filePatchRecoveryResult(input: {
+  cwd: string;
+  toolUse: MagiToolUsePart;
+  error: unknown;
+}): string | undefined {
+  if (!(input.error instanceof Error)) {
+    return undefined;
+  }
+  try {
+    const filePath = readString(input.toolUse.input, "file_path");
+    const patch = readString(input.toolUse.input, "patch");
+    const resolved = resolveWorkspacePath(input.cwd, filePath);
+    if (!existsSync(resolved.absolutePath)) {
+      return undefined;
+    }
+    const content = readFileSync(resolved.absolutePath, "utf8");
+    return explainPatchFailure({
+      filePath: resolved.relativePath,
+      content,
+      patch,
+      error: input.error
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 function readString(input: Record<string, unknown>, name: string): string {

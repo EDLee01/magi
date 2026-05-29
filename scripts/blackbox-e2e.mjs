@@ -553,6 +553,23 @@ function createComplexRouter() {
           patch: [
             "@@",
             " - goal context loaded",
+            "-stale patch context",
+            "+- FilePatch recovery first attempt",
+          ].join("\n"),
+        }),
+      ]);
+    }
+
+    if (complexTurns === 4) {
+      assert(transcript.includes("FilePatch failed for reports/e2e-result.md"), "FilePatch failure did not name the target");
+      assert(transcript.includes("Recovery guidance:"), "FilePatch failure did not include recovery guidance");
+      assert(transcript.includes("Current file snippet:"), "FilePatch failure did not include current file context");
+      return toolResponse([
+        toolCall("patch-report-retry", "FilePatch", {
+          file_path: "reports/e2e-result.md",
+          patch: [
+            "@@",
+            " - goal context loaded",
             " - hot memory loaded",
             " - deferred tool revealed",
             "+- FilePatch core edit verified",
@@ -561,7 +578,7 @@ function createComplexRouter() {
       ]);
     }
 
-    if (complexTurns === 4) {
+    if (complexTurns === 5) {
       assert(transcript.includes("Patched reports/e2e-result.md"), "FilePatch result was not visible");
       return toolResponse([
         toolCall("learning-propose", "LearningDraft", {

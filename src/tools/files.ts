@@ -196,6 +196,40 @@ export function previewPatchedContent(before: string, patch: string): string {
   return applyParsedPatch(before, parseUnifiedPatch(patch));
 }
 
+export function explainPatchFailure(input: {
+  filePath: string;
+  content: string;
+  patch: string;
+  error: Error;
+}): string {
+  const parsed = parseUnifiedPatchForExplanation(input.patch);
+  const lines = [
+    `FilePatch failed for ${input.filePath}: ${input.error.message}`,
+    "",
+    "Recovery guidance:",
+    "- Re-read the file or use the current snippet below before retrying.",
+    "- Keep at least one exact context or removed line from the current file in each hunk.",
+    "- If the context appears more than once, include more surrounding lines."
+  ];
+  if (parsed.length > 0) {
+    lines.push("");
+    lines.push("Patch tried to match:");
+    for (const [index, hunk] of parsed.entries()) {
+      lines.push(`## hunk ${index + 1}`);
+      lines.push(snippet(hunk.oldBlock || hunk.rawBlock, 10));
+    }
+  }
+  const best = bestPatchContextSnippet(input.content, parsed);
+  lines.push("");
+  lines.push("Current file snippet:");
+  if (best) {
+    lines.push(best);
+  } else {
+    lines.push(snippet(input.content, 14));
+  }
+  return lines.join("\n");
+}
+
 export function createUnifiedDiff(filePath: string, before: string, after: string): string {
   const beforeLines = before.split("\n");
   const afterLines = after.split("\n");
@@ -330,4 +364,94 @@ function findBlockMatch(text: string, block: string): { count: number; index: nu
     }
   }
   return { count: 0, index: -1 };
+}
+
+function parseUnifiedPatchForExplanation(
+  patch: string
+): Array<{ oldBlock: string; rawBlock: string }> {
+  const hunks: Array<{ oldLines: string[]; rawLines: string[] }> = [];
+  let current: { oldLines: string[]; rawLines: string[] } | undefined;
+  for (const rawLine of patch.split(/\r?\n/)) {
+    if (rawLine.startsWith("--- ") || rawLine.startsWith("+++ ")) {
+      continue;
+    }
+    if (rawLine.startsWith("@@")) {
+      current = { oldLines: [], rawLines: [] };
+      hunks.push(current);
+      continue;
+    }
+    if (!current || rawLine === "" || rawLine.startsWith("\\")) {
+      continue;
+    }
+    const marker = rawLine[0];
+    const text = rawLine.slice(1);
+    if (marker === " " || marker === "-") {
+      current.oldLines.push(text);
+      current.rawLines.push(text);
+    } else if (marker === "+") {
+      current.rawLines.push(text);
+    }
+  }
+  return hunks.map((hunk) => ({
+    oldBlock: hunk.oldLines.join("\n"),
+    rawBlock: hunk.rawLines.join("\n")
+  }));
+}
+
+function bestPatchContextSnippet(
+  content: string,
+  hunks: Array<{ oldBlock: string; rawBlock: string }>
+): string | undefined {
+  const fileLines = content.split(/\r?\n/);
+  const queryTerms = new Set<string>();
+  for (const hunk of hunks) {
+    for (const term of tokenizePatchText(`${hunk.oldBlock}\n${hunk.rawBlock}`)) {
+      queryTerms.add(term);
+    }
+  }
+  if (queryTerms.size === 0) {
+    return undefined;
+  }
+  let bestIndex = -1;
+  let bestScore = 0;
+  for (const [index, line] of fileLines.entries()) {
+    const lineTerms = tokenizePatchText(line);
+    let score = 0;
+    for (const term of queryTerms) {
+      if (lineTerms.includes(term)) {
+        score += 3;
+      } else if (lineTerms.some((item) => item.includes(term) || term.includes(item))) {
+        score += 1;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+  if (bestIndex < 0) {
+    return undefined;
+  }
+  const start = Math.max(0, bestIndex - 4);
+  const end = Math.min(fileLines.length, bestIndex + 5);
+  return fileLines
+    .slice(start, end)
+    .map((line, offset) => `${String(start + offset + 1).padStart(4, " ")} | ${line}`)
+    .join("\n");
+}
+
+function snippet(text: string, maxLines: number): string {
+  return text.split(/\r?\n/).slice(0, maxLines).join("\n");
+}
+
+function tokenizePatchText(text: string): string[] {
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .filter((term) => term.length >= 3)
+    )
+  );
 }
