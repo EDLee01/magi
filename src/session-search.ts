@@ -22,10 +22,14 @@ export interface SessionSearchHit {
   snippets: SessionMessageSnippet[];
 }
 
-export function searchSessions(store: SessionStore, input: SessionSearchRequest): SessionSearchHit[] {
+export function searchSessions(
+  store: SessionStore,
+  input: SessionSearchRequest
+): SessionSearchHit[] {
   const limit = clampInteger(input.limit ?? 5, 1, 20);
   const terms = tokenize(input.query ?? "");
-  const summaries = store.listSessions(100)
+  const summaries = store
+    .listSessions(100)
     .filter((summary) => input.includeCurrent === true || summary.id !== input.currentSessionId);
 
   const hits = summaries.flatMap((summary): SessionSearchHit[] => {
@@ -33,37 +37,49 @@ export function searchSessions(store: SessionStore, input: SessionSearchRequest)
     if (!session) return [];
     const score = terms.length === 0 ? 1 : scoreSession(session, terms);
     if (score <= 0) return [];
-    return [{
-      session: summary,
-      score,
-      snippets: selectSnippets(session.messages, terms, input.window ?? 2)
-    }];
+    return [
+      {
+        session: summary,
+        score,
+        snippets: selectSnippets(session.messages, terms, input.window ?? 2)
+      }
+    ];
   });
 
   return hits
-    .sort((left, right) => right.score - left.score || right.session.updatedAt.localeCompare(left.session.updatedAt))
+    .sort(
+      (left, right) =>
+        right.score - left.score || right.session.updatedAt.localeCompare(left.session.updatedAt)
+    )
     .slice(0, limit);
 }
 
-export function sessionWindow(store: SessionStore, input: {
-  sessionId: string;
-  aroundMessageId?: number;
-  window?: number;
-}): { session: SessionRecord; messages: SessionMessageSnippet[] } {
+export function sessionWindow(
+  store: SessionStore,
+  input: {
+    sessionId: string;
+    aroundMessageId?: number;
+    window?: number;
+  }
+): { session: SessionRecord; messages: SessionMessageSnippet[] } {
   const session = store.getSession(input.sessionId);
   if (!session) {
     throw new Error(`Session not found: ${input.sessionId}`);
   }
   const radius = clampInteger(input.window ?? 4, 1, 20);
   const messages = session.messages;
-  let index = input.aroundMessageId === undefined
-    ? 0
-    : messages.findIndex((message) => message.id === input.aroundMessageId);
+  let index =
+    input.aroundMessageId === undefined
+      ? 0
+      : messages.findIndex((message) => message.id === input.aroundMessageId);
   if (index < 0) {
     throw new Error(`Message not found in session ${input.sessionId}: ${input.aroundMessageId}`);
   }
   const start = Math.max(0, input.aroundMessageId === undefined ? 0 : index - radius);
-  const end = Math.min(messages.length, input.aroundMessageId === undefined ? radius * 2 : index + radius + 1);
+  const end = Math.min(
+    messages.length,
+    input.aroundMessageId === undefined ? radius * 2 : index + radius + 1
+  );
   return {
     session,
     messages: messages.slice(start, end).map(toSnippet)
@@ -109,7 +125,9 @@ export function formatSessionWindowResult(input: {
   for (const message of input.messages) {
     lines.push("");
     lines.push(`## ${message.role}#${message.messageId}`);
-    lines.push(message.content.length > 1_200 ? `${message.content.slice(0, 1_200)}...` : message.content);
+    lines.push(
+      message.content.length > 1_200 ? `${message.content.slice(0, 1_200)}...` : message.content
+    );
   }
   return lines.join("\n");
 }
@@ -155,18 +173,26 @@ function scoreSession(session: SessionRecord, terms: string[]): number {
   return score;
 }
 
-function selectSnippets(messages: MessageRecord[], terms: string[], window: number): SessionMessageSnippet[] {
+function selectSnippets(
+  messages: MessageRecord[],
+  terms: string[],
+  window: number
+): SessionMessageSnippet[] {
   const max = clampInteger(window, 1, 8);
-  const relevant = terms.length === 0
-    ? messages.filter((message) => message.role !== "tool").slice(0, max)
-    : messages.filter((message) => {
-      if (message.role === "tool") return false;
-      const text = message.content.toLowerCase();
-      return terms.some((term) => text.includes(term));
-    }).slice(0, max);
-  const selected = relevant.length > 0
-    ? relevant
-    : messages.filter((message) => message.role !== "tool").slice(0, max);
+  const relevant =
+    terms.length === 0
+      ? messages.filter((message) => message.role !== "tool").slice(0, max)
+      : messages
+          .filter((message) => {
+            if (message.role === "tool") return false;
+            const text = message.content.toLowerCase();
+            return terms.some((term) => text.includes(term));
+          })
+          .slice(0, max);
+  const selected =
+    relevant.length > 0
+      ? relevant
+      : messages.filter((message) => message.role !== "tool").slice(0, max);
   return selected.map(toSnippet);
 }
 
@@ -190,12 +216,16 @@ function formatSessionHeader(session: SessionSummary, score: number): string {
 }
 
 function tokenize(text: string): string[] {
-  return Array.from(new Set(text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 3 || (/[\u4e00-\u9fff]/.test(term) && term.length >= 2))));
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 3 || (/[\u4e00-\u9fff]/.test(term) && term.length >= 2))
+    )
+  );
 }
 
 function truncateInline(value: string, max: number): string {

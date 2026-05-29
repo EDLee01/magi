@@ -75,24 +75,28 @@ describe("provider routing", () => {
     await adapter.complete({
       model: "gpt-test",
       messages: [textMessage("user", "inspect repo")],
-      tools: [{
-        name: "FileRead",
-        description: "Read a file",
-        inputSchema: { type: "object", properties: { file_path: { type: "string" } } }
-      }]
+      tools: [
+        {
+          name: "FileRead",
+          description: "Read a file",
+          inputSchema: { type: "object", properties: { file_path: { type: "string" } } }
+        }
+      ]
     });
 
     expect(calls[0].body).toMatchObject({
       tool_choice: "auto",
       parallel_tool_calls: true,
-      tools: [{
-        type: "function",
-        function: {
-          name: "FileRead",
-          description: "Read a file",
-          parameters: { type: "object", properties: { file_path: { type: "string" } } }
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "FileRead",
+            description: "Read a file",
+            parameters: { type: "object", properties: { file_path: { type: "string" } } }
+          }
         }
-      }]
+      ]
     });
   });
 
@@ -113,29 +117,37 @@ describe("provider routing", () => {
 
     await adapter.complete({
       model: "gpt-test",
-      messages: [{
-        role: "assistant",
-        content: [{
-          type: "tool-use",
-          id: "call-1",
-          name: "FileRead",
-          input: { file_path: "README.md" }
-        }]
-      }]
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-use",
+              id: "call-1",
+              name: "FileRead",
+              input: { file_path: "README.md" }
+            }
+          ]
+        }
+      ]
     });
 
     expect(calls[0].body).toMatchObject({
-      messages: [{
-        role: "assistant",
-        tool_calls: [{
-          id: "call-1",
-          type: "function",
-          function: {
-            name: "FileRead",
-            arguments: "{\"file_path\":\"README.md\"}"
-          }
-        }]
-      }]
+      messages: [
+        {
+          role: "assistant",
+          tool_calls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: {
+                name: "FileRead",
+                arguments: '{"file_path":"README.md"}'
+              }
+            }
+          ]
+        }
+      ]
     });
   });
 
@@ -144,13 +156,17 @@ describe("provider routing", () => {
       name: "main",
       config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "responses" },
       env: { MAGI_OPENAI_API_KEY: "test-key" },
-      fetchImpl: async () => jsonResponse({
-        output_text: "responses ok",
-        usage: { input_tokens: 4, output_tokens: 5 }
-      })
+      fetchImpl: async () =>
+        jsonResponse({
+          output_text: "responses ok",
+          usage: { input_tokens: 4, output_tokens: 5 }
+        })
     });
 
-    const result = await adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] });
+    const result = await adapter.complete({
+      model: "gpt-test",
+      messages: [textMessage("user", "hello")]
+    });
 
     expect(result.text).toBe("responses ok");
     expect(result.usage).toEqual({ inputTokens: 4, outputTokens: 5 });
@@ -161,20 +177,26 @@ describe("provider routing", () => {
       name: "main",
       config: { type: "openai", apiKeyEnv: "MAGI_OPENAI_API_KEY", endpoint: "chat" },
       env: { MAGI_OPENAI_API_KEY: "test-key" },
-      fetchImpl: async () => jsonResponse({
-        choices: [{
-          message: {
-            content: [
-              { type: "text", text: "visible " },
-              { type: "output_text", text: { value: "answer" } }
-            ]
-          }
-        }],
-        usage: { prompt_tokens: 3, completion_tokens: 2 }
-      })
+      fetchImpl: async () =>
+        jsonResponse({
+          choices: [
+            {
+              message: {
+                content: [
+                  { type: "text", text: "visible " },
+                  { type: "output_text", text: { value: "answer" } }
+                ]
+              }
+            }
+          ],
+          usage: { prompt_tokens: 3, completion_tokens: 2 }
+        })
     });
 
-    const result = await adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] });
+    const result = await adapter.complete({
+      model: "gpt-test",
+      messages: [textMessage("user", "hello")]
+    });
 
     expect(result.text).toBe("visible answer");
   });
@@ -189,21 +211,27 @@ describe("provider routing", () => {
       }
     });
 
-    await expect(adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] })).rejects.toMatchObject({
+    await expect(
+      adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] })
+    ).rejects.toMatchObject({
       kind: "network",
       retryable: true
     });
-    await expect(adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] })).rejects.toThrow(/fetch failed/);
+    await expect(
+      adapter.complete({ model: "gpt-test", messages: [textMessage("user", "hello")] })
+    ).rejects.toThrow(/fetch failed/);
   });
 
   it("parses OpenAI-compatible streaming deltas", () => {
-    const events = parseOpenAiStream([
-      'data: {"choices":[{"delta":{"content":"hel"}}]}',
-      'data: {"choices":[{"delta":{"content":"lo"}}]}',
-      'data: {"usage":{"prompt_tokens":1,"completion_tokens":2}}',
-      "data: [DONE]",
-      ""
-    ].join("\n"));
+    const events = parseOpenAiStream(
+      [
+        'data: {"choices":[{"delta":{"content":"hel"}}]}',
+        'data: {"choices":[{"delta":{"content":"lo"}}]}',
+        'data: {"usage":{"prompt_tokens":1,"completion_tokens":2}}',
+        "data: [DONE]",
+        ""
+      ].join("\n")
+    );
 
     expect(events).toEqual([
       { type: "text-delta", text: "hel" },
@@ -214,12 +242,14 @@ describe("provider routing", () => {
   });
 
   it("parses OpenAI-compatible streaming array content deltas", () => {
-    const events = parseOpenAiStream([
-      'data: {"choices":[{"delta":{"content":[{"type":"text","text":"hel"}]}}]}',
-      'data: {"choices":[{"delta":{"content":[{"type":"output_text","text":{"value":"lo"}}]}}]}',
-      "data: [DONE]",
-      ""
-    ].join("\n"));
+    const events = parseOpenAiStream(
+      [
+        'data: {"choices":[{"delta":{"content":[{"type":"text","text":"hel"}]}}]}',
+        'data: {"choices":[{"delta":{"content":[{"type":"output_text","text":{"value":"lo"}}]}}]}',
+        "data: [DONE]",
+        ""
+      ].join("\n")
+    );
 
     expect(events).toEqual([
       { type: "text-delta", text: "hel" },
@@ -238,8 +268,26 @@ describe("provider routing", () => {
         return sseResponse([
           { choices: [{ delta: { content: "hel" } }] },
           { choices: [{ delta: { content: "lo" } }] },
-          { choices: [{ delta: { tool_calls: [{ index: 0, id: "call-1", function: { name: "FileRead", arguments: "{\"file_path\":" } }] } }] },
-          { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: "\"README.md\"}" } }] } }] },
+          {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: "call-1",
+                      function: { name: "FileRead", arguments: '{"file_path":' }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            choices: [
+              { delta: { tool_calls: [{ index: 0, function: { arguments: '"README.md"}' } }] } }
+            ]
+          },
           { usage: { prompt_tokens: 2, completion_tokens: 3 }, choices: [] }
         ]);
       }
@@ -281,11 +329,13 @@ describe("provider routing", () => {
     const stream = adapter.stream!({
       model: "gpt-test",
       messages: [textMessage("user", "inspect")],
-      tools: [{
-        name: "FileRead",
-        description: "Read a file",
-        inputSchema: { type: "object", properties: { file_path: { type: "string" } } }
-      }]
+      tools: [
+        {
+          name: "FileRead",
+          description: "Read a file",
+          inputSchema: { type: "object", properties: { file_path: { type: "string" } } }
+        }
+      ]
     });
     const first = await stream.next();
 
@@ -321,7 +371,10 @@ describe("provider routing", () => {
       }
     });
 
-    const result = await adapter.complete({ model: "compat-model", messages: [textMessage("user", "hello")] });
+    const result = await adapter.complete({
+      model: "compat-model",
+      messages: [textMessage("user", "hello")]
+    });
 
     expect(calls[0].url).toBe("https://example.invalid/v1/chat/completions");
     expect(calls[0].body).toMatchObject({ model: "compat-model" });
@@ -341,7 +394,11 @@ describe("provider routing", () => {
       },
       env: { MAGI_ANTHROPIC_AUTH_TOKEN: "test-key", ANTHROPIC_AUTH_TOKEN: "ignored" },
       fetchImpl: async (url, init) => {
-        calls.push({ url: String(url), headers: init?.headers, body: JSON.parse(String(init?.body)) });
+        calls.push({
+          url: String(url),
+          headers: init?.headers,
+          body: JSON.parse(String(init?.body))
+        });
         return jsonResponse({
           content: [{ type: "text", text: "anthropic ok" }],
           usage: { input_tokens: 2, output_tokens: 3 }
@@ -349,7 +406,10 @@ describe("provider routing", () => {
       }
     });
 
-    const result = await adapter.complete({ model: "claude-test", messages: [textMessage("user", "hello")] });
+    const result = await adapter.complete({
+      model: "claude-test",
+      messages: [textMessage("user", "hello")]
+    });
 
     expect(calls[0].url).toBe("https://example.invalid/v1/messages");
     expect(calls[0].body).toMatchObject({
@@ -376,7 +436,9 @@ describe("provider routing", () => {
       }
     });
 
-    await expect(adapter.complete({ model: "compatible-test", messages: [textMessage("user", "hello")] })).rejects.toMatchObject({
+    await expect(
+      adapter.complete({ model: "compatible-test", messages: [textMessage("user", "hello")] })
+    ).rejects.toMatchObject({
       kind: "network",
       retryable: true
     });
@@ -389,10 +451,9 @@ describe("provider routing", () => {
       model: "gpt-fast",
       source: "fast"
     });
-    expect(resolveFallbackChain(config, "main").map((item) => `${item.providerName}:${item.model}`)).toEqual([
-      "main:gpt-main",
-      "backup:gpt-backup"
-    ]);
+    expect(
+      resolveFallbackChain(config, "main").map((item) => `${item.providerName}:${item.model}`)
+    ).toEqual(["main:gpt-main", "backup:gpt-backup"]);
   });
 
   it("falls back on retryable provider failures", async () => {
@@ -419,16 +480,21 @@ describe("provider routing", () => {
   it("does not fall back on non-retryable provider failures", async () => {
     const config = configWithAliases();
     const registry = new Map<string, ProviderAdapter>([
-      ["main", failingAdapter("main", new ProviderError("bad key", { kind: "auth", retryable: false }))],
+      [
+        "main",
+        failingAdapter("main", new ProviderError("bad key", { kind: "auth", retryable: false }))
+      ],
       ["backup", successfulAdapter("backup", "should not run")]
     ]);
 
-    await expect(routeProviderRequest({
-      config,
-      registry,
-      alias: "main",
-      messages: [textMessage("user", "hello")]
-    })).rejects.toThrow(/bad key/);
+    await expect(
+      routeProviderRequest({
+        config,
+        registry,
+        alias: "main",
+        messages: [textMessage("user", "hello")]
+      })
+    ).rejects.toThrow(/bad key/);
   });
 
   it("calls the default provider when --model is not explicit", async () => {
@@ -523,7 +589,12 @@ function configWithAliases() {
     mcp: { servers: {} },
     hooks: [],
     context: { recentMessages: 6 },
-    memory: { enabled: true, autoWrite: "explicit" as const, maxResults: 8, scopes: ["user" as const, "project" as const, "session" as const] },
+    memory: {
+      enabled: true,
+      autoWrite: "explicit" as const,
+      maxResults: 8,
+      scopes: ["user" as const, "project" as const, "session" as const]
+    },
     webSearch: {
       locale: "zh-CN",
       market: "CN",

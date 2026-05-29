@@ -110,9 +110,12 @@ export function messageText(message: MagiMessage): string {
 const IMAGE_PREFIX = "<<MAGI_IMAGE:";
 const IMAGE_SUFFIX = ":MAGI_IMAGE>>";
 
-export function encodePromptWithImages(prompt: string, images: Array<{ mimeType: string; data: string }>): string {
+export function encodePromptWithImages(
+  prompt: string,
+  images: Array<{ mimeType: string; data: string }>
+): string {
   if (images.length === 0) return prompt;
-  const blocks = images.map(img => `${IMAGE_PREFIX}${img.mimeType}|${img.data}${IMAGE_SUFFIX}`);
+  const blocks = images.map((img) => `${IMAGE_PREFIX}${img.mimeType}|${img.data}${IMAGE_SUFFIX}`);
   return blocks.join("") + prompt;
 }
 

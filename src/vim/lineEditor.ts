@@ -50,7 +50,8 @@ export async function readLineWithVim(opts: VimReadLineOptions): Promise<string>
     let renderedCursorLine = 0;
 
     const render = () => {
-      const modeIndicator = state.mode === "NORMAL" ? "\x1b[33m[N]\x1b[39m " : "\x1b[36m[I]\x1b[39m ";
+      const modeIndicator =
+        state.mode === "NORMAL" ? "\x1b[33m[N]\x1b[39m " : "\x1b[36m[I]\x1b[39m ";
       const display = buildPromptDisplayForTest({
         prompt: modeIndicator + prompt,
         text: state.buffer,
@@ -99,7 +100,12 @@ export async function readLineWithVim(opts: VimReadLineOptions): Promise<string>
       output.write("\r\n");
     };
 
-    const onKey = (str: string | undefined, key: { name?: string; ctrl?: boolean; shift?: boolean; meta?: boolean; sequence?: string } | undefined) => {
+    const onKey = (
+      str: string | undefined,
+      key:
+        | { name?: string; ctrl?: boolean; shift?: boolean; meta?: boolean; sequence?: string }
+        | undefined
+    ) => {
       if (!key) return;
 
       // Ctrl+C: cancel
@@ -142,7 +148,12 @@ export async function readLineWithVim(opts: VimReadLineOptions): Promise<string>
   });
 }
 
-function handleInsertKey(state: State, str: string | undefined, key: { name?: string; ctrl?: boolean; meta?: boolean; sequence?: string }, render: () => void) {
+function handleInsertKey(
+  state: State,
+  str: string | undefined,
+  key: { name?: string; ctrl?: boolean; meta?: boolean; sequence?: string },
+  render: () => void
+) {
   // Backspace
   if (key.name === "backspace") {
     if (state.cursor > 0) {
@@ -162,21 +173,39 @@ function handleInsertKey(state: State, str: string | undefined, key: { name?: st
   }
   // Arrow keys
   if (key.name === "left") {
-    if (state.cursor > 0) { state.cursor--; render(); }
+    if (state.cursor > 0) {
+      state.cursor--;
+      render();
+    }
     return;
   }
   if (key.name === "right") {
-    if (state.cursor < state.buffer.length) { state.cursor++; render(); }
+    if (state.cursor < state.buffer.length) {
+      state.cursor++;
+      render();
+    }
     return;
   }
   if (key.name === "up") {
-    historyPrev(state); render(); return;
+    historyPrev(state);
+    render();
+    return;
   }
   if (key.name === "down") {
-    historyNext(state); render(); return;
+    historyNext(state);
+    render();
+    return;
   }
-  if (key.name === "home") { state.cursor = 0; render(); return; }
-  if (key.name === "end") { state.cursor = state.buffer.length; render(); return; }
+  if (key.name === "home") {
+    state.cursor = 0;
+    render();
+    return;
+  }
+  if (key.name === "end") {
+    state.cursor = state.buffer.length;
+    render();
+    return;
+  }
   // Ctrl+U: clear to start of line (emacs)
   if (key.ctrl && key.name === "u") {
     state.buffer = state.buffer.slice(state.cursor);
@@ -186,11 +215,15 @@ function handleInsertKey(state: State, str: string | undefined, key: { name?: st
   }
   // Ctrl+A: start of line
   if (key.ctrl && key.name === "a") {
-    state.cursor = 0; render(); return;
+    state.cursor = 0;
+    render();
+    return;
   }
   // Ctrl+E: end of line
   if (key.ctrl && key.name === "e") {
-    state.cursor = state.buffer.length; render(); return;
+    state.cursor = state.buffer.length;
+    render();
+    return;
   }
   // Printable character
   if (str && !key.ctrl && !key.meta && str.length === 1 && str.charCodeAt(0) >= 32) {
@@ -200,7 +233,13 @@ function handleInsertKey(state: State, str: string | undefined, key: { name?: st
   }
 }
 
-function handleNormalKey(state: State, str: string | undefined, key: { name?: string; ctrl?: boolean; sequence?: string }, render: () => void, setMode: (mode: VimMode) => void) {
+function handleNormalKey(
+  state: State,
+  str: string | undefined,
+  key: { name?: string; ctrl?: boolean; sequence?: string },
+  render: () => void,
+  setMode: (mode: VimMode) => void
+) {
   const k = str ?? key.name ?? "";
 
   // Pending operator + motion (e.g., dd, dw, yw, cw)
@@ -236,34 +275,79 @@ function handleNormalKey(state: State, str: string | undefined, key: { name?: st
   }
 
   // Mode switches
-  if (k === "i") { setMode("INSERT"); return; }
+  if (k === "i") {
+    setMode("INSERT");
+    return;
+  }
   if (k === "a") {
     if (state.cursor < state.buffer.length) state.cursor++;
     setMode("INSERT");
     return;
   }
-  if (k === "I") { state.cursor = 0; setMode("INSERT"); return; }
-  if (k === "A") { state.cursor = state.buffer.length; setMode("INSERT"); return; }
+  if (k === "I") {
+    state.cursor = 0;
+    setMode("INSERT");
+    return;
+  }
+  if (k === "A") {
+    state.cursor = state.buffer.length;
+    setMode("INSERT");
+    return;
+  }
 
   // Motions
   if (k === "h" || key.name === "left") {
     if (state.cursor > 0) state.cursor--;
-    render(); return;
+    render();
+    return;
   }
   if (k === "l" || key.name === "right") {
     if (state.cursor < Math.max(0, state.buffer.length - 1)) state.cursor++;
-    render(); return;
+    render();
+    return;
   }
-  if (k === "0" || key.name === "home") { state.cursor = 0; render(); return; }
-  if (k === "^") { state.cursor = firstNonBlank(state.buffer); render(); return; }
-  if (k === "$" || key.name === "end") { state.cursor = Math.max(0, state.buffer.length - 1); render(); return; }
-  if (k === "w") { state.cursor = nextWord(state.buffer, state.cursor); render(); return; }
-  if (k === "b") { state.cursor = prevWord(state.buffer, state.cursor); render(); return; }
-  if (k === "e") { state.cursor = endOfWord(state.buffer, state.cursor); render(); return; }
+  if (k === "0" || key.name === "home") {
+    state.cursor = 0;
+    render();
+    return;
+  }
+  if (k === "^") {
+    state.cursor = firstNonBlank(state.buffer);
+    render();
+    return;
+  }
+  if (k === "$" || key.name === "end") {
+    state.cursor = Math.max(0, state.buffer.length - 1);
+    render();
+    return;
+  }
+  if (k === "w") {
+    state.cursor = nextWord(state.buffer, state.cursor);
+    render();
+    return;
+  }
+  if (k === "b") {
+    state.cursor = prevWord(state.buffer, state.cursor);
+    render();
+    return;
+  }
+  if (k === "e") {
+    state.cursor = endOfWord(state.buffer, state.cursor);
+    render();
+    return;
+  }
 
   // History (j/k)
-  if (k === "k" || key.name === "up") { historyPrev(state); render(); return; }
-  if (k === "j" || key.name === "down") { historyNext(state); render(); return; }
+  if (k === "k" || key.name === "up") {
+    historyPrev(state);
+    render();
+    return;
+  }
+  if (k === "j" || key.name === "down") {
+    historyNext(state);
+    render();
+    return;
+  }
 
   // Edit commands
   if (k === "x") {
@@ -298,13 +382,17 @@ function handleNormalKey(state: State, str: string | undefined, key: { name?: st
     return;
   }
   if (k === "p") {
-    state.buffer = state.buffer.slice(0, state.cursor + 1) + state.yankBuffer + state.buffer.slice(state.cursor + 1);
+    state.buffer =
+      state.buffer.slice(0, state.cursor + 1) +
+      state.yankBuffer +
+      state.buffer.slice(state.cursor + 1);
     state.cursor += state.yankBuffer.length;
     render();
     return;
   }
   if (k === "P") {
-    state.buffer = state.buffer.slice(0, state.cursor) + state.yankBuffer + state.buffer.slice(state.cursor);
+    state.buffer =
+      state.buffer.slice(0, state.cursor) + state.yankBuffer + state.buffer.slice(state.cursor);
     state.cursor += state.yankBuffer.length;
     render();
     return;
@@ -316,14 +404,19 @@ function handleNormalKey(state: State, str: string | undefined, key: { name?: st
   }
 }
 
-function computeMotionRange(state: State, motion: string): { start: number; end: number } | undefined {
+function computeMotionRange(
+  state: State,
+  motion: string
+): { start: number; end: number } | undefined {
   if (motion === "w") return { start: state.cursor, end: nextWord(state.buffer, state.cursor) };
   if (motion === "b") return { start: prevWord(state.buffer, state.cursor), end: state.cursor };
-  if (motion === "e") return { start: state.cursor, end: endOfWord(state.buffer, state.cursor) + 1 };
+  if (motion === "e")
+    return { start: state.cursor, end: endOfWord(state.buffer, state.cursor) + 1 };
   if (motion === "$") return { start: state.cursor, end: state.buffer.length };
   if (motion === "0") return { start: 0, end: state.cursor };
   if (motion === "h") return { start: Math.max(0, state.cursor - 1), end: state.cursor };
-  if (motion === "l") return { start: state.cursor, end: Math.min(state.buffer.length, state.cursor + 1) };
+  if (motion === "l")
+    return { start: state.cursor, end: Math.min(state.buffer.length, state.cursor + 1) };
   return undefined;
 }
 

@@ -38,8 +38,14 @@ export const LearningDraftToolInputSchema = {
   additionalProperties: false
 } satisfies Record<string, unknown>;
 
-export function parseLearningDraftToolInput(input: Record<string, unknown>): LearningDraftToolRequest {
-  assertAllowedKeys(input, ["action", "id", "kind", "target", "content", "reason", "evidence", "confidence"], "LearningDraft input");
+export function parseLearningDraftToolInput(
+  input: Record<string, unknown>
+): LearningDraftToolRequest {
+  assertAllowedKeys(
+    input,
+    ["action", "id", "kind", "target", "content", "reason", "evidence", "confidence"],
+    "LearningDraft input"
+  );
   return {
     action: readAction(input.action),
     id: readOptionalString(input.id, "id"),
@@ -105,14 +111,25 @@ export function getLearningDraft(input: {
 }
 
 function readAction(value: unknown): LearningDraftToolRequest["action"] {
-  if (value === "list" || value === "show" || value === "propose" || value === "apply" || value === "reject") {
+  if (
+    value === "list" ||
+    value === "show" ||
+    value === "propose" ||
+    value === "apply" ||
+    value === "reject"
+  ) {
     return value;
   }
   throw new Error("Tool input action must be list, show, propose, apply, or reject");
 }
 
 function readKind(value: unknown): LearningDraftKind {
-  if (value === "memory" || value === "skill_create" || value === "skill_patch" || value === "do_not_save") {
+  if (
+    value === "memory" ||
+    value === "skill_create" ||
+    value === "skill_patch" ||
+    value === "do_not_save"
+  ) {
     return value;
   }
   throw new Error("Tool input kind must be memory, skill_create, skill_patch, or do_not_save");

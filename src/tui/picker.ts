@@ -47,15 +47,30 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
   const render = () => {
     clearPrevious();
     const visibleCount = Math.min(maxVisibleItems, filtered.length);
-    const maxLabel = Math.min(24, Math.max(4, ...filtered.map(item => inlineText(item.label).length)));
+    const maxLabel = Math.min(
+      24,
+      Math.max(4, ...filtered.map((item) => inlineText(item.label).length))
+    );
     const lines: string[] = [];
     const title = inlineText(options.title);
     const visibleFilter = inlineText(filter);
     const visibleEmpty = inlineText(options.emptyMessage ?? "No matching items");
-    const visibleFooter = inlineText(options.footer ?? "↑↓ select · Tab complete · Enter choose · Esc cancel");
+    const visibleFooter = inlineText(
+      options.footer ?? "↑↓ select · Tab complete · Enter choose · Esc cancel"
+    );
 
-    lines.push(clip(`${DIM}┌ ${title}${visibleFilter ? ` matching ${queryPrefix}${visibleFilter}` : ""}${RESET}`, width));
-    lines.push(clip(`> ${CYAN}${queryPrefix}${visibleFilter}${RESET}${visibleFilter ? "" : `${DIM} type to filter${RESET}`}`, width));
+    lines.push(
+      clip(
+        `${DIM}┌ ${title}${visibleFilter ? ` matching ${queryPrefix}${visibleFilter}` : ""}${RESET}`,
+        width
+      )
+    );
+    lines.push(
+      clip(
+        `> ${CYAN}${queryPrefix}${visibleFilter}${RESET}${visibleFilter ? "" : `${DIM} type to filter${RESET}`}`,
+        width
+      )
+    );
 
     if (filtered.length === 0) {
       lines.push(clip(`${DIM}│ ${visibleEmpty}${RESET}`, width));
@@ -65,14 +80,24 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
         const item = filtered[itemIndex]!;
         const isSelected = itemIndex === selected;
         const marker = isSelected ? "❯" : " ";
-        const label = `${labelPrefix}${inlineText(item.label)}`.padEnd(Math.min(maxLabel + labelPrefix.length + 1, 26));
+        const label = `${labelPrefix}${inlineText(item.label)}`.padEnd(
+          Math.min(maxLabel + labelPrefix.length + 1, 26)
+        );
         const description = item.description ? ` ${inlineText(item.description)}` : "";
         const detail = item.detail ? ` ${DIM}${inlineText(item.detail)}${RESET}` : "";
-        const scroll = filtered.length > maxVisibleItems ? ` ${DIM}${itemIndex + 1}/${filtered.length}${RESET}` : "";
+        const scroll =
+          filtered.length > maxVisibleItems
+            ? ` ${DIM}${itemIndex + 1}/${filtered.length}${RESET}`
+            : "";
         const style = item.disabled ? DIM : isSelected ? CYAN : DIM;
         const emphasisStart = isSelected && !item.disabled ? BOLD : "";
         const emphasisEnd = isSelected && !item.disabled ? BOLD_OFF : "";
-        lines.push(clip(`${style}│ ${marker} ${emphasisStart}${label}${emphasisEnd}${description}${detail}${scroll}${RESET}`, width));
+        lines.push(
+          clip(
+            `${style}│ ${marker} ${emphasisStart}${label}${emphasisEnd}${description}${detail}${scroll}${RESET}`,
+            width
+          )
+        );
       }
     }
 
@@ -236,12 +261,19 @@ function filterPickerItems(items: TuiPickerItem[], filter: string): TuiPickerIte
   if (!query) {
     return [...items];
   }
-  const candidates = items.filter((item) =>
-    inlineText(item.label).toLowerCase().includes(query)
-    || inlineText(item.description ?? "").toLowerCase().includes(query)
-    || inlineText(item.detail ?? "").toLowerCase().includes(query)
+  const candidates = items.filter(
+    (item) =>
+      inlineText(item.label).toLowerCase().includes(query) ||
+      inlineText(item.description ?? "")
+        .toLowerCase()
+        .includes(query) ||
+      inlineText(item.detail ?? "")
+        .toLowerCase()
+        .includes(query)
   );
-  return [...candidates].sort((a, b) => rankPickerItem(a, query) - rankPickerItem(b, query) || a.label.localeCompare(b.label));
+  return [...candidates].sort(
+    (a, b) => rankPickerItem(a, query) - rankPickerItem(b, query) || a.label.localeCompare(b.label)
+  );
 }
 
 function rankPickerItem(item: TuiPickerItem, query: string): number {
@@ -249,7 +281,12 @@ function rankPickerItem(item: TuiPickerItem, query: string): number {
   const label = inlineText(item.label).toLowerCase();
   if (label === query) return 0;
   if (label.startsWith(query)) return 1;
-  if (inlineText(item.description ?? "").toLowerCase().includes(query)) return 2;
+  if (
+    inlineText(item.description ?? "")
+      .toLowerCase()
+      .includes(query)
+  )
+    return 2;
   if (label.includes(query)) return 3;
   return 4;
 }
@@ -259,7 +296,7 @@ function inlineText(text: string): string {
 }
 
 function firstSelectableIndex(items: TuiPickerItem[]): number {
-  const index = items.findIndex(item => !item.disabled);
+  const index = items.findIndex((item) => !item.disabled);
   return index === -1 ? 0 : index;
 }
 
@@ -290,17 +327,18 @@ function cellWidth(text: string): number {
 function charWidth(char: string): number {
   const codePoint = char.codePointAt(0);
   if (codePoint === undefined) return 0;
-  return codePoint >= 0x1100 && (
-    codePoint <= 0x115f ||
-    codePoint === 0x2329 ||
-    codePoint === 0x232a ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
-    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-    (codePoint >= 0x1f300 && codePoint <= 0x1faff)
-  ) ? 2 : 1;
+  return codePoint >= 0x1100 &&
+    (codePoint <= 0x115f ||
+      codePoint === 0x2329 ||
+      codePoint === 0x232a ||
+      (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+      (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+      (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+      (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+      (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+      (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+      (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+      (codePoint >= 0x1f300 && codePoint <= 0x1faff))
+    ? 2
+    : 1;
 }

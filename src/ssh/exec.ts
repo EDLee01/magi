@@ -36,7 +36,10 @@ export async function sshExec(input: {
 
   if (result.error) {
     if ((result.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
-      throw new ToolError(`SSH connection to ${input.host} timed out after ${input.timeoutMs ?? 30_000}ms`, "timeout");
+      throw new ToolError(
+        `SSH connection to ${input.host} timed out after ${input.timeoutMs ?? 30_000}ms`,
+        "timeout"
+      );
     }
     throw new ToolError(`SSH failed: ${result.error.message}`, "command-failed");
   }
@@ -52,9 +55,12 @@ export async function sshExec(input: {
 
 export function buildSshArgs(host: string, user?: string, port?: number): string[] {
   const args = [
-    "-o", "StrictHostKeyChecking=accept-new",
-    "-o", "ConnectTimeout=10",
-    "-o", "BatchMode=yes"
+    "-o",
+    "StrictHostKeyChecking=accept-new",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "BatchMode=yes"
   ];
 
   if (port) {

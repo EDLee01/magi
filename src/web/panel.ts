@@ -112,7 +112,9 @@ export function openApiDocument(): Record<string, unknown> {
       "/jobs/{id}/approvals/{toolUseId}": { post: { summary: "Resolve active approval" } },
       "/jobs/{id}/approvals/{toolUseId}/cancel": { post: { summary: "Cancel active approval" } },
       "/jobs/{id}/questions/{toolUseId}": { post: { summary: "Resolve active user question" } },
-      "/jobs/{id}/questions/{toolUseId}/cancel": { post: { summary: "Cancel active user question" } },
+      "/jobs/{id}/questions/{toolUseId}/cancel": {
+        post: { summary: "Cancel active user question" }
+      },
       "/events": { get: { summary: "Stream recent events as SSE" } },
       "/events.json": { get: { summary: "List recent events" } },
       "/approvals": { post: { summary: "Record approval" } },

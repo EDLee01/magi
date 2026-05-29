@@ -35,7 +35,7 @@ export function getProactiveSuggestions(ctx: SuggestionContext): string[] {
     suggestions.push(command ? `\x1b[36m${command}\x1b[39m — ${label}` : label);
   }
 
-  const tools = new Set(ctx.toolNames.map(t => t.toLowerCase()));
+  const tools = new Set(ctx.toolNames.map((t) => t.toLowerCase()));
 
   // File operations
   if (tools.has("filewrite") || tools.has("fileedit") || tools.has("notebookedit")) {
@@ -44,7 +44,12 @@ export function getProactiveSuggestions(ctx: SuggestionContext): string[] {
   }
 
   // Git operations
-  if (tools.has("gitcommit") || tools.has("gitstage") || tools.has("gitbranchcreate") || tools.has("gitcheckout")) {
+  if (
+    tools.has("gitcommit") ||
+    tools.has("gitstage") ||
+    tools.has("gitbranchcreate") ||
+    tools.has("gitcheckout")
+  ) {
     add("view git log", "/diff");
     add("create branch", "/commit");
   }

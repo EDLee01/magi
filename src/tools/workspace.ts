@@ -4,7 +4,10 @@ import { realpathSync } from "node:fs";
 
 import { ToolError } from "./errors.js";
 
-export function resolveWorkspacePath(cwd: string, requestedPath: string): { absolutePath: string; relativePath: string } {
+export function resolveWorkspacePath(
+  cwd: string,
+  requestedPath: string
+): { absolutePath: string; relativePath: string } {
   if (!requestedPath.trim()) {
     throw new ToolError("Path must not be empty", "not-found");
   }
@@ -20,7 +23,10 @@ export function resolveWorkspacePath(cwd: string, requestedPath: string): { abso
 
   const rel = path.relative(realCwd, realPath);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new ToolError(`Path ${requestedPath} is outside allowed directories`, "outside-workspace");
+    throw new ToolError(
+      `Path ${requestedPath} is outside allowed directories`,
+      "outside-workspace"
+    );
   }
   return {
     absolutePath: realPath,

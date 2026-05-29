@@ -15,11 +15,14 @@ export interface McpToolRegistryInput {
 
 export class McpToolRegistry {
   private readonly manager: McpConnectionManager;
-  private readonly toolsByName = new Map<string, {
-    serverName: string;
-    originalName: string;
-    tool: McpTool;
-  }>();
+  private readonly toolsByName = new Map<
+    string,
+    {
+      serverName: string;
+      originalName: string;
+      tool: McpTool;
+    }
+  >();
   private discovered = false;
 
   constructor(private readonly input: McpToolRegistryInput) {
@@ -117,12 +120,16 @@ export class McpToolRegistry {
       const client = await this.client(serverName);
       const resources = await client.listResources();
       for (const resource of resources) {
-        lines.push([
-          `${serverName}: ${resource.uri}`,
-          resource.name ? `name=${resource.name}` : undefined,
-          resource.mimeType ? `mime=${resource.mimeType}` : undefined,
-          resource.description ? `description=${resource.description}` : undefined
-        ].filter((part): part is string => Boolean(part)).join(" | "));
+        lines.push(
+          [
+            `${serverName}: ${resource.uri}`,
+            resource.name ? `name=${resource.name}` : undefined,
+            resource.mimeType ? `mime=${resource.mimeType}` : undefined,
+            resource.description ? `description=${resource.description}` : undefined
+          ]
+            .filter((part): part is string => Boolean(part))
+            .join(" | ")
+        );
       }
     }
     return {
@@ -140,13 +147,20 @@ export class McpToolRegistry {
     return {
       toolCallId: toolUse.id,
       toolName: toolUse.name,
-      content: result.contents.length === 0
-        ? `No content for ${uri}`
-        : result.contents.map((content: McpResourceContent) => [
-          content.uri ? `uri: ${content.uri}` : undefined,
-          content.mimeType ? `mime: ${content.mimeType}` : undefined,
-          content.text ?? content.blob ?? ""
-        ].filter((part): part is string => Boolean(part)).join("\n")).join("\n\n")
+      content:
+        result.contents.length === 0
+          ? `No content for ${uri}`
+          : result.contents
+              .map((content: McpResourceContent) =>
+                [
+                  content.uri ? `uri: ${content.uri}` : undefined,
+                  content.mimeType ? `mime: ${content.mimeType}` : undefined,
+                  content.text ?? content.blob ?? ""
+                ]
+                  .filter((part): part is string => Boolean(part))
+                  .join("\n")
+              )
+              .join("\n\n")
     };
   }
 
@@ -215,7 +229,7 @@ function formatMcpToolContent(value: unknown): string {
   if (isRecord(value) && Array.isArray(value.content)) {
     const text = value.content
       .filter(isRecord)
-      .map((part) => typeof part.text === "string" ? part.text : JSON.stringify(part))
+      .map((part) => (typeof part.text === "string" ? part.text : JSON.stringify(part)))
       .join("\n");
     return text || JSON.stringify(value);
   }

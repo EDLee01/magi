@@ -43,12 +43,9 @@ const MEMORY_FILES: Record<string, string> = {
     "Project context, open questions, and active decisions that are not tied to a more specific project file yet.",
     ""
   ].join("\n"),
-  "skills/README.md": [
-    "# Skills",
-    "",
-    "Skill-specific memory and operating context.",
-    ""
-  ].join("\n"),
+  "skills/README.md": ["# Skills", "", "Skill-specific memory and operating context.", ""].join(
+    "\n"
+  ),
   "workflows/README.md": [
     "# Workflows",
     "",
@@ -140,10 +137,12 @@ export function readMemoryFile(input: MemoryRootOptions & { filePath: string }):
   return readFileSync(absolutePath, "utf8");
 }
 
-export function appendMemoryFile(input: MemoryRootOptions & {
-  filePath: string;
-  content: string;
-}): string {
+export function appendMemoryFile(
+  input: MemoryRootOptions & {
+    filePath: string;
+    content: string;
+  }
+): string {
   ensureMemoryStructure(input);
   const root = memoryRoot(input);
   const absolutePath = resolveMemoryFilePath(root, input.filePath);
@@ -155,10 +154,12 @@ export function appendMemoryFile(input: MemoryRootOptions & {
   return absolutePath;
 }
 
-export function writeMemoryFile(input: MemoryRootOptions & {
-  filePath: string;
-  content: string;
-}): string {
+export function writeMemoryFile(
+  input: MemoryRootOptions & {
+    filePath: string;
+    content: string;
+  }
+): string {
   ensureMemoryStructure(input);
   const root = memoryRoot(input);
   const absolutePath = resolveMemoryFilePath(root, input.filePath);
@@ -195,10 +196,11 @@ export function isMemoryContentSafe(content: string): boolean {
 export function rebuildMemoryIndex(input: MemoryRootOptions): void {
   const root = memoryRoot(input);
   if (!existsSync(root)) return;
-  const records = listMemoryFiles(input).filter((record) =>
-    record.path !== "INDEX.md"
-      && !record.path.startsWith("drafts/")
-      && !record.path.startsWith("dreams/")
+  const records = listMemoryFiles(input).filter(
+    (record) =>
+      record.path !== "INDEX.md" &&
+      !record.path.startsWith("drafts/") &&
+      !record.path.startsWith("dreams/")
   );
   const lines = [
     "# Memory",

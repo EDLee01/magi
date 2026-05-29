@@ -40,40 +40,42 @@ afterEach(async () => {
 describe("tool registry", () => {
   it("exposes schema-backed built-in tool definitions", () => {
     const names = getBuiltinToolDefinitions().map((tool) => tool.name);
-    expect(names).toEqual(expect.arrayContaining([
-      "FileRead",
-      "FileWrite",
-      "FileEdit",
-      "Glob",
-      "Grep",
-      "Bash",
-      "WebFetch",
-      "WebSearch",
-      "GitStatus",
-      "GitDiff",
-      "GitLog",
-      "GitShow",
-      "GitBranchList",
-      "GitBranchCreate",
-      "GitCheckout",
-      "GitStage",
-      "AskUserQuestion",
-      "SendUserMessage",
-      "Brief",
-      "CronCreate",
-      "CronUpdate",
-      "CronDelete",
-      "CronList",
-      "TodoWrite",
-      "ToolSearch",
-      "WorkspaceDiagnostics",
-      "Config",
-      "Skill",
-      "SkillManage",
-      "LearningDraft",
-      "SessionSearch",
-      "LSP"
-    ]));
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "FileRead",
+        "FileWrite",
+        "FileEdit",
+        "Glob",
+        "Grep",
+        "Bash",
+        "WebFetch",
+        "WebSearch",
+        "GitStatus",
+        "GitDiff",
+        "GitLog",
+        "GitShow",
+        "GitBranchList",
+        "GitBranchCreate",
+        "GitCheckout",
+        "GitStage",
+        "AskUserQuestion",
+        "SendUserMessage",
+        "Brief",
+        "CronCreate",
+        "CronUpdate",
+        "CronDelete",
+        "CronList",
+        "TodoWrite",
+        "ToolSearch",
+        "WorkspaceDiagnostics",
+        "Config",
+        "Skill",
+        "SkillManage",
+        "LearningDraft",
+        "SessionSearch",
+        "LSP"
+      ])
+    );
     expect(getBuiltinToolRegistry().get("FileRead")?.isConcurrencySafe({})).toBe(true);
     expect(getBuiltinToolRegistry().get("FileWrite")?.isReadOnly({})).toBe(false);
   });
@@ -82,29 +84,33 @@ describe("tool registry", () => {
     const core = getCoreToolDefinitions().map((tool) => tool.name);
     const deferred = getDeferredToolDefinitions().map((tool) => tool.name);
 
-    expect(core).toEqual(expect.arrayContaining([
-      "FileRead",
-      "FileWrite",
-      "FileEdit",
-      "Glob",
-      "Grep",
-      "Bash",
-      "ToolSearch",
-      "WorkspaceDiagnostics",
-      "EnterPlanMode",
-      "ExitPlanMode"
-    ]));
-    expect(deferred).toEqual(expect.arrayContaining([
-      "Agent",
-      "Browser",
-      "Config",
-      "LearningDraft",
-      "GitBranchCreate",
-      "LSP",
-      "Monitor",
-      "SessionSearch",
-      "SkillManage"
-    ]));
+    expect(core).toEqual(
+      expect.arrayContaining([
+        "FileRead",
+        "FileWrite",
+        "FileEdit",
+        "Glob",
+        "Grep",
+        "Bash",
+        "ToolSearch",
+        "WorkspaceDiagnostics",
+        "EnterPlanMode",
+        "ExitPlanMode"
+      ])
+    );
+    expect(deferred).toEqual(
+      expect.arrayContaining([
+        "Agent",
+        "Browser",
+        "Config",
+        "LearningDraft",
+        "GitBranchCreate",
+        "LSP",
+        "Monitor",
+        "SessionSearch",
+        "SkillManage"
+      ])
+    );
     expect(core).not.toContain("Agent");
     expect(core).not.toContain("Browser");
     expect(core).not.toContain("Config");
@@ -121,8 +127,16 @@ describe("tool registry", () => {
     let current: string;
     try {
       prior = store.createSession({ title: "pixel snake review", cwd: workspace });
-      store.appendMessage({ sessionId: prior, role: "user", content: "Review the pixel snake canvas collision bug" });
-      store.appendMessage({ sessionId: prior, role: "assistant", content: "The fix was to keep food off the snake body." });
+      store.appendMessage({
+        sessionId: prior,
+        role: "user",
+        content: "Review the pixel snake canvas collision bug"
+      });
+      store.appendMessage({
+        sessionId: prior,
+        role: "assistant",
+        content: "The fix was to keep food off the snake body."
+      });
       current = store.createSession({ title: "current", cwd: workspace });
       store.appendMessage({ sessionId: current, role: "user", content: "current-only content" });
     } finally {
@@ -186,7 +200,9 @@ describe("tool registry", () => {
     expect(proposed.isError).toBeUndefined();
     const id = /Created LearningDraft: ([^ ]+)/.exec(proposed.content)?.[1];
     expect(id).toBeTruthy();
-    expect(readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")).not.toContain("Use rg before broad file reads.");
+    expect(
+      readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")
+    ).not.toContain("Use rg before broad file reads.");
 
     const show = await executeRegisteredTool({
       cwd: workspace,
@@ -212,7 +228,9 @@ describe("tool registry", () => {
       }
     });
     expect(applied.isError).toBeUndefined();
-    expect(readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")).toContain("Use rg before broad file reads.");
+    expect(
+      readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")
+    ).toContain("Use rg before broad file reads.");
 
     const skillDraft = await executeRegisteredTool({
       cwd: workspace,
@@ -247,7 +265,9 @@ describe("tool registry", () => {
       }
     });
     expect(skillApplied.isError).toBeUndefined();
-    expect(readFileSync(path.join(paths.skillsRoot, "learned-debug", "SKILL.md"), "utf8")).toContain("Run focused tests before full suites.");
+    expect(
+      readFileSync(path.join(paths.skillsRoot, "learned-debug", "SKILL.md"), "utf8")
+    ).toContain("Run focused tests before full suites.");
   });
 
   it("writes Memorize tool calls directly to the memory graph", async () => {
@@ -279,15 +299,17 @@ describe("tool registry", () => {
     const store = MemoryNodeStore.open(paths);
     const nodes = store.listHotNodes({ limit: 10, minWeight: 0 });
     store.close();
-    expect(nodes).toContainEqual(expect.objectContaining({
-      type: "work_habit",
-      title: "Focused checks first",
-      summary: "User prefers focused checks before broad checks.",
-      body: "For coding tasks, run focused checks before broad checks unless the user asks otherwise.",
-      weight: 0.7,
-      source: "agent",
-      sourceSessionId: "session-1"
-    }));
+    expect(nodes).toContainEqual(
+      expect.objectContaining({
+        type: "work_habit",
+        title: "Focused checks first",
+        summary: "User prefers focused checks before broad checks.",
+        body: "For coding tasks, run focused checks before broad checks unless the user asks otherwise.",
+        weight: 0.7,
+        source: "agent",
+        sourceSessionId: "session-1"
+      })
+    );
   });
 
   it("creates and patches skills with SkillManage path limits", async () => {
@@ -378,11 +400,11 @@ describe("tool registry", () => {
     writeFileSync(path.join(workspace, "a.ts"), "const alpha = 1;\n", "utf8");
     writeFileSync(path.join(workspace, "b.txt"), "alpha\n", "utf8");
     mkdirSync(path.join(workspace, "nested"));
-    writeFileSync(path.join(workspace, "nested", "c.ts"), [
-      "before",
-      "const beta = 42;",
-      "after"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      path.join(workspace, "nested", "c.ts"),
+      ["before", "const beta = 42;", "after"].join("\n"),
+      "utf8"
+    );
     writeFileSync(path.join(workspace, "nested", "d.py"), "beta = 42\n", "utf8");
 
     const glob = await executeRegisteredTool({
@@ -456,16 +478,20 @@ describe("tool registry", () => {
       name: "FileWrite",
       input: { file_path: "x.txt", content: "x" }
     };
-    expect(checkToolPermission({ toolUse: writeCall, mode: "plan" })).toMatchObject({ decision: "deny" });
-    expect(checkToolPermission({
-      toolUse: writeCall,
-      mode: "default",
-      rules: {
-        allow: ["FileWrite(*)"],
-        deny: ["FileWrite(x.txt)"],
-        ask: []
-      }
-    })).toMatchObject({ decision: "deny" });
+    expect(checkToolPermission({ toolUse: writeCall, mode: "plan" })).toMatchObject({
+      decision: "deny"
+    });
+    expect(
+      checkToolPermission({
+        toolUse: writeCall,
+        mode: "default",
+        rules: {
+          allow: ["FileWrite(*)"],
+          deny: ["FileWrite(x.txt)"],
+          ask: []
+        }
+      })
+    ).toMatchObject({ decision: "deny" });
   });
 
   it("allows conservative read-only Bash commands without approving mutating shell commands", () => {
@@ -496,9 +522,15 @@ describe("tool registry", () => {
       decision: "allow",
       reason: "read-only tool"
     });
-    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "default" })).toMatchObject({ decision: "ask" });
-    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "plan" })).toMatchObject({ decision: "deny" });
-    expect(checkToolPermission({ toolUse: testBashCall, mode: "default" })).toMatchObject({ decision: "ask" });
+    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "default" })).toMatchObject({
+      decision: "ask"
+    });
+    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "plan" })).toMatchObject({
+      decision: "deny"
+    });
+    expect(checkToolPermission({ toolUse: testBashCall, mode: "default" })).toMatchObject({
+      decision: "ask"
+    });
   });
 
   it("persists large tool output with a preview", () => {
@@ -635,7 +667,9 @@ describe("tool registry", () => {
     });
     expect(checkout.isError).toBeUndefined();
     expect(checkout.content).toContain("Checked out branch feature/test-branch");
-    expect(gitOutput(workspace, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe("feature/test-branch");
+    expect(gitOutput(workspace, ["rev-parse", "--abbrev-ref", "HEAD"]).trim()).toBe(
+      "feature/test-branch"
+    );
 
     writeFileSync(path.join(workspace, "tracked.txt"), "alpha\nbeta\n", "utf8");
     writeFileSync(path.join(workspace, "new.txt"), "new\n", "utf8");
@@ -816,15 +850,17 @@ describe("tool registry", () => {
     const seenPrompts: string[] = [];
     server = http.createServer((_request, response) => {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      response.end([
-        "<!doctype html>",
-        "<title>Alpha Status</title>",
-        "<main>",
-        "<h1>Alpha launch</h1>",
-        "<p>The launch window is 09:30 UTC.</p>",
-        "<script>ignore me</script>",
-        "</main>"
-      ].join(""));
+      response.end(
+        [
+          "<!doctype html>",
+          "<title>Alpha Status</title>",
+          "<main>",
+          "<h1>Alpha launch</h1>",
+          "<p>The launch window is 09:30 UTC.</p>",
+          "<script>ignore me</script>",
+          "</main>"
+        ].join("")
+      );
     });
     const url = await listen(server);
 
@@ -839,12 +875,20 @@ describe("tool registry", () => {
       permissionMode: "default",
       env: { MAGI_WEBFETCH_ALLOWLIST: "127.0.0.1" },
       promptModel: async ({ messages }) => {
-        seenPrompts.push(messages.map((message) => message.content.map((part) => {
-          if (part.type === "text") return part.text;
-          if (part.type === "tool-result") return part.content;
-          if (part.type === "tool-use") return part.name;
-          return "";
-        }).join("")).join("\n"));
+        seenPrompts.push(
+          messages
+            .map((message) =>
+              message.content
+                .map((part) => {
+                  if (part.type === "text") return part.text;
+                  if (part.type === "tool-result") return part.content;
+                  if (part.type === "tool-use") return part.name;
+                  return "";
+                })
+                .join("")
+            )
+            .join("\n")
+        );
         return { text: "The launch window is 09:30 UTC." };
       }
     });
@@ -862,30 +906,32 @@ describe("tool registry", () => {
     server = http.createServer((request, response) => {
       seenRequests.push(request.url ?? "");
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        results: [
-          {
-            title: "Global result",
-            url: "https://global.example.com/magi-next/tools",
-            snippet: "Global Tool documentation for Magi Next."
-          },
-          {
-            title: "Magi Next tools",
-            url: "https://docs.example.cn/magi-next/tools",
-            snippet: "Magi Next 工具文档。"
-          },
-          {
-            title: "Blocked result",
-            url: "https://blocked.example.com/secret",
-            snippet: "This should be filtered."
-          },
-          {
-            title: "Other domain",
-            url: "https://other.example.net/magi",
-            snippet: "This should be filtered by allowed domains."
-          }
-        ]
-      }));
+      response.end(
+        JSON.stringify({
+          results: [
+            {
+              title: "Global result",
+              url: "https://global.example.com/magi-next/tools",
+              snippet: "Global Tool documentation for Magi Next."
+            },
+            {
+              title: "Magi Next tools",
+              url: "https://docs.example.cn/magi-next/tools",
+              snippet: "Magi Next 工具文档。"
+            },
+            {
+              title: "Blocked result",
+              url: "https://blocked.example.com/secret",
+              snippet: "This should be filtered."
+            },
+            {
+              title: "Other domain",
+              url: "https://other.example.net/magi",
+              snippet: "This should be filtered by allowed domains."
+            }
+          ]
+        })
+      );
     });
     const endpoint = await listen(server);
 
@@ -922,7 +968,7 @@ describe("tool registry", () => {
     expect(seenRequests[0]).toContain("count=5");
     expect(seenRequests[0]).toContain("locale=zh-CN");
     expect(seenRequests[0]).toContain("market=CN");
-    expect(result.content).toContain("WebSearch results for \"magi next\" (2)");
+    expect(result.content).toContain('WebSearch results for "magi next" (2)');
     expect(result.content).toContain("1. Magi Next tools");
     expect(result.content).toContain("https://docs.example.cn/magi-next/tools");
     expect(result.content).toContain("2. Global result");
@@ -979,7 +1025,9 @@ describe("tool registry", () => {
       }
     });
     expect(invalidDomain).toMatchObject({ isError: true });
-    expect(invalidDomain.content).toContain("allowed_domains.0 must be a domain or wildcard domain");
+    expect(invalidDomain.content).toContain(
+      "allowed_domains.0 must be a domain or wildcard domain"
+    );
 
     // When no config is provided, WebSearch silently falls back to WebBrowser (DuckDuckGo HTML).
     // The fallback may succeed or fail depending on network availability — we don't assert
@@ -1004,25 +1052,33 @@ describe("tool registry", () => {
         id: "ask-1",
         name: "AskUserQuestion",
         input: {
-          questions: [{
-            header: "Implementation path",
-            question: "Which path should be used?",
-            options: [
-              { label: "A", description: "Use the direct implementation" },
-              { label: "B", description: "Split into follow-up tasks", preview: "Slower, more review points" }
-            ]
-          }]
+          questions: [
+            {
+              header: "Implementation path",
+              question: "Which path should be used?",
+              options: [
+                { label: "A", description: "Use the direct implementation" },
+                {
+                  label: "B",
+                  description: "Split into follow-up tasks",
+                  preview: "Slower, more review points"
+                }
+              ]
+            }
+          ]
         }
       },
       userQuestionResolver: ({ toolUse, question }) => {
         expect(toolUse.id).toBe("ask-1");
         expect(question.questions[0].question).toBe("Which path should be used?");
         return {
-          answers: [{
-            question: question.questions[0].question,
-            selectedLabels: ["A"],
-            selectedOptions: [question.questions[0].options[0]]
-          }]
+          answers: [
+            {
+              question: question.questions[0].question,
+              selectedLabels: ["A"],
+              selectedOptions: [question.questions[0].options[0]]
+            }
+          ]
         };
       }
     });
@@ -1030,11 +1086,12 @@ describe("tool registry", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content).toContain("User answered AskUserQuestion");
     expect(result.content).toContain("- A: Use the direct implementation");
-    expect(result.content).toContain("\"selectedLabels\"");
+    expect(result.content).toContain('"selectedLabels"');
   });
 
   it("shows ExitPlanMode plans in the approval question before selection", async () => {
-    const plan = "1. Inspect the current plan UI\n2. Show this plan before approval\n3. Verify with tests";
+    const plan =
+      "1. Inspect the current plan UI\n2. Show this plan before approval\n3. Verify with tests";
     const result = await executeRegisteredTool({
       cwd: process.cwd(),
       toolUse: {
@@ -1049,11 +1106,13 @@ describe("tool registry", () => {
         expect(question.questions[0].preview).toContain("Implementation plan:");
         expect(question.questions[0].preview).toContain(plan);
         return {
-          answers: [{
-            question: question.questions[0].question,
-            selectedLabels: ["Yes, proceed"],
-            selectedOptions: [question.questions[0].options[0]]
-          }]
+          answers: [
+            {
+              question: question.questions[0].question,
+              selectedLabels: ["Yes, proceed"],
+              selectedOptions: [question.questions[0].options[0]]
+            }
+          ]
         };
       }
     });
@@ -1084,21 +1143,25 @@ describe("tool registry", () => {
         id: "ask-invalid-answer",
         name: "AskUserQuestion",
         input: {
-          questions: [{
-            question: "Pick one",
-            options: [
-              { label: "A", description: "Alpha" },
-              { label: "B", description: "Beta" }
-            ]
-          }]
+          questions: [
+            {
+              question: "Pick one",
+              options: [
+                { label: "A", description: "Alpha" },
+                { label: "B", description: "Beta" }
+              ]
+            }
+          ]
         }
       },
       userQuestionResolver: ({ question }) => ({
-        answers: [{
-          question: question.questions[0].question,
-          selectedLabels: ["missing"],
-          selectedOptions: []
-        }]
+        answers: [
+          {
+            question: question.questions[0].question,
+            selectedLabels: ["missing"],
+            selectedOptions: []
+          }
+        ]
       })
     });
     expect(invalidAnswer).toMatchObject({ isError: true });
@@ -1218,7 +1281,12 @@ describe("tool registry", () => {
         name: "TodoWrite",
         input: {
           todos: [
-            { id: "inspect", content: "Inspect current tool patterns", status: "completed", priority: "high" },
+            {
+              id: "inspect",
+              content: "Inspect current tool patterns",
+              status: "completed",
+              priority: "high"
+            },
             { id: "implement", content: "Implement TodoWrite state", status: "in_progress" }
           ]
         }
@@ -1228,7 +1296,9 @@ describe("tool registry", () => {
     expect(first.isError).toBeUndefined();
     expect(first.content).toContain("Todo list replaced (2 items)");
     expect(first.content).toContain("status: pending: 0, in_progress: 1, completed: 1");
-    expect(first.content).toContain("1. [completed] inspect priority=high - Inspect current tool patterns");
+    expect(first.content).toContain(
+      "1. [completed] inspect priority=high - Inspect current tool patterns"
+    );
     const stateFile = todoStorePathFromRoot(stateRoot);
     expect(existsSync(stateFile)).toBe(true);
     expect(stateFile).toContain(".magi-next");
@@ -1245,7 +1315,12 @@ describe("tool registry", () => {
         name: "TodoWrite",
         input: {
           todos: [
-            { id: "ship", content: "Ship TodoWrite with tests", status: "pending", priority: "medium" }
+            {
+              id: "ship",
+              content: "Ship TodoWrite with tests",
+              status: "pending",
+              priority: "medium"
+            }
           ]
         }
       }
@@ -1344,7 +1419,7 @@ describe("tool registry", () => {
       }
     });
     expect(selected.content).toContain("Tool: FileRead");
-    expect(selected.content).toContain("\"file_path\"");
+    expect(selected.content).toContain('"file_path"');
 
     const missing = await executeRegisteredTool({
       cwd: workspace,
@@ -1362,21 +1437,36 @@ describe("tool registry", () => {
   it("diagnoses workspace manifests, scripts, languages, commands, and git state without executing commands", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-diagnostics-"));
     initGitRepo(workspace);
-    writeFileSync(path.join(workspace, "package.json"), JSON.stringify({
-      name: "diagnostic-app",
-      scripts: {
-        test: "vitest run",
-        build: "tsc -p tsconfig.json",
-        verify: "npm run test && npm run build"
-      },
-      dependencies: { react: "^19.0.0" },
-      devDependencies: { typescript: "^5.0.0", vitest: "^3.0.0" }
-    }, null, 2), "utf8");
+    writeFileSync(
+      path.join(workspace, "package.json"),
+      JSON.stringify(
+        {
+          name: "diagnostic-app",
+          scripts: {
+            test: "vitest run",
+            build: "tsc -p tsconfig.json",
+            verify: "npm run test && npm run build"
+          },
+          dependencies: { react: "^19.0.0" },
+          devDependencies: { typescript: "^5.0.0", vitest: "^3.0.0" }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
     writeFileSync(path.join(workspace, "package-lock.json"), "{}", "utf8");
     writeFileSync(path.join(workspace, "tsconfig.json"), "{}", "utf8");
     writeFileSync(path.join(workspace, "README.md"), "# Diagnostic App\n", "utf8");
     writeFileSync(path.join(workspace, "src.ts"), "export const value: number = 1;\n", "utf8");
-    git(workspace, ["add", "package.json", "package-lock.json", "tsconfig.json", "README.md", "src.ts"]);
+    git(workspace, [
+      "add",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "README.md",
+      "src.ts"
+    ]);
     git(workspace, ["commit", "-m", "initial"]);
     writeFileSync(path.join(workspace, "src.ts"), "export const value: number = 2;\n", "utf8");
 
@@ -1393,7 +1483,9 @@ describe("tool registry", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content).toContain("Workspace Diagnostics");
     expect(result.content).toContain("package manager: npm");
-    expect(result.content).toContain("manifests: package.json, package-lock.json, tsconfig.json, README.md");
+    expect(result.content).toContain(
+      "manifests: package.json, package-lock.json, tsconfig.json, README.md"
+    );
     expect(result.content).toContain("languages: TypeScript (1)");
     expect(result.content).toContain("frameworks: React, TypeScript, Vitest");
     expect(result.content).toContain("- verify: npm run test && npm run build");
@@ -1411,7 +1503,10 @@ describe("tool registry", () => {
         input: { format: "json" }
       }
     });
-    const parsed = JSON.parse(json.content) as { packageManager: string; suggestedCommands: string[] };
+    const parsed = JSON.parse(json.content) as {
+      packageManager: string;
+      suggestedCommands: string[];
+    };
     expect(parsed.packageManager).toBe("npm");
     expect(parsed.suggestedCommands).toContain("npm run verify");
   });
@@ -1481,7 +1576,11 @@ describe("tool registry", () => {
     ensureMagiHome(paths);
     const skillRoot = path.join(paths.skillsRoot, "commit-helper");
     mkdirSync(skillRoot, { recursive: true });
-    writeFileSync(path.join(skillRoot, "SKILL.md"), "# Commit Helper\n\nUse concise commit summaries.\n", "utf8");
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      "# Commit Helper\n\nUse concise commit summaries.\n",
+      "utf8"
+    );
 
     const list = await executeRegisteredTool({
       cwd: workspace,
@@ -1526,45 +1625,57 @@ describe("tool registry", () => {
 
   it("answers TypeScript LSP definition, reference, hover, and symbol queries", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
-    writeFileSync(path.join(workspace, "tsconfig.json"), JSON.stringify({
-      compilerOptions: {
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true
-      }
-    }), "utf8");
+    writeFileSync(
+      path.join(workspace, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true
+        }
+      }),
+      "utf8"
+    );
     mkdirSync(path.join(workspace, "src"));
-    writeFileSync(path.join(workspace, "src", "math.ts"), [
-      "export function addValue(left: number, right: number): number {",
-      "  return left + right;",
-      "}",
-      "",
-      "export const scaleFactor = 2;",
-      "",
-      "export interface Calculator {",
-      "  compute(value: number): number;",
-      "}",
-      "",
-      "export class Doubler implements Calculator {",
-      "  compute(value: number): number {",
-      "    return addValue(value, value);",
-      "  }",
-      "}",
-      "",
-      "export function runPipeline(input: number): number {",
-      "  const calculator = new Doubler();",
-      "  return calculator.compute(input);",
-      "}"
-    ].join("\n"), "utf8");
-    writeFileSync(path.join(workspace, "src", "use.ts"), [
-      "import { addValue, runPipeline, scaleFactor } from './math.js';",
-      "",
-      "export const total = addValue(scaleFactor, 3);",
-      "export function consumePipeline(): number {",
-      "  return runPipeline(total);",
-      "}"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      path.join(workspace, "src", "math.ts"),
+      [
+        "export function addValue(left: number, right: number): number {",
+        "  return left + right;",
+        "}",
+        "",
+        "export const scaleFactor = 2;",
+        "",
+        "export interface Calculator {",
+        "  compute(value: number): number;",
+        "}",
+        "",
+        "export class Doubler implements Calculator {",
+        "  compute(value: number): number {",
+        "    return addValue(value, value);",
+        "  }",
+        "}",
+        "",
+        "export function runPipeline(input: number): number {",
+        "  const calculator = new Doubler();",
+        "  return calculator.compute(input);",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workspace, "src", "use.ts"),
+      [
+        "import { addValue, runPipeline, scaleFactor } from './math.js';",
+        "",
+        "export const total = addValue(scaleFactor, 3);",
+        "export function consumePipeline(): number {",
+        "  return runPipeline(total);",
+        "}"
+      ].join("\n"),
+      "utf8"
+    );
 
     const definition = await executeRegisteredTool({
       cwd: workspace,
@@ -1705,7 +1816,7 @@ async function listen(server: http.Server): Promise<string> {
 
 async function closeServer(server: http.Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
+    server.close((error) => (error ? reject(error) : resolve()));
   });
 }
 

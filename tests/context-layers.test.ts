@@ -171,7 +171,10 @@ describe("context/layers", () => {
     it("returns branch info for git repos", () => {
       const cwd = makeTempCwd();
       const { execSync } = require("node:child_process");
-      execSync("git init && git -c user.email=test@test.com -c user.name=Test commit --allow-empty -m init", { cwd, encoding: "utf8" });
+      execSync(
+        "git init && git -c user.email=test@test.com -c user.name=Test commit --allow-empty -m init",
+        { cwd, encoding: "utf8" }
+      );
       const result = getGitContext(cwd);
       expect(result).toBeDefined();
       expect(result).toContain("[Git]");

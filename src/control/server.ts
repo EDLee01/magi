@@ -14,7 +14,13 @@ import {
   ActiveInteractionRegistry,
   ActiveInteractionStateError
 } from "../interactions.js";
-import { cancelAgentTask, completeAgentTask, spawnAgentTask, startAgentTask, waitAgentTask } from "../agents/task-queue.js";
+import {
+  cancelAgentTask,
+  completeAgentTask,
+  spawnAgentTask,
+  startAgentTask,
+  waitAgentTask
+} from "../agents/task-queue.js";
 import { listLocalPlugins } from "../plugins/manifest.js";
 import { discoverLocalMarketplaceSources, loadMarketplace } from "../plugins/marketplace.js";
 import { listSkills } from "../skills/loader.js";
@@ -64,18 +70,26 @@ export async function startControlServer(input: {
   await new Promise<void>((resolve, reject) => {
     server.once("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE") {
-        reject(new Error([
-          `Cannot start control server: port ${input.runtime.controlPort} is already in use on ${input.runtime.controlBind}.`,
-          ``,
-          `Common fixes:`,
-          `  - 'magi daemon status' — see if Magi is already running`,
-          `  - 'lsof -i :${input.runtime.controlPort}' — find what's using the port`,
-          `  - 'MAGI_CONTROL_PORT=8780 magi serve' — pick a different port`
-        ].join("\n")));
+        reject(
+          new Error(
+            [
+              `Cannot start control server: port ${input.runtime.controlPort} is already in use on ${input.runtime.controlBind}.`,
+              ``,
+              `Common fixes:`,
+              `  - 'magi daemon status' — see if Magi is already running`,
+              `  - 'lsof -i :${input.runtime.controlPort}' — find what's using the port`,
+              `  - 'MAGI_CONTROL_PORT=8780 magi serve' — pick a different port`
+            ].join("\n")
+          )
+        );
         return;
       }
       if (err.code === "EACCES") {
-        reject(new Error(`Cannot bind to ${input.runtime.controlBind}:${input.runtime.controlPort} — permission denied. Pick a port above 1024 or run with elevated privileges.`));
+        reject(
+          new Error(
+            `Cannot bind to ${input.runtime.controlBind}:${input.runtime.controlPort} — permission denied. Pick a port above 1024 or run with elevated privileges.`
+          )
+        );
         return;
       }
       reject(err);
@@ -102,11 +116,15 @@ export async function startControlServer(input: {
         }
       });
       if (input.env?.MAGI_DEBUG_MDNS === "1") {
-        process.stdout.write(`[mdns] Advertising ${instanceName} on _magi._tcp.local. (port ${address.port})\n`);
+        process.stdout.write(
+          `[mdns] Advertising ${instanceName} on _magi._tcp.local. (port ${address.port})\n`
+        );
       }
     } catch (error) {
       if (input.env?.MAGI_DEBUG_MDNS === "1") {
-        process.stdout.write(`[mdns] Failed to advertise: ${error instanceof Error ? error.message : String(error)}\n`);
+        process.stdout.write(
+          `[mdns] Failed to advertise: ${error instanceof Error ? error.message : String(error)}\n`
+        );
       }
     }
   }
@@ -123,7 +141,9 @@ export async function startControlServer(input: {
       }
       await Promise.allSettled([...runningJobs.values()].map((running) => running.promise));
       interactions.close();
-      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      );
     }
   };
 }
@@ -136,33 +156,38 @@ export function runDueCronJobs(input: {
   env?: NodeJS.ProcessEnv;
   now?: Date;
 }) {
-  const due = takeDueCronJobs(cronStorePathFromRoot(input.paths.stateRoot), input.now ?? new Date());
-  return Promise.all(due.map(async ({ job, prompt }) => {
-    const result = await runHeadlessPrompt({
-      prompt,
-      cwd: input.cwd,
-      store: input.store,
-      config: input.config,
-      env: input.env,
-      paths: input.paths,
-      stateRoot: input.paths.stateRoot,
-      modelAlias: "main",
-      sessionName: `cron ${job.id}`
-    });
-    input.store.recordAudit({
-      sessionId: result.sessionId,
-      jobId: result.jobId,
-      action: "cron.job.executed",
-      target: job.id,
-      metadata: {
-        cron: job.cron,
+  const due = takeDueCronJobs(
+    cronStorePathFromRoot(input.paths.stateRoot),
+    input.now ?? new Date()
+  );
+  return Promise.all(
+    due.map(async ({ job, prompt }) => {
+      const result = await runHeadlessPrompt({
         prompt,
-        recurring: job.recurring,
-        nextRunAt: job.nextRunAt
-      }
-    });
-    return { cronJob: job, result };
-  }));
+        cwd: input.cwd,
+        store: input.store,
+        config: input.config,
+        env: input.env,
+        paths: input.paths,
+        stateRoot: input.paths.stateRoot,
+        modelAlias: "main",
+        sessionName: `cron ${job.id}`
+      });
+      input.store.recordAudit({
+        sessionId: result.sessionId,
+        jobId: result.jobId,
+        action: "cron.job.executed",
+        target: job.id,
+        metadata: {
+          cron: job.cron,
+          prompt,
+          recurring: job.recurring,
+          nextRunAt: job.nextRunAt
+        }
+      });
+      return { cronJob: job, result };
+    })
+  );
 }
 
 function startCronRunner(input: {
@@ -225,11 +250,15 @@ function parseInteractionTimeoutMs(raw: string | undefined): number | undefined 
     return undefined;
   }
   if (!/^\d+$/.test(raw)) {
-    throw new Error(`MAGI_INTERACTION_TIMEOUT_MS must be an integer >= 1, got ${JSON.stringify(raw)}`);
+    throw new Error(
+      `MAGI_INTERACTION_TIMEOUT_MS must be an integer >= 1, got ${JSON.stringify(raw)}`
+    );
   }
   const timeout = Number(raw);
   if (!Number.isInteger(timeout) || timeout < 1) {
-    throw new Error(`MAGI_INTERACTION_TIMEOUT_MS must be an integer >= 1, got ${JSON.stringify(raw)}`);
+    throw new Error(
+      `MAGI_INTERACTION_TIMEOUT_MS must be an integer >= 1, got ${JSON.stringify(raw)}`
+    );
   }
   return timeout;
 }
@@ -247,7 +276,10 @@ async function handleRequest(input: {
   response: ServerResponse;
 }): Promise<void> {
   try {
-    const url = new URL(input.request.url ?? "/", `http://${input.request.headers.host ?? "127.0.0.1"}`);
+    const url = new URL(
+      input.request.url ?? "/",
+      `http://${input.request.headers.host ?? "127.0.0.1"}`
+    );
 
     if (input.request.method === "GET" && url.pathname === "/health") {
       return sendJson(input.response, 200, {
@@ -275,7 +307,8 @@ async function handleRequest(input: {
       if (!isLoopbackRequest(input.request) && !isAuthorized(input.request, input.store)) {
         return sendJson(input.response, 403, {
           error: "forbidden",
-          message: "Pairing must be initiated from the local machine. Run 'magi pair' on the daemon host."
+          message:
+            "Pairing must be initiated from the local machine. Run 'magi pair' on the daemon host."
         });
       }
       const body = await readJson(input.request);
@@ -284,7 +317,11 @@ async function handleRequest(input: {
         deviceName: typeof body.name === "string" ? body.name : "unnamed device"
       });
       input.store.recordAudit({
-        sessionId: input.store.createSession({ title: "control pairing", cwd: input.cwd, metadata: { command: "pairing" } }),
+        sessionId: input.store.createSession({
+          title: "control pairing",
+          cwd: input.cwd,
+          metadata: { command: "pairing" }
+        }),
         action: "control.pairing.created",
         target: token.deviceId,
         metadata: { expiresAt: token.expiresAt }
@@ -373,10 +410,16 @@ async function handleRequest(input: {
       }
       const decision = readApprovalDecision(body);
       if (decision === undefined) {
-        return sendJson(input.response, 400, { error: "decision must be approve, deny, approved, denied, true, or false" });
+        return sendJson(input.response, 400, {
+          error: "decision must be approve, deny, approved, denied, true, or false"
+        });
       }
       try {
-        const interaction = input.interactions.resolveApproval({ jobId, toolUseId, approved: decision });
+        const interaction = input.interactions.resolveApproval({
+          jobId,
+          toolUseId,
+          approved: decision
+        });
         input.store.recordAudit({
           sessionId: job.sessionId,
           jobId,
@@ -430,10 +473,12 @@ async function handleRequest(input: {
       }
     }
 
-    const jobInteractionCancelRoute = /^\/jobs\/([^/]+)\/(approvals|questions)\/([^/]+)\/cancel$/.exec(url.pathname);
+    const jobInteractionCancelRoute =
+      /^\/jobs\/([^/]+)\/(approvals|questions)\/([^/]+)\/cancel$/.exec(url.pathname);
     if (jobInteractionCancelRoute && input.request.method === "POST") {
       const jobId = decodeURIComponent(jobInteractionCancelRoute[1]);
-      const interactionType = jobInteractionCancelRoute[2] === "approvals" ? "approval" : "question";
+      const interactionType =
+        jobInteractionCancelRoute[2] === "approvals" ? "approval" : "question";
       const toolUseId = decodeURIComponent(jobInteractionCancelRoute[3]);
       const body = await readJson(input.request);
       const job = input.store.getJob(jobId);
@@ -449,7 +494,10 @@ async function handleRequest(input: {
         input.store.recordAudit({
           sessionId: job.sessionId,
           jobId,
-          action: interactionType === "approval" ? "control.approval.cancelled" : "control.user_question.cancelled",
+          action:
+            interactionType === "approval"
+              ? "control.approval.cancelled"
+              : "control.user_question.cancelled",
           target: toolUseId,
           metadata: {
             status: "cancelled",
@@ -468,7 +516,9 @@ async function handleRequest(input: {
     const jobRoute = /^\/jobs\/([^/]+)$/.exec(url.pathname);
     if (jobRoute && input.request.method === "GET") {
       const job = input.store.getJob(decodeURIComponent(jobRoute[1]));
-      return job ? sendJson(input.response, 200, { job }) : sendJson(input.response, 404, { error: "job not found" });
+      return job
+        ? sendJson(input.response, 200, { job })
+        : sendJson(input.response, 404, { error: "job not found" });
     }
 
     const jobCancelRoute = /^\/jobs\/([^/]+)\/cancel$/.exec(url.pathname);
@@ -549,7 +599,10 @@ async function handleRequest(input: {
         ? body.writeFiles.filter((item): item is string => typeof item === "string")
         : [];
       const cwd = typeof body.cwd === "string" ? body.cwd : input.cwd;
-      const sessionId = input.store.createSession({ title: `control agent task ${body.role}`, cwd });
+      const sessionId = input.store.createSession({
+        title: `control agent task ${body.role}`,
+        cwd
+      });
       const task = spawnAgentTask(input.store, {
         role: body.role,
         prompt: body.prompt,
@@ -584,7 +637,9 @@ async function handleRequest(input: {
       const body = await readJson(input.request);
       if (action === "start") {
         const task = waitAgentTask(input.store, startAgentTask(input.store, taskId).id);
-        const sessionId = task.sessionId ?? input.store.createSession({ title: "control agent start", cwd: task.cwd });
+        const sessionId =
+          task.sessionId ??
+          input.store.createSession({ title: "control agent start", cwd: task.cwd });
         const hooks = await triggerHooks({
           event: "subagent_start",
           hooks: input.config.hooks,
@@ -606,7 +661,9 @@ async function handleRequest(input: {
       }
       if (action === "cancel") {
         const task = cancelAgentTask(input.store, taskId);
-        const sessionId = task.sessionId ?? input.store.createSession({ title: "control agent stop", cwd: task.cwd });
+        const sessionId =
+          task.sessionId ??
+          input.store.createSession({ title: "control agent stop", cwd: task.cwd });
         const hooks = await triggerHooks({
           event: "stop",
           hooks: input.config.hooks,
@@ -639,8 +696,14 @@ async function handleRequest(input: {
         });
         return sendJson(input.response, 200, { task, hooks: [...hooks, ...subagentHooks] });
       }
-      const task = completeAgentTask(input.store, taskId, typeof body.result === "string" ? body.result : "");
-      const sessionId = task.sessionId ?? input.store.createSession({ title: "control agent notification", cwd: task.cwd });
+      const task = completeAgentTask(
+        input.store,
+        taskId,
+        typeof body.result === "string" ? body.result : ""
+      );
+      const sessionId =
+        task.sessionId ??
+        input.store.createSession({ title: "control agent notification", cwd: task.cwd });
       const hooks = await triggerHooks({
         event: "notification",
         hooks: input.config.hooks,
@@ -686,7 +749,10 @@ async function handleRequest(input: {
           lastAssistantMessage: task.result ?? undefined
         }
       });
-      return sendJson(input.response, 200, { task, hooks: [...hooks, ...taskHooks, ...subagentHooks] });
+      return sendJson(input.response, 200, {
+        task,
+        hooks: [...hooks, ...taskHooks, ...subagentHooks]
+      });
     }
 
     if (input.request.method === "GET" && url.pathname === "/audit") {
@@ -740,9 +806,10 @@ async function handleRequest(input: {
 
     if (input.request.method === "POST" && url.pathname === "/approvals") {
       const body = await readJson(input.request);
-      const sessionId = typeof body.sessionId === "string"
-        ? body.sessionId
-        : input.store.createSession({ title: "control approval", cwd: input.cwd });
+      const sessionId =
+        typeof body.sessionId === "string"
+          ? body.sessionId
+          : input.store.createSession({ title: "control approval", cwd: input.cwd });
       input.store.recordAudit({
         sessionId,
         jobId: typeof body.jobId === "string" ? body.jobId : undefined,
@@ -792,19 +859,23 @@ function streamEvents(input: {
     connection: "keep-alive",
     "x-accel-buffering": "no"
   });
-  input.response.write(`event: ready\ndata: ${JSON.stringify({
-    ok: true,
-    sessionId: input.sessionId,
-    jobId: input.jobId
-  })}\n\n`);
+  input.response.write(
+    `event: ready\ndata: ${JSON.stringify({
+      ok: true,
+      sessionId: input.sessionId,
+      jobId: input.jobId
+    })}\n\n`
+  );
 
-  const historical = input.store.listRecentAuditEvents({
-    sessionId: input.sessionId,
-    jobId: input.jobId,
-    afterId: input.afterId,
-    limit: input.limit,
-    order: "asc"
-  }).map(toEventView);
+  const historical = input.store
+    .listRecentAuditEvents({
+      sessionId: input.sessionId,
+      jobId: input.jobId,
+      afterId: input.afterId,
+      limit: input.limit,
+      order: "asc"
+    })
+    .map(toEventView);
   for (const event of historical) {
     writeSseEvent(input.response, "audit", event);
   }
@@ -849,15 +920,19 @@ function matchesEventStreamFilter(
   return true;
 }
 
-async function runControlJob(input: {
-  paths: MagiPaths;
-  config: MagiConfig;
-  store: SessionStore;
-  cwd: string;
-  env?: NodeJS.ProcessEnv;
-  interactions: ActiveInteractionRegistry;
-  runningJobs: Map<string, RunningControlJob>;
-}, body: Record<string, unknown>, options: { sessionId?: string; cwd?: string } = {}) {
+async function runControlJob(
+  input: {
+    paths: MagiPaths;
+    config: MagiConfig;
+    store: SessionStore;
+    cwd: string;
+    env?: NodeJS.ProcessEnv;
+    interactions: ActiveInteractionRegistry;
+    runningJobs: Map<string, RunningControlJob>;
+  },
+  body: Record<string, unknown>,
+  options: { sessionId?: string; cwd?: string } = {}
+) {
   try {
     return await runHeadlessPrompt({
       prompt: String(body.prompt),
@@ -877,7 +952,8 @@ async function runControlJob(input: {
     });
   } catch (error) {
     if (error instanceof ActiveInteractionCancelledError) {
-      const jobId = findLatestCancelledInteractionJobId(input.interactions) ?? findLatestJobId(input.store);
+      const jobId =
+        findLatestCancelledInteractionJobId(input.interactions) ?? findLatestJobId(input.store);
       return {
         sessionId: options.sessionId ?? findJobSessionId(input.store, jobId) ?? "",
         jobId: jobId ?? "",
@@ -888,22 +964,28 @@ async function runControlJob(input: {
   }
 }
 
-function startBackgroundControlJob(input: {
-  paths: MagiPaths;
-  config: MagiConfig;
-  store: SessionStore;
-  cwd: string;
-  env?: NodeJS.ProcessEnv;
-  interactions: ActiveInteractionRegistry;
-  runningJobs: Map<string, RunningControlJob>;
-}, body: Record<string, unknown>, options: { sessionId?: string; cwd?: string } = {}) {
+function startBackgroundControlJob(
+  input: {
+    paths: MagiPaths;
+    config: MagiConfig;
+    store: SessionStore;
+    cwd: string;
+    env?: NodeJS.ProcessEnv;
+    interactions: ActiveInteractionRegistry;
+    runningJobs: Map<string, RunningControlJob>;
+  },
+  body: Record<string, unknown>,
+  options: { sessionId?: string; cwd?: string } = {}
+) {
   const cwd = readOptionalString(body.cwd) ?? options.cwd ?? input.cwd;
   const prompt = String(body.prompt);
-  const sessionId = options.sessionId ?? input.store.createSession({
-    title: readOptionalString(body.sessionName) ?? prompt.slice(0, 80),
-    cwd,
-    metadata: { mode: "control-background" }
-  });
+  const sessionId =
+    options.sessionId ??
+    input.store.createSession({
+      title: readOptionalString(body.sessionName) ?? prompt.slice(0, 80),
+      cwd,
+      metadata: { mode: "control-background" }
+    });
   const jobId = randomUUID();
   const controller = new AbortController();
   const promise = runHeadlessPrompt({
@@ -953,7 +1035,9 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
     return {};
   }
   const parsed = JSON.parse(text) as unknown;
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
@@ -961,7 +1045,12 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.end(`${JSON.stringify(body)}\n`);
 }
 
-function sendText(response: ServerResponse, status: number, contentType: string, body: string): void {
+function sendText(
+  response: ServerResponse,
+  status: number,
+  contentType: string,
+  body: string
+): void {
   response.writeHead(status, { "content-type": contentType });
   response.end(body);
 }
@@ -979,8 +1068,11 @@ function sendInteractionError(response: ServerResponse, error: unknown): void {
   return sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
 }
 
-function findLatestCancelledInteractionJobId(interactions: ActiveInteractionRegistry): string | undefined {
-  return interactions.listInteractions({ status: "cancelled" })
+function findLatestCancelledInteractionJobId(
+  interactions: ActiveInteractionRegistry
+): string | undefined {
+  return interactions
+    .listInteractions({ status: "cancelled" })
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.jobId;
 }
 
@@ -1001,22 +1093,39 @@ function readOptionalString(value: unknown): string | undefined {
 }
 
 function readOptionalRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function readApprovalDecision(body: Record<string, unknown>): boolean | undefined {
   const raw = body.approved ?? body.decision;
-  if (raw === true || raw === "approve" || raw === "approved" || raw === "allow" || raw === "allowed") {
+  if (
+    raw === true ||
+    raw === "approve" ||
+    raw === "approved" ||
+    raw === "allow" ||
+    raw === "allowed"
+  ) {
     return true;
   }
-  if (raw === false || raw === "deny" || raw === "denied" || raw === "reject" || raw === "rejected") {
+  if (
+    raw === false ||
+    raw === "deny" ||
+    raw === "denied" ||
+    raw === "reject" ||
+    raw === "rejected"
+  ) {
     return false;
   }
   return undefined;
 }
 
 function readPermissionMode(value: unknown): ToolPermissionMode | undefined {
-  return value === "default" || value === "acceptEdits" || value === "bypassPermissions" || value === "plan"
+  return value === "default" ||
+    value === "acceptEdits" ||
+    value === "bypassPermissions" ||
+    value === "plan"
     ? value
     : undefined;
 }
@@ -1026,14 +1135,17 @@ function normalizeControlQuestionAnswer(
   question: AskUserQuestionRequest
 ): AskUserQuestionAnswer {
   const rawAnswer = readOptionalRecord(body.answer) ?? body;
-  const candidate = rawAnswer.answers === undefined && Array.isArray(body.selectedLabels)
-    ? {
-      answers: [{
-        question: question.questions[0]?.question ?? "",
-        selectedLabels: body.selectedLabels
-      }]
-    }
-    : rawAnswer;
+  const candidate =
+    rawAnswer.answers === undefined && Array.isArray(body.selectedLabels)
+      ? {
+          answers: [
+            {
+              question: question.questions[0]?.question ?? "",
+              selectedLabels: body.selectedLabels
+            }
+          ]
+        }
+      : rawAnswer;
   return normalizeAskUserQuestionAnswer(question, candidate as unknown as AskUserQuestionAnswer);
 }
 

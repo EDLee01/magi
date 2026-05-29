@@ -141,7 +141,9 @@ export function formatSearchMatches(
     return "No matches";
   }
   const fileCount = new Set(matches.map((match) => match.path)).size;
-  const header = input.pattern ? `Search: ${input.pattern} -> ${fileCount} files, ${matches.length} matches` : undefined;
+  const header = input.pattern
+    ? `Search: ${input.pattern} -> ${fileCount} files, ${matches.length} matches`
+    : undefined;
   const body = matches.flatMap((match) => formatMatchWithContext(match, input.lineNumbers ?? true));
   return [header, ...body].filter((line): line is string => Boolean(line)).join("\n");
 }
@@ -190,7 +192,12 @@ function readHeadLimit(input: { headLimit?: number; maxMatches?: number }): numb
   return raw;
 }
 
-function parseRipgrepJson(stdout: string, headLimit: number, beforeContext: number, afterContext: number): SearchMatch[] {
+function parseRipgrepJson(
+  stdout: string,
+  headLimit: number,
+  beforeContext: number,
+  afterContext: number
+): SearchMatch[] {
   const matches: SearchMatch[] = [];
   const pendingBefore = new Map<string, SearchContextLine[]>();
   const lastMatchByPath = new Map<string, SearchMatch>();
@@ -203,7 +210,8 @@ function parseRipgrepJson(stdout: string, headLimit: number, beforeContext: numb
       continue;
     }
     const filePath = readTextField(event.data.path);
-    const lineNumber = typeof event.data.line_number === "number" ? event.data.line_number : undefined;
+    const lineNumber =
+      typeof event.data.line_number === "number" ? event.data.line_number : undefined;
     const text = readTextField(event.data.lines)?.replace(/\r?\n$/, "");
     if (!filePath || !lineNumber || text === undefined) {
       continue;
@@ -275,7 +283,12 @@ function searchWithoutRipgrep(input: {
 
   function walk(dir: string): void {
     for (const name of readdirSync(dir)) {
-      if ((input.headLimit !== 0 && matches.length >= input.headLimit) || name === "node_modules" || name === "dist" || name === ".git") {
+      if (
+        (input.headLimit !== 0 && matches.length >= input.headLimit) ||
+        name === "node_modules" ||
+        name === "dist" ||
+        name === ".git"
+      ) {
         continue;
       }
       const item = path.join(dir, name);
@@ -314,7 +327,10 @@ function searchWithoutRipgrep(input: {
   }
 }
 
-function createLineMatcher(query: string, input: { ignoreCase?: boolean; fixedStrings?: boolean }): (line: string) => boolean {
+function createLineMatcher(
+  query: string,
+  input: { ignoreCase?: boolean; fixedStrings?: boolean }
+): (line: string) => boolean {
   if (input.fixedStrings) {
     const needle = input.ignoreCase ? query.toLowerCase() : query;
     return (line) => (input.ignoreCase ? line.toLowerCase() : line).includes(needle);
@@ -344,9 +360,13 @@ function readContext(
 
 function formatMatchWithContext(match: SearchMatch, lineNumbers: boolean): string[] {
   return [
-    ...(match.before ?? []).map((line) => formatSearchLine(match.path, line.line, line.text, lineNumbers, "-")),
+    ...(match.before ?? []).map((line) =>
+      formatSearchLine(match.path, line.line, line.text, lineNumbers, "-")
+    ),
     formatSearchLine(match.path, match.line, match.text, lineNumbers, ":"),
-    ...(match.after ?? []).map((line) => formatSearchLine(match.path, line.line, line.text, lineNumbers, "-"))
+    ...(match.after ?? []).map((line) =>
+      formatSearchLine(match.path, line.line, line.text, lineNumbers, "-")
+    )
   ];
 }
 
@@ -357,7 +377,9 @@ function formatSearchLine(
   lineNumbers: boolean,
   separator: ":" | "-"
 ): string {
-  return lineNumbers ? `${filePath}${separator}${line}${separator}${text}` : `${filePath}${separator}${text}`;
+  return lineNumbers
+    ? `${filePath}${separator}${line}${separator}${text}`
+    : `${filePath}${separator}${text}`;
 }
 
 function typeToGlobs(type: string | undefined): string[] {
@@ -394,7 +416,18 @@ const TYPE_GLOBS: Record<string, string[]> = {
   kotlin: ["*.kt", "**/*.kt", "*.kts", "**/*.kts"],
   swift: ["*.swift", "**/*.swift"],
   c: ["*.c", "**/*.c", "*.h", "**/*.h"],
-  cpp: ["*.cc", "**/*.cc", "*.cpp", "**/*.cpp", "*.cxx", "**/*.cxx", "*.hh", "**/*.hh", "*.hpp", "**/*.hpp"],
+  cpp: [
+    "*.cc",
+    "**/*.cc",
+    "*.cpp",
+    "**/*.cpp",
+    "*.cxx",
+    "**/*.cxx",
+    "*.hh",
+    "**/*.hh",
+    "*.hpp",
+    "**/*.hpp"
+  ],
   cs: ["*.cs", "**/*.cs"],
   csharp: ["*.cs", "**/*.cs"],
   php: ["*.php", "**/*.php"],

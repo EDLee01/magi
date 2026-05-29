@@ -2,14 +2,34 @@ import { ToolError } from "./errors.js";
 
 // --- Types ---
 
-export interface BrowserNavigateInput { url: string; }
-export interface BrowserClickInput { selector?: string; x?: number; y?: number; }
-export interface BrowserTypeInput { selector: string; text: string; }
-export interface BrowserScrollInput { direction: "up" | "down" | "left" | "right"; amount?: number; }
-export interface BrowserScreenshotInput { fullPage?: boolean; }
-export interface BrowserExtractTextInput { selector?: string; }
-export interface BrowserWaitInput { ms: number; }
-export interface BrowserEvaluateInput { script: string; }
+export interface BrowserNavigateInput {
+  url: string;
+}
+export interface BrowserClickInput {
+  selector?: string;
+  x?: number;
+  y?: number;
+}
+export interface BrowserTypeInput {
+  selector: string;
+  text: string;
+}
+export interface BrowserScrollInput {
+  direction: "up" | "down" | "left" | "right";
+  amount?: number;
+}
+export interface BrowserScreenshotInput {
+  fullPage?: boolean;
+}
+export interface BrowserExtractTextInput {
+  selector?: string;
+}
+export interface BrowserWaitInput {
+  ms: number;
+}
+export interface BrowserEvaluateInput {
+  script: string;
+}
 
 export type BrowserAction =
   | { action: "navigate"; url: string }
@@ -47,7 +67,10 @@ interface PageLike {
   waitForTimeout(ms: number): Promise<void>;
   title(): Promise<string>;
   url(): string;
-  waitForSelector(selector: string, options?: Record<string, unknown>): Promise<ElementHandleLike | null>;
+  waitForSelector(
+    selector: string,
+    options?: Record<string, unknown>
+  ): Promise<ElementHandleLike | null>;
   mouse: {
     click(x: number, y: number): Promise<void>;
     wheel(x: number, y: number): Promise<void>;
@@ -74,7 +97,9 @@ async function loadPlaywright(): Promise<PlaywrightModule> {
     return playwrightModule;
   }
   try {
-    const dynamicImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<unknown>;
+    const dynamicImport = new Function("specifier", "return import(specifier)") as (
+      specifier: string
+    ) => Promise<unknown>;
     const loaded = await dynamicImport("playwright");
     if (!isPlaywrightModule(loaded)) {
       throw new Error("module did not export chromium.launch");
@@ -91,10 +116,12 @@ async function loadPlaywright(): Promise<PlaywrightModule> {
 }
 
 function isPlaywrightModule(value: unknown): value is PlaywrightModule {
-  return typeof value === "object"
-    && value !== null
-    && "chromium" in value
-    && typeof (value as { chromium?: { launch?: unknown } }).chromium?.launch === "function";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "chromium" in value &&
+    typeof (value as { chromium?: { launch?: unknown } }).chromium?.launch === "function"
+  );
 }
 
 async function getBrowser(): Promise<BrowserLike> {
@@ -102,12 +129,11 @@ async function getBrowser(): Promise<BrowserLike> {
     const { chromium } = await loadPlaywright();
     browserInstance = await chromium.launch({
       headless: false,
-      args: [
-        "--start-maximized",
-        "--no-sandbox"
-      ]
+      args: ["--start-maximized", "--no-sandbox"]
     });
-    process.on("exit", () => { browserInstance?.close().catch(() => {}); });
+    process.on("exit", () => {
+      browserInstance?.close().catch(() => {});
+    });
   }
   return browserInstance;
 }
@@ -140,7 +166,10 @@ async function closeBrowser(): Promise<void> {
 export const BrowserNavigateInputSchema = {
   type: "object",
   properties: {
-    url: { type: "string", description: "Full URL to navigate to (including protocol, e.g. https://www.zhihu.com)" }
+    url: {
+      type: "string",
+      description: "Full URL to navigate to (including protocol, e.g. https://www.zhihu.com)"
+    }
   },
   required: ["url"],
   additionalProperties: false
@@ -151,7 +180,17 @@ export const BrowserActionInputSchema = {
   properties: {
     action: {
       type: "string",
-      enum: ["navigate", "click", "type", "scroll", "screenshot", "extract_text", "wait", "evaluate", "close"],
+      enum: [
+        "navigate",
+        "click",
+        "type",
+        "scroll",
+        "screenshot",
+        "extract_text",
+        "wait",
+        "evaluate",
+        "close"
+      ],
       description: "Browser action to perform"
     },
     url: { type: "string", description: "URL for the navigate action" },
@@ -162,10 +201,16 @@ export const BrowserActionInputSchema = {
       enum: ["up", "down", "left", "right"],
       description: "Scroll direction (for scroll action)"
     },
-    amount: { type: "number", description: "Pixels to scroll (for scroll action, default: window height)" },
+    amount: {
+      type: "number",
+      description: "Pixels to scroll (for scroll action, default: window height)"
+    },
     x: { type: "number", description: "X coordinate to click (for click action without selector)" },
     y: { type: "number", description: "Y coordinate to click (for click action without selector)" },
-    fullPage: { type: "boolean", description: "Capture full page (for screenshot action, default: false)" },
+    fullPage: {
+      type: "boolean",
+      description: "Capture full page (for screenshot action, default: false)"
+    },
     ms: { type: "number", description: "Milliseconds to wait (for wait action)" },
     script: { type: "string", description: "JavaScript to execute (for evaluate action)" }
   },
@@ -180,15 +225,31 @@ export async function executeBrowserAction(input: Record<string, unknown>): Prom
   if (!action) throw new ToolError("Browser action is required", "bad-input");
 
   switch (action) {
-    case "navigate": return navigate(typeof input.url === "string" ? input.url : "");
-    case "click": return click(input.selector as string | undefined, input.x as number | undefined, input.y as number | undefined);
-    case "type": return typeText(input.selector as string, input.text as string);
-    case "scroll": return scroll(input.direction as "up" | "down" | "left" | "right", input.amount as number | undefined);
-    case "screenshot": return screenshot(input.fullPage as boolean | undefined);
-    case "extract_text": return extractText(input.selector as string | undefined);
-    case "wait": return waitMs(input.ms as number | undefined);
-    case "evaluate": return evaluate(input.script as string);
-    case "close": return closeAction();
+    case "navigate":
+      return navigate(typeof input.url === "string" ? input.url : "");
+    case "click":
+      return click(
+        input.selector as string | undefined,
+        input.x as number | undefined,
+        input.y as number | undefined
+      );
+    case "type":
+      return typeText(input.selector as string, input.text as string);
+    case "scroll":
+      return scroll(
+        input.direction as "up" | "down" | "left" | "right",
+        input.amount as number | undefined
+      );
+    case "screenshot":
+      return screenshot(input.fullPage as boolean | undefined);
+    case "extract_text":
+      return extractText(input.selector as string | undefined);
+    case "wait":
+      return waitMs(input.ms as number | undefined);
+    case "evaluate":
+      return evaluate(input.script as string);
+    case "close":
+      return closeAction();
     default:
       throw new ToolError(`Unknown browser action: ${action}`, "bad-input");
   }
@@ -246,7 +307,10 @@ async function typeText(selector: string, text: string): Promise<string> {
   }
 }
 
-async function scroll(direction: "up" | "down" | "left" | "right", amount?: number): Promise<string> {
+async function scroll(
+  direction: "up" | "down" | "left" | "right",
+  amount?: number
+): Promise<string> {
   const page = await getPage();
   const delta = amount ?? 600;
   const deltas: Record<string, { x: number; y: number }> = {

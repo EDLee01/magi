@@ -30,7 +30,10 @@ export interface SubagentResult {
 export const AgentToolInputSchema = {
   type: "object",
   properties: {
-    description: { type: "string", description: "Short (3-5 word) description of what the agent will do" },
+    description: {
+      type: "string",
+      description: "Short (3-5 word) description of what the agent will do"
+    },
     prompt: { type: "string", description: "The task for the agent to perform" },
     subagent_type: {
       type: "string",
@@ -40,7 +43,8 @@ export const AgentToolInputSchema = {
     run_in_background: { type: "boolean", description: "Run agent in background (default false)" },
     target: {
       type: "string",
-      description: "Optional peer name (mDNS) or URL of a remote Magi daemon to dispatch this sub-agent to. Use 'magi peers' to see available targets. If omitted, runs locally."
+      description:
+        "Optional peer name (mDNS) or URL of a remote Magi daemon to dispatch this sub-agent to. Use 'magi peers' to see available targets. If omitted, runs locally."
     }
   },
   required: ["description", "prompt"],
@@ -59,12 +63,18 @@ export function parseAgentToolInput(input: Record<string, unknown>): AgentToolIn
   const subagentType = input.subagent_type;
   let parsedType: SubagentType = "general";
   if (subagentType !== undefined) {
-    if (subagentType !== "general" && subagentType !== "explore" && subagentType !== "plan" && subagentType !== "verification") {
+    if (
+      subagentType !== "general" &&
+      subagentType !== "explore" &&
+      subagentType !== "plan" &&
+      subagentType !== "verification"
+    ) {
       throw new Error("subagent_type must be general, explore, plan, or verification");
     }
     parsedType = subagentType;
   }
-  const target = typeof input.target === "string" && input.target.trim() ? input.target.trim() : undefined;
+  const target =
+    typeof input.target === "string" && input.target.trim() ? input.target.trim() : undefined;
   return {
     description: description.trim(),
     prompt: prompt.trim(),

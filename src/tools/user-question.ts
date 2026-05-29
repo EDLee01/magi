@@ -85,7 +85,10 @@ export function parseAskUserQuestionInput(input: Record<string, unknown>): AskUs
     if (!isRecord(rawQuestion)) {
       throw new Error(`AskUserQuestion question ${questionIndex + 1} must be an object`);
     }
-    const question = readNonEmptyString(rawQuestion.question, `questions[${questionIndex}].question`);
+    const question = readNonEmptyString(
+      rawQuestion.question,
+      `questions[${questionIndex}].question`
+    );
     const header = readOptionalString(rawQuestion.header, `questions[${questionIndex}].header`);
     const preview = readOptionalString(rawQuestion.preview, `questions[${questionIndex}].preview`);
     const rawOptions = rawQuestion.options;
@@ -93,16 +96,29 @@ export function parseAskUserQuestionInput(input: Record<string, unknown>): AskUs
       throw new Error(`AskUserQuestion questions[${questionIndex}].options must be an array`);
     }
     if (rawOptions.length < 2 || rawOptions.length > 4) {
-      throw new Error(`AskUserQuestion questions[${questionIndex}].options requires 2 to 4 options`);
+      throw new Error(
+        `AskUserQuestion questions[${questionIndex}].options requires 2 to 4 options`
+      );
     }
     const options = rawOptions.map((rawOption, optionIndex): AskUserQuestionOption => {
       if (!isRecord(rawOption)) {
-        throw new Error(`AskUserQuestion questions[${questionIndex}].options[${optionIndex}] must be an object`);
+        throw new Error(
+          `AskUserQuestion questions[${questionIndex}].options[${optionIndex}] must be an object`
+        );
       }
       return {
-        label: readNonEmptyString(rawOption.label, `questions[${questionIndex}].options[${optionIndex}].label`),
-        description: readNonEmptyString(rawOption.description, `questions[${questionIndex}].options[${optionIndex}].description`),
-        preview: readOptionalString(rawOption.preview, `questions[${questionIndex}].options[${optionIndex}].preview`)
+        label: readNonEmptyString(
+          rawOption.label,
+          `questions[${questionIndex}].options[${optionIndex}].label`
+        ),
+        description: readNonEmptyString(
+          rawOption.description,
+          `questions[${questionIndex}].options[${optionIndex}].description`
+        ),
+        preview: readOptionalString(
+          rawOption.preview,
+          `questions[${questionIndex}].options[${optionIndex}].preview`
+        )
       };
     });
     const multiSelect = readOptionalBoolean(
@@ -129,7 +145,9 @@ export function normalizeAskUserQuestionAnswer(
     throw new Error("AskUserQuestion resolver must return { answers: [...] }");
   }
   if (answer.answers.length !== request.questions.length) {
-    throw new Error(`AskUserQuestion resolver returned ${answer.answers.length} answers for ${request.questions.length} questions`);
+    throw new Error(
+      `AskUserQuestion resolver returned ${answer.answers.length} answers for ${request.questions.length} questions`
+    );
   }
 
   return {
@@ -139,14 +157,21 @@ export function normalizeAskUserQuestionAnswer(
       }
       const question = request.questions[index];
       const labels = Array.isArray(selection.selectedLabels)
-        ? selection.selectedLabels.map((label, labelIndex) => readNonEmptyString(label, `answers[${index}].selectedLabels[${labelIndex}]`))
+        ? selection.selectedLabels.map((label, labelIndex) =>
+            readNonEmptyString(label, `answers[${index}].selectedLabels[${labelIndex}]`)
+          )
         : Array.isArray(selection.selectedOptions)
           ? selection.selectedOptions.map((option, optionIndex) => {
-            if (!isRecord(option)) {
-              throw new Error(`AskUserQuestion answers[${index}].selectedOptions[${optionIndex}] must be an object`);
-            }
-            return readNonEmptyString(option.label, `answers[${index}].selectedOptions[${optionIndex}].label`);
-          })
+              if (!isRecord(option)) {
+                throw new Error(
+                  `AskUserQuestion answers[${index}].selectedOptions[${optionIndex}] must be an object`
+                );
+              }
+              return readNonEmptyString(
+                option.label,
+                `answers[${index}].selectedOptions[${optionIndex}].label`
+              );
+            })
           : [];
       if (labels.length === 0) {
         throw new Error(`AskUserQuestion answer ${index + 1} must select at least one option`);
@@ -181,13 +206,21 @@ export function formatAskUserQuestionAnswer(answer: AskUserQuestionAnswer): stri
       }
     }
   });
-  lines.push("", "JSON:", JSON.stringify({
-    answers: answer.answers.map((selection) => ({
-      question: selection.question,
-      selectedLabels: selection.selectedLabels,
-      selectedOptions: selection.selectedOptions
-    }))
-  }, null, 2));
+  lines.push(
+    "",
+    "JSON:",
+    JSON.stringify(
+      {
+        answers: answer.answers.map((selection) => ({
+          question: selection.question,
+          selectedLabels: selection.selectedLabels,
+          selectedOptions: selection.selectedOptions
+        }))
+      },
+      null,
+      2
+    )
+  );
   return lines.join("\n");
 }
 
@@ -210,11 +243,19 @@ export function formatAskUserQuestionForTerminal(
       return `${index + 1}. ${option.label}${description}${preview}`;
     }),
     question.multiSelect ? "Choose one or more numbers separated by commas:" : "Choose one number:"
-  ].filter((line): line is string => Boolean(line)).join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 }
 
-export function parseAskUserQuestionSelection(input: string, question: AskUserQuestionItem): AskUserQuestionOption[] {
-  const pieces = input.split(/[,\s]+/).map((piece) => piece.trim()).filter(Boolean);
+export function parseAskUserQuestionSelection(
+  input: string,
+  question: AskUserQuestionItem
+): AskUserQuestionOption[] {
+  const pieces = input
+    .split(/[,\s]+/)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
   if (pieces.length === 0) {
     throw new Error("Choose at least one option");
   }
@@ -270,9 +311,9 @@ export async function triggerElicitationHooks(input: {
   answer?: AskUserQuestionAnswer;
 }): Promise<void> {
   if (!input.hooks) return;
-  
+
   const { triggerHook } = await import("../hooks/trigger.js");
-  
+
   if (input.answer) {
     void triggerHook({
       event: "elicitation_result",

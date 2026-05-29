@@ -5,7 +5,13 @@
  */
 
 import { ProviderAdapter, ProviderRequest, textMessage } from "./providers/ir.js";
-import { MemoryEntry, MemorySearchResult, listMemoryEntries, searchMemory, formatMemorySearchResults } from "./memory.js";
+import {
+  MemoryEntry,
+  MemorySearchResult,
+  listMemoryEntries,
+  searchMemory,
+  formatMemorySearchResults
+} from "./memory.js";
 import { MagiPaths } from "./paths.js";
 import { MemoryScope } from "./memory.js";
 
@@ -32,7 +38,9 @@ export interface SelectMemoryResult {
   formatted: string | undefined;
 }
 
-export async function selectRelevantMemories(input: SelectMemoryInput): Promise<SelectMemoryResult> {
+export async function selectRelevantMemories(
+  input: SelectMemoryInput
+): Promise<SelectMemoryResult> {
   const allEntries = listMemoryEntries({
     paths: input.paths,
     cwd: input.cwd,
@@ -113,12 +121,10 @@ async function llmSelectMemories(input: {
   const response = await input.route.adapter.complete(request);
   const indices = parseIndices(response.text, input.entries.length);
 
-  return indices
-    .slice(0, input.maxResults)
-    .map((index) => ({
-      ...input.entries[index],
-      score: input.maxResults - indices.indexOf(index) // Higher score for earlier picks
-    }));
+  return indices.slice(0, input.maxResults).map((index) => ({
+    ...input.entries[index],
+    score: input.maxResults - indices.indexOf(index) // Higher score for earlier picks
+  }));
 }
 
 function parseIndices(text: string, maxIndex: number): number[] {
@@ -132,8 +138,9 @@ function parseIndices(text: string, maxIndex: number): number[] {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed
-      .filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < maxIndex);
+    return parsed.filter(
+      (v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0 && v < maxIndex
+    );
   } catch {
     return [];
   }

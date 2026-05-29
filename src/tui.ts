@@ -27,7 +27,11 @@ import { MagiPaths } from "./paths.js";
 import { resolveModelPickerSelection, resolveSessionPickerSelection } from "./slash.js";
 import { parseCommandLine, registry } from "./commands/registry.js";
 import { isVimModeEnabled } from "./commands/vim.js";
-import { formatPermissionMode, parsePermissionMode, PERMISSION_MODES } from "./commands/permissions.js";
+import {
+  formatPermissionMode,
+  parsePermissionMode,
+  PERMISSION_MODES
+} from "./commands/permissions.js";
 import { readLineWithVim } from "./vim/lineEditor.js";
 import { startSpinner } from "./spinner.js";
 import { createStreamingMarkdown } from "./markdown.js";
@@ -54,11 +58,7 @@ import {
   UserQuestionResolver
 } from "./tools/user-question.js";
 
-export const MAGI_TEXT_HAT = [
-  "  △",
-  " /✦\\",
-  "▔▔▔"
-].join("\n");
+export const MAGI_TEXT_HAT = ["  △", " /✦\\", "▔▔▔"].join("\n");
 
 export function formatTuiStartupBanner(input: {
   cwd: string;
@@ -84,7 +84,12 @@ export interface TuiLiveEventWriter {
 }
 
 export type { TuiTranscriptEntry, TuiTranscriptState } from "./tui/transcript.js";
-export { buildTuiTranscriptState, formatTuiLiveEvent, formatTuiTranscriptEntry, formatTuiTranscriptStatus } from "./tui/transcript.js";
+export {
+  buildTuiTranscriptState,
+  formatTuiLiveEvent,
+  formatTuiTranscriptEntry,
+  formatTuiTranscriptStatus
+} from "./tui/transcript.js";
 export { colorizeDiffLine, createTerminalUserQuestionResolver } from "./tui/interactions.js";
 
 function installRunningInterruptKeys(controller: AbortController): () => void {
@@ -134,7 +139,10 @@ export async function runInteractiveTerminal(inputConfig: {
       const partial = match[1].toLowerCase();
       const all = registry.getAll();
       const matches = partial
-        ? all.filter(cmd => cmd.name.startsWith(partial) || (cmd.aliases ?? []).some(a => a.startsWith(partial)))
+        ? all.filter(
+            (cmd) =>
+              cmd.name.startsWith(partial) || (cmd.aliases ?? []).some((a) => a.startsWith(partial))
+          )
         : all;
       if (matches.length === 0) {
         return [[], line];
@@ -144,8 +152,8 @@ export async function runInteractiveTerminal(inputConfig: {
         return [[`/${matches[0].name} `], line];
       }
       // Show all matches with descriptions
-      const maxName = Math.max(...matches.map(c => c.name.length));
-      const display = matches.map(cmd => `/${cmd.name.padEnd(maxName)}  ${cmd.description}`);
+      const maxName = Math.max(...matches.map((c) => c.name.length));
+      const display = matches.map((cmd) => `/${cmd.name.padEnd(maxName)}  ${cmd.description}`);
       // Print the menu above the prompt
       output.write("\n" + display.join("\n") + "\n");
       return [[`/${partial}`], line];
@@ -164,11 +172,13 @@ export async function runInteractiveTerminal(inputConfig: {
   const aliasCount = Object.keys(inputConfig.config.models?.aliases ?? {}).length;
   const providerCount = Object.keys(inputConfig.config.providers ?? {}).length;
   if (providerCount === 0 || aliasCount === 0) {
-    output.write([
-      "\x1b[33m  ⚠ No provider is configured.\x1b[39m",
-      "    \x1b[90mRun 'magi init' (in another shell) to set up a provider, then restart.\x1b[39m",
-      ""
-    ].join("\n"));
+    output.write(
+      [
+        "\x1b[33m  ⚠ No provider is configured.\x1b[39m",
+        "    \x1b[90mRun 'magi init' (in another shell) to set up a provider, then restart.\x1b[39m",
+        ""
+      ].join("\n")
+    );
   }
   // Handle Ctrl+C: interrupt running query or exit on double-Ctrl+C.
   // readline emits 'SIGINT' on the rl instance (not on stdin); attaching here
@@ -199,14 +209,14 @@ export async function runInteractiveTerminal(inputConfig: {
   const inputHistory: string[] = loadHistory().map(decodeHistoryEntry);
   const slashSuggestionCommands = () => {
     const skillItems = inputConfig.paths
-      ? listSkills(inputConfig.paths).map(skill => ({
-        name: skill.name,
-        usage: `/${skill.name}`,
-        description: `[skill] ${skill.summary}`
-      }))
+      ? listSkills(inputConfig.paths).map((skill) => ({
+          name: skill.name,
+          usage: `/${skill.name}`,
+          description: `[skill] ${skill.summary}`
+        }))
       : [];
     return [
-      ...registry.getAll().map(cmd => ({
+      ...registry.getAll().map((cmd) => ({
         name: cmd.name,
         usage: cmd.usage,
         description: cmd.description
@@ -287,10 +297,10 @@ export async function runInteractiveTerminal(inputConfig: {
             stdin: input,
             stdout: output,
             items: [
-              ...registry.getAll().map(cmd => ({ name: cmd.name, description: cmd.description })),
+              ...registry.getAll().map((cmd) => ({ name: cmd.name, description: cmd.description })),
               ...slashSuggestionCommands()
-                .filter(item => item.description.startsWith("[skill]"))
-                .map(item => ({ name: item.name, description: item.description })),
+                .filter((item) => item.description.startsWith("[skill]"))
+                .map((item) => ({ name: item.name, description: item.description })),
               { name: "exit", description: "Quit Magi" },
               { name: "continue", description: "Continue last response" }
             ]
@@ -331,7 +341,9 @@ export async function runInteractiveTerminal(inputConfig: {
           if (result) {
             output.write(result + "\n");
             output.write("  /exit or /quit            Quit Magi Next\n");
-            output.write("  /continue                 Ask the model to continue its last response\n");
+            output.write(
+              "  /continue                 Ask the model to continue its last response\n"
+            );
           }
           continue;
         }
@@ -367,7 +379,11 @@ export async function runInteractiveTerminal(inputConfig: {
           continue;
         }
 
-        if ((parsed.name === "permissions" || parsed.name === "perms") && parsed.args[0] === "mode" && parsed.args.length <= 1) {
+        if (
+          (parsed.name === "permissions" || parsed.name === "perms") &&
+          parsed.args[0] === "mode" &&
+          parsed.args.length <= 1
+        ) {
           const selected = await pickInteractivePermissionMode({
             input,
             output,
@@ -386,7 +402,11 @@ export async function runInteractiveTerminal(inputConfig: {
           const selected = resolveModelPickerSelection(inputConfig.config, parsed.args[0]);
           if (selected) currentModel = selected;
         }
-        if ((parsed.name === "permissions" || parsed.name === "perms") && parsed.args[0] === "mode" && parsed.args[1]) {
+        if (
+          (parsed.name === "permissions" || parsed.name === "perms") &&
+          parsed.args[0] === "mode" &&
+          parsed.args[1]
+        ) {
           const selected = parsePermissionMode(parsed.args[1]);
           if (selected) {
             currentPermissionMode = selected;
@@ -452,7 +472,8 @@ export async function runInteractiveTerminal(inputConfig: {
           const skill = findSkill(inputConfig.paths, parsed.name);
           if (skill) {
             // Inject skill body as the prompt; let the model handle it
-            const skillArgs = parsed.args.length > 0 ? `\n\nArguments: ${parsed.args.join(" ")}` : "";
+            const skillArgs =
+              parsed.args.length > 0 ? `\n\nArguments: ${parsed.args.join(" ")}` : "";
             trimmed = `Execute the "${skill.name}" skill:\n\n${skill.body ?? ""}${skillArgs}`;
             // Fall through to normal prompt flow
           } else {
@@ -517,11 +538,12 @@ export async function runInteractiveTerminal(inputConfig: {
       // sentinel-prefixed block that the agent loop parses back into multi-part
       // user messages.
       const pendingImages = takePendingImages();
-      const promptWithImages = pendingImages.length > 0
-        ? encodePromptWithImages(trimmed, pendingImages)
-        : trimmed;
+      const promptWithImages =
+        pendingImages.length > 0 ? encodePromptWithImages(trimmed, pendingImages) : trimmed;
       if (pendingImages.length > 0) {
-        output.write(`\x1b[90m[attaching ${pendingImages.length} image${pendingImages.length === 1 ? "" : "s"}]\x1b[39m\n`);
+        output.write(
+          `\x1b[90m[attaching ${pendingImages.length} image${pendingImages.length === 1 ? "" : "s"}]\x1b[39m\n`
+        );
       }
       let result: Awaited<ReturnType<typeof runHeadlessPrompt>> | undefined;
       let stopInterruptKeys: (() => void) | undefined;
@@ -568,7 +590,9 @@ export async function runInteractiveTerminal(inputConfig: {
             }
             if (event.type === "compact_boundary") {
               if (!streamedAny) spinner.stop();
-              output.write(`\x1b[90m[context compacted: ${event.sourceMessageCount} messages, ~${event.estimatedTokensBefore} tokens]\x1b[39m\n`);
+              output.write(
+                `\x1b[90m[context compacted: ${event.sourceMessageCount} messages, ~${event.estimatedTokensBefore} tokens]\x1b[39m\n`
+              );
             }
           }
         });
@@ -602,9 +626,10 @@ export async function runInteractiveTerminal(inputConfig: {
       }
       const elapsed = Date.now() - startedAt;
       const secs = (elapsed / 1000).toFixed(1);
-      const tokenInfo = totalInputTokens > 0
-        ? ` · ${formatTokens(totalInputTokens)}↑ ${formatTokens(totalOutputTokens)}↓`
-        : "";
+      const tokenInfo =
+        totalInputTokens > 0
+          ? ` · ${formatTokens(totalInputTokens)}↑ ${formatTokens(totalOutputTokens)}↓`
+          : "";
       output.write(`\n\x1b[90m${result.model ?? currentModel} · ${secs}s${tokenInfo}\x1b[39m\n`);
 
       // Proactive suggestions
@@ -614,7 +639,7 @@ export async function runInteractiveTerminal(inputConfig: {
         hadErrors
       });
       if (suggestions.length > 0) {
-        output.write(`\x1b[90m${suggestions.map(s => `→ ${s}`).join("  ")}\x1b[39m\n`);
+        output.write(`\x1b[90m${suggestions.map((s) => `→ ${s}`).join("  ")}\x1b[39m\n`);
       }
     }
   } finally {
@@ -650,7 +675,9 @@ export function startTuiLiveEventWriter(input: {
     } else {
       liveSessionId = event.sessionId;
     }
-    const line = formatTuiLiveEvent(toEventView(event), { showToolTrace: input.env?.MAGI_DEBUG_TOOLS === "1" });
+    const line = formatTuiLiveEvent(toEventView(event), {
+      showToolTrace: input.env?.MAGI_DEBUG_TOOLS === "1"
+    });
     if (line) {
       terminalOutput.write(`${line}\n`);
     }
@@ -677,21 +704,21 @@ export function startTuiLiveEventWriter(input: {
   };
 }
 
-
-
 export function formatSessionList(store: SessionStore): string {
   const sessions = store.listSessions(50);
   if (sessions.length === 0) {
     return "No sessions\n";
   }
-  return [
-    "Recent sessions:",
-    ...sessions.map((session, index) => {
-      const marker = index === 0 ? ">" : " ";
-      return `${marker} ${session.id}  ${session.updatedAt}  ${session.messageCount} msg  ${session.title ?? "(untitled)"}  ${session.cwd}`;
-    }),
-    "Use magi -r <session-id> -p <prompt> or magi resume <session-id>."
-  ].join("\n") + "\n";
+  return (
+    [
+      "Recent sessions:",
+      ...sessions.map((session, index) => {
+        const marker = index === 0 ? ">" : " ";
+        return `${marker} ${session.id}  ${session.updatedAt}  ${session.messageCount} msg  ${session.title ?? "(untitled)"}  ${session.cwd}`;
+      }),
+      "Use magi -r <session-id> -p <prompt> or magi resume <session-id>."
+    ].join("\n") + "\n"
+  );
 }
 
 export function formatSessionResume(store: SessionStore, sessionId: string): string {
@@ -699,14 +726,22 @@ export function formatSessionResume(store: SessionStore, sessionId: string): str
   if (!session) {
     return `Session not found: ${sessionId}\n`;
   }
-  const pending = store.listSessionAuditEvents(sessionId, 50)
+  const pending = store
+    .listSessionAuditEvents(sessionId, 50)
     .map(toEventView)
-    .filter((event) => event.status === "pending" && (event.category === "approval" || event.category === "question"));
+    .filter(
+      (event) =>
+        event.status === "pending" &&
+        (event.category === "approval" || event.category === "question")
+    );
   const events = store.listSessionAuditEvents(sessionId, 8).map(toEventView);
-  const transcript = buildTuiTranscriptState(store.listSessionAuditEvents(sessionId, 50).map(toEventView), {
-    sessionId,
-    limit: 8
-  });
+  const transcript = buildTuiTranscriptState(
+    store.listSessionAuditEvents(sessionId, 50).map(toEventView),
+    {
+      sessionId,
+      limit: 8
+    }
+  );
   const renderState = buildTuiRenderState({
     events: store.listSessionAuditEvents(sessionId, 50).map(toEventView),
     sessionId,
@@ -734,7 +769,10 @@ function formatPendingResumeInteractions(events: ReturnType<typeof toEventView>[
   return [
     "Pending interactions:",
     ...events.map((event) => {
-      const toolUseId = typeof event.metadata.toolUseId === "string" ? event.metadata.toolUseId : event.target ?? "unknown";
+      const toolUseId =
+        typeof event.metadata.toolUseId === "string"
+          ? event.metadata.toolUseId
+          : (event.target ?? "unknown");
       return `- ${event.category} ${toolUseId} job=${event.jobId ?? "unknown"} ${event.message}`;
     })
   ].join("\n");
@@ -755,7 +793,11 @@ export interface LineEmitter {
   off(event: "line", listener: (line: string) => void): unknown;
 }
 
-export async function collectPastedContinuations(rl: LineEmitter, firstLine: string, windowMs = 100): Promise<string> {
+export async function collectPastedContinuations(
+  rl: LineEmitter,
+  firstLine: string,
+  windowMs = 100
+): Promise<string> {
   const lines: string[] = [firstLine];
   while (true) {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -819,11 +861,13 @@ export function startInteractiveGoalCommand(input: {
   args: string[];
 }): InteractiveGoalStartResult {
   const prompt = input.args.join(" ");
-  const sessionId = input.sessionId ?? input.store.createSession({
-    title: prompt.slice(0, 80) || "goal",
-    cwd: input.cwd,
-    metadata: { mode: "interactive", command: "goal" }
-  });
+  const sessionId =
+    input.sessionId ??
+    input.store.createSession({
+      title: prompt.slice(0, 80) || "goal",
+      cwd: input.cwd,
+      metadata: { mode: "interactive", command: "goal" }
+    });
   return {
     sessionId,
     message: startInteractiveGoal(input.paths, sessionId, input.args),
@@ -831,9 +875,14 @@ export function startInteractiveGoalCommand(input: {
   };
 }
 
-function startInteractiveGoal(paths: MagiPaths | undefined, sessionId: string | undefined, args: string[]): string {
+function startInteractiveGoal(
+  paths: MagiPaths | undefined,
+  sessionId: string | undefined,
+  args: string[]
+): string {
   if (!paths) return "Goal requires a configured paths root.";
-  if (!sessionId) return "No active session. Send a message first or resume a session, then use /goal.";
+  if (!sessionId)
+    return "No active session. Send a message first or resume a session, then use /goal.";
   const objective = args.join(" ").trim();
   const goal = createGoal(paths, { sessionId, objective });
   return `Goal started: ${goal.objective}`;
@@ -847,7 +896,9 @@ async function pickInteractiveModel(input: {
 }): Promise<string | undefined> {
   const items: TuiPickerItem[] = buildModelPickerItems(input.config, input.currentModel);
   if (items.length === 0) {
-    input.output.write("No model aliases configured.\nUse /model <provider:model> after configuring the provider.\n");
+    input.output.write(
+      "No model aliases configured.\nUse /model <provider:model> after configuring the provider.\n"
+    );
     return undefined;
   }
   return showTuiPicker({
@@ -901,7 +952,7 @@ async function pickInteractivePermissionMode(input: {
 }
 
 export function buildPermissionModePickerItems(currentMode: ToolPermissionMode): TuiPickerItem[] {
-  return PERMISSION_MODES.map(mode => ({
+  return PERMISSION_MODES.map((mode) => ({
     label: mode,
     value: mode,
     description: permissionModePickerDescription(mode),
@@ -944,11 +995,12 @@ async function pickInteractiveSession(input: {
 }
 
 export function buildSessionPickerItems(store: SessionStore): TuiPickerItem[] {
-  return store.listSessions(50).map(session => ({
+  return store.listSessions(50).map((session) => ({
     label: session.title ? formatSessionTitle(session.title) : shortSessionId(session.id),
     value: session.id,
     description: `${session.messageCount} msg`,
-    detail: `${session.updatedAt} ${session.cwd} ${session.title ? shortSessionId(session.id) : ""}`.trim()
+    detail:
+      `${session.updatedAt} ${session.cwd} ${session.title ? shortSessionId(session.id) : ""}`.trim()
   }));
 }
 

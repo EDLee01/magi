@@ -17,7 +17,12 @@ import {
   formatCronList,
   listCronJobs
 } from "./cron.js";
-import { createUnifiedDiff, editWorkspaceFile, readWorkspaceFile, writeWorkspaceFile } from "./files.js";
+import {
+  createUnifiedDiff,
+  editWorkspaceFile,
+  readWorkspaceFile,
+  writeWorkspaceFile
+} from "./files.js";
 import {
   checkoutGitBranch,
   createGitBranch,
@@ -32,40 +37,175 @@ import {
 import { executeLspRequest, LSP_SCHEMA, parseLspRequest } from "./lsp.js";
 import { formatSearchMatches, globWorkspace, searchWorkspace } from "./search.js";
 import { isReadOnlyShellCommand, runShellCommand } from "./shell.js";
-import { formatMonitorResult, getMonitorData, MonitorInputSchema, parseMonitorInput } from "./monitor.js";
+import {
+  formatMonitorResult,
+  getMonitorData,
+  MonitorInputSchema,
+  parseMonitorInput
+} from "./monitor.js";
 import { executeSleep, parseSleepInput, SleepInputSchema } from "./sleep.js";
-import { executeFileCopy, formatFileCopyResult, FileCopyInputSchema, parseFileCopyInput } from "./file-copy.js";
-import { executeFileMove, formatFileMoveResult, FileMoveInputSchema, parseFileMoveInput } from "./file-move.js";
-import { executeFileDelete, FileDeleteInputSchema, formatFileDeleteResult, parseFileDeleteInput } from "./file-delete.js";
-import { DirCreateInputSchema, executeDirCreate, formatDirCreateResult, parseDirCreateInput } from "./dir-create.js";
-import { DirListInputSchema, executeDirList, formatDirListResult, parseDirListInput } from "./dir-list.js";
-import { executeProcessList, formatProcessListResult, parseProcessListInput, ProcessListInputSchema } from "./process-list.js";
-import { executeKillProcess, formatKillProcessResult, KillProcessInputSchema, parseKillProcessInput } from "./kill-process.js";
-import { EnvironmentInputSchema, executeEnvironment, formatEnvironmentResult, parseEnvironmentInput } from "./environment.js";
-import { DiskUsageInputSchema, executeDiskUsage, formatDiskUsageResult, parseDiskUsageInput } from "./disk-usage.js";
-import { executeSystemInfo, formatSystemInfoResult, parseSystemInfoInput, SystemInfoInputSchema } from "./system-info.js";
-import { executeHttpRequest, formatHttpRequestResult, HttpRequestInputSchema, parseHttpRequestInput } from "./http-request.js";
-import { DownloadFileInputSchema, executeDownloadFile, formatDownloadFileResult, parseDownloadFileInput } from "./download-file.js";
-import { executeJsonQuery, formatJsonQueryResult, JsonQueryInputSchema, parseJsonQueryInput } from "./json-query.js";
-import { ArchiveCreateInputSchema, executeArchiveCreate, formatArchiveCreateResult, parseArchiveCreateInput } from "./archive-create.js";
-import { ArchiveExtractInputSchema, executeArchiveExtract, formatArchiveExtractResult, parseArchiveExtractInput } from "./archive-extract.js";
-import { executeGitBranchDelete, formatGitBranchDeleteResult, GitBranchDeleteInputSchema, parseGitBranchDeleteInput } from "./git-branch-delete.js";
-import { executeGitStash, formatGitStashResult, GitStashInputSchema, parseGitStashInput } from "./git-stash.js";
-import { executeGitReset, formatGitResetResult, GitResetInputSchema, parseGitResetInput } from "./git-reset.js";
-import { executeFileFind, FileFindInputSchema, formatFileFindResult, parseFileFindInput } from "./file-find.js";
-import { executeHeadTail, formatHeadTailResult, HeadTailInputSchema, parseHeadTailInput } from "./head-tail.js";
-import { executeTextStats, formatTextStatsResult, parseTextStatsInput, TextStatsInputSchema } from "./text-stats.js";
-import { executeTreeView, formatTreeViewResult, parseTreeViewInput, TreeViewInputSchema } from "./tree-view.js";
-import { executeWhoAmI, formatWhoAmIResult, parseWhoAmIInput, WhoAmIInputSchema } from "./whoami.js";
-import { executeNetworkCheck, formatNetworkCheckResult, NetworkCheckInputSchema, parseNetworkCheckInput } from "./network-check.js";
-import { Base64InputSchema, executeBase64, formatBase64Result, parseBase64Input } from "./base64.js";
+import {
+  executeFileCopy,
+  formatFileCopyResult,
+  FileCopyInputSchema,
+  parseFileCopyInput
+} from "./file-copy.js";
+import {
+  executeFileMove,
+  formatFileMoveResult,
+  FileMoveInputSchema,
+  parseFileMoveInput
+} from "./file-move.js";
+import {
+  executeFileDelete,
+  FileDeleteInputSchema,
+  formatFileDeleteResult,
+  parseFileDeleteInput
+} from "./file-delete.js";
+import {
+  DirCreateInputSchema,
+  executeDirCreate,
+  formatDirCreateResult,
+  parseDirCreateInput
+} from "./dir-create.js";
+import {
+  DirListInputSchema,
+  executeDirList,
+  formatDirListResult,
+  parseDirListInput
+} from "./dir-list.js";
+import {
+  executeProcessList,
+  formatProcessListResult,
+  parseProcessListInput,
+  ProcessListInputSchema
+} from "./process-list.js";
+import {
+  executeKillProcess,
+  formatKillProcessResult,
+  KillProcessInputSchema,
+  parseKillProcessInput
+} from "./kill-process.js";
+import {
+  EnvironmentInputSchema,
+  executeEnvironment,
+  formatEnvironmentResult,
+  parseEnvironmentInput
+} from "./environment.js";
+import {
+  DiskUsageInputSchema,
+  executeDiskUsage,
+  formatDiskUsageResult,
+  parseDiskUsageInput
+} from "./disk-usage.js";
+import {
+  executeSystemInfo,
+  formatSystemInfoResult,
+  parseSystemInfoInput,
+  SystemInfoInputSchema
+} from "./system-info.js";
+import {
+  executeHttpRequest,
+  formatHttpRequestResult,
+  HttpRequestInputSchema,
+  parseHttpRequestInput
+} from "./http-request.js";
+import {
+  DownloadFileInputSchema,
+  executeDownloadFile,
+  formatDownloadFileResult,
+  parseDownloadFileInput
+} from "./download-file.js";
+import {
+  executeJsonQuery,
+  formatJsonQueryResult,
+  JsonQueryInputSchema,
+  parseJsonQueryInput
+} from "./json-query.js";
+import {
+  ArchiveCreateInputSchema,
+  executeArchiveCreate,
+  formatArchiveCreateResult,
+  parseArchiveCreateInput
+} from "./archive-create.js";
+import {
+  ArchiveExtractInputSchema,
+  executeArchiveExtract,
+  formatArchiveExtractResult,
+  parseArchiveExtractInput
+} from "./archive-extract.js";
+import {
+  executeGitBranchDelete,
+  formatGitBranchDeleteResult,
+  GitBranchDeleteInputSchema,
+  parseGitBranchDeleteInput
+} from "./git-branch-delete.js";
+import {
+  executeGitStash,
+  formatGitStashResult,
+  GitStashInputSchema,
+  parseGitStashInput
+} from "./git-stash.js";
+import {
+  executeGitReset,
+  formatGitResetResult,
+  GitResetInputSchema,
+  parseGitResetInput
+} from "./git-reset.js";
+import {
+  executeFileFind,
+  FileFindInputSchema,
+  formatFileFindResult,
+  parseFileFindInput
+} from "./file-find.js";
+import {
+  executeHeadTail,
+  formatHeadTailResult,
+  HeadTailInputSchema,
+  parseHeadTailInput
+} from "./head-tail.js";
+import {
+  executeTextStats,
+  formatTextStatsResult,
+  parseTextStatsInput,
+  TextStatsInputSchema
+} from "./text-stats.js";
+import {
+  executeTreeView,
+  formatTreeViewResult,
+  parseTreeViewInput,
+  TreeViewInputSchema
+} from "./tree-view.js";
+import {
+  executeWhoAmI,
+  formatWhoAmIResult,
+  parseWhoAmIInput,
+  WhoAmIInputSchema
+} from "./whoami.js";
+import {
+  executeNetworkCheck,
+  formatNetworkCheckResult,
+  NetworkCheckInputSchema,
+  parseNetworkCheckInput
+} from "./network-check.js";
+import {
+  Base64InputSchema,
+  executeBase64,
+  formatBase64Result,
+  parseBase64Input
+} from "./base64.js";
 import { executeWhich, formatWhichResult, parseWhichInput, WhichInputSchema } from "./which.js";
 import { DateInputSchema, executeDate, formatDateResult, parseDateInput } from "./date.js";
 import { sshExec } from "../ssh/exec.js";
 import { sshFileRead, sshFileWrite } from "../ssh/file.js";
 import { executeSnip, formatSnipResult, parseSnipInput, SnipInputSchema } from "./snip.js";
 import { executeSkillTool, parseSkillToolInput, SkillToolInputSchema } from "./skill-tool.js";
-import { executeSkillManage, parseSkillManageInput, skillManagePreview, SkillManageInputSchema } from "./skill-manage.js";
+import {
+  executeSkillManage,
+  parseSkillManageInput,
+  skillManagePreview,
+  SkillManageInputSchema
+} from "./skill-manage.js";
 import {
   executeLearningDraftTool,
   LearningDraftToolInputSchema,
@@ -79,7 +219,12 @@ import {
   searchSessions,
   sessionWindow
 } from "../session-search.js";
-import { formatTodoWriteResult, parseTodoWriteInput, replaceTodoList, TodoWriteInputSchema } from "./todo.js";
+import {
+  formatTodoWriteResult,
+  parseTodoWriteInput,
+  replaceTodoList,
+  TodoWriteInputSchema
+} from "./todo.js";
 import { executeToolSearch, parseToolSearchInput, ToolSearchInputSchema } from "./tool-search.js";
 import {
   executeTaskCreate,
@@ -132,11 +277,7 @@ import {
   GitHubPRListInputSchema,
   GitHubPRViewInputSchema
 } from "./github.js";
-import {
-  AgentToolInputSchema,
-  formatAgentToolResult,
-  parseAgentToolInput
-} from "./agent-tool.js";
+import { AgentToolInputSchema, formatAgentToolResult, parseAgentToolInput } from "./agent-tool.js";
 import {
   executeNotebookEdit,
   executeNotebookRead,
@@ -160,7 +301,11 @@ import {
   UserQuestionResolver
 } from "./user-question.js";
 import { readWebFetchAllowlist, webFetch, webFetchHostAllowed } from "./web-fetch.js";
-import { BrowserActionInputSchema, executeBrowserAction, formatBrowserActionResult } from "./browser.js";
+import {
+  BrowserActionInputSchema,
+  executeBrowserAction,
+  formatBrowserActionResult
+} from "./browser.js";
 import {
   executeWebBrowser,
   formatWebBrowserResult,
@@ -207,7 +352,10 @@ export interface RegisteredTool {
   isReadOnly(input: Record<string, unknown>): boolean;
   isDestructive(input: Record<string, unknown>): boolean;
   isConcurrencySafe(input: Record<string, unknown>): boolean;
-  checkPermissions?(input: Record<string, unknown>, context: ToolExecutionContext): ToolPermissionResult | undefined;
+  checkPermissions?(
+    input: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): ToolPermissionResult | undefined;
 }
 
 export type ToolExposure = "core" | "deferred";
@@ -311,7 +459,10 @@ export async function executeRegisteredTool(input: {
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
-  approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: ToolPermissionResult }) => Promise<boolean> | boolean;
+  approvalResolver?: (request: {
+    toolUse: MagiToolUsePart;
+    permission: ToolPermissionResult;
+  }) => Promise<boolean> | boolean;
   signal?: AbortSignal;
 }): Promise<RegisteredToolResult> {
   const registry = getBuiltinToolRegistry();
@@ -345,11 +496,16 @@ export async function executeRegisteredTool(input: {
       env: context.env
     });
     // Generate diff preview for FileWrite/FileEdit when approval is needed
-    if (permission.decision === "ask" && (input.toolUse.name === "FileWrite" || input.toolUse.name === "FileEdit")) {
+    if (
+      permission.decision === "ask" &&
+      (input.toolUse.name === "FileWrite" || input.toolUse.name === "FileEdit")
+    ) {
       try {
         const filePath = readString(input.toolUse.input, "file_path");
         const resolved = resolveWorkspacePath(input.cwd, filePath);
-        const before = existsSync(resolved.absolutePath) ? readFileSync(resolved.absolutePath, "utf8") : "";
+        const before = existsSync(resolved.absolutePath)
+          ? readFileSync(resolved.absolutePath, "utf8")
+          : "";
         let after: string;
         if (input.toolUse.name === "FileWrite") {
           after = readString(input.toolUse.input, "content");
@@ -357,7 +513,9 @@ export async function executeRegisteredTool(input: {
           const oldString = readString(input.toolUse.input, "old_string");
           const newString = readString(input.toolUse.input, "new_string");
           const replaceAll = Boolean(input.toolUse.input.replace_all);
-          after = replaceAll ? before.split(oldString).join(newString) : before.replace(oldString, newString);
+          after = replaceAll
+            ? before.split(oldString).join(newString)
+            : before.replace(oldString, newString);
         }
         permission.diff = createUnifiedDiff(resolved.relativePath, before, after);
       } catch {
@@ -409,9 +567,11 @@ function shouldRethrowToolExecutionError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  return error.name === "AbortError"
-    || error.name === "ActiveInteractionCancelledError"
-    || error.name === "ActiveInteractionTimeoutError";
+  return (
+    error.name === "AbortError" ||
+    error.name === "ActiveInteractionCancelledError" ||
+    error.name === "ActiveInteractionTimeoutError"
+  );
 }
 
 export async function executeRegisteredTools(input: {
@@ -429,7 +589,10 @@ export async function executeRegisteredTools(input: {
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
-  approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: ToolPermissionResult }) => Promise<boolean> | boolean;
+  approvalResolver?: (request: {
+    toolUse: MagiToolUsePart;
+    permission: ToolPermissionResult;
+  }) => Promise<boolean> | boolean;
   signal?: AbortSignal;
 }): Promise<RegisteredToolResult[]> {
   const registry = getBuiltinToolRegistry();
@@ -446,9 +609,11 @@ export async function executeRegisteredTools(input: {
     }
   });
 
-  await Promise.all(concurrent.map(async ({ index, toolUse }) => {
-    results[index] = await executeRegisteredTool({ ...input, toolUse });
-  }));
+  await Promise.all(
+    concurrent.map(async ({ index, toolUse }) => {
+      results[index] = await executeRegisteredTool({ ...input, toolUse });
+    })
+  );
   for (const { index, toolUse } of sequential) {
     results[index] = await executeRegisteredTool({ ...input, toolUse });
   }
@@ -539,10 +704,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Read a UTF-8 text file inside the current workspace.",
     category: "files",
     tags: ["file", "read", "workspace"],
-    inputSchema: objectSchema({
-      file_path: { type: "string" },
-      max_bytes: { type: "number" }
-    }, ["file_path"]),
+    inputSchema: objectSchema(
+      {
+        file_path: { type: "string" },
+        max_bytes: { type: "number" }
+      },
+      ["file_path"]
+    ),
     call: (input, context) => {
       const result = readWorkspaceFile({
         cwd: context.cwd,
@@ -560,10 +728,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Create or overwrite a UTF-8 text file inside the current workspace.",
     category: "files",
     tags: ["file", "write", "workspace"],
-    inputSchema: objectSchema({
-      file_path: { type: "string" },
-      content: { type: "string" }
-    }, ["file_path", "content"]),
+    inputSchema: objectSchema(
+      {
+        file_path: { type: "string" },
+        content: { type: "string" }
+      },
+      ["file_path", "content"]
+    ),
     call: (input, context) => {
       const result = writeWorkspaceFile({
         cwd: context.cwd,
@@ -582,12 +753,15 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Replace text in a UTF-8 file inside the current workspace.",
     category: "files",
     tags: ["file", "edit", "workspace"],
-    inputSchema: objectSchema({
-      file_path: { type: "string" },
-      old_string: { type: "string" },
-      new_string: { type: "string" },
-      replace_all: { type: "boolean" }
-    }, ["file_path", "old_string", "new_string"]),
+    inputSchema: objectSchema(
+      {
+        file_path: { type: "string" },
+        old_string: { type: "string" },
+        new_string: { type: "string" },
+        replace_all: { type: "boolean" }
+      },
+      ["file_path", "old_string", "new_string"]
+    ),
     call: (input, context) => {
       const result = editWorkspaceFile({
         cwd: context.cwd,
@@ -636,11 +810,14 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Find files by glob pattern inside the current workspace.",
     category: "search",
     tags: ["glob", "file", "workspace"],
-    inputSchema: objectSchema({
-      pattern: { type: "string" },
-      path: { type: "string" },
-      max_matches: { type: "number" }
-    }, ["pattern"]),
+    inputSchema: objectSchema(
+      {
+        pattern: { type: "string" },
+        path: { type: "string" },
+        max_matches: { type: "number" }
+      },
+      ["pattern"]
+    ),
     call: (input, context) => {
       const matches = globWorkspace({
         cwd: context.cwd,
@@ -659,21 +836,24 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Search text in the current workspace with ripgrep-compatible options.",
     category: "search",
     tags: ["grep", "search", "ripgrep", "workspace"],
-    inputSchema: objectSchema({
-      pattern: { type: "string" },
-      path: { type: "string" },
-      glob: { type: "string" },
-      type: { type: "string" },
-      output_mode: { type: "string" },
-      max_matches: { type: "number" },
-      head_limit: { type: "number" },
-      ignore_case: { type: "boolean" },
-      fixed_strings: { type: "boolean" },
-      line_numbers: { type: "boolean" },
-      before_context: { type: "number" },
-      after_context: { type: "number" },
-      context: { type: "number" }
-    }, ["pattern"]),
+    inputSchema: objectSchema(
+      {
+        pattern: { type: "string" },
+        path: { type: "string" },
+        glob: { type: "string" },
+        type: { type: "string" },
+        output_mode: { type: "string" },
+        max_matches: { type: "number" },
+        head_limit: { type: "number" },
+        ignore_case: { type: "boolean" },
+        fixed_strings: { type: "boolean" },
+        line_numbers: { type: "boolean" },
+        before_context: { type: "number" },
+        after_context: { type: "number" },
+        context: { type: "number" }
+      },
+      ["pattern"]
+    ),
     call: (input, context) => {
       const outputMode = readOutputMode(input, "output_mode");
       const contextLines = readOptionalNumber(input, "context");
@@ -705,10 +885,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Run a shell command in the current workspace.",
     category: "shell",
     tags: ["bash", "command", "terminal"],
-    inputSchema: objectSchema({
-      command: { type: "string" },
-      timeout_ms: { type: "number" }
-    }, ["command"]),
+    inputSchema: objectSchema(
+      {
+        command: { type: "string" },
+        timeout_ms: { type: "number" }
+      },
+      ["command"]
+    ),
     call: async (input, context) => {
       const result = await runShellCommand({
         cwd: context.cwd,
@@ -721,9 +904,12 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         `Command exited ${result.exitCode}`,
         result.stdout ? `stdout:\n${result.stdout.trimEnd()}` : undefined,
         result.stderr ? `stderr:\n${result.stderr.trimEnd()}` : undefined
-      ].filter((line): line is string => Boolean(line)).join("\n");
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n");
     },
-    isReadOnly: (input) => typeof input.command === "string" && isReadOnlyShellCommand(input.command),
+    isReadOnly: (input) =>
+      typeof input.command === "string" && isReadOnlyShellCommand(input.command),
     isDestructive: () => false,
     isConcurrencySafe: () => false
   },
@@ -753,18 +939,22 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Return git working tree status for the current workspace.",
     category: "git",
     tags: ["git", "status", "workspace"],
-    inputSchema: objectSchema({
-      path: { type: "string" },
-      branch: { type: "boolean" },
-      porcelain: { type: "boolean" },
-      untracked: { type: "string" }
-    }, []),
-    call: (input, context) => getGitStatus(context.cwd, {
-      path: readOptionalString(input, "path"),
-      branch: readOptionalBoolean(input, "branch"),
-      porcelain: readOptionalBoolean(input, "porcelain"),
-      untracked: readGitUntracked(input, "untracked")
-    }),
+    inputSchema: objectSchema(
+      {
+        path: { type: "string" },
+        branch: { type: "boolean" },
+        porcelain: { type: "boolean" },
+        untracked: { type: "string" }
+      },
+      []
+    ),
+    call: (input, context) =>
+      getGitStatus(context.cwd, {
+        path: readOptionalString(input, "path"),
+        branch: readOptionalBoolean(input, "branch"),
+        porcelain: readOptionalBoolean(input, "porcelain"),
+        untracked: readGitUntracked(input, "untracked")
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -774,20 +964,24 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Return git diff output for unstaged or staged workspace changes.",
     category: "git",
     tags: ["git", "diff", "workspace"],
-    inputSchema: objectSchema({
-      path: { type: "string" },
-      staged: { type: "boolean" },
-      stat: { type: "boolean" },
-      name_only: { type: "boolean" },
-      context: { type: "number" }
-    }, []),
-    call: (input, context) => getGitDiff(context.cwd, {
-      path: readOptionalString(input, "path"),
-      staged: readOptionalBoolean(input, "staged"),
-      stat: readOptionalBoolean(input, "stat"),
-      nameOnly: readOptionalBoolean(input, "name_only"),
-      context: readOptionalNumber(input, "context")
-    }),
+    inputSchema: objectSchema(
+      {
+        path: { type: "string" },
+        staged: { type: "boolean" },
+        stat: { type: "boolean" },
+        name_only: { type: "boolean" },
+        context: { type: "number" }
+      },
+      []
+    ),
+    call: (input, context) =>
+      getGitDiff(context.cwd, {
+        path: readOptionalString(input, "path"),
+        staged: readOptionalBoolean(input, "staged"),
+        stat: readOptionalBoolean(input, "stat"),
+        nameOnly: readOptionalBoolean(input, "name_only"),
+        context: readOptionalNumber(input, "context")
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -797,16 +991,20 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Return recent git commits for the current workspace.",
     category: "git",
     tags: ["git", "log", "commits"],
-    inputSchema: objectSchema({
-      path: { type: "string" },
-      max_count: { type: "number" },
-      oneline: { type: "boolean" }
-    }, []),
-    call: (input, context) => getGitLog(context.cwd, {
-      path: readOptionalString(input, "path"),
-      maxCount: readOptionalNumber(input, "max_count"),
-      oneline: readOptionalBoolean(input, "oneline")
-    }),
+    inputSchema: objectSchema(
+      {
+        path: { type: "string" },
+        max_count: { type: "number" },
+        oneline: { type: "boolean" }
+      },
+      []
+    ),
+    call: (input, context) =>
+      getGitLog(context.cwd, {
+        path: readOptionalString(input, "path"),
+        maxCount: readOptionalNumber(input, "max_count"),
+        oneline: readOptionalBoolean(input, "oneline")
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -816,18 +1014,22 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Return a git object or commit using a simple revision name, tag, or commit id.",
     category: "git",
     tags: ["git", "show", "commit"],
-    inputSchema: objectSchema({
-      rev: { type: "string" },
-      stat: { type: "boolean" },
-      name_only: { type: "boolean" },
-      max_bytes: { type: "number" }
-    }, []),
-    call: (input, context) => getGitShow(context.cwd, {
-      rev: readOptionalString(input, "rev"),
-      stat: readOptionalBoolean(input, "stat"),
-      nameOnly: readOptionalBoolean(input, "name_only"),
-      maxBytes: readOptionalNumber(input, "max_bytes")
-    }),
+    inputSchema: objectSchema(
+      {
+        rev: { type: "string" },
+        stat: { type: "boolean" },
+        name_only: { type: "boolean" },
+        max_bytes: { type: "number" }
+      },
+      []
+    ),
+    call: (input, context) =>
+      getGitShow(context.cwd, {
+        rev: readOptionalString(input, "rev"),
+        stat: readOptionalBoolean(input, "stat"),
+        nameOnly: readOptionalBoolean(input, "name_only"),
+        maxBytes: readOptionalNumber(input, "max_bytes")
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -837,12 +1039,16 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "List local or all branches for the current git workspace.",
     category: "git",
     tags: ["git", "branch", "list"],
-    inputSchema: objectSchema({
-      all: { type: "boolean" }
-    }, []),
-    call: (input, context) => listGitBranches(context.cwd, {
-      all: readOptionalBoolean(input, "all")
-    }),
+    inputSchema: objectSchema(
+      {
+        all: { type: "boolean" }
+      },
+      []
+    ),
+    call: (input, context) =>
+      listGitBranches(context.cwd, {
+        all: readOptionalBoolean(input, "all")
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -852,16 +1058,20 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Create a new git branch, optionally checking it out.",
     category: "git",
     tags: ["git", "branch", "create", "mutation"],
-    inputSchema: objectSchema({
-      name: { type: "string" },
-      start_point: { type: "string" },
-      checkout: { type: "boolean" }
-    }, ["name"]),
-    call: (input, context) => createGitBranch(context.cwd, {
-      name: readString(input, "name"),
-      startPoint: readOptionalString(input, "start_point"),
-      checkout: readOptionalBoolean(input, "checkout")
-    }),
+    inputSchema: objectSchema(
+      {
+        name: { type: "string" },
+        start_point: { type: "string" },
+        checkout: { type: "boolean" }
+      },
+      ["name"]
+    ),
+    call: (input, context) =>
+      createGitBranch(context.cwd, {
+        name: readString(input, "name"),
+        startPoint: readOptionalString(input, "start_point"),
+        checkout: readOptionalBoolean(input, "checkout")
+      }),
     isReadOnly: () => false,
     isDestructive: () => false,
     isConcurrencySafe: () => false
@@ -871,16 +1081,20 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Check out an existing git branch, or create and check out a new branch.",
     category: "git",
     tags: ["git", "checkout", "branch", "mutation"],
-    inputSchema: objectSchema({
-      branch: { type: "string" },
-      create: { type: "boolean" },
-      start_point: { type: "string" }
-    }, ["branch"]),
-    call: (input, context) => checkoutGitBranch(context.cwd, {
-      branch: readString(input, "branch"),
-      create: readOptionalBoolean(input, "create"),
-      startPoint: readOptionalString(input, "start_point")
-    }),
+    inputSchema: objectSchema(
+      {
+        branch: { type: "string" },
+        create: { type: "boolean" },
+        start_point: { type: "string" }
+      },
+      ["branch"]
+    ),
+    call: (input, context) =>
+      checkoutGitBranch(context.cwd, {
+        branch: readString(input, "branch"),
+        create: readOptionalBoolean(input, "create"),
+        startPoint: readOptionalString(input, "start_point")
+      }),
     isReadOnly: () => false,
     isDestructive: () => false,
     isConcurrencySafe: () => false
@@ -890,14 +1104,18 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Stage or unstage specific workspace paths.",
     category: "git",
     tags: ["git", "stage", "index", "mutation"],
-    inputSchema: objectSchema({
-      paths: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 100 },
-      mode: { type: "string" }
-    }, ["paths"]),
-    call: (input, context) => stageGitPaths(context.cwd, {
-      paths: readStringArray(input, "paths"),
-      mode: readGitStageMode(input, "mode")
-    }),
+    inputSchema: objectSchema(
+      {
+        paths: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 100 },
+        mode: { type: "string" }
+      },
+      ["paths"]
+    ),
+    call: (input, context) =>
+      stageGitPaths(context.cwd, {
+        paths: readStringArray(input, "paths"),
+        mode: readGitStageMode(input, "mode")
+      }),
     isReadOnly: () => false,
     isDestructive: (input) => input.mode === "unstage",
     isConcurrencySafe: () => false
@@ -907,11 +1125,14 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Fetch a web page and use the active model to extract information from it.",
     category: "web",
     tags: ["web", "fetch", "http", "summarize"],
-    inputSchema: objectSchema({
-      url: { type: "string" },
-      prompt: { type: "string" },
-      max_bytes: { type: "number" }
-    }, ["url", "prompt"]),
+    inputSchema: objectSchema(
+      {
+        url: { type: "string" },
+        prompt: { type: "string" },
+        max_bytes: { type: "number" }
+      },
+      ["url", "prompt"]
+    ),
     call: async (input, context) => {
       if (!context.promptModel) {
         throw new Error("WebFetch requires an active model route");
@@ -975,7 +1196,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "WebBrowser",
-    description: "Browse the web: search via DuckDuckGo (no API key needed) or fetch a URL and extract readable text.",
+    description:
+      "Browse the web: search via DuckDuckGo (no API key needed) or fetch a URL and extract readable text.",
     category: "web",
     tags: ["web", "browser", "search", "fetch", "duckduckgo"],
     inputSchema: WebBrowserInputSchema,
@@ -990,7 +1212,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "AskUserQuestion",
-    description: "Ask the user 1 to 4 structured multiple-choice questions and return their selections.",
+    description:
+      "Ask the user 1 to 4 structured multiple-choice questions and return their selections.",
     category: "communication",
     tags: ["user", "question", "approval", "choice"],
     inputSchema: ASK_USER_QUESTION_SCHEMA,
@@ -1000,7 +1223,12 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       }
       const request = parseAskUserQuestionInput(input);
       const rawAnswer = await context.userQuestionResolver({
-        toolUse: context.toolUse ?? { type: "tool-use", id: "AskUserQuestion", name: "AskUserQuestion", input },
+        toolUse: context.toolUse ?? {
+          type: "tool-use",
+          id: "AskUserQuestion",
+          name: "AskUserQuestion",
+          input
+        },
         question: request
       });
       return formatAskUserQuestionAnswer(normalizeAskUserQuestionAnswer(request, rawAnswer));
@@ -1018,7 +1246,12 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     call: async (input, context) => {
       const request = parseSendUserMessageInput(input);
       const result = await (context.userMessageSink ?? defaultUserMessageSink)({
-        toolUse: context.toolUse ?? { type: "tool-use", id: "SendUserMessage", name: "SendUserMessage", input },
+        toolUse: context.toolUse ?? {
+          type: "tool-use",
+          id: "SendUserMessage",
+          name: "SendUserMessage",
+          input
+        },
         message: request
       });
       return formatSendUserMessageResult(request, result);
@@ -1118,11 +1351,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TodoWriteInputSchema,
     call: async (input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTodoWriteResult(await replaceTodoList({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId,
-        todos: parseTodoWriteInput(input)
-      }));
+      return formatTodoWriteResult(
+        await replaceTodoList({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId,
+          todos: parseTodoWriteInput(input)
+        })
+      );
     },
     isReadOnly: () => false,
     isDestructive: () => true,
@@ -1136,11 +1371,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TaskCreateInputSchema,
     call: (input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTaskCreateResult(executeTaskCreate({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId,
-        task: parseTaskCreateInput(input)
-      }));
+      return formatTaskCreateResult(
+        executeTaskCreate({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId,
+          task: parseTaskCreateInput(input)
+        })
+      );
     },
     isReadOnly: () => false,
     isDestructive: () => false,
@@ -1154,11 +1391,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TaskUpdateInputSchema,
     call: (input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTaskUpdateResult(executeTaskUpdate({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId,
-        update: parseTaskUpdateInput(input)
-      }));
+      return formatTaskUpdateResult(
+        executeTaskUpdate({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId,
+          update: parseTaskUpdateInput(input)
+        })
+      );
     },
     isReadOnly: () => false,
     isDestructive: (input) => input.status === "deleted",
@@ -1172,10 +1411,12 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TaskListInputSchema,
     call: (_input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTaskListResult(executeTaskList({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId
-      }));
+      return formatTaskListResult(
+        executeTaskList({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId
+        })
+      );
     },
     isReadOnly: () => true,
     isDestructive: () => false,
@@ -1189,11 +1430,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TaskGetInputSchema,
     call: (input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTaskGetResult(executeTaskGet({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId,
-        taskId: readString(input, "taskId")
-      }));
+      return formatTaskGetResult(
+        executeTaskGet({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId,
+          taskId: readString(input, "taskId")
+        })
+      );
     },
     isReadOnly: () => true,
     isDestructive: () => false,
@@ -1207,11 +1450,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TaskOutputInputSchema,
     call: async (input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTaskOutputResult(await executeTaskOutput({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId,
-        taskId: readString(input, "taskId")
-      }));
+      return formatTaskOutputResult(
+        await executeTaskOutput({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId,
+          taskId: readString(input, "taskId")
+        })
+      );
     },
     isReadOnly: () => true,
     isDestructive: () => false,
@@ -1225,11 +1470,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: TaskStopInputSchema,
     call: async (input, context) => {
       const todoContext = requireTodoContext(context);
-      return formatTaskStopResult(await executeTaskStop({
-        stateRoot: todoContext.stateRoot,
-        sessionId: todoContext.sessionId,
-        taskId: readString(input, "taskId")
-      }));
+      return formatTaskStopResult(
+        await executeTaskStop({
+          stateRoot: todoContext.stateRoot,
+          sessionId: todoContext.sessionId,
+          taskId: readString(input, "taskId")
+        })
+      );
     },
     isReadOnly: () => false,
     isDestructive: () => false,
@@ -1237,7 +1484,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "ToolSearch",
-    description: "Search built-in tool documentation or select one tool by name for its full schema.",
+    description:
+      "Search built-in tool documentation or select one tool by name for its full schema.",
     category: "tools",
     tags: ["tool", "search", "schema", "docs"],
     inputSchema: ToolSearchInputSchema,
@@ -1248,16 +1496,20 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "WorkspaceDiagnostics",
-    description: "Inspect the current workspace for manifests, languages, package scripts, suggested commands, and git status without executing project commands.",
+    description:
+      "Inspect the current workspace for manifests, languages, package scripts, suggested commands, and git status without executing project commands.",
     category: "workspace",
     tags: ["workspace", "diagnostics", "scripts", "setup"],
     inputSchema: WorkspaceDiagnosticsInputSchema,
     call: (input, context) => {
       const request = parseWorkspaceDiagnosticsInput(input);
-      return formatWorkspaceDiagnostics(runWorkspaceDiagnostics({
-        cwd: context.cwd,
-        request
-      }), request.format);
+      return formatWorkspaceDiagnostics(
+        runWorkspaceDiagnostics({
+          cwd: context.cwd,
+          request
+        }),
+        request.format
+      );
     },
     isReadOnly: () => true,
     isDestructive: () => false,
@@ -1269,18 +1521,20 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     category: "config",
     tags: ["config", "settings", "magi"],
     inputSchema: ConfigToolInputSchema,
-    call: (input, context) => executeConfigTool({
-      request: parseConfigToolInput(input),
-      configFile: requireConfigFile(context),
-      env: context.env
-    }),
+    call: (input, context) =>
+      executeConfigTool({
+        request: parseConfigToolInput(input),
+        configFile: requireConfigFile(context),
+        env: context.env
+      }),
     isReadOnly: (input) => input.value === undefined,
     isDestructive: () => false,
     isConcurrencySafe: (input) => input.value === undefined
   },
   {
     name: "Memorize",
-    description: "Write a durable weighted memory graph node for future conversations. Use sparingly for genuine user profiles, preferences, work habits, workflows, project facts, decisions, problems, skill references, or reference pointers — not ephemeral conversation state.",
+    description:
+      "Write a durable weighted memory graph node for future conversations. Use sparingly for genuine user profiles, preferences, work habits, workflows, project facts, decisions, problems, skill references, or reference pointers — not ephemeral conversation state.",
     category: "memory",
     tags: ["memory", "graph", "persist"],
     inputSchema: {
@@ -1289,13 +1543,46 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       properties: {
         type: {
           type: "string",
-          enum: ["user_profile", "preference", "work_habit", "workflow", "project", "decision", "problem", "reference", "skill_ref"],
-          description: "Memory node type. Use work_habit for recurring user working style, workflow for repeatable procedures, and skill_ref to point to reusable skills."
+          enum: [
+            "user_profile",
+            "preference",
+            "work_habit",
+            "workflow",
+            "project",
+            "decision",
+            "problem",
+            "reference",
+            "skill_ref"
+          ],
+          description:
+            "Memory node type. Use work_habit for recurring user working style, workflow for repeatable procedures, and skill_ref to point to reusable skills."
         },
-        name: { type: "string", minLength: 1, maxLength: 80, description: "Short title (e.g. 'User role', 'Prefers tabs over spaces')." },
-        description: { type: "string", minLength: 1, maxLength: 200, description: "One-line description used to decide relevance in future conversations." },
-        body: { type: "string", minLength: 1, maxLength: 4000, description: "Memory content. For preferences, habits, workflows, and project decisions, include when and how to apply it." },
-        weight: { type: "number", minimum: 0, maximum: 1, description: "Optional confidence/priority weight. Explicit or highly stable facts should be higher; uncertain autonomous memories should be lower." }
+        name: {
+          type: "string",
+          minLength: 1,
+          maxLength: 80,
+          description: "Short title (e.g. 'User role', 'Prefers tabs over spaces')."
+        },
+        description: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description: "One-line description used to decide relevance in future conversations."
+        },
+        body: {
+          type: "string",
+          minLength: 1,
+          maxLength: 4000,
+          description:
+            "Memory content. For preferences, habits, workflows, and project decisions, include when and how to apply it."
+        },
+        weight: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+          description:
+            "Optional confidence/priority weight. Explicit or highly stable facts should be higher; uncertain autonomous memories should be lower."
+        }
       },
       required: ["type", "name", "description", "body"]
     },
@@ -1337,31 +1624,35 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     category: "skills",
     tags: ["skill", "instructions", "workflow"],
     inputSchema: SkillToolInputSchema,
-    call: (input, context) => executeSkillTool({
-      request: parseSkillToolInput(input),
-      skillsRoot: requireSkillsRoot(context)
-    }),
+    call: (input, context) =>
+      executeSkillTool({
+        request: parseSkillToolInput(input),
+        skillsRoot: requireSkillsRoot(context)
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
   },
   {
     name: "SkillManage",
-    description: "Create, patch, or write files inside the Magi skills directory with path-limited safety checks. Use after LearningDraft review or explicit user approval.",
+    description:
+      "Create, patch, or write files inside the Magi skills directory with path-limited safety checks. Use after LearningDraft review or explicit user approval.",
     category: "skills",
     tags: ["skill", "manage", "learning", "workflow", "mutation"],
     inputSchema: SkillManageInputSchema,
-    call: (input, context) => executeSkillManage({
-      request: parseSkillManageInput(input),
-      skillsRoot: requireSkillsRoot(context)
-    }),
+    call: (input, context) =>
+      executeSkillManage({
+        request: parseSkillManageInput(input),
+        skillsRoot: requireSkillsRoot(context)
+      }),
     isReadOnly: (input) => input.action === "list" || input.action === "show",
     isDestructive: (input) => input.action === "write_file",
     isConcurrencySafe: (input) => input.action === "list" || input.action === "show"
   },
   {
     name: "LearningDraft",
-    description: "List, show, propose, apply, or reject reviewable learning drafts. Drafts can target Memory or Skills, but durable writes happen only when applied.",
+    description:
+      "List, show, propose, apply, or reject reviewable learning drafts. Drafts can target Memory or Skills, but durable writes happen only when applied.",
     category: "memory",
     tags: ["learning", "memory", "skill", "draft", "review"],
     inputSchema: LearningDraftToolInputSchema,
@@ -1381,19 +1672,34 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "SessionSearch",
-    description: "Search previous Magi sessions, browse recent sessions, or inspect a message window for pre-task recall.",
+    description:
+      "Search previous Magi sessions, browse recent sessions, or inspect a message window for pre-task recall.",
     category: "memory",
     tags: ["session", "history", "recall", "learning", "search"],
-    inputSchema: objectSchema({
-      query: { type: "string", description: "Search title, cwd, user messages, and assistant messages." },
-      session_id: { type: "string", description: "Inspect one session instead of searching." },
-      around_message_id: { type: "number", description: "When session_id is set, show messages around this message id." },
-      limit: { type: "number" },
-      window: { type: "number", description: "Snippets per hit or message radius for session windows." },
-      include_current: { type: "boolean" }
-    }, []),
+    inputSchema: objectSchema(
+      {
+        query: {
+          type: "string",
+          description: "Search title, cwd, user messages, and assistant messages."
+        },
+        session_id: { type: "string", description: "Inspect one session instead of searching." },
+        around_message_id: {
+          type: "number",
+          description: "When session_id is set, show messages around this message id."
+        },
+        limit: { type: "number" },
+        window: {
+          type: "number",
+          description: "Snippets per hit or message radius for session windows."
+        },
+        include_current: { type: "boolean" }
+      },
+      []
+    ),
     call: (input, context) => {
-      const store = new SessionStore(path.join(requireStateRoot(context, "SessionSearch"), "sessions.sqlite"));
+      const store = new SessionStore(
+        path.join(requireStateRoot(context, "SessionSearch"), "sessions.sqlite")
+      );
       try {
         const sessionId = readOptionalString(input, "session_id");
         const window = readOptionalNumber(input, "window");
@@ -1428,21 +1734,24 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "LSP",
-    description: "Run TypeScript/JavaScript workspace symbol, definition, reference, and hover queries.",
+    description:
+      "Run TypeScript/JavaScript workspace symbol, definition, reference, and hover queries.",
     category: "lsp",
     tags: ["lsp", "typescript", "symbols", "references"],
     inputSchema: LSP_SCHEMA,
-    call: (input, context) => executeLspRequest({
-      cwd: context.cwd,
-      request: parseLspRequest(input)
-    }),
+    call: (input, context) =>
+      executeLspRequest({
+        cwd: context.cwd,
+        request: parseLspRequest(input)
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
   },
   {
     name: "EnterPlanMode",
-    description: "Switch to plan mode for non-trivial tasks. Blocks mutations until the plan is approved by the user.",
+    description:
+      "Switch to plan mode for non-trivial tasks. Blocks mutations until the plan is approved by the user.",
     category: "planning",
     tags: ["plan", "mode", "architecture"],
     inputSchema: EnterPlanModeInputSchema,
@@ -1471,8 +1780,14 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
                   header: "Plan review",
                   preview: `Implementation plan:\n\n${parsed.plan}`,
                   options: [
-                    { label: "Yes, proceed", description: "Approve the plan and start implementing" },
-                    { label: "No, revise", description: "I want to give feedback or change the approach" }
+                    {
+                      label: "Yes, proceed",
+                      description: "Approve the plan and start implementing"
+                    },
+                    {
+                      label: "No, revise",
+                      description: "I want to give feedback or change the approach"
+                    }
                   ],
                   multiSelect: false
                 }
@@ -1490,7 +1805,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
               "---"
             ].join("\n");
           }
-          const feedback = selection?.selectedLabels?.join(", ") ?? "User wants to revise the plan.";
+          const feedback =
+            selection?.selectedLabels?.join(", ") ?? "User wants to revise the plan.";
           return [
             `Plan not approved. User response: ${feedback}`,
             "",
@@ -1508,7 +1824,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "EnterWorktree",
-    description: "Create an isolated git worktree for safe agent execution. Changes do not affect the main working tree.",
+    description:
+      "Create an isolated git worktree for safe agent execution. Changes do not affect the main working tree.",
     category: "git",
     tags: ["git", "worktree", "isolation", "mutation"],
     inputSchema: EnterWorktreeInputSchema,
@@ -1540,7 +1857,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "ExitWorktree",
-    description: "Exit the current worktree session. Use action 'keep' to preserve or 'remove' to delete.",
+    description:
+      "Exit the current worktree session. Use action 'keep' to preserve or 'remove' to delete.",
     category: "git",
     tags: ["git", "worktree", "cleanup"],
     inputSchema: ExitWorktreeInputSchema,
@@ -1618,12 +1936,13 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     category: "github",
     tags: ["github", "pr", "list"],
     inputSchema: GitHubPRListInputSchema,
-    call: (input, context) => ghPRList(context.cwd, {
-      state: readOptionalString(input, "state"),
-      limit: readOptionalNumber(input, "limit"),
-      author: readOptionalString(input, "author"),
-      label: readOptionalString(input, "label")
-    }),
+    call: (input, context) =>
+      ghPRList(context.cwd, {
+        state: readOptionalString(input, "state"),
+        limit: readOptionalNumber(input, "limit"),
+        author: readOptionalString(input, "author"),
+        label: readOptionalString(input, "label")
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true
@@ -1662,13 +1981,16 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Run a shell command on a remote host via SSH.",
     category: "ssh",
     tags: ["ssh", "remote", "shell"],
-    inputSchema: objectSchema({
-      host: { type: "string" },
-      command: { type: "string" },
-      user: { type: "string" },
-      port: { type: "number" },
-      timeoutMs: { type: "number" }
-    }, ["host", "command"]),
+    inputSchema: objectSchema(
+      {
+        host: { type: "string" },
+        command: { type: "string" },
+        user: { type: "string" },
+        port: { type: "number" },
+        timeoutMs: { type: "number" }
+      },
+      ["host", "command"]
+    ),
     call: async (input, context) => {
       const result = await sshExec({
         host: readString(input, "host"),
@@ -1683,7 +2005,9 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         `Exit code: ${result.exitCode}`,
         result.stdout ? `\n${result.stdout}` : "",
         result.stderr ? `\nstderr:\n${result.stderr}` : ""
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
     },
     isReadOnly: () => false,
     isDestructive: () => false,
@@ -1694,12 +2018,15 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Read a file from a remote host via SSH.",
     category: "ssh",
     tags: ["ssh", "remote", "file", "read"],
-    inputSchema: objectSchema({
-      host: { type: "string" },
-      path: { type: "string" },
-      user: { type: "string" },
-      port: { type: "number" }
-    }, ["host", "path"]),
+    inputSchema: objectSchema(
+      {
+        host: { type: "string" },
+        path: { type: "string" },
+        user: { type: "string" },
+        port: { type: "number" }
+      },
+      ["host", "path"]
+    ),
     call: async (input, context) => {
       const result = await sshFileRead({
         host: readString(input, "host"),
@@ -1718,13 +2045,16 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     description: "Write a file to a remote host via SSH.",
     category: "ssh",
     tags: ["ssh", "remote", "file", "write"],
-    inputSchema: objectSchema({
-      host: { type: "string" },
-      path: { type: "string" },
-      content: { type: "string" },
-      user: { type: "string" },
-      port: { type: "number" }
-    }, ["host", "path", "content"]),
+    inputSchema: objectSchema(
+      {
+        host: { type: "string" },
+        path: { type: "string" },
+        content: { type: "string" },
+        user: { type: "string" },
+        port: { type: "number" }
+      },
+      ["host", "path", "content"]
+    ),
     call: async (input, context) => {
       const result = await sshFileWrite({
         host: readString(input, "host"),
@@ -2157,14 +2487,17 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "Agent",
-    description: "Spawn a sub-agent to handle complex tasks autonomously, preserving the main context window.",
+    description:
+      "Spawn a sub-agent to handle complex tasks autonomously, preserving the main context window.",
     category: "agent",
     tags: ["agent", "subagent", "parallel", "research"],
     inputSchema: AgentToolInputSchema,
     call: async (input, context) => {
       const parsed = parseAgentToolInput(input);
       if (!context.spawnSubAgent) {
-        throw new Error("Agent tool requires a spawnSubAgent executor (not available in this context)");
+        throw new Error(
+          "Agent tool requires a spawnSubAgent executor (not available in this context)"
+        );
       }
       const result = await context.spawnSubAgent({
         prompt: parsed.prompt,
@@ -2187,7 +2520,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "ListPeers",
-    description: "List all Magi peers reachable on the local network. Use this to discover targets for the Agent tool's `target` parameter when distributing work across multiple machines. Returns peer name, address, and status.",
+    description:
+      "List all Magi peers reachable on the local network. Use this to discover targets for the Agent tool's `target` parameter when distributing work across multiple machines. Returns peer name, address, and status.",
     category: "agent",
     tags: ["agent", "peers", "swarm", "discovery"],
     inputSchema: {
@@ -2203,13 +2537,14 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       }
     },
     call: async (input) => {
-      const timeoutMs = typeof (input as Record<string, unknown>).timeoutMs === "number"
-        ? (input as Record<string, number>).timeoutMs
-        : 2500;
+      const timeoutMs =
+        typeof (input as Record<string, unknown>).timeoutMs === "number"
+          ? (input as Record<string, number>).timeoutMs
+          : 2500;
       // Discover via mDNS
       const { browseMdns } = await import("../control/mdns.js");
       const browser = browseMdns({});
-      await new Promise(resolve => setTimeout(resolve, timeoutMs));
+      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
       const peers = browser.peers();
       browser.stop();
       // Also include saved peers (manually configured with credentials)
@@ -2226,11 +2561,15 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         if (existsSync(dbPath)) {
           const mod = await import("../session-store.js");
           const store = new mod.SessionStore(dbPath);
-          savedPeers = store.listMcpOAuthTokens()
-            .filter(t => t.serverName.startsWith("peer:"))
-            .map(t => ({
+          savedPeers = store
+            .listMcpOAuthTokens()
+            .filter((t) => t.serverName.startsWith("peer:"))
+            .map((t) => ({
               name: t.serverName.replace(/^peer:/, ""),
-              url: ((t.metadata as Record<string, unknown>)?.peerUrl as string) ?? t.authServerUrl ?? "?"
+              url:
+                ((t.metadata as Record<string, unknown>)?.peerUrl as string) ??
+                t.authServerUrl ??
+                "?"
             }));
           store.close();
         }
@@ -2253,21 +2592,31 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         for (const p of peers) {
           lines.push(`  ${p.instanceName.padEnd(28)} ${p.address}:${p.port}  ${p.hostname}`);
           if (p.txt && Object.keys(p.txt).length > 0) {
-            lines.push(`    info: ${Object.entries(p.txt).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+            lines.push(
+              `    info: ${Object.entries(p.txt)
+                .map(([k, v]) => `${k}=${v}`)
+                .join(", ")}`
+            );
           }
         }
       }
       if (savedPeers.length > 0) {
         if (lines.length > 0) lines.push("");
-        lines.push(`${savedPeers.length} saved peer(s) with credentials (use these as Agent target):`);
+        lines.push(
+          `${savedPeers.length} saved peer(s) with credentials (use these as Agent target):`
+        );
         for (const p of savedPeers) {
           lines.push(`  ${p.name.padEnd(28)} ${p.url}`);
         }
       }
       lines.push("");
       lines.push("To dispatch a sub-agent to a peer, call:");
-      lines.push("  Agent({ target: <peer-name>, subagent_type: <type>, prompt: <task>, description: <short> })");
-      lines.push("Multiple Agent calls in the same response run in parallel — split work across peers for speed.");
+      lines.push(
+        "  Agent({ target: <peer-name>, subagent_type: <type>, prompt: <task>, description: <short> })"
+      );
+      lines.push(
+        "Multiple Agent calls in the same response run in parallel — split work across peers for speed."
+      );
       return lines.join("\n");
     },
     isReadOnly: () => true,
@@ -2276,7 +2625,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "DiscoverSkills",
-    description: "List user-installed skills with their descriptions. Skills are reusable workflows; invoke them by replying with their name as a slash command (e.g. `/verify`) or calling the Skill tool with the skill name.",
+    description:
+      "List user-installed skills with their descriptions. Skills are reusable workflows; invoke them by replying with their name as a slash command (e.g. `/verify`) or calling the Skill tool with the skill name.",
     category: "agent",
     tags: ["skills", "discovery"],
     inputSchema: {
@@ -2304,7 +2654,9 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         lines.push(`  /${s.name.padEnd(20)} ${s.summary}`);
       }
       lines.push("");
-      lines.push("To run a skill: reply with its name as a slash command, or call Skill({name: \"...\"}).");
+      lines.push(
+        'To run a skill: reply with its name as a slash command, or call Skill({name: "..."}).'
+      );
       return lines.join("\n");
     },
     isReadOnly: () => true,
@@ -2313,7 +2665,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "CtxInspect",
-    description: "Show the current session's context size: message count, approximate token usage, and the most recent message titles. Use to decide whether to compact the session.",
+    description:
+      "Show the current session's context size: message count, approximate token usage, and the most recent message titles. Use to decide whether to compact the session.",
     category: "agent",
     tags: ["context", "introspection"],
     inputSchema: {
@@ -2371,7 +2724,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "VerifyPlanExecution",
-    description: "Run the project's build and test commands and return a PASS/FAIL/PARTIAL verdict with evidence. Use after implementation work that touches multiple files. Detects npm/pnpm/yarn, cargo, go, mvn/gradle automatically.",
+    description:
+      "Run the project's build and test commands and return a PASS/FAIL/PARTIAL verdict with evidence. Use after implementation work that touches multiple files. Detects npm/pnpm/yarn, cargo, go, mvn/gradle automatically.",
     category: "verification",
     tags: ["verify", "test", "build"],
     inputSchema: {
@@ -2392,18 +2746,27 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
 
       function detectStack(): { build: string[]; test: string[]; lint?: string[] } | undefined {
         if (existsSync(path.join(cwd, "package.json"))) {
-          const pm = existsSync(path.join(cwd, "pnpm-lock.yaml")) ? "pnpm"
-                  : existsSync(path.join(cwd, "yarn.lock")) ? "yarn"
-                  : "npm";
+          const pm = existsSync(path.join(cwd, "pnpm-lock.yaml"))
+            ? "pnpm"
+            : existsSync(path.join(cwd, "yarn.lock"))
+              ? "yarn"
+              : "npm";
           return {
             build: [pm, "run", "build"],
             test: [pm, "test", "--", "--run"],
             lint: [pm, "run", "lint"]
           };
         }
-        if (existsSync(path.join(cwd, "Cargo.toml"))) return { build: ["cargo", "build"], test: ["cargo", "test"], lint: ["cargo", "clippy"] };
-        if (existsSync(path.join(cwd, "go.mod"))) return { build: ["go", "build", "./..."], test: ["go", "test", "./..."], lint: ["go", "vet", "./..."] };
-        if (existsSync(path.join(cwd, "pom.xml"))) return { build: ["mvn", "compile"], test: ["mvn", "test"] };
+        if (existsSync(path.join(cwd, "Cargo.toml")))
+          return { build: ["cargo", "build"], test: ["cargo", "test"], lint: ["cargo", "clippy"] };
+        if (existsSync(path.join(cwd, "go.mod")))
+          return {
+            build: ["go", "build", "./..."],
+            test: ["go", "test", "./..."],
+            lint: ["go", "vet", "./..."]
+          };
+        if (existsSync(path.join(cwd, "pom.xml")))
+          return { build: ["mvn", "compile"], test: ["mvn", "test"] };
         return undefined;
       }
 
@@ -2419,7 +2782,12 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       }
 
       function run(label: string, argv: string[]): { ok: boolean; output: string } {
-        const r = spawnSync(argv[0], argv.slice(1), { cwd, encoding: "utf8", env: { ...process.env, CI: "1" }, timeout: 5 * 60 * 1000 });
+        const r = spawnSync(argv[0], argv.slice(1), {
+          cwd,
+          encoding: "utf8",
+          env: { ...process.env, CI: "1" },
+          timeout: 5 * 60 * 1000
+        });
         const stdout = (r.stdout ?? "").toString();
         const stderr = (r.stderr ?? "").toString();
         const tail = (stdout + stderr).split("\n").slice(-15).join("\n");
@@ -2434,20 +2802,29 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       const buildResult = run("BUILD", stack.build);
       anyRun = true;
       evidence.push(buildResult.output);
-      if (!buildResult.ok) { allPassed = false; issues.push("build failed"); }
+      if (!buildResult.ok) {
+        allPassed = false;
+        issues.push("build failed");
+      }
 
       if (!skipTests) {
         const testResult = run("TEST", stack.test);
         anyRun = true;
         evidence.push(testResult.output);
-        if (!testResult.ok) { allPassed = false; issues.push("tests failed"); }
+        if (!testResult.ok) {
+          allPassed = false;
+          issues.push("tests failed");
+        }
       }
 
       if (!skipLint && stack.lint) {
         const lintResult = run("LINT", stack.lint);
         anyRun = true;
         evidence.push(lintResult.output);
-        if (!lintResult.ok) { allPassed = false; issues.push("lint failed"); }
+        if (!lintResult.ok) {
+          allPassed = false;
+          issues.push("lint failed");
+        }
       }
 
       const verdict = !anyRun ? "PARTIAL" : allPassed ? "PASS" : "FAIL";
@@ -2469,7 +2846,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "Browser",
-    description: "Control a real Chromium browser. Actions: navigate, click, type, scroll, screenshot, extract_text, wait, evaluate, close. Use navigate to open URLs, click to interact, screenshot to see the page (vision), evaluate to run JS. Browser stays open between calls so you can do multiple actions in sequence.",
+    description:
+      "Control a real Chromium browser. Actions: navigate, click, type, scroll, screenshot, extract_text, wait, evaluate, close. Use navigate to open URLs, click to interact, screenshot to see the page (vision), evaluate to run JS. Browser stays open between calls so you can do multiple actions in sequence.",
     category: "web",
     tags: ["browser", "web", "automation", "playwright"],
     inputSchema: BrowserActionInputSchema,
@@ -2483,15 +2861,24 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     // need approval.
     isReadOnly: (input) => {
       const action = (input as Record<string, unknown>).action;
-      return action === "navigate" || action === "scroll" || action === "screenshot"
-        || action === "extract_text" || action === "wait" || action === "close";
+      return (
+        action === "navigate" ||
+        action === "scroll" ||
+        action === "screenshot" ||
+        action === "extract_text" ||
+        action === "wait" ||
+        action === "close"
+      );
     },
     isDestructive: () => false,
     isConcurrencySafe: () => false
   }
 ];
 
-function matchRules(toolUse: MagiToolUsePart, rules: ToolPermissionRules | undefined): ToolPermissionResult | undefined {
+function matchRules(
+  toolUse: MagiToolUsePart,
+  rules: ToolPermissionRules | undefined
+): ToolPermissionResult | undefined {
   for (const [decision, list] of [
     ["deny", rules?.deny ?? []],
     ["ask", rules?.ask ?? []],
@@ -2515,11 +2902,11 @@ function ruleMatches(rule: string, toolUse: MagiToolUsePart): boolean {
     return true;
   }
   const haystack = String(
-    toolUse.input.command
-    ?? toolUse.input.file_path
-    ?? toolUse.input.pattern
-    ?? toolUse.input.url
-    ?? ""
+    toolUse.input.command ??
+      toolUse.input.file_path ??
+      toolUse.input.pattern ??
+      toolUse.input.url ??
+      ""
   );
   return globPattern(selector, haystack);
 }
@@ -2536,7 +2923,11 @@ function objectSchema(
   return { type: "object", properties, required, additionalProperties: false };
 }
 
-function errorResult(toolUse: MagiToolUsePart, content: string, permission?: ToolPermissionResult): RegisteredToolResult {
+function errorResult(
+  toolUse: MagiToolUsePart,
+  content: string,
+  permission?: ToolPermissionResult
+): RegisteredToolResult {
   return { toolCallId: toolUse.id, toolName: toolUse.name, content, isError: true, permission };
 }
 
@@ -2587,7 +2978,10 @@ function readStringArray(input: Record<string, unknown>, name: string): string[]
   });
 }
 
-function readGitUntracked(input: Record<string, unknown>, name: string): "all" | "normal" | "none" | undefined {
+function readGitUntracked(
+  input: Record<string, unknown>,
+  name: string
+): "all" | "normal" | "none" | undefined {
   const value = input[name];
   if (value === undefined) return undefined;
   if (value === "all" || value === "normal" || value === "none") {
@@ -2596,7 +2990,10 @@ function readGitUntracked(input: Record<string, unknown>, name: string): "all" |
   throw new Error(`Tool input ${name} must be all, normal, or none`);
 }
 
-function readGitStageMode(input: Record<string, unknown>, name: string): "stage" | "unstage" | undefined {
+function readGitStageMode(
+  input: Record<string, unknown>,
+  name: string
+): "stage" | "unstage" | undefined {
   const value = input[name];
   if (value === undefined) return undefined;
   if (value === "stage" || value === "unstage") {
@@ -2605,7 +3002,10 @@ function readGitStageMode(input: Record<string, unknown>, name: string): "stage"
   throw new Error(`Tool input ${name} must be stage or unstage`);
 }
 
-function readOutputMode(input: Record<string, unknown>, name: string): "content" | "files_with_matches" | "count" {
+function readOutputMode(
+  input: Record<string, unknown>,
+  name: string
+): "content" | "files_with_matches" | "count" {
   const value = input[name];
   if (value === undefined) return "content";
   if (value === "content" || value === "files_with_matches" || value === "count") {
@@ -2625,7 +3025,10 @@ function requireStateFile(context: ToolExecutionContext): string {
   return cronStorePathFromRoot(context.stateRoot);
 }
 
-function requireTodoContext(context: ToolExecutionContext): { stateRoot: string; sessionId: string } {
+function requireTodoContext(context: ToolExecutionContext): {
+  stateRoot: string;
+  sessionId: string;
+} {
   if (!context.stateRoot) {
     throw new Error("TodoWrite requires Magi stateRoot");
   }
@@ -2664,16 +3067,18 @@ function requireSkillsRoot(context: ToolExecutionContext): string {
 }
 
 function isValidMemoryNodeType(value: string): value is MemoryNodeType {
-  return value === "user_profile"
-    || value === "preference"
-    || value === "work_habit"
-    || value === "workflow"
-    || value === "project"
-    || value === "decision"
-    || value === "problem"
-    || value === "reference"
-    || value === "skill_ref"
-    || value === "session";
+  return (
+    value === "user_profile" ||
+    value === "preference" ||
+    value === "work_habit" ||
+    value === "workflow" ||
+    value === "project" ||
+    value === "decision" ||
+    value === "problem" ||
+    value === "reference" ||
+    value === "skill_ref" ||
+    value === "session"
+  );
 }
 
 function readOptionalWeight(value: unknown): number | undefined {

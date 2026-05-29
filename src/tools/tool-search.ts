@@ -48,23 +48,30 @@ export function executeToolSearch(input: ToolSearchInput, tools: ToolSearchableR
   }
   return [
     `ToolSearch results for ${JSON.stringify(input.query)} (${matches.length})`,
-    ...matches.map(({ tool, score }, index) => [
-      `${index + 1}. ${tool.name} [${tool.category ?? "uncategorized"}] score=${score}`,
-      `   ${tool.description ?? "No description"}`,
-      `   tags: ${(tool.tags ?? []).join(", ") || "none"}`,
-      `   schema: ${schemaSummary(tool.inputSchema)}`
-    ].join("\n")),
+    ...matches.map(({ tool, score }, index) =>
+      [
+        `${index + 1}. ${tool.name} [${tool.category ?? "uncategorized"}] score=${score}`,
+        `   ${tool.description ?? "No description"}`,
+        `   tags: ${(tool.tags ?? []).join(", ") || "none"}`,
+        `   schema: ${schemaSummary(tool.inputSchema)}`
+      ].join("\n")
+    ),
     "",
     "Use query select:<tool_name> for the full schema."
   ].join("\n");
 }
 
-function searchTools(query: string, tools: ToolSearchableRecord[]): Array<{ tool: ToolSearchableRecord; score: number }> {
+function searchTools(
+  query: string,
+  tools: ToolSearchableRecord[]
+): Array<{ tool: ToolSearchableRecord; score: number }> {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   return tools
     .map((tool) => ({ tool, score: scoreTool(tool, terms) }))
     .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score || left.tool.name.localeCompare(right.tool.name));
+    .sort(
+      (left, right) => right.score - left.score || left.tool.name.localeCompare(right.tool.name)
+    );
 }
 
 function scoreTool(tool: ToolSearchableRecord, terms: string[]): number {
@@ -102,7 +109,9 @@ function formatSelectedTool(tool: ToolSearchableRecord): string {
 
 function schemaSummary(schema: Record<string, unknown>): string {
   const properties = isRecord(schema.properties) ? Object.keys(schema.properties) : [];
-  const required = Array.isArray(schema.required) ? schema.required.filter((item) => typeof item === "string") : [];
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((item) => typeof item === "string")
+    : [];
   return `required=[${required.join(", ")}] properties=[${properties.join(", ")}]`;
 }
 

@@ -9,7 +9,14 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { TodoItem, TodoStatus, TodoStatusValues, loadTodoStore, saveTodoStore, todoStorePathFromRoot } from "./todo.js";
+import {
+  TodoItem,
+  TodoStatus,
+  TodoStatusValues,
+  loadTodoStore,
+  saveTodoStore,
+  todoStorePathFromRoot
+} from "./todo.js";
 
 export interface TaskCreateInput {
   subject: string;
@@ -112,9 +119,11 @@ export function parseTaskCreateInput(input: Record<string, unknown>): TaskCreate
   }
   return {
     subject: subject.trim(),
-    description: typeof input.description === "string" ? input.description.trim() || undefined : undefined,
+    description:
+      typeof input.description === "string" ? input.description.trim() || undefined : undefined,
     priority: readPriority(input.priority),
-    activeForm: typeof input.activeForm === "string" ? input.activeForm.trim() || undefined : undefined
+    activeForm:
+      typeof input.activeForm === "string" ? input.activeForm.trim() || undefined : undefined
   };
 }
 
@@ -126,7 +135,12 @@ export function parseTaskUpdateInput(input: Record<string, unknown>): TaskUpdate
   const status = input.status;
   let parsedStatus: TodoStatus | "deleted" | undefined;
   if (status !== undefined) {
-    if (status !== "pending" && status !== "in_progress" && status !== "completed" && status !== "deleted") {
+    if (
+      status !== "pending" &&
+      status !== "in_progress" &&
+      status !== "completed" &&
+      status !== "deleted"
+    ) {
       throw new Error("TaskUpdate status must be pending, in_progress, completed, or deleted");
     }
     parsedStatus = status;
@@ -135,9 +149,11 @@ export function parseTaskUpdateInput(input: Record<string, unknown>): TaskUpdate
     taskId: taskId.trim(),
     status: parsedStatus,
     subject: typeof input.subject === "string" ? input.subject.trim() || undefined : undefined,
-    description: typeof input.description === "string" ? input.description.trim() || undefined : undefined,
+    description:
+      typeof input.description === "string" ? input.description.trim() || undefined : undefined,
     priority: readPriority(input.priority),
-    activeForm: typeof input.activeForm === "string" ? input.activeForm.trim() || undefined : undefined
+    activeForm:
+      typeof input.activeForm === "string" ? input.activeForm.trim() || undefined : undefined
   };
 }
 
@@ -218,10 +234,7 @@ export function executeTaskUpdate(input: {
   };
 }
 
-export function executeTaskList(input: {
-  stateRoot: string;
-  sessionId: string;
-}): TaskListResult {
+export function executeTaskList(input: { stateRoot: string; sessionId: string }): TaskListResult {
   const stateFile = todoStorePathFromRoot(input.stateRoot);
   const store = loadTodoStore(stateFile);
   const session = store.sessions[input.sessionId];
@@ -272,11 +285,29 @@ export async function executeTaskStop(input: {
       if (job) {
         if (job.status === "running") {
           const meta = (job.metadata ?? {}) as Record<string, unknown>;
-          jobStore.updateJobStatus({ id: job.id, status: "cancelled", metadata: { ...meta, cancelledAt: new Date().toISOString() } });
-          return { stopped: true, task: { id: job.id, subject: typeof meta.description === "string" ? meta.description : job.kind, status: "cancelled" as TodoStatus } };
+          jobStore.updateJobStatus({
+            id: job.id,
+            status: "cancelled",
+            metadata: { ...meta, cancelledAt: new Date().toISOString() }
+          });
+          return {
+            stopped: true,
+            task: {
+              id: job.id,
+              subject: typeof meta.description === "string" ? meta.description : job.kind,
+              status: "cancelled" as TodoStatus
+            }
+          };
         }
         const meta = (job.metadata ?? {}) as Record<string, unknown>;
-        return { stopped: false, task: { id: job.id, subject: typeof meta.description === "string" ? meta.description : job.kind, status: job.status as TodoStatus } };
+        return {
+          stopped: false,
+          task: {
+            id: job.id,
+            subject: typeof meta.description === "string" ? meta.description : job.kind,
+            status: job.status as TodoStatus
+          }
+        };
       }
     }
     // Fallback: per-session todo entries
@@ -291,7 +322,10 @@ export async function executeTaskStop(input: {
     session.updatedAt = new Date().toISOString();
     store.sessions[input.sessionId] = session;
     saveTodoStore(stateFile, store);
-    return { stopped: true, task: { id: todo.id, subject: todo.content, status: todo.status, priority: todo.priority } };
+    return {
+      stopped: true,
+      task: { id: todo.id, subject: todo.content, status: todo.status, priority: todo.priority }
+    };
   } finally {
     if (shouldCloseStore && jobStore) {
       jobStore.close();
@@ -343,7 +377,11 @@ export async function executeTaskOutput(input: {
     if (!session) return { taskId: input.taskId, status: "not_found" };
     const todo = session.todos.find((t) => t.id === input.taskId);
     if (!todo) return { taskId: input.taskId, status: "not_found" };
-    return { taskId: todo.id, status: todo.status, output: `Task #${todo.id}: [${todo.status}] ${todo.content}` };
+    return {
+      taskId: todo.id,
+      status: todo.status,
+      output: `Task #${todo.id}: [${todo.status}] ${todo.content}`
+    };
   } finally {
     if (shouldCloseStore && jobStore) {
       jobStore.close();
@@ -357,7 +395,10 @@ export function formatTaskCreateResult(result: { task: TaskView; allTasks: TaskV
   return `Task #${result.task.id} created: ${result.task.subject}\n\n${formatTaskListCompact(result.allTasks)}`;
 }
 
-export function formatTaskUpdateResult(result: { task: TaskView | null; allTasks: TaskView[] }): string {
+export function formatTaskUpdateResult(result: {
+  task: TaskView | null;
+  allTasks: TaskView[];
+}): string {
   if (!result.task) {
     return `Task deleted.\n\n${formatTaskListCompact(result.allTasks)}`;
   }
@@ -380,21 +421,28 @@ export function formatTaskGetResult(task: TaskView | null): string {
 
 export function formatTaskStopResult(result: { stopped: boolean; task: TaskView | null }): string {
   if (!result.task) return "Task not found.";
-  if (!result.stopped) return `Task #${result.task.id} is not running (status: ${result.task.status}).`;
+  if (!result.stopped)
+    return `Task #${result.task.id} is not running (status: ${result.task.status}).`;
   return `Task #${result.task.id} stopped.`;
 }
 
-export function formatTaskOutputResult(result: { taskId: string; status: string; output?: string }): string {
+export function formatTaskOutputResult(result: {
+  taskId: string;
+  status: string;
+  output?: string;
+}): string {
   if (result.status === "not_found") return `Task ${result.taskId} not found.`;
   return result.output ?? `Task ${result.taskId}: ${result.status}`;
 }
 
 function formatTaskListCompact(tasks: TaskView[]): string {
-  return tasks.map((t) => {
-    const icon = t.status === "completed" ? "done" : t.status === "in_progress" ? "wip" : "todo";
-    const prio = t.priority ? ` [${t.priority}]` : "";
-    return `#${t.id} [${icon}]${prio} ${t.subject}`;
-  }).join("\n");
+  return tasks
+    .map((t) => {
+      const icon = t.status === "completed" ? "done" : t.status === "in_progress" ? "wip" : "todo";
+      const prio = t.priority ? ` [${t.priority}]` : "";
+      return `#${t.id} [${icon}]${prio} ${t.subject}`;
+    })
+    .join("\n");
 }
 
 // --- Helpers ---

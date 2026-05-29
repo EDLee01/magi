@@ -31,8 +31,15 @@ export const EnterWorktreeInputSchema = {
 export const ExitWorktreeInputSchema = {
   type: "object",
   properties: {
-    action: { type: "string", enum: ["keep", "remove"], description: "keep leaves worktree on disk; remove deletes it." },
-    discard_changes: { type: "boolean", description: "Required true to remove a worktree with uncommitted changes." }
+    action: {
+      type: "string",
+      enum: ["keep", "remove"],
+      description: "keep leaves worktree on disk; remove deletes it."
+    },
+    discard_changes: {
+      type: "boolean",
+      description: "Required true to remove a worktree with uncommitted changes."
+    }
   },
   required: ["action"],
   additionalProperties: false
@@ -68,10 +75,7 @@ export function parseExitWorktreeInput(input: Record<string, unknown>): ExitWork
 
 // --- Execution ---
 
-export function executeEnterWorktree(input: {
-  cwd: string;
-  name?: string;
-}): WorktreeState {
+export function executeEnterWorktree(input: { cwd: string; name?: string }): WorktreeState {
   // Verify we're in a git repo
   const check = spawnSync("git", ["rev-parse", "--git-dir"], {
     cwd: input.cwd,
@@ -141,7 +145,7 @@ export function executeExitWorktree(input: {
     if (status.stdout?.trim()) {
       throw new Error(
         `Worktree has uncommitted changes. Set discard_changes: true to force removal.\n` +
-        `Changes:\n${status.stdout.trim()}`
+          `Changes:\n${status.stdout.trim()}`
       );
     }
   }
@@ -178,7 +182,11 @@ export function formatEnterWorktreeResult(state: WorktreeState): string {
   ].join("\n");
 }
 
-export function formatExitWorktreeResult(result: { removed: boolean; worktreePath?: string; branchName?: string }): string {
+export function formatExitWorktreeResult(result: {
+  removed: boolean;
+  worktreePath?: string;
+  branchName?: string;
+}): string {
   if (result.removed) {
     return "Worktree removed. Returned to original working directory.";
   }
@@ -186,7 +194,9 @@ export function formatExitWorktreeResult(result: { removed: boolean; worktreePat
     "Worktree kept on disk.",
     result.worktreePath ? `  path: ${result.worktreePath}` : "",
     result.branchName ? `  branch: ${result.branchName}` : ""
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 // --- Helpers ---

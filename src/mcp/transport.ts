@@ -68,12 +68,14 @@ class StdioMcpTransport implements McpTransport {
   private readonly lines: readline.Interface;
   private closed = false;
 
-  constructor(private readonly input: {
-    serverName: string;
-    server: McpServerConfig;
-    env?: NodeJS.ProcessEnv;
-    callbacks: McpTransportCallbacks;
-  }) {
+  constructor(
+    private readonly input: {
+      serverName: string;
+      server: McpServerConfig;
+      env?: NodeJS.ProcessEnv;
+      callbacks: McpTransportCallbacks;
+    }
+  ) {
     if (!input.server.command) {
       throw new Error(`MCP stdio server ${input.serverName} requires command`);
     }
@@ -91,7 +93,9 @@ class StdioMcpTransport implements McpTransport {
     this.child.on("exit", (code) => {
       if (!this.closed) {
         input.callbacks.onDisconnect();
-        input.callbacks.onError(new Error(`MCP server ${input.serverName} exited with code ${code}`));
+        input.callbacks.onError(
+          new Error(`MCP server ${input.serverName} exited with code ${code}`)
+        );
       }
     });
   }
@@ -134,12 +138,14 @@ class HttpMcpTransport implements McpTransport {
   private readonly headers: Record<string, string>;
   private closed = false;
 
-  constructor(private readonly input: {
-    serverName: string;
-    server: McpServerConfig;
-    env?: NodeJS.ProcessEnv;
-    callbacks: McpTransportCallbacks;
-  }) {
+  constructor(
+    private readonly input: {
+      serverName: string;
+      server: McpServerConfig;
+      env?: NodeJS.ProcessEnv;
+      callbacks: McpTransportCallbacks;
+    }
+  ) {
     if (!input.server.url) {
       throw new Error(`MCP HTTP server ${input.serverName} requires url`);
     }
@@ -183,12 +189,14 @@ class SseMcpTransport implements McpTransport {
   private buffer = "";
   private closed = false;
 
-  constructor(private readonly input: {
-    serverName: string;
-    server: McpServerConfig;
-    env?: NodeJS.ProcessEnv;
-    callbacks: McpTransportCallbacks;
-  }) {
+  constructor(
+    private readonly input: {
+      serverName: string;
+      server: McpServerConfig;
+      env?: NodeJS.ProcessEnv;
+      callbacks: McpTransportCallbacks;
+    }
+  ) {
     if (!input.server.url) {
       throw new Error(`MCP SSE server ${input.serverName} requires url`);
     }
@@ -220,7 +228,9 @@ class SseMcpTransport implements McpTransport {
       },
       body: JSON.stringify(message)
     });
-    await emitHttpResponse(response, this.input.serverName, this.input.callbacks, { allowEmpty: true });
+    await emitHttpResponse(response, this.input.serverName, this.input.callbacks, {
+      allowEmpty: true
+    });
   }
 
   close(): void {
@@ -250,7 +260,9 @@ class SseMcpTransport implements McpTransport {
             body
           );
         }
-        throw new Error(`MCP SSE server ${this.input.serverName} returned ${response.status}: ${body}`);
+        throw new Error(
+          `MCP SSE server ${this.input.serverName} returned ${response.status}: ${body}`
+        );
       }
       if (!response.body) {
         throw new Error(`MCP SSE server ${this.input.serverName} returned no event stream`);
@@ -280,7 +292,9 @@ class SseMcpTransport implements McpTransport {
       }
       if (!this.closed) {
         this.input.callbacks.onDisconnect();
-        this.input.callbacks.onError(new Error(`MCP SSE server ${this.input.serverName} disconnected`));
+        this.input.callbacks.onError(
+          new Error(`MCP SSE server ${this.input.serverName} disconnected`)
+        );
       }
     } catch (error) {
       if (!this.closed) {
@@ -323,12 +337,14 @@ class WebSocketMcpTransport implements McpTransport {
   private readonly openPromise: Promise<void>;
   private closed = false;
 
-  constructor(private readonly input: {
-    serverName: string;
-    server: McpServerConfig;
-    env?: NodeJS.ProcessEnv;
-    callbacks: McpTransportCallbacks;
-  }) {
+  constructor(
+    private readonly input: {
+      serverName: string;
+      server: McpServerConfig;
+      env?: NodeJS.ProcessEnv;
+      callbacks: McpTransportCallbacks;
+    }
+  ) {
     if (!input.server.url) {
       throw new Error(`MCP WebSocket server ${input.serverName} requires url`);
     }
@@ -395,18 +411,19 @@ class WebSocketMcpTransport implements McpTransport {
   }
 }
 
-
 class WebSocketIdeMcpTransport implements McpTransport {
   private readonly socket: WebSocket;
   private readonly openPromise: Promise<void>;
   private closed = false;
 
-  constructor(private readonly input: {
-    serverName: string;
-    server: McpServerConfig;
-    env?: NodeJS.ProcessEnv;
-    callbacks: McpTransportCallbacks;
-  }) {
+  constructor(
+    private readonly input: {
+      serverName: string;
+      server: McpServerConfig;
+      env?: NodeJS.ProcessEnv;
+      callbacks: McpTransportCallbacks;
+    }
+  ) {
     if (!input.server.url) {
       throw new Error(`MCP WebSocket-IDE server ${input.serverName} requires url`);
     }
@@ -435,7 +452,9 @@ class WebSocketIdeMcpTransport implements McpTransport {
     this.socket.on("close", () => {
       if (!this.closed) {
         input.callbacks.onDisconnect();
-        input.callbacks.onError(new Error(`MCP WebSocket-IDE server ${input.serverName} disconnected`));
+        input.callbacks.onError(
+          new Error(`MCP WebSocket-IDE server ${input.serverName} disconnected`)
+        );
       }
     });
   }
@@ -475,7 +494,7 @@ class WebSocketIdeMcpTransport implements McpTransport {
   private handleMessage(data: string): void {
     try {
       const message = JSON.parse(data);
-      
+
       // IDE-specific message types
       if (message.type === "file-sync") {
         this.input.callbacks.onMessage({
@@ -485,7 +504,7 @@ class WebSocketIdeMcpTransport implements McpTransport {
         });
         return;
       }
-      
+
       if (message.type === "diagnostics") {
         this.input.callbacks.onMessage({
           jsonrpc: "2.0",
@@ -494,7 +513,7 @@ class WebSocketIdeMcpTransport implements McpTransport {
         });
         return;
       }
-      
+
       this.input.callbacks.onMessage(message);
     } catch (error) {
       if (!this.closed) {
@@ -513,11 +532,7 @@ async function emitHttpResponse(
   const body = await response.text();
   if (!response.ok) {
     if (response.status === 401) {
-      throw new McpUnauthorizedError(
-        serverName,
-        response.headers.get("www-authenticate"),
-        body
-      );
+      throw new McpUnauthorizedError(serverName, response.headers.get("www-authenticate"), body);
     }
     throw new Error(`MCP HTTP server ${serverName} returned ${response.status}: ${body}`);
   }
@@ -537,10 +552,16 @@ async function emitHttpResponse(
   callbacks.onMessage(JSON.parse(body));
 }
 
-function buildHeaders(headers: Record<string, string> | undefined, env: NodeJS.ProcessEnv | undefined): Record<string, string> {
+function buildHeaders(
+  headers: Record<string, string> | undefined,
+  env: NodeJS.ProcessEnv | undefined
+): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers ?? {})) {
-    result[key] = value.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (_match, name: string) => env?.[name] ?? process.env[name] ?? "");
+    result[key] = value.replace(
+      /\$([A-Za-z_][A-Za-z0-9_]*)/g,
+      (_match, name: string) => env?.[name] ?? process.env[name] ?? ""
+    );
   }
   return result;
 }

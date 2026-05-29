@@ -43,7 +43,12 @@ describe("context budget and compaction", () => {
       expect(budget.messageCount).toBe(3);
       expect(budget.summaryCount).toBe(1);
       expect(budget.estimatedTokens).toBeGreaterThan(0);
-      expect(budget.categories.map((category) => category.category)).toEqual(["user", "assistant", "tool", "summary"]);
+      expect(budget.categories.map((category) => category.category)).toEqual([
+        "user",
+        "assistant",
+        "tool",
+        "summary"
+      ]);
       expect(estimateTokens("hello world")).toBeGreaterThan(0);
     } finally {
       store.close();
@@ -153,7 +158,9 @@ describe("context budget and compaction", () => {
       expect(compacted.removedDuplicateToolResults).toBe(1);
       expect(compacted.truncatedToolResults).toBe(1);
       expect(compacted.mergedSystemMessages).toBe(1);
-      expect(compacted.messages.some((message) => message.content.includes("[tool result truncated]"))).toBe(true);
+      expect(
+        compacted.messages.some((message) => message.content.includes("[tool result truncated]"))
+      ).toBe(true);
       expect(compacted.messages.at(-1)?.content).toContain("system one\nsystem two");
     } finally {
       store.close();
@@ -171,8 +178,15 @@ describe("context budget and compaction", () => {
       const adapter: ProviderAdapter = {
         name: "summary-provider",
         complete: async (request) => {
-          const text = request.messages[0].content[0].type === "text" ? request.messages[0].content[0].text : "";
-          calls.push({ model: request.model, prompt: text, maxOutputTokens: request.maxOutputTokens });
+          const text =
+            request.messages[0].content[0].type === "text"
+              ? request.messages[0].content[0].text
+              : "";
+          calls.push({
+            model: request.model,
+            prompt: text,
+            maxOutputTokens: request.maxOutputTokens
+          });
           return { text: "LLM SUMMARY: keep root and pending context work" };
         }
       };
@@ -216,12 +230,12 @@ describe("context budget and compaction", () => {
           {
             event: "pre_compact",
             type: "command",
-            command: "node -e 'require(\"fs\").writeFileSync(\"pre.json\", process.env.ARGUMENTS)'"
+            command: 'node -e \'require("fs").writeFileSync("pre.json", process.env.ARGUMENTS)\''
           },
           {
             event: "post_compact",
             type: "command",
-            command: "node -e 'require(\"fs\").writeFileSync(\"post.json\", process.env.ARGUMENTS)'"
+            command: 'node -e \'require("fs").writeFileSync("post.json", process.env.ARGUMENTS)\''
           }
         ],
         cwd: temp.path,
@@ -231,11 +245,21 @@ describe("context budget and compaction", () => {
 
       expect(result.hooks.pre).toHaveLength(1);
       expect(result.hooks.post).toHaveLength(1);
-      await expect(readFile(path.join(temp.path, "pre.json"), "utf8")).resolves.toContain('"trigger":"manual"');
-      await expect(readFile(path.join(temp.path, "pre.json"), "utf8")).resolves.toContain('"customInstructions":"keep constraints"');
-      await expect(readFile(path.join(temp.path, "post.json"), "utf8")).resolves.toContain('"compactSummary"');
-      expect(store.listAuditEvents(20).filter((event) => event.action === "agent.hook.completed").map((event) => event.target))
-        .toEqual(["post_compact:command", "pre_compact:command"]);
+      await expect(readFile(path.join(temp.path, "pre.json"), "utf8")).resolves.toContain(
+        '"trigger":"manual"'
+      );
+      await expect(readFile(path.join(temp.path, "pre.json"), "utf8")).resolves.toContain(
+        '"customInstructions":"keep constraints"'
+      );
+      await expect(readFile(path.join(temp.path, "post.json"), "utf8")).resolves.toContain(
+        '"compactSummary"'
+      );
+      expect(
+        store
+          .listAuditEvents(20)
+          .filter((event) => event.action === "agent.hook.completed")
+          .map((event) => event.target)
+      ).toEqual(["post_compact:command", "pre_compact:command"]);
     } finally {
       store.close();
     }
@@ -246,16 +270,20 @@ describe("context budget and compaction", () => {
     const store = SessionStore.open(getMagiPaths(temp.env));
     try {
       const sessionId = seedContextSession(store);
-      await expect(compactSessionWithHooks({
-        store,
-        sessionId,
-        hooks: [{
-          event: "pre_compact",
-          type: "command",
-          command: "printf no-compact && exit 2"
-        }],
-        cwd: temp.path
-      })).rejects.toThrow(/Compaction blocked by hook: no-compact/);
+      await expect(
+        compactSessionWithHooks({
+          store,
+          sessionId,
+          hooks: [
+            {
+              event: "pre_compact",
+              type: "command",
+              command: "printf no-compact && exit 2"
+            }
+          ],
+          cwd: temp.path
+        })
+      ).rejects.toThrow(/Compaction blocked by hook: no-compact/);
       expect(store.listContextSummaries(sessionId)).toHaveLength(0);
     } finally {
       store.close();
@@ -292,19 +320,23 @@ describe("context budget and compaction", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  summary:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      "    baseUrl: http://127.0.0.1:9/v1",
-      "models:",
-      "  aliases:",
-      "    compact: summary:gpt-compact",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  summary:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        "    baseUrl: http://127.0.0.1:9/v1",
+        "models:",
+        "  aliases:",
+        "    compact: summary:gpt-compact",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
     const store = SessionStore.open(paths);
     let sessionId = "";
     try {
@@ -330,17 +362,21 @@ describe("context budget and compaction", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "hooks:",
-      "  - event: pre_compact",
-      "    type: command",
-      "    command: \"node -e 'require(\\\"fs\\\").writeFileSync(\\\"cli-pre.json\\\", process.env.ARGUMENTS)'\"",
-      "  - event: post_compact",
-      "    type: command",
-      "    command: \"node -e 'require(\\\"fs\\\").writeFileSync(\\\"cli-post.json\\\", process.env.ARGUMENTS)'\"",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "hooks:",
+        "  - event: pre_compact",
+        "    type: command",
+        '    command: "node -e \'require(\\"fs\\").writeFileSync(\\"cli-pre.json\\", process.env.ARGUMENTS)\'"',
+        "  - event: post_compact",
+        "    type: command",
+        '    command: "node -e \'require(\\"fs\\").writeFileSync(\\"cli-post.json\\", process.env.ARGUMENTS)\'"',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
     const store = SessionStore.open(paths);
     let sessionId = "";
     try {
@@ -352,8 +388,12 @@ describe("context budget and compaction", () => {
     const compact = await runCli(["compact", sessionId], temp.env, temp.path);
     expect(compact.exitCode).toBe(0);
     expect(compact.stdout).toContain("summaryId:");
-    await expect(readFile(path.join(temp.path, "cli-pre.json"), "utf8")).resolves.toContain("compact_started");
-    await expect(readFile(path.join(temp.path, "cli-post.json"), "utf8")).resolves.toContain("compact_completed");
+    await expect(readFile(path.join(temp.path, "cli-pre.json"), "utf8")).resolves.toContain(
+      "compact_started"
+    );
+    await expect(readFile(path.join(temp.path, "cli-post.json"), "utf8")).resolves.toContain(
+      "compact_completed"
+    );
   });
 });
 

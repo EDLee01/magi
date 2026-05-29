@@ -78,12 +78,12 @@ export async function replaceTodoList(input: {
     updatedAt
   };
   saveTodoStore(stateFile, store);
-  
+
   if (input.hooks) {
     const { triggerHook } = await import("../hooks/trigger.js");
-    const previousIds = new Set(previousTodos.map(t => t.id));
-    const currentIds = new Set(input.todos.map(t => t.id));
-    
+    const previousIds = new Set(previousTodos.map((t) => t.id));
+    const currentIds = new Set(input.todos.map((t) => t.id));
+
     for (const todo of input.todos) {
       if (!previousIds.has(todo.id)) {
         void triggerHook({
@@ -97,8 +97,8 @@ export async function replaceTodoList(input: {
           }
         });
       }
-      
-      const prevTodo = previousTodos.find(t => t.id === todo.id);
+
+      const prevTodo = previousTodos.find((t) => t.id === todo.id);
       if (prevTodo && prevTodo.status !== "completed" && todo.status === "completed") {
         void triggerHook({
           event: "task_completed",
@@ -162,13 +162,19 @@ export function readTodoList(value: unknown): TodoItem[] {
 }
 
 export function formatTodoWriteResult(result: TodoWriteResult): string {
-  const added = result.todos.filter((todo) => !result.previousTodos.some((previous) => previous.id === todo.id)).length;
-  const removed = result.previousTodos.filter((previous) => !result.todos.some((todo) => todo.id === previous.id)).length;
+  const added = result.todos.filter(
+    (todo) => !result.previousTodos.some((previous) => previous.id === todo.id)
+  ).length;
+  const removed = result.previousTodos.filter(
+    (previous) => !result.todos.some((todo) => todo.id === previous.id)
+  ).length;
   const changed = result.todos.filter((todo) => {
     const previous = result.previousTodos.find((item) => item.id === todo.id);
     return previous && JSON.stringify(previous) !== JSON.stringify(todo);
   }).length;
-  const counts = TodoStatusValues.map((status) => `${status}: ${result.todos.filter((todo) => todo.status === status).length}`);
+  const counts = TodoStatusValues.map(
+    (status) => `${status}: ${result.todos.filter((todo) => todo.status === status).length}`
+  );
   return [
     `Todo list replaced (${result.todos.length} items)`,
     `changes: +${added} ~${changed} -${removed}`,
@@ -177,17 +183,21 @@ export function formatTodoWriteResult(result: TodoWriteResult): string {
     `stateFile: ${result.stateFile}`,
     "",
     formatTodoList(result.todos)
-  ].join("\n").trimEnd();
+  ]
+    .join("\n")
+    .trimEnd();
 }
 
 export function formatTodoList(todos: TodoItem[]): string {
   if (todos.length === 0) {
     return "No todos";
   }
-  return todos.map((todo, index) => {
-    const priority = todo.priority ? ` priority=${todo.priority}` : "";
-    return `${index + 1}. [${todo.status}] ${todo.id}${priority} - ${todo.content}`;
-  }).join("\n");
+  return todos
+    .map((todo, index) => {
+      const priority = todo.priority ? ` priority=${todo.priority}` : "";
+      return `${index + 1}. [${todo.status}] ${todo.id}${priority} - ${todo.content}`;
+    })
+    .join("\n");
 }
 
 function readTodoSessionState(sessionId: string, value: unknown): TodoSessionState {

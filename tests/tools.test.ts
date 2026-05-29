@@ -8,7 +8,12 @@ import { runCli } from "../src/cli.js";
 import { readWorkspaceFile, writeWorkspaceFile } from "../src/tools/files.js";
 import { getGitSummary } from "../src/tools/git.js";
 import { searchWorkspace } from "../src/tools/search.js";
-import { isDangerousShellCommand, isLongRunningCommand, isReadOnlyShellCommand, runShellCommand } from "../src/tools/shell.js";
+import {
+  isDangerousShellCommand,
+  isLongRunningCommand,
+  isReadOnlyShellCommand,
+  runShellCommand
+} from "../src/tools/shell.js";
 import { ToolError } from "../src/tools/errors.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
@@ -35,23 +40,29 @@ describe("local tools", () => {
       path: "small.txt",
       content: "hello\n"
     });
-    expect(() => readWorkspaceFile({ cwd: workspace!, filePath: "big.txt", maxBytes: 4 })).toThrow(/above/);
+    expect(() => readWorkspaceFile({ cwd: workspace!, filePath: "big.txt", maxBytes: 4 })).toThrow(
+      /above/
+    );
     expect(() => readWorkspaceFile({ cwd: workspace!, filePath: "binary.bin" })).toThrow(/binary/);
   });
 
   it("blocks file access outside the workspace", () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tools-"));
-    expect(() => readWorkspaceFile({ cwd: workspace!, filePath: "../outside.txt" })).toThrow(/outside/);
+    expect(() => readWorkspaceFile({ cwd: workspace!, filePath: "../outside.txt" })).toThrow(
+      /outside/
+    );
   });
 
   it("requires approval before writing files and records a diff", () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tools-"));
-    expect(() => writeWorkspaceFile({
-      cwd: workspace!,
-      filePath: "note.txt",
-      content: "hello",
-      approved: false
-    })).toThrow(/requires diff approval/);
+    expect(() =>
+      writeWorkspaceFile({
+        cwd: workspace!,
+        filePath: "note.txt",
+        content: "hello",
+        approved: false
+      })
+    ).toThrow(/requires diff approval/);
 
     const result = writeWorkspaceFile({
       cwd: workspace,
@@ -76,10 +87,12 @@ describe("local tools", () => {
 
   it("blocks dangerous shell commands unless explicitly approved", async () => {
     expect(isDangerousShellCommand("rm -rf /tmp/something")).toBe(true);
-    await expect(runShellCommand({
-      cwd: process.cwd(),
-      command: "rm -rf /tmp/something"
-    })).rejects.toMatchObject({ kind: "approval-required" } satisfies Partial<ToolError>);
+    await expect(
+      runShellCommand({
+        cwd: process.cwd(),
+        command: "rm -rf /tmp/something"
+      })
+    ).rejects.toMatchObject({ kind: "approval-required" } satisfies Partial<ToolError>);
   });
 
   it("classifies only conservative shell commands as read-only", () => {
@@ -111,8 +124,14 @@ describe("local tools", () => {
 
   it("does not auto-background commands that already background a long-running segment", () => {
     expect(isLongRunningCommand("cd app && npm run dev")).toBe(true);
-    expect(isLongRunningCommand("cd app && npm run dev > app.log 2>&1 &\necho \"PID: $!\"")).toBe(false);
-    expect(isLongRunningCommand("nohup bash -c 'npm run dev' > app.log 2>&1 < /dev/null & disown; echo BG_PID=$!")).toBe(false);
+    expect(isLongRunningCommand('cd app && npm run dev > app.log 2>&1 &\necho "PID: $!"')).toBe(
+      false
+    );
+    expect(
+      isLongRunningCommand(
+        "nohup bash -c 'npm run dev' > app.log 2>&1 < /dev/null & disown; echo BG_PID=$!"
+      )
+    ).toBe(false);
   });
 
   it("auto-backgrounds long-running commands only once", async () => {
@@ -145,7 +164,9 @@ describe("local tools", () => {
 
     const pid = Number(/PID=(\d+)/.exec(result.stdout)?.[1]);
     if (Number.isFinite(pid)) {
-      try { process.kill(pid, "SIGTERM"); } catch {}
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {}
     }
 
     expect(result.exitCode).toBe(0);

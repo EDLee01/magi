@@ -19,23 +19,28 @@ export class McpClient {
   private transport: McpTransport;
   private nextId = 1;
   private closed = false;
-  private readonly pending = new Map<number, {
-    resolve: (value: unknown) => void;
-    reject: (reason: unknown) => void;
-  }>();
+  private readonly pending = new Map<
+    number,
+    {
+      resolve: (value: unknown) => void;
+      reject: (reason: unknown) => void;
+    }
+  >();
 
-  constructor(private readonly input: {
-    serverName: string;
-    server: McpServerConfig;
-    env?: NodeJS.ProcessEnv;
-    onDisconnect?: () => void;
-    /**
-     * Called when the server returns 401. Should attempt to refresh the OAuth
-     * token and return the new token, or undefined if not possible. The client
-     * will retry the request once with the new token in headers.
-     */
-    onUnauthorized?: (info: { wwwAuthenticate: string | null }) => Promise<string | undefined>;
-  }) {
+  constructor(
+    private readonly input: {
+      serverName: string;
+      server: McpServerConfig;
+      env?: NodeJS.ProcessEnv;
+      onDisconnect?: () => void;
+      /**
+       * Called when the server returns 401. Should attempt to refresh the OAuth
+       * token and return the new token, or undefined if not possible. The client
+       * will retry the request once with the new token in headers.
+       */
+      onUnauthorized?: (info: { wwwAuthenticate: string | null }) => Promise<string | undefined>;
+    }
+  ) {
     this.transport = this.openConnection();
   }
 
@@ -115,9 +120,7 @@ export class McpClient {
       return { contents: [] };
     }
     return {
-      contents: result.contents
-        .filter(isRecord)
-        .map(readResourceContent)
+      contents: result.contents.filter(isRecord).map(readResourceContent)
     };
   }
 
@@ -130,7 +133,9 @@ export class McpClient {
     try {
       await Promise.race([
         this.request("tools/list", {}),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("ping timeout")), timeoutMs))
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("ping timeout")), timeoutMs)
+        )
       ]);
       return true;
     } catch {
@@ -149,18 +154,24 @@ export class McpClient {
         name: typeof prompt.name === "string" ? prompt.name : "",
         description: typeof prompt.description === "string" ? prompt.description : undefined,
         arguments: Array.isArray(prompt.arguments)
-          ? prompt.arguments.filter(isRecord).map((arg) => ({
-              name: typeof arg.name === "string" ? arg.name : "",
-              description: typeof arg.description === "string" ? arg.description : undefined,
-              required: typeof arg.required === "boolean" ? arg.required : undefined
-            })).filter((a) => a.name)
+          ? prompt.arguments
+              .filter(isRecord)
+              .map((arg) => ({
+                name: typeof arg.name === "string" ? arg.name : "",
+                description: typeof arg.description === "string" ? arg.description : undefined,
+                required: typeof arg.required === "boolean" ? arg.required : undefined
+              }))
+              .filter((a) => a.name)
           : undefined
       }))
       .filter((prompt) => prompt.name);
   }
 
   async getPrompt(name: string, params?: Record<string, string>): Promise<McpGetPromptResult> {
-    const result = await this.requestWithSessionRetry("prompts/get", { name, arguments: params ?? {} });
+    const result = await this.requestWithSessionRetry("prompts/get", {
+      name,
+      arguments: params ?? {}
+    });
     if (!isRecord(result)) {
       return { messages: [] };
     }
@@ -201,7 +212,8 @@ export class McpClient {
     const payload = { jsonrpc: "2.0" as const, id, method, params };
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.transport.ready()
+      this.transport
+        .ready()
         .then(() => this.transport.send(payload))
         .catch((error: unknown) => {
           if (this.pending.delete(id)) {
@@ -211,7 +223,10 @@ export class McpClient {
     });
   }
 
-  private async requestWithSessionRetry(method: string, params: Record<string, unknown>): Promise<unknown> {
+  private async requestWithSessionRetry(
+    method: string,
+    params: Record<string, unknown>
+  ): Promise<unknown> {
     try {
       return await this.request(method, params);
     } catch (error) {
@@ -220,7 +235,11 @@ export class McpClient {
         return this.request(method, params);
       }
       // 401 Unauthorized — try to refresh OAuth token and retry once
-      if (error && typeof error === "object" && (error as { name?: string }).name === "McpUnauthorizedError") {
+      if (
+        error &&
+        typeof error === "object" &&
+        (error as { name?: string }).name === "McpUnauthorizedError"
+      ) {
         const unauthorizedError = error as { wwwAuthenticate: string | null };
         if (this.input.onUnauthorized) {
           const newToken = await this.input.onUnauthorized({
@@ -269,7 +288,9 @@ export class McpApprovalRequiredError extends MagiUsageError {
   readonly approval: McpApprovalRequest;
 
   constructor(approval: McpApprovalRequest) {
-    super(`MCP approval required for ${approval.serverName}/${approval.toolName}: ${approval.reason}`);
+    super(
+      `MCP approval required for ${approval.serverName}/${approval.toolName}: ${approval.reason}`
+    );
     this.name = "McpApprovalRequiredError";
     this.approval = approval;
   }
@@ -312,9 +333,16 @@ function readResourceContent(value: Record<string, unknown>): McpResourceContent
 }
 
 function readPromptMessage(value: Record<string, unknown>): McpPromptMessage {
-  const role = value.role === "user" || value.role === "assistant" || value.role === "system" ? value.role : "user";
+  const role =
+    value.role === "user" || value.role === "assistant" || value.role === "system"
+      ? value.role
+      : "user";
   const content = isRecord(value.content) ? value.content : { type: "text", text: "" };
-  if (content.type === "image" && typeof content.data === "string" && typeof content.mimeType === "string") {
+  if (
+    content.type === "image" &&
+    typeof content.data === "string" &&
+    typeof content.mimeType === "string"
+  ) {
     return { role, content: { type: "image", data: content.data, mimeType: content.mimeType } };
   }
   if (content.type === "resource" && isRecord(content.resource)) {

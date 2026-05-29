@@ -4,17 +4,15 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import path from "node:path";
 import os from "node:os";
 
-import {
-  executeEnterWorktree,
-  executeExitWorktree,
-  WorktreeState
-} from "../src/tools/worktree.js";
+import { executeEnterWorktree, executeExitWorktree, WorktreeState } from "../src/tools/worktree.js";
 
 describe("worktree lifecycle", () => {
   let repoDir: string | undefined;
   afterEach(() => {
     if (repoDir) {
-      try { rmSync(repoDir, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(repoDir, { recursive: true, force: true });
+      } catch {}
       repoDir = undefined;
     }
   });
@@ -41,7 +39,10 @@ describe("worktree lifecycle", () => {
 
     // Modify a file in the worktree — does not touch the main tree
     writeFileSync(path.join(state.worktreePath!, "feature.txt"), "feature work\n");
-    execSync(`git -C "${state.worktreePath}" add feature.txt && git -C "${state.worktreePath}" commit -q -m feature`, { shell: "/bin/sh" });
+    execSync(
+      `git -C "${state.worktreePath}" add feature.txt && git -C "${state.worktreePath}" commit -q -m feature`,
+      { shell: "/bin/sh" }
+    );
 
     // Main tree still unchanged
     expect(existsSync(path.join(repoDir, "feature.txt"))).toBe(false);

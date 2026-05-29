@@ -33,7 +33,11 @@ export const WebSearchInputSchema = {
 } satisfies Record<string, unknown>;
 
 export function parseWebSearchInput(input: Record<string, unknown>): WebSearchToolInput {
-  assertAllowedKeys(input, ["query", "allowed_domains", "blocked_domains", "max_results"], "WebSearch input");
+  assertAllowedKeys(
+    input,
+    ["query", "allowed_domains", "blocked_domains", "max_results"],
+    "WebSearch input"
+  );
   const query = readNonEmptyString(input.query, "query");
   if (query.length < 2) {
     throw new Error("Tool input query must be at least 2 characters");
@@ -53,11 +57,16 @@ export async function webSearch(input: {
   fetch?: typeof fetch;
 }): Promise<WebSearchResult> {
   if (input.config.provider !== "http-json" || !input.config.endpoint) {
-    throw new Error("WebSearch requires webSearch.provider=http-json and webSearch.endpoint in Magi config or MAGI_WEBSEARCH_ENDPOINT");
+    throw new Error(
+      "WebSearch requires webSearch.provider=http-json and webSearch.endpoint in Magi config or MAGI_WEBSEARCH_ENDPOINT"
+    );
   }
   const endpoint = new URL(input.config.endpoint);
   endpoint.searchParams.set(input.config.queryParam, input.request.query);
-  const maxResults = Math.min(input.request.maxResults ?? input.config.maxResults, input.config.maxResults);
+  const maxResults = Math.min(
+    input.request.maxResults ?? input.config.maxResults,
+    input.config.maxResults
+  );
   endpoint.searchParams.set("count", String(maxResults));
   endpoint.searchParams.set("locale", input.config.locale);
   endpoint.searchParams.set("market", input.config.market);
@@ -76,7 +85,7 @@ export async function webSearch(input: {
   if (!response.ok) {
     throw new Error(`WebSearch failed with HTTP ${response.status}`);
   }
-  const parsed = await response.json() as unknown;
+  const parsed = (await response.json()) as unknown;
   const rawResults = readPath(parsed, input.config.resultsPath);
   if (!Array.isArray(rawResults)) {
     throw new Error(`WebSearch response path ${input.config.resultsPath} must be an array`);
@@ -103,11 +112,15 @@ export function formatWebSearchResult(result: WebSearchResult): string {
   return [
     `WebSearch results for ${JSON.stringify(result.query)} (${result.results.length})`,
     `provider: ${result.provider}`,
-    ...result.results.map((item, index) => [
-      `${index + 1}. ${item.title}`,
-      `   URL: ${item.url}`,
-      item.snippet ? `   Snippet: ${item.snippet}` : undefined
-    ].filter((line): line is string => Boolean(line)).join("\n"))
+    ...result.results.map((item, index) =>
+      [
+        `${index + 1}. ${item.title}`,
+        `   URL: ${item.url}`,
+        item.snippet ? `   Snippet: ${item.snippet}` : undefined
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n")
+    )
   ].join("\n");
 }
 
@@ -117,7 +130,12 @@ function mainlandScore(item: WebSearchResultItem, config: WebSearchConfig): numb
   }
   const host = normalizeHttpUrl(item.url, "WebSearch result url").hostname.toLowerCase();
   let score = 0;
-  if (host.endsWith(".cn") || host.endsWith(".com.cn") || host.endsWith(".net.cn") || host.endsWith(".org.cn")) {
+  if (
+    host.endsWith(".cn") ||
+    host.endsWith(".com.cn") ||
+    host.endsWith(".net.cn") ||
+    host.endsWith(".org.cn")
+  ) {
     score += 4;
   }
   if (containsCjk(item.title)) {
@@ -133,7 +151,11 @@ function containsCjk(value: string): boolean {
   return /[\u3400-\u9fff]/u.test(value);
 }
 
-function readResultItem(value: unknown, index: number, config: WebSearchConfig): WebSearchResultItem {
+function readResultItem(
+  value: unknown,
+  index: number,
+  config: WebSearchConfig
+): WebSearchResultItem {
   const title = readPath(value, config.titlePath);
   const url = readPath(value, config.urlPath);
   const snippet = readPath(value, config.snippetPath);
@@ -151,7 +173,11 @@ function readResultItem(value: unknown, index: number, config: WebSearchConfig):
   };
 }
 
-function domainAllowed(urlValue: string, allowed: string[] | undefined, blocked: string[]): boolean {
+function domainAllowed(
+  urlValue: string,
+  allowed: string[] | undefined,
+  blocked: string[]
+): boolean {
   const host = normalizeHttpUrl(urlValue, "WebSearch result url").hostname.toLowerCase();
   if (blocked.some((domain) => hostMatches(domain, host))) {
     return false;
@@ -199,7 +225,12 @@ function readOptionalDomainList(value: unknown, label: string): string[] | undef
 
 function normalizeDomainPattern(value: string, label: string): string {
   const domain = value.startsWith("*.") ? value.slice(2) : value;
-  if (!/^[a-z0-9.-]+$/.test(domain) || domain.includes("..") || domain.startsWith(".") || domain.endsWith(".")) {
+  if (
+    !/^[a-z0-9.-]+$/.test(domain) ||
+    domain.includes("..") ||
+    domain.startsWith(".") ||
+    domain.endsWith(".")
+  ) {
     throw new Error(`Tool input ${label} must be a domain or wildcard domain`);
   }
   return value;

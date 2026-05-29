@@ -1,10 +1,24 @@
 import { execSync } from "node:child_process";
 import os from "node:os";
 
-export interface SystemInfoResult { hostname: string; platform: string; uptime: string; loadAvg: string; users: number; processes: number }
-export const SystemInfoInputSchema = { type: "object", properties: {}, required: [], additionalProperties: false } satisfies Record<string, unknown>;
+export interface SystemInfoResult {
+  hostname: string;
+  platform: string;
+  uptime: string;
+  loadAvg: string;
+  users: number;
+  processes: number;
+}
+export const SystemInfoInputSchema = {
+  type: "object",
+  properties: {},
+  required: [],
+  additionalProperties: false
+} satisfies Record<string, unknown>;
 
-export function parseSystemInfoInput(): Record<string, never> { return {}; }
+export function parseSystemInfoInput(): Record<string, never> {
+  return {};
+}
 
 export function executeSystemInfo(): SystemInfoResult {
   const uptimeSecs = os.uptime();
@@ -12,7 +26,10 @@ export function executeSystemInfo(): SystemInfoResult {
   const hours = Math.floor((uptimeSecs % 86400) / 3600);
   const mins = Math.floor((uptimeSecs % 3600) / 60);
   const uptimeStr = `${days}d ${hours}h ${mins}m`;
-  const loadAvg = os.loadavg().map(v => v.toFixed(2)).join(", ");
+  const loadAvg = os
+    .loadavg()
+    .map((v) => v.toFixed(2))
+    .join(", ");
   let users = 0;
   let processes = 0;
   try {
@@ -20,8 +37,17 @@ export function executeSystemInfo(): SystemInfoResult {
     users = parseInt(who.trim(), 10) || 0;
     const ps = execSync("ps aux | wc -l", { encoding: "utf8", timeout: 3000 });
     processes = parseInt(ps.trim(), 10) || 0;
-  } catch { /* best effort */ }
-  return { hostname: os.hostname(), platform: `${os.type()} ${os.release()}`, uptime: uptimeStr, loadAvg, users, processes };
+  } catch {
+    /* best effort */
+  }
+  return {
+    hostname: os.hostname(),
+    platform: `${os.type()} ${os.release()}`,
+    uptime: uptimeStr,
+    loadAvg,
+    users,
+    processes
+  };
 }
 
 export function formatSystemInfoResult(result: SystemInfoResult): string {

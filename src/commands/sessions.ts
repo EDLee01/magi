@@ -1,4 +1,8 @@
-import { formatSessionSearch, resolveSessionPickerSelection, SlashCommandInput } from "./registry.js";
+import {
+  formatSessionSearch,
+  resolveSessionPickerSelection,
+  SlashCommandInput
+} from "./registry.js";
 
 export const command = {
   name: "sessions",

@@ -38,7 +38,10 @@ export function renderTuiBlock(block: TuiBlock, options: TuiRenderOptions = {}):
   return renderBlock(block, Math.max(40, options.width ?? 100), options).join("\n");
 }
 
-export function renderTuiPendingBlock(block: TuiPendingBlock, options: TuiRenderOptions = {}): string {
+export function renderTuiPendingBlock(
+  block: TuiPendingBlock,
+  options: TuiRenderOptions = {}
+): string {
   const prefix = block.kind === "question" ? "?" : "!";
   const title = `${prefix} ${block.title}`;
   const detail = block.detail ? ` - ${block.detail}` : "";
@@ -65,13 +68,23 @@ function renderSummary(state: TuiRenderState, width: number, options: TuiRenderO
   return colorize(clip(summary, width), DIM, options);
 }
 
-function renderPending(blocks: TuiPendingBlock[], width: number, options: TuiRenderOptions): string {
+function renderPending(
+  blocks: TuiPendingBlock[],
+  width: number,
+  options: TuiRenderOptions
+): string {
   if (blocks.length === 0) {
     return colorize("Pending: none", DIM, options);
   }
   return [
     colorize(`Pending: ${blocks.length}`, YELLOW, options),
-    ...blocks.map((block) => colorize(`  ${renderTuiPendingBlock(block, { ...options, width: width - 2 })}`, YELLOW, options))
+    ...blocks.map((block) =>
+      colorize(
+        `  ${renderTuiPendingBlock(block, { ...options, width: width - 2 })}`,
+        YELLOW,
+        options
+      )
+    )
   ].join("\n");
 }
 
@@ -89,7 +102,8 @@ function markerForBlock(block: TuiBlock): string {
   if (block.status === "failed" || block.status === "denied") return "✗";
   if (block.status === "cancelled") return "⊘";
   if (block.status === "timeout") return "!";
-  if (block.status === "completed" || block.status === "resolved" || block.status === "answered") return "✓";
+  if (block.status === "completed" || block.status === "resolved" || block.status === "answered")
+    return "✓";
   switch (block.kind) {
     case "approval":
     case "question":
@@ -153,19 +167,20 @@ function cellWidth(text: string): number {
 function charWidth(char: string): number {
   const codePoint = char.codePointAt(0);
   if (codePoint === undefined) return 0;
-  return codePoint >= 0x1100 && (
-    codePoint <= 0x115f ||
-    codePoint === 0x2329 ||
-    codePoint === 0x232a ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
-    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-    (codePoint >= 0x1f300 && codePoint <= 0x1faff)
-  ) ? 2 : 1;
+  return codePoint >= 0x1100 &&
+    (codePoint <= 0x115f ||
+      codePoint === 0x2329 ||
+      codePoint === 0x232a ||
+      (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+      (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+      (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+      (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+      (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+      (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+      (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+      (codePoint >= 0x1f300 && codePoint <= 0x1faff))
+    ? 2
+    : 1;
 }
 
 function stripAnsi(text: string): string {

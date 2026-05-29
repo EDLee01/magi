@@ -13,9 +13,7 @@ describe("image content parts", () => {
     });
 
     it("prepends sentinel-wrapped blocks for each image", () => {
-      const out = encodePromptWithImages("describe this", [
-        { mimeType: "image/png", data: "AAA" }
-      ]);
+      const out = encodePromptWithImages("describe this", [{ mimeType: "image/png", data: "AAA" }]);
       expect(out).toContain("MAGI_IMAGE");
       expect(out).toContain("image/png");
       expect(out).toContain("AAA");
@@ -46,7 +44,7 @@ describe("image content parts", () => {
         { mimeType: "image/png", data: "B" }
       ]);
       const parts = parsePromptIntoParts(encoded);
-      const images = parts.filter(p => p.type === "image");
+      const images = parts.filter((p) => p.type === "image");
       expect(images).toHaveLength(2);
       expect((images[0] as { data: string }).data).toBe("A");
       expect((images[1] as { data: string }).data).toBe("B");

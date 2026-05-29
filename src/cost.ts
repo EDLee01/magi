@@ -35,7 +35,7 @@ const PRICING: Record<string, ModelPricing> = {
   "deepseek-reasoner": { inputPerMillion: 0.55, outputPerMillion: 2.19 },
 
   // Local / unknown
-  "local": { inputPerMillion: 0, outputPerMillion: 0 }
+  local: { inputPerMillion: 0, outputPerMillion: 0 }
 };
 
 /**
@@ -66,7 +66,11 @@ export function getModelPricing(model: string): ModelPricing {
   return { inputPerMillion: 0, outputPerMillion: 0 };
 }
 
-export function calculateCost(input: { model: string; inputTokens: number; outputTokens: number }): number {
+export function calculateCost(input: {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}): number {
   const pricing = getModelPricing(input.model);
   const inputCost = (input.inputTokens * pricing.inputPerMillion) / 1_000_000;
   const outputCost = (input.outputTokens * pricing.outputPerMillion) / 1_000_000;

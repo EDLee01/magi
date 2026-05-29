@@ -37,24 +37,30 @@ describe("TUI render state and renderer", () => {
           category: "approval",
           status: "pending",
           target: "FileWrite",
-          metadata: { interactionKind: "approval", toolUseId: "write-1", reason: "FileWrite requires approval" }
+          metadata: {
+            interactionKind: "approval",
+            toolUseId: "write-1",
+            reason: "FileWrite requires approval"
+          }
         })
       ]
     });
 
-    expect(state.blocks.map(block => block.title)).toContain("FileRead requested");
+    expect(state.blocks.map((block) => block.title)).toContain("FileRead requested");
     expect(state.pending).toHaveLength(1);
     expect(state.pending[0]?.title).toBe("Approval waiting for FileWrite");
   });
 
   it("renders compact transcript blocks without color when requested", () => {
-    const block = eventToTuiBlock(event({
-      id: 3,
-      action: "agent.tool.completed",
-      target: "GitStatus",
-      metadata: { toolCallId: "git-1" },
-      status: "completed"
-    }));
+    const block = eventToTuiBlock(
+      event({
+        id: 3,
+        action: "agent.tool.completed",
+        target: "GitStatus",
+        metadata: { toolCallId: "git-1" },
+        status: "completed"
+      })
+    );
 
     expect(block).toBeDefined();
     expect(renderTuiBlock(block!, { color: false })).toBe("✓ GitStatus completed - (git-1)");
@@ -72,7 +78,11 @@ describe("TUI render state and renderer", () => {
           category: "approval",
           status: "pending",
           target: "Bash",
-          metadata: { interactionKind: "approval", toolUseId: "bash-1", reason: "Bash requires approval" }
+          metadata: {
+            interactionKind: "approval",
+            toolUseId: "bash-1",
+            reason: "Bash requires approval"
+          }
         })
       ]
     });

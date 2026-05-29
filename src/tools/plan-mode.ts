@@ -52,7 +52,9 @@ export function formatEnterPlanModeResult(input: { reason?: string }): string {
     "Use read-only tools (FileRead, Grep, Glob, GitLog, etc.) to explore the codebase.",
     "When ready, call ExitPlanMode with your implementation plan.",
     input.reason ? `\nReason: ${input.reason}` : ""
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function formatExitPlanModeResult(input: { plan: string }): string {

@@ -1,7 +1,10 @@
 import { McpServerConfig } from "../config.js";
 import { McpApprovalRequest } from "./types.js";
 
-export function classifyMcpToolRisk(toolName: string, params: Record<string, unknown>): McpApprovalRequest["risk"] {
+export function classifyMcpToolRisk(
+  toolName: string,
+  params: Record<string, unknown>
+): McpApprovalRequest["risk"] {
   const lowered = toolName.toLowerCase();
   if (/(write|delete|exec|shell|apply|mutate|create|update)/.test(lowered)) {
     return "high";
@@ -28,7 +31,10 @@ export function requiresMcpApproval(input: {
       toolName: input.toolName,
       params: input.params,
       risk,
-      reason: input.server.approval === "always" ? "server requires approval for every MCP call" : "tool call is high risk"
+      reason:
+        input.server.approval === "always"
+          ? "server requires approval for every MCP call"
+          : "tool call is high risk"
     };
   }
   return undefined;

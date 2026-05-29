@@ -9,12 +9,17 @@ export const command = {
     const hours = Math.max(1, Math.min(168, Number(args[0]) || 24));
     const now = Date.now();
     const cutoff = now - hours * 3600_000;
-    const usage = input.store.listAllUsage(5000).filter(u => new Date(u.createdAt).getTime() >= cutoff);
+    const usage = input.store
+      .listAllUsage(5000)
+      .filter((u) => new Date(u.createdAt).getTime() >= cutoff);
     if (usage.length === 0) {
       return `No API calls in the last ${hours}h.`;
     }
     // Bucket by hour
-    const buckets = new Map<string, { calls: number; input: number; output: number; models: Set<string> }>();
+    const buckets = new Map<
+      string,
+      { calls: number; input: number; output: number; models: Set<string> }
+    >();
     for (const u of usage) {
       const t = new Date(u.createdAt);
       const hourKey = `${t.toISOString().slice(0, 13)}:00`;
@@ -35,9 +40,14 @@ export const command = {
       const b = buckets.get(key)!;
       const inK = formatTokens(b.input);
       const outK = formatTokens(b.output);
-      lines.push(`  ${key.replace("T", " ").padEnd(20)} ${String(b.calls).padStart(6)} ${inK.padStart(10)} ${outK.padStart(10)}  ${[...b.models].slice(0, 2).join(", ")}`);
+      lines.push(
+        `  ${key.replace("T", " ").padEnd(20)} ${String(b.calls).padStart(6)} ${inK.padStart(10)} ${outK.padStart(10)}  ${[...b.models].slice(0, 2).join(", ")}`
+      );
     }
-    const total = usage.reduce((s, u) => ({ input: s.input + u.inputTokens, output: s.output + u.outputTokens }), { input: 0, output: 0 });
+    const total = usage.reduce(
+      (s, u) => ({ input: s.input + u.inputTokens, output: s.output + u.outputTokens }),
+      { input: 0, output: 0 }
+    );
     lines.push("");
     lines.push(`  Total: ${formatTokens(total.input)} in, ${formatTokens(total.output)} out`);
     lines.push("");

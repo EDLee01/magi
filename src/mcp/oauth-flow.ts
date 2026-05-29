@@ -63,7 +63,7 @@ export async function runOAuthFlow(input: RunOAuthFlowInput): Promise<RunOAuthFl
       if (!metadata.registration_endpoint) {
         throw new Error(
           `OAuth server at ${input.authServerUrl} does not support Dynamic Client Registration. ` +
-          `Configure a static client_id in mcp.servers.${input.serverName}.oauth.clientId`
+            `Configure a static client_id in mcp.servers.${input.serverName}.oauth.clientId`
         );
       }
       const registered = await registerOAuthClient({
@@ -176,9 +176,7 @@ export async function refreshStoredToken(input: {
 }
 
 function openBrowser(url: string): void {
-  const cmd = platform() === "darwin" ? "open" :
-              platform() === "win32" ? "start" :
-              "xdg-open";
+  const cmd = platform() === "darwin" ? "open" : platform() === "win32" ? "start" : "xdg-open";
   try {
     const child = spawn(cmd, platform() === "win32" ? ["", url] : [url], {
       detached: true,

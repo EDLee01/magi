@@ -119,7 +119,13 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     text = text.slice(0, cursor) + value + text.slice(cursor);
     cursor += value.length;
     historyIndex = history.length;
-    slashSelection = clampSlashSelection(text, cursor, options.slashCommands ?? [], options.maxSlashSuggestions ?? 8, slashSelection);
+    slashSelection = clampSlashSelection(
+      text,
+      cursor,
+      options.slashCommands ?? [],
+      options.maxSlashSuggestions ?? 8,
+      slashSelection
+    );
   };
 
   const backspace = () => {
@@ -128,7 +134,13 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     text = text.slice(0, prev) + text.slice(cursor);
     cursor = prev;
     historyIndex = history.length;
-    slashSelection = clampSlashSelection(text, cursor, options.slashCommands ?? [], options.maxSlashSuggestions ?? 8, slashSelection);
+    slashSelection = clampSlashSelection(
+      text,
+      cursor,
+      options.slashCommands ?? [],
+      options.maxSlashSuggestions ?? 8,
+      slashSelection
+    );
   };
 
   const del = () => {
@@ -136,7 +148,13 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     const next = nextOffset(text, cursor);
     text = text.slice(0, cursor) + text.slice(next);
     historyIndex = history.length;
-    slashSelection = clampSlashSelection(text, cursor, options.slashCommands ?? [], options.maxSlashSuggestions ?? 8, slashSelection);
+    slashSelection = clampSlashSelection(
+      text,
+      cursor,
+      options.slashCommands ?? [],
+      options.maxSlashSuggestions ?? 8,
+      slashSelection
+    );
   };
 
   const moveHistory = (direction: -1 | 1) => {
@@ -159,14 +177,15 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     slashSelection = 0;
   };
 
-  const getSlashState = () => getSlashSuggestionState({
-    text,
-    cursor,
-    commands: options.slashCommands ?? [],
-    maxSuggestions: options.maxSlashSuggestions ?? 8,
-    selection: slashSelection,
-    final: false
-  });
+  const getSlashState = () =>
+    getSlashSuggestionState({
+      text,
+      cursor,
+      commands: options.slashCommands ?? [],
+      maxSuggestions: options.maxSlashSuggestions ?? 8,
+      selection: slashSelection,
+      final: false
+    });
 
   const moveSlashSelection = (delta: -1 | 1): boolean => {
     const state = getSlashState();
@@ -246,7 +265,11 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
         submit();
         return;
       }
-      if (chunk.startsWith("\x1b[13;2u", i) || chunk.startsWith("\x1b[13;3u", i) || chunk.startsWith("\x1b[13;4u", i)) {
+      if (
+        chunk.startsWith("\x1b[13;2u", i) ||
+        chunk.startsWith("\x1b[13;3u", i) ||
+        chunk.startsWith("\x1b[13;4u", i)
+      ) {
         insertNewline();
         i += 7;
         continue;
@@ -494,7 +517,10 @@ function buildDisplay(input: {
     prompt: input.prompt,
     safeColumns: input.safeColumns
   });
-  const cursorRow = Math.max(0, rows.findIndex((row) => row.cursorColumn !== undefined));
+  const cursorRow = Math.max(
+    0,
+    rows.findIndex((row) => row.cursorColumn !== undefined)
+  );
   const half = Math.floor(input.maxVisibleLines / 2);
   let first = Math.max(0, cursorRow - half);
   const last = Math.min(rows.length, first + input.maxVisibleLines);
@@ -506,19 +532,27 @@ function buildDisplay(input: {
   if (lines.length === 0) {
     lines.push(input.prompt);
   }
-  const helper = promptHelperText(input.text, input.cursor, rows.length, input.maxVisibleLines, input.final);
+  const helper = promptHelperText(
+    input.text,
+    input.cursor,
+    rows.length,
+    input.maxVisibleLines,
+    input.final
+  );
   if (helper) {
     lines.push(clipToColumns(`${DIM}${helper}${RESET}`, input.safeColumns));
   }
-  lines.push(...formatSlashSuggestionLines({
-    text: input.text,
-    cursor: input.cursor,
-    commands: input.slashCommands ?? [],
-    maxSuggestions: input.maxSlashSuggestions ?? 8,
-    safeColumns: input.safeColumns,
-    final: input.final,
-    selection: input.slashSelection ?? 0
-  }));
+  lines.push(
+    ...formatSlashSuggestionLines({
+      text: input.text,
+      cursor: input.cursor,
+      commands: input.slashCommands ?? [],
+      maxSuggestions: input.maxSlashSuggestions ?? 8,
+      safeColumns: input.safeColumns,
+      final: input.final,
+      selection: input.slashSelection ?? 0
+    })
+  );
   return { lines, cursorLine, cursorColumn };
 }
 
@@ -540,7 +574,10 @@ function formatSlashSuggestionLines(input: {
   if (state.visible.length === 0) {
     lines.push(`${DIM}│ No matching commands${RESET}`);
   } else {
-    const nameWidth = Math.min(18, Math.max(...state.visible.map(command => command.name.length), 4));
+    const nameWidth = Math.min(
+      18,
+      Math.max(...state.visible.map((command) => command.name.length), 4)
+    );
     for (let index = 0; index < state.visible.length; index += 1) {
       const command = state.visible[index]!;
       const usage = command.usage ?? `/${command.name}`;
@@ -552,11 +589,13 @@ function formatSlashSuggestionLines(input: {
       lines.push(`${style}│ ${marker} ${padded} ${command.description}${RESET}`);
     }
     if (state.total > state.visible.length) {
-      lines.push(`${DIM}│ +${state.total - state.visible.length} more - keep typing to filter${RESET}`);
+      lines.push(
+        `${DIM}│ +${state.total - state.visible.length} more - keep typing to filter${RESET}`
+      );
     }
   }
   lines.push(`${DIM}└ ↑↓ select · Tab complete · Enter run · Esc clear${RESET}`);
-  return lines.map(line => clipToColumns(line, input.safeColumns));
+  return lines.map((line) => clipToColumns(line, input.safeColumns));
 }
 
 function getSlashSuggestionState(input: {
@@ -576,8 +615,10 @@ function getSlashSuggestionState(input: {
   }
   const query = match[1]?.toLowerCase() ?? "";
   const candidates = query ? filterSlashCommands(input.commands, query) : [...input.commands];
-  const all = candidates
-    .sort((a, b) => slashSuggestionRank(a, query) - slashSuggestionRank(b, query) || a.name.localeCompare(b.name));
+  const all = candidates.sort(
+    (a, b) =>
+      slashSuggestionRank(a, query) - slashSuggestionRank(b, query) || a.name.localeCompare(b.name)
+  );
   const visible = all.slice(0, Math.max(1, input.maxSuggestions));
   return {
     query,
@@ -598,18 +639,23 @@ function clampSlashSelection(
   return Math.min(selection, state.visible.length - 1);
 }
 
-function filterSlashCommands(commands: TuiPromptSlashCommand[], query: string): TuiPromptSlashCommand[] {
-  const prefixMatches = commands.filter((command) =>
-    command.name.toLowerCase().startsWith(query)
-    || (command.usage ?? "").toLowerCase().replace(/^\//, "").startsWith(query)
+function filterSlashCommands(
+  commands: TuiPromptSlashCommand[],
+  query: string
+): TuiPromptSlashCommand[] {
+  const prefixMatches = commands.filter(
+    (command) =>
+      command.name.toLowerCase().startsWith(query) ||
+      (command.usage ?? "").toLowerCase().replace(/^\//, "").startsWith(query)
   );
   if (prefixMatches.length > 0) {
     return prefixMatches;
   }
-  return commands.filter((command) =>
-    command.name.toLowerCase().includes(query)
-    || command.description.toLowerCase().includes(query)
-    || (command.usage ?? "").toLowerCase().includes(query)
+  return commands.filter(
+    (command) =>
+      command.name.toLowerCase().includes(query) ||
+      command.description.toLowerCase().includes(query) ||
+      (command.usage ?? "").toLowerCase().includes(query)
   );
 }
 
@@ -639,27 +685,39 @@ function buildDisplayRows(input: {
     const wrapWidth = Math.max(8, input.safeColumns - visibleWidth(wrapPrefix));
     const segments = wrapTextCells(logicalLine.text, firstWidth, wrapWidth);
     const isCursorLogicalLine = sourceLine === input.cursorLine;
-    const cursorCell = isCursorLogicalLine ? visibleWidth(logicalLine.text.slice(0, input.cursorColumn)) : undefined;
+    const cursorCell = isCursorLogicalLine
+      ? visibleWidth(logicalLine.text.slice(0, input.cursorColumn))
+      : undefined;
 
     for (let index = 0; index < segments.length; index += 1) {
       const segment = segments[index]!;
       const prefix = index === 0 ? firstPrefix : wrapPrefix;
-      const isCursorRow = cursorCell !== undefined
-        && cursorCell >= segment.startCell
-        && (cursorCell < segment.endCell || index === segments.length - 1);
+      const isCursorRow =
+        cursorCell !== undefined &&
+        cursorCell >= segment.startCell &&
+        (cursorCell < segment.endCell || index === segments.length - 1);
       rows.push({
         line: clipToColumns(prefix + segment.text, input.safeColumns),
         sourceLine,
         cursorColumn: isCursorRow
-          ? Math.min(input.safeColumns - 1, visibleWidth(prefix) + Math.max(0, cursorCell - segment.startCell))
+          ? Math.min(
+              input.safeColumns - 1,
+              visibleWidth(prefix) + Math.max(0, cursorCell - segment.startCell)
+            )
           : undefined
       });
     }
   }
-  return rows.length > 0 ? rows : [{ line: input.prompt, sourceLine: 0, cursorColumn: visibleWidth(input.prompt) }];
+  return rows.length > 0
+    ? rows
+    : [{ line: input.prompt, sourceLine: 0, cursorColumn: visibleWidth(input.prompt) }];
 }
 
-function wrapTextCells(text: string, firstWidth: number, nextWidth: number): Array<{ text: string; startCell: number; endCell: number }> {
+function wrapTextCells(
+  text: string,
+  firstWidth: number,
+  nextWidth: number
+): Array<{ text: string; startCell: number; endCell: number }> {
   const totalWidth = visibleWidth(text);
   if (totalWidth === 0) {
     return [{ text: "", startCell: 0, endCell: 0 }];
@@ -716,7 +774,7 @@ function hasUnclosedMarkdownFence(text: string): boolean {
 
 function hasUnclosedBracket(text: string): boolean {
   const stack: string[] = [];
-  let quote: "'" | "\"" | "`" | undefined;
+  let quote: "'" | '"' | "`" | undefined;
   let escaped = false;
   for (const char of text) {
     if (escaped) {
@@ -731,7 +789,7 @@ function hasUnclosedBracket(text: string): boolean {
       if (char === quote) quote = undefined;
       continue;
     }
-    if (char === "'" || char === "\"" || char === "`") {
+    if (char === "'" || char === '"' || char === "`") {
       quote = char;
       continue;
     }
@@ -741,7 +799,11 @@ function hasUnclosedBracket(text: string): boolean {
     }
     if (char === ")" || char === "]" || char === "}") {
       const open = stack.at(-1);
-      if ((open === "(" && char === ")") || (open === "[" && char === "]") || (open === "{" && char === "}")) {
+      if (
+        (open === "(" && char === ")") ||
+        (open === "[" && char === "]") ||
+        (open === "{" && char === "}")
+      ) {
         stack.pop();
       }
     }
@@ -872,7 +934,11 @@ function firstGrapheme(text: string): Grapheme {
 function segmentGraphemes(text: string): Grapheme[] {
   const segmenter = getGraphemeSegmenter();
   const segments = segmenter
-    ? [...segmenter.segment(text)].map(({ segment, index }) => ({ segment, index, width: graphemeWidth(segment) }))
+    ? [...segmenter.segment(text)].map(({ segment, index }) => ({
+        segment,
+        index,
+        width: graphemeWidth(segment)
+      }))
     : Array.from(text).map((segment, index) => ({ segment, index, width: graphemeWidth(segment) }));
   return segments;
 }
@@ -907,18 +973,19 @@ function codePointWidth(codePoint: number): number {
 }
 
 function isWideCodePoint(codePoint: number): boolean {
-  return codePoint >= 0x1100 && (
-    codePoint <= 0x115f ||
-    codePoint === 0x2329 ||
-    codePoint === 0x232a ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
-    (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-    (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-    (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-    (codePoint >= 0x1f300 && codePoint <= 0x1faff)
+  return (
+    codePoint >= 0x1100 &&
+    (codePoint <= 0x115f ||
+      codePoint === 0x2329 ||
+      codePoint === 0x232a ||
+      (codePoint >= 0x2e80 && codePoint <= 0xa4cf && codePoint !== 0x303f) ||
+      (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+      (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+      (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+      (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+      (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+      (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+      (codePoint >= 0x1f300 && codePoint <= 0x1faff))
   );
 }
 
@@ -926,10 +993,12 @@ function isEmojiGrapheme(grapheme: string): boolean {
   for (const char of grapheme) {
     const codePoint = char.codePointAt(0);
     if (codePoint === undefined) continue;
-    if ((codePoint >= 0x1f000 && codePoint <= 0x1faff)
-      || (codePoint >= 0x2600 && codePoint <= 0x27bf)
-      || codePoint === 0xfe0f
-      || codePoint === 0x200d) {
+    if (
+      (codePoint >= 0x1f000 && codePoint <= 0x1faff) ||
+      (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
+      codePoint === 0xfe0f ||
+      codePoint === 0x200d
+    ) {
       return true;
     }
   }
@@ -939,22 +1008,26 @@ function isEmojiGrapheme(grapheme: string): boolean {
 function isSingleRegionalIndicator(grapheme: string): boolean {
   const chars = Array.from(grapheme);
   const codePoint = chars[0]?.codePointAt(0);
-  return chars.length === 1 && codePoint !== undefined && codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff;
+  return (
+    chars.length === 1 && codePoint !== undefined && codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff
+  );
 }
 
 function isZeroWidth(codePoint: number): boolean {
-  return codePoint <= 0x1f
-    || (codePoint >= 0x7f && codePoint <= 0x9f)
-    || (codePoint >= 0x0300 && codePoint <= 0x036f)
-    || (codePoint >= 0x1ab0 && codePoint <= 0x1aff)
-    || (codePoint >= 0x1dc0 && codePoint <= 0x1dff)
-    || (codePoint >= 0x200b && codePoint <= 0x200f)
-    || (codePoint >= 0x202a && codePoint <= 0x202e)
-    || (codePoint >= 0x2060 && codePoint <= 0x206f)
-    || (codePoint >= 0xfe00 && codePoint <= 0xfe0f)
-    || (codePoint >= 0xfe20 && codePoint <= 0xfe2f)
-    || codePoint === 0xfeff
-    || codePoint === 0x00ad;
+  return (
+    codePoint <= 0x1f ||
+    (codePoint >= 0x7f && codePoint <= 0x9f) ||
+    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x200b && codePoint <= 0x200f) ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    (codePoint >= 0x2060 && codePoint <= 0x206f) ||
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+    codePoint === 0xfeff ||
+    codePoint === 0x00ad
+  );
 }
 
 function safePromptColumns(terminalColumns: number): number {

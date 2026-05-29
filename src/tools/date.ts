@@ -1,5 +1,17 @@
-export interface DateResult { iso: string; unix: number; utc: string; local: string; timezone: string; weekday: string }
-export const DateInputSchema = { type: "object", properties: { format: { type: "string", enum: ["iso", "unix", "utc", "local", "all"] } }, required: [], additionalProperties: false } satisfies Record<string, unknown>;
+export interface DateResult {
+  iso: string;
+  unix: number;
+  utc: string;
+  local: string;
+  timezone: string;
+  weekday: string;
+}
+export const DateInputSchema = {
+  type: "object",
+  properties: { format: { type: "string", enum: ["iso", "unix", "utc", "local", "all"] } },
+  required: [],
+  additionalProperties: false
+} satisfies Record<string, unknown>;
 
 export function parseDateInput(input: Record<string, unknown>): { format: string } {
   return { format: typeof input.format === "string" ? input.format : "all" };
@@ -13,7 +25,9 @@ export function executeDate(): DateResult {
     utc: now.toUTCString(),
     local: now.toString(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    weekday: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][now.getDay()]
+    weekday: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][
+      now.getDay()
+    ]
   };
 }
 

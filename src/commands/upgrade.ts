@@ -41,7 +41,7 @@ export const command = {
       });
       clearTimeout(timer);
       if (response.ok) {
-        const info = await response.json() as { version?: string };
+        const info = (await response.json()) as { version?: string };
         if (info.version) {
           lines.push(`Latest on npm: ${info.version}`);
           if (info.version !== installedVersion) {

@@ -39,7 +39,11 @@ export function startAgentTask(store: SessionStore, taskId: string): AgentTaskRe
   return mustGetTask(store, taskId);
 }
 
-export function completeAgentTask(store: SessionStore, taskId: string, result: string): AgentTaskRecord {
+export function completeAgentTask(
+  store: SessionStore,
+  taskId: string,
+  result: string
+): AgentTaskRecord {
   const task = mustGetTask(store, taskId);
   store.updateAgentTask({ id: taskId, status: "completed", result, metadata: task.metadata });
   return mustGetTask(store, taskId);
@@ -47,7 +51,12 @@ export function completeAgentTask(store: SessionStore, taskId: string, result: s
 
 export function cancelAgentTask(store: SessionStore, taskId: string): AgentTaskRecord {
   const task = mustGetTask(store, taskId);
-  store.updateAgentTask({ id: taskId, status: "cancelled", result: task.result, metadata: task.metadata });
+  store.updateAgentTask({
+    id: taskId,
+    status: "cancelled",
+    result: task.result,
+    metadata: task.metadata
+  });
   return mustGetTask(store, taskId);
 }
 

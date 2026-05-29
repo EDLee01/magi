@@ -12,7 +12,13 @@ import { runHeadlessPrompt } from "./headless.js";
 import { formatMemory, MemoryScope } from "./memory.js";
 import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
-import { proposeMemoryDraft, listDrafts, formatDraftReview, applyDraft, rejectDraft } from "./memory-draft.js";
+import {
+  proposeMemoryDraft,
+  listDrafts,
+  formatDraftReview,
+  applyDraft,
+  rejectDraft
+} from "./memory-draft.js";
 import { runDream, listDreams, showDream, applyDream, rejectDream } from "./memory-dream.js";
 import {
   applyLearningDraft,
@@ -27,24 +33,52 @@ import { formatAgentInstructions, loadAgentInstructions } from "./rules/agents-l
 import { SessionStore } from "./session-store.js";
 import { formatSessionList, formatSessionResume, runInteractiveTerminal } from "./tui.js";
 import { startControlServer } from "./control/server.js";
-import { getDaemonStatus, startDaemon, stopDaemon, writeDaemonPidFile, clearDaemonPidFile } from "./control/daemon.js";
+import {
+  getDaemonStatus,
+  startDaemon,
+  stopDaemon,
+  writeDaemonPidFile,
+  clearDaemonPidFile
+} from "./control/daemon.js";
 import { createJsonLogger, type Logger, type LogLevel } from "./logger.js";
 import { setColorEnabled } from "./colors.js";
 import { compactSessionWithHooks, formatCompactResult } from "./context/compaction.js";
 import { computeSessionContextBudget, formatSessionContextBudget } from "./context/token-budget.js";
-import { cancelAgentTask, completeAgentTask, spawnAgentTask, startAgentTask, waitAgentTask } from "./agents/task-queue.js";
+import {
+  cancelAgentTask,
+  completeAgentTask,
+  spawnAgentTask,
+  startAgentTask,
+  waitAgentTask
+} from "./agents/task-queue.js";
 import { resolveRunnerCommand, RunnerClient } from "./runner/client.js";
 import { AgentRole } from "./session-store.js";
 import { formatPluginList, listLocalPlugins } from "./plugins/manifest.js";
-import { discoverLocalMarketplaceSources, formatMarketplaces, loadMarketplace } from "./plugins/marketplace.js";
+import {
+  discoverLocalMarketplaceSources,
+  formatMarketplaces,
+  loadMarketplace
+} from "./plugins/marketplace.js";
 import { findSkill, formatSkillList, listSkills } from "./skills/loader.js";
 import { formatSessionSearch } from "./slash.js";
-import { formatWorkspaceDiagnostics, runWorkspaceDiagnostics } from "./tools/workspace-diagnostics.js";
+import {
+  formatWorkspaceDiagnostics,
+  runWorkspaceDiagnostics
+} from "./tools/workspace-diagnostics.js";
 import { VERSION } from "./version.js";
 import { triggerHooks } from "./hooks/events.js";
 import { buildProviderRegistry } from "./providers/registry.js";
 import { resolveModelAlias } from "./routing/model-alias.js";
-import { createGoal, clearGoal, formatGoal, formatGoalStatus, getGoal, isGoalCreationArgs, listGoals, updateGoalStatus } from "./goal.js";
+import {
+  createGoal,
+  clearGoal,
+  formatGoal,
+  formatGoalStatus,
+  getGoal,
+  isGoalCreationArgs,
+  listGoals,
+  updateGoalStatus
+} from "./goal.js";
 import { parsePermissionMode } from "./commands/permissions.js";
 import { ToolPermissionMode } from "./tools/registry.js";
 
@@ -54,7 +88,11 @@ export interface CliResult {
   stderr: string;
 }
 
-export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): Promise<CliResult> {
+export async function runCli(
+  argv: string[],
+  env: NodeJS.ProcessEnv = process.env,
+  cwd = process.cwd()
+): Promise<CliResult> {
   try {
     return await runCliUnsafe(argv, env, cwd);
   } catch (error) {
@@ -66,12 +104,16 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // message. Don't print the stack — it adds noise without information.
       return { exitCode: 1, stdout: "", stderr: `${error.message}\n` };
     }
-    const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+    const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
     return { exitCode: 1, stdout: "", stderr: `${detail}\n` };
   }
 }
 
-async function runCliUnsafe(argv: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<CliResult> {
+async function runCliUnsafe(
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  cwd: string
+): Promise<CliResult> {
   const parsed = parseArgs(argv);
   const command = parsed.command;
 
@@ -125,7 +167,11 @@ async function runCliUnsafe(argv: string[], env: NodeJS.ProcessEnv, cwd: string)
   return runCliUnsafeWithParsed(parsed, runtimeEnv, cwd);
 }
 
-async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv, cwd: string): Promise<CliResult> {
+async function runCliUnsafeWithParsed(
+  parsed: ParsedArgs,
+  env: NodeJS.ProcessEnv,
+  cwd: string
+): Promise<CliResult> {
   const command = parsed.command;
 
   // First-run bootstrap: ensure ~/.magi-next exists and bundled skills are
@@ -170,7 +216,9 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     try {
       const resumeSession = parsed.resumeSessionId
         ? store.getSession(parsed.resumeSessionId)
-        : parsed.continueSession ? store.getMostRecentSession(cwd) : undefined;
+        : parsed.continueSession
+          ? store.getMostRecentSession(cwd)
+          : undefined;
       if (parsed.resumeSessionId && !resumeSession) {
         throw new MagiUsageError(`Session not found: ${parsed.resumeSessionId}`);
       }
@@ -269,7 +317,11 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     const store = SessionStore.open(paths);
     try {
       const output = formatSessionResume(store, sessionId);
-      return { exitCode: output.startsWith("Session not found:") ? 2 : 0, stdout: output, stderr: "" };
+      return {
+        exitCode: output.startsWith("Session not found:") ? 2 : 0,
+        stdout: output,
+        stderr: ""
+      };
     } finally {
       store.close();
     }
@@ -283,7 +335,11 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     try {
       if (parsed.resumeSessionId) {
         const output = formatSessionResume(store, parsed.resumeSessionId);
-        return { exitCode: output.startsWith("Session not found:") ? 2 : 0, stdout: output, stderr: "" };
+        return {
+          exitCode: output.startsWith("Session not found:") ? 2 : 0,
+          stdout: output,
+          stderr: ""
+        };
       }
       return { exitCode: 0, stdout: `${formatSessionSearch(store, "")}\n`, stderr: "" };
     } finally {
@@ -331,7 +387,9 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     const store = SessionStore.open(paths);
     try {
       const session = resolveSessionForCommand(store, parsed.rest[0], cwd);
-      const modelRunner = parsed.modelAlias ? resolveCompactionModelRunner(config, env, parsed.modelAlias) : undefined;
+      const modelRunner = parsed.modelAlias
+        ? resolveCompactionModelRunner(config, env, parsed.modelAlias)
+        : undefined;
       const compacted = await compactSessionWithHooks({
         store,
         sessionId: session.id,
@@ -384,23 +442,50 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         const goals = listGoals(paths, session.id);
         return {
           exitCode: 0,
-          stdout: goals.length === 0
-            ? "No goals for this session.\n"
-            : `${["Goals for this session:", ...goals.map((goal) => `- ${formatGoalStatus(goal.status).padEnd(16)} ${goal.objective} (${goal.updatedAt})`)].join("\n")}\n`,
+          stdout:
+            goals.length === 0
+              ? "No goals for this session.\n"
+              : `${["Goals for this session:", ...goals.map((goal) => `- ${formatGoalStatus(goal.status).padEnd(16)} ${goal.objective} (${goal.updatedAt})`)].join("\n")}\n`,
           stderr: ""
         };
       }
       if (sub === "done" || sub === "complete" || sub === "completed") {
-        const goal = updateGoalStatus(paths, { sessionId: session.id, status: "completed", note: parsed.rest.slice(1).join(" ") });
-        return { exitCode: goal ? 0 : 2, stdout: `${goal ? `Goal completed: ${goal.objective}` : "No active goal."}\n`, stderr: "" };
+        const goal = updateGoalStatus(paths, {
+          sessionId: session.id,
+          status: "completed",
+          note: parsed.rest.slice(1).join(" ")
+        });
+        return {
+          exitCode: goal ? 0 : 2,
+          stdout: `${goal ? `Goal completed: ${goal.objective}` : "No active goal."}\n`,
+          stderr: ""
+        };
       }
       if (sub === "blocked" || sub === "block") {
-        const goal = updateGoalStatus(paths, { sessionId: session.id, status: "blocked", note: parsed.rest.slice(1).join(" ") });
-        return { exitCode: goal ? 0 : 2, stdout: `${goal ? `Goal blocked: ${goal.objective}` : "No active goal."}\n`, stderr: "" };
+        const goal = updateGoalStatus(paths, {
+          sessionId: session.id,
+          status: "blocked",
+          note: parsed.rest.slice(1).join(" ")
+        });
+        return {
+          exitCode: goal ? 0 : 2,
+          stdout: `${goal ? `Goal blocked: ${goal.objective}` : "No active goal."}\n`,
+          stderr: ""
+        };
       }
-      if (sub === "cancel" || sub === "cancelled" || sub === "clear" || sub === "reset" || sub === "stop") {
+      if (
+        sub === "cancel" ||
+        sub === "cancelled" ||
+        sub === "clear" ||
+        sub === "reset" ||
+        sub === "stop"
+      ) {
         const goal = clearGoal(paths, session.id);
-        return { exitCode: goal ? 0 : 2, stdout: `${goal ? `Goal cancelled: ${goal.objective}` : "No active goal."}\n`, stderr: "" };
+        return {
+          exitCode: goal ? 0 : 2,
+          stdout: `${goal ? `Goal cancelled: ${goal.objective}` : "No active goal."}\n`,
+          stderr: ""
+        };
       }
       const goal = createGoal(paths, { sessionId: session.id, objective: parsed.rest.join(" ") });
       return { exitCode: 0, stdout: `Goal started: ${goal.objective}\n`, stderr: "" };
@@ -446,12 +531,20 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     }
     if (subcommand === "list") {
       const files = listMemoryFiles(rootInput);
-      return { exitCode: 0, stdout: `${files.map((file) => `${file.path}\t${file.size}`).join("\n") || "No Memory files"}\n`, stderr: "" };
+      return {
+        exitCode: 0,
+        stdout: `${files.map((file) => `${file.path}\t${file.size}`).join("\n") || "No Memory files"}\n`,
+        stderr: ""
+      };
     }
     if (subcommand === "show") {
       const target = parsed.rest[1];
       if (!target) throw new MagiUsageError("magi memory show requires a path");
-      return { exitCode: 0, stdout: readMemoryFile({ ...rootInput, filePath: target }), stderr: "" };
+      return {
+        exitCode: 0,
+        stdout: readMemoryFile({ ...rootInput, filePath: target }),
+        stderr: ""
+      };
     }
     if (subcommand === "search") {
       const query = parsed.rest.slice(1).join(" ");
@@ -459,20 +552,44 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         throw new MagiUsageError("magi memory search requires a query");
       }
       const sessionId = parsed.resumeSessionId ?? parsed.sessionId;
-      const hits = retrieveRelevantMemory({ ...rootInput, query, maxResults: config.memory.maxResults, sessionId });
-      return { exitCode: 0, stdout: `${formatMemoryContext(hits) || "No matching Memory"}\n`, stderr: "" };
+      const hits = retrieveRelevantMemory({
+        ...rootInput,
+        query,
+        maxResults: config.memory.maxResults,
+        sessionId
+      });
+      return {
+        exitCode: 0,
+        stdout: `${formatMemoryContext(hits) || "No matching Memory"}\n`,
+        stderr: ""
+      };
     }
     if (subcommand === "drafts") {
       const drafts = listDrafts(rootInput);
-      return { exitCode: 0, stdout: `${drafts.map((draft) => `${draft.id}\t${draft.status}\t${draft.targetFile}`).join("\n") || "No Memory Drafts"}\n`, stderr: "" };
+      return {
+        exitCode: 0,
+        stdout: `${drafts.map((draft) => `${draft.id}\t${draft.status}\t${draft.targetFile}`).join("\n") || "No Memory Drafts"}\n`,
+        stderr: ""
+      };
     }
     if (subcommand === "draft") {
       const action = parsed.rest[1];
       const id = parsed.rest[2];
       if (!action || !id) throw new MagiUsageError("magi memory draft <show|apply|reject> <id>");
-      if (action === "show") return { exitCode: 0, stdout: `${formatDraftReview({ ...rootInput, id })}\n`, stderr: "" };
-      if (action === "apply") return { exitCode: 0, stdout: `Applied Memory Draft: ${applyDraft({ ...rootInput, id }).id}\n`, stderr: "" };
-      if (action === "reject") return { exitCode: 0, stdout: `Rejected Memory Draft: ${rejectDraft({ ...rootInput, id }).id}\n`, stderr: "" };
+      if (action === "show")
+        return { exitCode: 0, stdout: `${formatDraftReview({ ...rootInput, id })}\n`, stderr: "" };
+      if (action === "apply")
+        return {
+          exitCode: 0,
+          stdout: `Applied Memory Draft: ${applyDraft({ ...rootInput, id }).id}\n`,
+          stderr: ""
+        };
+      if (action === "reject")
+        return {
+          exitCode: 0,
+          stdout: `Rejected Memory Draft: ${rejectDraft({ ...rootInput, id }).id}\n`,
+          stderr: ""
+        };
       throw new MagiUsageError(`Unknown memory draft action: ${action}`);
     }
     if (subcommand === "dream") {
@@ -480,23 +597,44 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       const id = parsed.rest[2];
       if (!action) {
         const dream = runDream(rootInput);
-        return { exitCode: 0, stdout: `Experimental Dream created: ${dream.id}\n${dream.summary}\nDrafts: ${dream.draftIds.length}\n`, stderr: "" };
+        return {
+          exitCode: 0,
+          stdout: `Experimental Dream created: ${dream.id}\n${dream.summary}\nDrafts: ${dream.draftIds.length}\n`,
+          stderr: ""
+        };
       }
       if (!id) throw new MagiUsageError("magi memory dream <show|apply|reject> <id>");
-      if (action === "show") return { exitCode: 0, stdout: `${JSON.stringify(showDream({ ...rootInput, id }), null, 2)}\n`, stderr: "" };
+      if (action === "show")
+        return {
+          exitCode: 0,
+          stdout: `${JSON.stringify(showDream({ ...rootInput, id }), null, 2)}\n`,
+          stderr: ""
+        };
       if (action === "apply") {
-        const dream = applyDream({ ...rootInput, id, applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId }) });
+        const dream = applyDream({
+          ...rootInput,
+          id,
+          applyDraft: (draftId) => applyDraft({ ...rootInput, id: draftId })
+        });
         return { exitCode: 0, stdout: `Applied Dream: ${dream.id}\n`, stderr: "" };
       }
       if (action === "reject") {
-        const dream = rejectDream({ ...rootInput, id, rejectDraft: (draftId) => rejectDraft({ ...rootInput, id: draftId }) });
+        const dream = rejectDream({
+          ...rootInput,
+          id,
+          rejectDraft: (draftId) => rejectDraft({ ...rootInput, id: draftId })
+        });
         return { exitCode: 0, stdout: `Rejected Dream: ${dream.id}\n`, stderr: "" };
       }
       throw new MagiUsageError(`Unknown memory dream action: ${action}`);
     }
     if (subcommand === "dreams") {
       const dreams = listDreams(rootInput);
-      return { exitCode: 0, stdout: `${dreams.map((dream) => `${dream.id}\t${dream.status}\toperations=${dream.operationCount}\tdrafts=${dream.draftCount}`).join("\n") || "No experimental Dream runs"}\n`, stderr: "" };
+      return {
+        exitCode: 0,
+        stdout: `${dreams.map((dream) => `${dream.id}\t${dream.status}\toperations=${dream.operationCount}\tdrafts=${dream.draftCount}`).join("\n") || "No experimental Dream runs"}\n`,
+        stderr: ""
+      };
     }
     if (subcommand === "view") {
       const scope = readMemoryScope(parsed.rest[1]);
@@ -540,15 +678,34 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     };
     const subcommand = parsed.rest[0] ?? "drafts";
     if (subcommand === "drafts" || subcommand === "list") {
-      return { exitCode: 0, stdout: `${formatLearningDraftList(listLearningDrafts(rootInput))}\n`, stderr: "" };
+      return {
+        exitCode: 0,
+        stdout: `${formatLearningDraftList(listLearningDrafts(rootInput))}\n`,
+        stderr: ""
+      };
     }
     if (subcommand === "draft") {
       const action = parsed.rest[1];
       const id = parsed.rest[2];
       if (!action || !id) throw new MagiUsageError("magi learning draft <show|apply|reject> <id>");
-      if (action === "show") return { exitCode: 0, stdout: `${formatLearningDraftReview({ ...rootInput, id })}\n`, stderr: "" };
-      if (action === "apply") return { exitCode: 0, stdout: `Applied LearningDraft: ${applyLearningDraft({ ...rootInput, id }).id}\n`, stderr: "" };
-      if (action === "reject") return { exitCode: 0, stdout: `Rejected LearningDraft: ${rejectLearningDraft({ ...rootInput, id }).id}\n`, stderr: "" };
+      if (action === "show")
+        return {
+          exitCode: 0,
+          stdout: `${formatLearningDraftReview({ ...rootInput, id })}\n`,
+          stderr: ""
+        };
+      if (action === "apply")
+        return {
+          exitCode: 0,
+          stdout: `Applied LearningDraft: ${applyLearningDraft({ ...rootInput, id }).id}\n`,
+          stderr: ""
+        };
+      if (action === "reject")
+        return {
+          exitCode: 0,
+          stdout: `Rejected LearningDraft: ${rejectLearningDraft({ ...rootInput, id }).id}\n`,
+          stderr: ""
+        };
       throw new MagiUsageError(`Unknown learning draft action: ${action}`);
     }
     throw new MagiUsageError(`Unknown learning command: ${subcommand}`);
@@ -580,12 +737,13 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         const resources = await client.listResources();
         return {
           exitCode: 0,
-          stdout: `${resources.map((resource) => [
-            resource.uri,
-            resource.name,
-            resource.mimeType,
-            resource.description
-          ].filter(Boolean).join("  ")).join("\n")}\n`,
+          stdout: `${resources
+            .map((resource) =>
+              [resource.uri, resource.name, resource.mimeType, resource.description]
+                .filter(Boolean)
+                .join("  ")
+            )
+            .join("\n")}\n`,
           stderr: ""
         };
       }
@@ -594,11 +752,17 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         const result = await client.readResource(uri);
         return {
           exitCode: 0,
-          stdout: `${result.contents.map((content) => [
-            content.uri ? `uri: ${content.uri}` : undefined,
-            content.mimeType ? `mime: ${content.mimeType}` : undefined,
-            content.text ?? content.blob ?? ""
-          ].filter(Boolean).join("\n")).join("\n\n")}\n`,
+          stdout: `${result.contents
+            .map((content) =>
+              [
+                content.uri ? `uri: ${content.uri}` : undefined,
+                content.mimeType ? `mime: ${content.mimeType}` : undefined,
+                content.text ?? content.blob ?? ""
+              ]
+                .filter(Boolean)
+                .join("\n")
+            )
+            .join("\n\n")}\n`,
           stderr: ""
         };
       }
@@ -673,9 +837,10 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         const tasks = store.listAgentTasks(50);
         return {
           exitCode: 0,
-          stdout: tasks.length === 0
-            ? "No agent tasks\n"
-            : `${tasks.map((task) => `${task.id}  ${task.role}  ${task.status}  ${task.prompt}`).join("\n")}\n`,
+          stdout:
+            tasks.length === 0
+              ? "No agent tasks\n"
+              : `${tasks.map((task) => `${task.id}  ${task.role}  ${task.status}  ${task.prompt}`).join("\n")}\n`,
           stderr: ""
         };
       }
@@ -685,7 +850,11 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         if (!prompt.trim()) {
           throw new MagiUsageError("magi agents spawn <explorer|worker> <prompt> requires prompt");
         }
-        const sessionId = store.createSession({ title: `agent task ${role}`, cwd, metadata: { command: "agents spawn", role } });
+        const sessionId = store.createSession({
+          title: `agent task ${role}`,
+          cwd,
+          metadata: { command: "agents spawn", role }
+        });
         const task = spawnAgentTask(store, {
           role,
           prompt,
@@ -712,7 +881,8 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       }
       if (subcommand === "start") {
         const task = startAgentTask(store, requireArg(parsed.rest[1], "task id"));
-        const sessionId = task.sessionId ?? store.createSession({ title: "cli agent start", cwd: task.cwd });
+        const sessionId =
+          task.sessionId ?? store.createSession({ title: "cli agent start", cwd: task.cwd });
         await triggerHooks({
           event: "subagent_start",
           hooks: config.hooks,
@@ -730,11 +900,16 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         return { exitCode: 0, stdout: `${JSON.stringify(task)}\n`, stderr: "" };
       }
       if (subcommand === "wait") {
-        return { exitCode: 0, stdout: `${JSON.stringify(waitAgentTask(store, requireArg(parsed.rest[1], "task id")))}\n`, stderr: "" };
+        return {
+          exitCode: 0,
+          stdout: `${JSON.stringify(waitAgentTask(store, requireArg(parsed.rest[1], "task id")))}\n`,
+          stderr: ""
+        };
       }
       if (subcommand === "cancel") {
         const task = cancelAgentTask(store, requireArg(parsed.rest[1], "task id"));
-        const sessionId = task.sessionId ?? store.createSession({ title: "cli agent stop", cwd: task.cwd });
+        const sessionId =
+          task.sessionId ?? store.createSession({ title: "cli agent stop", cwd: task.cwd });
         await triggerHooks({
           event: "stop",
           hooks: config.hooks,
@@ -767,8 +942,13 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         return { exitCode: 0, stdout: `${JSON.stringify(task)}\n`, stderr: "" };
       }
       if (subcommand === "complete") {
-        const task = completeAgentTask(store, requireArg(parsed.rest[1], "task id"), parsed.rest.slice(2).join(" "));
-        const sessionId = task.sessionId ?? store.createSession({ title: "cli agent notification", cwd: task.cwd });
+        const task = completeAgentTask(
+          store,
+          requireArg(parsed.rest[1], "task id"),
+          parsed.rest.slice(2).join(" ")
+        );
+        const sessionId =
+          task.sessionId ?? store.createSession({ title: "cli agent notification", cwd: task.cwd });
         await triggerHooks({
           event: "notification",
           hooks: config.hooks,
@@ -856,7 +1036,7 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
           timeoutMs: parsed.runnerTimeoutMs
         });
         return {
-          exitCode: result.timedOut ? 124 : result.exitCode ?? 1,
+          exitCode: result.timedOut ? 124 : (result.exitCode ?? 1),
           stdout: [
             `command: ${result.command}`,
             `cwd: ${result.cwd}`,
@@ -898,11 +1078,13 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         loadConfig(paths, env);
         const store = SessionStore.open(paths);
         try {
-          const sessionId = parsed.sessionId ?? store.createSession({
-            title: `runner apply ${filePath}`,
-            cwd,
-            metadata: { command: "runner apply" }
-          });
+          const sessionId =
+            parsed.sessionId ??
+            store.createSession({
+              title: `runner apply ${filePath}`,
+              cwd,
+              metadata: { command: "runner apply" }
+            });
           const result = await client.applyPatch({
             cwd,
             filePath,
@@ -982,9 +1164,14 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       ensureMagiHome(paths);
       const store = SessionStore.open(paths);
       try {
-        const tokens = store.listMcpOAuthTokens().filter(t => t.serverName.startsWith("peer:"));
+        const tokens = store.listMcpOAuthTokens().filter((t) => t.serverName.startsWith("peer:"));
         if (tokens.length === 0) {
-          return { exitCode: 0, stdout: "No saved peers.\nUse 'magi peers add <name> <url> <device-id> <token>' to register one.\n", stderr: "" };
+          return {
+            exitCode: 0,
+            stdout:
+              "No saved peers.\nUse 'magi peers add <name> <url> <device-id> <token>' to register one.\n",
+            stderr: ""
+          };
         }
         const lines = ["Saved peers:", ""];
         for (const t of tokens) {
@@ -1001,22 +1188,23 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     const { browseMdns } = await import("./control/mdns.js");
     const handle = browseMdns({});
     const waitMs = sub === "list" ? Number(parsed.rest[1]) || 2500 : Number(sub) || 2500;
-    await new Promise(resolve => setTimeout(resolve, waitMs));
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
     const peers = handle.peers();
     handle.stop();
     if (peers.length === 0) {
       return {
         exitCode: 0,
-        stdout: [
-          "No Magi peers discovered on the LAN.",
-          "",
-          `Scanned for ${waitMs}ms via mDNS (_magi._tcp.local.).`,
-          "Make sure other daemons are running with mDNS enabled.",
-          "Set MAGI_DISABLE_MDNS=1 to disable advertisement on this host.",
-          "",
-          "To register a peer manually with credentials:",
-          "  magi peers add <name> <url> <device-id> <token>"
-        ].join("\n") + "\n",
+        stdout:
+          [
+            "No Magi peers discovered on the LAN.",
+            "",
+            `Scanned for ${waitMs}ms via mDNS (_magi._tcp.local.).`,
+            "Make sure other daemons are running with mDNS enabled.",
+            "Set MAGI_DISABLE_MDNS=1 to disable advertisement on this host.",
+            "",
+            "To register a peer manually with credentials:",
+            "  magi peers add <name> <url> <device-id> <token>"
+          ].join("\n") + "\n",
         stderr: ""
       };
     }
@@ -1026,11 +1214,17 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       lines.push(`    Host:    ${peer.hostname}`);
       lines.push(`    Address: ${peer.address}:${peer.port}`);
       if (Object.keys(peer.txt).length > 0) {
-        lines.push(`    Info:    ${Object.entries(peer.txt).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+        lines.push(
+          `    Info:    ${Object.entries(peer.txt)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(", ")}`
+        );
       }
       lines.push("");
     }
-    lines.push("Use 'magi peers add <name> <url> <device-id> <token>' to save credentials for cross-machine dispatch.");
+    lines.push(
+      "Use 'magi peers add <name> <url> <device-id> <token>' to save credentials for cross-machine dispatch."
+    );
     return { exitCode: 0, stdout: lines.join("\n"), stderr: "" };
   }
 
@@ -1045,14 +1239,21 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         return { exitCode: 0, stdout: "No jobs found.\n", stderr: "" };
       }
       const lines = ["Recent jobs (newest first):", ""];
-      lines.push(`  ${"ID".padEnd(38)} ${"Status".padEnd(11)} ${"Kind".padEnd(16)} ${"Created".padEnd(20)} Title`);
+      lines.push(
+        `  ${"ID".padEnd(38)} ${"Status".padEnd(11)} ${"Kind".padEnd(16)} ${"Created".padEnd(20)} Title`
+      );
       for (const job of jobs) {
         const meta = (job.metadata ?? {}) as Record<string, unknown>;
-        const desc = typeof meta.description === "string" ? meta.description
-                  : typeof meta.title === "string" ? meta.title
-                  : "";
+        const desc =
+          typeof meta.description === "string"
+            ? meta.description
+            : typeof meta.title === "string"
+              ? meta.title
+              : "";
         const created = job.createdAt.replace("T", " ").slice(0, 19);
-        lines.push(`  ${job.id.padEnd(38)} ${job.status.padEnd(11)} ${job.kind.padEnd(16)} ${created.padEnd(20)} ${desc}`);
+        lines.push(
+          `  ${job.id.padEnd(38)} ${job.status.padEnd(11)} ${job.kind.padEnd(16)} ${created.padEnd(20)} ${desc}`
+        );
       }
       lines.push("");
       lines.push("Use 'magi logs <id>' for events, 'magi kill <id>' to cancel a running job.");
@@ -1114,7 +1315,8 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       return {
         exitCode: 1,
         stdout: "",
-        stderr: "Magi daemon is not running. Only running jobs can be cancelled.\nStart it with: magi daemon start\n"
+        stderr:
+          "Magi daemon is not running. Only running jobs can be cancelled.\nStart it with: magi daemon start\n"
       };
     }
     const reason = parsed.rest.slice(1).join(" ").trim() || "cancelled by user";
@@ -1127,11 +1329,19 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       });
       if (!response.ok) {
         const text = await response.text();
-        return { exitCode: 1, stdout: "", stderr: `Daemon rejected cancel (${response.status}): ${text}\n` };
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: `Daemon rejected cancel (${response.status}): ${text}\n`
+        };
       }
       return { exitCode: 0, stdout: `Cancelled job ${jobId}\n`, stderr: "" };
     } catch (error) {
-      return { exitCode: 1, stdout: "", stderr: `Failed to reach daemon: ${error instanceof Error ? error.message : String(error)}\n` };
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr: `Failed to reach daemon: ${error instanceof Error ? error.message : String(error)}\n`
+      };
     }
   }
 
@@ -1146,9 +1356,10 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     ensureMagiHome(paths);
     const { runInit } = await import("./commands/init.js");
     const presetArg = parsed.rest[0];
-    const preset = presetArg === "anthropic" || presetArg === "openai" || presetArg === "deepseek"
-      ? presetArg
-      : undefined;
+    const preset =
+      presetArg === "anthropic" || presetArg === "openai" || presetArg === "deepseek"
+        ? presetArg
+        : undefined;
     const nonInteractive = parsed.rest.includes("--non-interactive") || parsed.rest.includes("-y");
     const result = await runInit({ paths, env, preset, nonInteractive });
     if (!result.wrote && result.reason) {
@@ -1162,9 +1373,7 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     ensureMagiHome(paths);
     const status = getDaemonStatus(paths);
     if (!status.running) {
-      throw new MagiUsageError(
-        "Magi daemon is not running. Start it first: magi daemon start"
-      );
+      throw new MagiUsageError("Magi daemon is not running. Start it first: magi daemon start");
     }
     const deviceName = parsed.rest[0] ?? `device-${Date.now().toString(36)}`;
     const url = `http://${status.bind ?? "127.0.0.1"}:${status.port ?? 8765}/pairing`;
@@ -1174,9 +1383,11 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       body: JSON.stringify({ name: deviceName })
     });
     if (!response.ok) {
-      throw new MagiUsageError(`Pairing request failed (${response.status}): ${await response.text()}`);
+      throw new MagiUsageError(
+        `Pairing request failed (${response.status}): ${await response.text()}`
+      );
     }
-    const token = await response.json() as { deviceId: string; token: string; expiresAt: string };
+    const token = (await response.json()) as { deviceId: string; token: string; expiresAt: string };
     // Build the connection URL (works for phone) — replace bind with actual LAN IP if needed
     const { networkInterfaces } = await import("node:os");
     const ifaces = networkInterfaces();
@@ -1215,7 +1426,9 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     lines.push(`Local:     http://127.0.0.1:${port}/panel`);
     lines.push("");
     if (status.bind !== "0.0.0.0" && status.bind !== "::") {
-      lines.push("To allow LAN access (for phone), restart the daemon with MAGI_CONTROL_BIND=0.0.0.0:");
+      lines.push(
+        "To allow LAN access (for phone), restart the daemon with MAGI_CONTROL_BIND=0.0.0.0:"
+      );
       lines.push("  magi daemon stop && MAGI_CONTROL_BIND=0.0.0.0 magi daemon start");
     }
     return { exitCode: 0, stdout: lines.join("\n") + "\n", stderr: "" };
@@ -1238,12 +1451,13 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       const result = startDaemon(paths, { binPath, env });
       return {
         exitCode: 0,
-        stdout: [
-          `Magi daemon started (pid ${result.pid}).`,
-          `Log: ${result.logFile}`,
-          `PID: ${result.pidFile}`,
-          `Use 'magi daemon status' to verify, 'magi daemon stop' to stop.`
-        ].join("\n") + "\n",
+        stdout:
+          [
+            `Magi daemon started (pid ${result.pid}).`,
+            `Log: ${result.logFile}`,
+            `PID: ${result.pidFile}`,
+            `Use 'magi daemon status' to verify, 'magi daemon stop' to stop.`
+          ].join("\n") + "\n",
         stderr: ""
       };
     }
@@ -1259,30 +1473,32 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       if (!status.running) {
         return {
           exitCode: 0,
-          stdout: [
-            "Magi daemon is not running.",
-            `PID file: ${status.pidFile}`,
-            `Log file: ${status.logFile}`,
-            "Use 'magi daemon start' to start it."
-          ].join("\n") + "\n",
+          stdout:
+            [
+              "Magi daemon is not running.",
+              `PID file: ${status.pidFile}`,
+              `Log file: ${status.logFile}`,
+              "Use 'magi daemon start' to start it."
+            ].join("\n") + "\n",
           stderr: ""
         };
       }
       return {
         exitCode: 0,
-        stdout: [
-          `Magi daemon is running (pid ${status.pid}).`,
-          `Address: ${status.bind ?? "?"}:${status.port ?? "?"}`,
-          `Started: ${status.startedAt ?? "?"}`,
-          `Log: ${status.logFile}`
-        ].join("\n") + "\n",
+        stdout:
+          [
+            `Magi daemon is running (pid ${status.pid}).`,
+            `Address: ${status.bind ?? "?"}:${status.port ?? "?"}`,
+            `Started: ${status.startedAt ?? "?"}`,
+            `Log: ${status.logFile}`
+          ].join("\n") + "\n",
         stderr: ""
       };
     }
     if (sub === "restart") {
       stopDaemon(paths);
       // Wait briefly for the process to terminate
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       const binPath = process.argv[1];
       const result = startDaemon(paths, { binPath, env });
       return {
@@ -1303,7 +1519,9 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       const lastN = lines.slice(-tail).join("\n");
       return { exitCode: 0, stdout: lastN.endsWith("\n") ? lastN : lastN + "\n", stderr: "" };
     }
-    throw new MagiUsageError(`Unknown daemon subcommand: ${sub}. Use start/stop/restart/status/logs.`);
+    throw new MagiUsageError(
+      `Unknown daemon subcommand: ${sub}. Use start/stop/restart/status/logs.`
+    );
   }
 
   if (command === "serve") {
@@ -1353,9 +1571,13 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
       });
       // Cleanup PID file and logger on graceful shutdown
       const cleanup = () => {
-        try { daemonLogger?.info("daemon stopping", { pid: process.pid }); } catch {}
+        try {
+          daemonLogger?.info("daemon stopping", { pid: process.pid });
+        } catch {}
         clearDaemonPidFile(paths);
-        try { daemonLogger?.close(); } catch {}
+        try {
+          daemonLogger?.close();
+        } catch {}
       };
       process.on("SIGTERM", cleanup);
       process.on("SIGINT", cleanup);
@@ -1444,11 +1666,43 @@ function helpText(): string {
 
 function knownCommands(): Set<string> {
   return new Set([
-    "help", "--help", "-h", "--version", "-v", "-p", "--prompt", "--print",
-    "doctor", "config", "sessions", "resume", "context", "compact", "rules",
+    "help",
+    "--help",
+    "-h",
+    "--version",
+    "-v",
+    "-p",
+    "--prompt",
+    "--print",
+    "doctor",
+    "config",
+    "sessions",
+    "resume",
+    "context",
+    "compact",
+    "rules",
     "goal",
-    "workspace", "memory", "learning", "learn", "mcp", "plugins", "marketplace", "skills", "agents", "runner",
-    "serve", "daemon", "pair", "peers", "ps", "logs", "kill", "init", "tutorial", "-r", "--resume"
+    "workspace",
+    "memory",
+    "learning",
+    "learn",
+    "mcp",
+    "plugins",
+    "marketplace",
+    "skills",
+    "agents",
+    "runner",
+    "serve",
+    "daemon",
+    "pair",
+    "peers",
+    "ps",
+    "logs",
+    "kill",
+    "init",
+    "tutorial",
+    "-r",
+    "--resume"
   ]);
 }
 
@@ -1548,7 +1802,9 @@ function parseArgs(argv: string[]): ParsedArgs {
       const value = argv[++index];
       const parsedMode = parsePermissionMode(value);
       if (!parsedMode) {
-        throw new MagiUsageError("--permission-mode must be default, acceptEdits, bypassPermissions, or plan");
+        throw new MagiUsageError(
+          "--permission-mode must be default, acceptEdits, bypassPermissions, or plan"
+        );
       }
       permissionMode = parsedMode;
       continue;
@@ -1650,12 +1906,18 @@ function resolveGoalSessionForCommand(input: {
   throw new MagiUsageError("No sessions found");
 }
 
-function resolveCompactionModelRunner(config: ReturnType<typeof loadConfig>, env: NodeJS.ProcessEnv, alias: string) {
+function resolveCompactionModelRunner(
+  config: ReturnType<typeof loadConfig>,
+  env: NodeJS.ProcessEnv,
+  alias: string
+) {
   const registry = buildProviderRegistry({ config, env });
   const resolved = resolveModelAlias(config, alias);
   const adapter = registry.get(resolved.providerName);
   if (!adapter) {
-    throw new MagiUsageError(`Provider ${resolved.providerName} is not configured for compaction model ${JSON.stringify(alias)}`);
+    throw new MagiUsageError(
+      `Provider ${resolved.providerName} is not configured for compaction model ${JSON.stringify(alias)}`
+    );
   }
   return {
     adapter,

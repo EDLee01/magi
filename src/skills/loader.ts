@@ -18,20 +18,18 @@ export function listSkills(paths: MagiPaths): SkillRecord[] {
   } catch {
     return [];
   }
-  return entries
-    .sort()
-    .flatMap((name) => {
-      const root = path.join(paths.skillsRoot, name);
-      const file = path.join(root, "SKILL.md");
-      try {
-        if (!statSync(file).isFile()) {
-          return [];
-        }
-        return [loadSkill(root, false)];
-      } catch {
+  return entries.sort().flatMap((name) => {
+    const root = path.join(paths.skillsRoot, name);
+    const file = path.join(root, "SKILL.md");
+    try {
+      if (!statSync(file).isFile()) {
         return [];
       }
-    });
+      return [loadSkill(root, false)];
+    } catch {
+      return [];
+    }
+  });
 }
 
 export function loadSkill(root: string, includeBody = true): SkillRecord {

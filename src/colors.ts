@@ -66,8 +66,12 @@ function installFilter(): void {
   patched = true;
   originalStdoutWrite = process.stdout.write.bind(process.stdout);
   originalStderrWrite = process.stderr.write.bind(process.stderr);
-  process.stdout.write = makeFilter(originalStdoutWrite as unknown as (...args: unknown[]) => boolean) as typeof process.stdout.write;
-  process.stderr.write = makeFilter(originalStderrWrite as unknown as (...args: unknown[]) => boolean) as typeof process.stderr.write;
+  process.stdout.write = makeFilter(
+    originalStdoutWrite as unknown as (...args: unknown[]) => boolean
+  ) as typeof process.stdout.write;
+  process.stderr.write = makeFilter(
+    originalStderrWrite as unknown as (...args: unknown[]) => boolean
+  ) as typeof process.stderr.write;
 }
 
 function uninstallFilter(): void {

@@ -1,4 +1,13 @@
-import { createGoal, clearGoal, formatGoal, formatGoalStatus, getGoal, isGoalCreationArgs, listGoals, updateGoalStatus } from "../goal.js";
+import {
+  createGoal,
+  clearGoal,
+  formatGoal,
+  formatGoalStatus,
+  getGoal,
+  isGoalCreationArgs,
+  listGoals,
+  updateGoalStatus
+} from "../goal.js";
 import { SlashCommandInput } from "./registry.js";
 
 export const command = {
@@ -9,7 +18,8 @@ export const command = {
   group: "Session",
   handler: (args: string[], input: SlashCommandInput): string => {
     if (!input.paths) return "Goal requires a configured paths root.";
-    if (!input.sessionId) return "No active session. Send a message first or resume a session, then use /goal.";
+    if (!input.sessionId)
+      return "No active session. Send a message first or resume a session, then use /goal.";
 
     const sub = args[0]?.toLowerCase();
     if (!sub || sub === "status" || sub === "show") {
@@ -20,7 +30,10 @@ export const command = {
       if (goals.length === 0) return "No goals for this session.";
       return [
         "Goals for this session:",
-        ...goals.map((goal) => `- ${formatGoalStatus(goal.status).padEnd(16)} ${goal.objective} (${goal.updatedAt})`)
+        ...goals.map(
+          (goal) =>
+            `- ${formatGoalStatus(goal.status).padEnd(16)} ${goal.objective} (${goal.updatedAt})`
+        )
       ].join("\n");
     }
     if (sub === "done" || sub === "complete" || sub === "completed") {
@@ -39,7 +52,13 @@ export const command = {
       });
       return goal ? `Goal blocked: ${goal.objective}` : "No active goal.";
     }
-    if (sub === "cancel" || sub === "cancelled" || sub === "clear" || sub === "reset" || sub === "stop") {
+    if (
+      sub === "cancel" ||
+      sub === "cancelled" ||
+      sub === "clear" ||
+      sub === "reset" ||
+      sub === "stop"
+    ) {
       const goal = clearGoal(input.paths, input.sessionId);
       return goal ? `Goal cancelled: ${goal.objective}` : "No active goal.";
     }

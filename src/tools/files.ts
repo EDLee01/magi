@@ -34,7 +34,10 @@ export function readWorkspaceFile(input: {
     throw new ToolError(`${input.filePath} is not a file`, "not-found");
   }
   if (stat.size > maxBytes) {
-    throw new ToolError(`${input.filePath} is ${stat.size} bytes, above the ${maxBytes} byte read limit`, "file-too-large");
+    throw new ToolError(
+      `${input.filePath} is ${stat.size} bytes, above the ${maxBytes} byte read limit`,
+      "file-too-large"
+    );
   }
 
   const content = readFileSync(resolved.absolutePath);
@@ -62,11 +65,13 @@ export function writeWorkspaceFile(input: {
   }
 
   const resolved = resolveWorkspacePath(input.cwd, input.filePath);
-  const before = existsSync(resolved.absolutePath) ? readFileSync(resolved.absolutePath, "utf8") : "";
+  const before = existsSync(resolved.absolutePath)
+    ? readFileSync(resolved.absolutePath, "utf8")
+    : "";
   const diff = createUnifiedDiff(resolved.relativePath, before, input.content);
   mkdirSync(path.dirname(resolved.absolutePath), { recursive: true });
   atomicWriteFile(resolved.absolutePath, input.content);
-  
+
   if (input.hooks) {
     void triggerHook({
       event: "file_changed",
@@ -111,14 +116,17 @@ export function editWorkspaceFile(input: {
     throw new ToolError("old_string not found in file", "not-found");
   }
   if (occurrences > 1 && !input.replaceAll) {
-    throw new ToolError("old_string is not unique; use replace_all or provide more context", "bad-input");
+    throw new ToolError(
+      "old_string is not unique; use replace_all or provide more context",
+      "bad-input"
+    );
   }
   const after = input.replaceAll
     ? before.split(input.oldString).join(input.newString)
     : before.replace(input.oldString, input.newString);
   const diff = createUnifiedDiff(resolved.relativePath, before, after);
   atomicWriteFile(resolved.absolutePath, after);
-  
+
   if (input.hooks) {
     void triggerHook({
       event: "file_changed",
@@ -147,8 +155,12 @@ export function createUnifiedDiff(filePath: string, before: string, after: strin
     `--- a/${filePath}`,
     `+++ b/${filePath}`,
     "@@",
-    ...beforeLines.filter((line, index) => index < beforeLines.length - 1 || line !== "").map((line) => `-${line}`),
-    ...afterLines.filter((line, index) => index < afterLines.length - 1 || line !== "").map((line) => `+${line}`),
+    ...beforeLines
+      .filter((line, index) => index < beforeLines.length - 1 || line !== "")
+      .map((line) => `-${line}`),
+    ...afterLines
+      .filter((line, index) => index < afterLines.length - 1 || line !== "")
+      .map((line) => `+${line}`),
     ""
   ].join("\n");
 }

@@ -112,7 +112,9 @@ export function appendMemory(input: {
     file,
     lineNumber: existingEntries.length + 1
   });
-  const duplicate = existingEntries.some((entry) => normalizeText(entry.text) === normalizeText(incoming.text));
+  const duplicate = existingEntries.some(
+    (entry) => normalizeText(entry.text) === normalizeText(incoming.text)
+  );
   const conflicts = findMemoryConflicts(existingEntries, incoming);
   const appended = !duplicate && conflicts.length === 0;
   if (appended) {
@@ -122,7 +124,11 @@ export function appendMemory(input: {
   if (input.store && input.sessionId) {
     input.store.recordAudit({
       sessionId: input.sessionId,
-      action: appended ? "memory.append" : conflicts.length > 0 ? "memory.conflict" : "memory.duplicate",
+      action: appended
+        ? "memory.append"
+        : conflicts.length > 0
+          ? "memory.conflict"
+          : "memory.duplicate",
       target: file,
       metadata: {
         scope: input.scope,
@@ -150,14 +156,24 @@ export function formatMemory(input: {
   sessionId?: string;
 }): string {
   if (input.scope) {
-    const text = readMemory({ paths: input.paths, cwd: input.cwd, scope: input.scope, sessionId: input.sessionId });
+    const text = readMemory({
+      paths: input.paths,
+      cwd: input.cwd,
+      scope: input.scope,
+      sessionId: input.sessionId
+    });
     return text || `No ${input.scope} memory\n`;
   }
 
   const user = readMemory({ paths: input.paths, cwd: input.cwd, scope: "user" });
   const project = readMemory({ paths: input.paths, cwd: input.cwd, scope: "project" });
   const session = input.sessionId
-    ? readMemory({ paths: input.paths, cwd: input.cwd, scope: "session", sessionId: input.sessionId })
+    ? readMemory({
+        paths: input.paths,
+        cwd: input.cwd,
+        scope: "session",
+        sessionId: input.sessionId
+      })
     : "";
   return [
     "# user",
@@ -178,12 +194,21 @@ export function listMemoryEntries(input: {
   sessionId?: string;
   scopes?: MemoryScope[];
 }): MemoryEntry[] {
-  const scopes = input.scopes ?? ["user", "project", ...(input.sessionId ? ["session" as const] : [])];
+  const scopes = input.scopes ?? [
+    "user",
+    "project",
+    ...(input.sessionId ? ["session" as const] : [])
+  ];
   return scopes.flatMap((scope) => {
     if (scope === "session" && !input.sessionId) {
       return [];
     }
-    const file = resolveMemoryFile({ paths: input.paths, cwd: input.cwd, sessionId: input.sessionId, scope });
+    const file = resolveMemoryFile({
+      paths: input.paths,
+      cwd: input.cwd,
+      sessionId: input.sessionId,
+      scope
+    });
     const text = existsSync(file) ? readFileSync(file, "utf8") : "";
     return parseMemoryEntries({ text, scope, file });
   });
@@ -212,7 +237,12 @@ export function searchMemory(input: {
       score: scoreMemoryEntry(entry, terms) + scopeWeight[entry.scope]
     }))
     .filter((entry) => entry.score > scopeWeight[entry.scope])
-    .sort((left, right) => right.score - left.score || scopeWeight[right.scope] - scopeWeight[left.scope] || left.line - right.line)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        scopeWeight[right.scope] - scopeWeight[left.scope] ||
+        left.line - right.line
+    )
     .slice(0, input.maxResults ?? 8);
 }
 
@@ -220,13 +250,14 @@ export function formatMemorySearchResults(results: MemorySearchResult[]): string
   if (results.length === 0) {
     return "";
   }
-  return [
-    "[Relevant memory]",
-    ...results.map((entry) => `- ${entry.scope}: ${entry.text}`)
-  ].join("\n");
+  return ["[Relevant memory]", ...results.map((entry) => `- ${entry.scope}: ${entry.text}`)].join(
+    "\n"
+  );
 }
 
-export function extractExplicitMemoryWrite(prompt: string): { scope: MemoryScope; text: string } | undefined {
+export function extractExplicitMemoryWrite(
+  prompt: string
+): { scope: MemoryScope; text: string } | undefined {
   const trimmed = prompt.trim();
   const patterns: Array<{ pattern: RegExp; scope?: MemoryScope }> = [
     { pattern: /^(?:remember|please remember)\s+(?:for\s+)?(user|project|session)\s*:\s*(.+)$/i },
@@ -259,17 +290,23 @@ export function extractExplicitMemoryWrite(prompt: string): { scope: MemoryScope
   return undefined;
 }
 
-function parseMemoryEntries(input: { text: string; scope: MemoryScope; file: string }): MemoryEntry[] {
+function parseMemoryEntries(input: {
+  text: string;
+  scope: MemoryScope;
+  file: string;
+}): MemoryEntry[] {
   return input.text
     .split(/\r?\n/)
     .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
     .filter((line) => Boolean(line.line))
-    .map((line) => parseMemoryEntryLine({
-      line: line.line,
-      scope: input.scope,
-      file: input.file,
-      lineNumber: line.lineNumber
-    }));
+    .map((line) =>
+      parseMemoryEntryLine({
+        line: line.line,
+        scope: input.scope,
+        file: input.file,
+        lineNumber: line.lineNumber
+      })
+    );
 }
 
 function parseMemoryEntryLine(input: {
@@ -314,7 +351,10 @@ function findMemoryConflicts(entries: MemoryEntry[], incoming: MemoryEntry): Mem
     return [];
   }
   return entries
-    .filter((entry) => entry.key === incoming.key && entry.value !== undefined && entry.value !== incoming.value)
+    .filter(
+      (entry) =>
+        entry.key === incoming.key && entry.value !== undefined && entry.value !== incoming.value
+    )
     .map((existing) => ({
       scope: incoming.scope,
       key: incoming.key!,
@@ -337,12 +377,16 @@ function scoreMemoryEntry(entry: MemoryEntry, terms: string[]): number {
 }
 
 function tokenize(text: string): string[] {
-  return Array.from(new Set(text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 2)));
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 2)
+    )
+  );
 }
 
 function normalizeKey(text: string): string {

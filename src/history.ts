@@ -4,7 +4,16 @@
  * Deduplicates consecutive identical entries.
  */
 
-import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync, openSync, readSync, closeSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  appendFileSync,
+  mkdirSync,
+  statSync,
+  openSync,
+  readSync,
+  closeSync
+} from "node:fs";
 import path from "node:path";
 import { atomicWrite } from "./fs-utils.js";
 import os from "node:os";

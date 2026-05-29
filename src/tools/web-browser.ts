@@ -43,12 +43,20 @@ export const WebBrowserInputSchema = {
 } satisfies Record<string, unknown>;
 
 export function parseWebBrowserInput(input: Record<string, unknown>): WebBrowserInput {
-  const action = input.action === "fetch" ? "fetch" as const : "search" as const;
+  const action = input.action === "fetch" ? ("fetch" as const) : ("search" as const);
   const query = typeof input.query === "string" ? input.query.trim() : "";
   const url = typeof input.url === "string" ? input.url.trim() : "";
-  const source = (input.source === "baidu" || input.source === "duckduckgo" ? input.source : "bing") as SearchSource;
-  const maxResults = typeof input.max_results === "number" ? Math.min(Math.max(1, Math.floor(input.max_results)), 20) : 10;
-  const maxChars = typeof input.max_chars === "number" ? Math.min(Math.max(1000, Math.floor(input.max_chars)), 100000) : 20000;
+  const source = (
+    input.source === "baidu" || input.source === "duckduckgo" ? input.source : "bing"
+  ) as SearchSource;
+  const maxResults =
+    typeof input.max_results === "number"
+      ? Math.min(Math.max(1, Math.floor(input.max_results)), 20)
+      : 10;
+  const maxChars =
+    typeof input.max_chars === "number"
+      ? Math.min(Math.max(1000, Math.floor(input.max_chars)), 100000)
+      : 20000;
 
   if (action === "search" && !query) {
     throw new Error("WebBrowser search requires a query");
@@ -94,11 +102,15 @@ export function formatWebBrowserResult(result: WebBrowserResult): string {
     return [
       `${sourceLabel}Search results for "${result.query}" (${result.results.length}):`,
       "",
-      ...result.results.map((item, i) => [
-        `${i + 1}. ${item.title}`,
-        `   URL: ${item.url}`,
-        item.snippet ? `   ${item.snippet}` : null
-      ].filter(Boolean).join("\n"))
+      ...result.results.map((item, i) =>
+        [
+          `${i + 1}. ${item.title}`,
+          `   URL: ${item.url}`,
+          item.snippet ? `   ${item.snippet}` : null
+        ]
+          .filter(Boolean)
+          .join("\n")
+      )
     ].join("\n");
   }
 
@@ -108,12 +120,7 @@ export function formatWebBrowserResult(result: WebBrowserResult): string {
   const text = result.text ?? "";
   const lines = text.split("\n").length;
   const chars = text.length;
-  return [
-    `Content from ${result.url}:`,
-    `(${chars} chars, ~${lines} lines)`,
-    "",
-    text
-  ].join("\n");
+  return [`Content from ${result.url}:`, `(${chars} chars, ~${lines} lines)`, "", text].join("\n");
 }
 
 // ─── Bing Search ───────────────────────────────────────────────────
@@ -201,7 +208,9 @@ function parseBaiduResults(html: string, maxResults: number): WebBrowserSearchIt
     const block = html.slice(start, pos);
 
     // Title & URL
-    const h3a = /<h3[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/h3>/i.exec(block);
+    const h3a = /<h3[^>]*>[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<\/h3>/i.exec(
+      block
+    );
     if (!h3a) continue;
     let url = decodeHtmlEntities(h3a[1]);
     const title = stripHtml(h3a[2]);
@@ -210,7 +219,9 @@ function parseBaiduResults(html: string, maxResults: number): WebBrowserSearchIt
     url = extractBaiduUrl(url);
 
     // Snippet from <span class="content-right_..."> or general text
-    const snippetMatch = /<div[^>]*class="[^"]*c-abstract[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(block);
+    const snippetMatch = /<div[^>]*class="[^"]*c-abstract[^"]*"[^>]*>([\s\S]*?)<\/div>/i.exec(
+      block
+    );
     const snippet = snippetMatch ? stripHtml(snippetMatch[1]) : "";
 
     if (title && url) {
@@ -327,7 +338,8 @@ async function fetchUrl(url: string, maxChars: number): Promise<WebBrowserResult
     };
   }
 
-  const isHtml = contentType.includes("text/html") || /<html|<body|<article|<p[ >]/i.test(raw.slice(0, 500));
+  const isHtml =
+    contentType.includes("text/html") || /<html|<body|<article|<p[ >]/i.test(raw.slice(0, 500));
   const text = isHtml ? extractText(raw) : raw;
   const truncated = text.slice(0, maxChars);
 
@@ -365,11 +377,23 @@ function extractText(html: string): string {
 
 // ─── HTTP helpers ──────────────────────────────────────────────────
 
-function httpsOrHttpRequest(hostname: string, path: string, protocol: string): Promise<{ body: string; contentType: string }> {
+function httpsOrHttpRequest(
+  hostname: string,
+  path: string,
+  protocol: string
+): Promise<{ body: string; contentType: string }> {
   const mod = protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
     const req = mod.request(
-      { hostname, path, method: "GET", headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" }, timeout: 30000 },
+      {
+        hostname,
+        path,
+        method: "GET",
+        headers: {
+          "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        },
+        timeout: 30000
+      },
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -381,7 +405,10 @@ function httpsOrHttpRequest(hostname: string, path: string, protocol: string): P
       }
     );
     req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("Request timed out")); });
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timed out"));
+    });
     req.end();
   });
 }
@@ -394,13 +421,24 @@ function httpsRequestGet(url: string, redirects = 5): Promise<string> {
         hostname: parsed.hostname,
         path: parsed.pathname + parsed.search,
         method: "GET",
-        headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+        headers: {
+          "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        },
         timeout: 30000
       },
       (res) => {
-        if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location && redirects > 0) {
+        if (
+          (res.statusCode === 301 ||
+            res.statusCode === 302 ||
+            res.statusCode === 307 ||
+            res.statusCode === 308) &&
+          res.headers.location &&
+          redirects > 0
+        ) {
           const redirect = res.headers.location;
-          const nextUrl = redirect.startsWith("http") ? redirect : `https://${parsed.hostname}${redirect}`;
+          const nextUrl = redirect.startsWith("http")
+            ? redirect
+            : `https://${parsed.hostname}${redirect}`;
           resolve(httpsRequestGet(nextUrl, redirects - 1));
           return;
         }
@@ -410,7 +448,10 @@ function httpsRequestGet(url: string, redirects = 5): Promise<string> {
       }
     );
     req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("Request timed out")); });
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timed out"));
+    });
     req.end();
   });
 }
@@ -431,7 +472,10 @@ function httpsRequest(
       res.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     });
     req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("Request timed out")); });
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Request timed out"));
+    });
     if (body) req.write(body);
     req.end();
   });
@@ -440,7 +484,12 @@ function httpsRequest(
 // ─── String helpers ────────────────────────────────────────────────
 
 function stripHtml(value: string): string {
-  return decodeHtmlEntities(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  return decodeHtmlEntities(
+    value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -449,7 +498,7 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, "\"")
+    .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&#(\d+);/g, (_m: string, code: string) => {
       const n = Number(code);

@@ -10,7 +10,9 @@ describe("magi init", () => {
   let tmpRoot: string | undefined;
   afterEach(() => {
     if (tmpRoot) {
-      try { rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(tmpRoot, { recursive: true, force: true });
+      } catch {}
       tmpRoot = undefined;
     }
   });
@@ -65,15 +67,19 @@ describe("magi init", () => {
   it("refuses to overwrite an existing real config in non-interactive mode", async () => {
     const { paths, env } = makePaths({ ANTHROPIC_AUTH_TOKEN: "fake-key" });
     // Write a non-stub config
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  custom:",
-      "    type: openai",
-      "models:",
-      "  aliases:",
-      "    main: custom:gpt-x"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  custom:",
+        "    type: openai",
+        "models:",
+        "  aliases:",
+        "    main: custom:gpt-x"
+      ].join("\n"),
+      "utf8"
+    );
     const result = await runInit({ paths, env, nonInteractive: true });
     expect(result.wrote).toBe(false);
     expect(result.reason).toContain("config already exists");

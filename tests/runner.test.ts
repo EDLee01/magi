@@ -52,22 +52,26 @@ describe("Rust runner bridge", () => {
       });
       await expect(client.ping()).resolves.toEqual({ ok: true });
       await expect(client.echo("hello runner")).resolves.toBe("hello runner");
-      await expect(client.runProcess({
-        command: "printf ok",
-        cwd: process.cwd()
-      })).resolves.toMatchObject({
+      await expect(
+        client.runProcess({
+          command: "printf ok",
+          cwd: process.cwd()
+        })
+      ).resolves.toMatchObject({
         command: "printf ok",
         exitCode: 0,
         stdout: "mock stdout\n",
         timedOut: false
       });
       await expect(client.ptySmoke()).resolves.toMatchObject({ ok: true, stdout: "magi-pty-ok" });
-      await expect(client.applyPatch({
-        cwd: process.cwd(),
-        filePath: "note.txt",
-        content: "ok",
-        approved: true
-      })).resolves.toMatchObject({
+      await expect(
+        client.applyPatch({
+          cwd: process.cwd(),
+          filePath: "note.txt",
+          content: "ok",
+          approved: true
+        })
+      ).resolves.toMatchObject({
         path: "note.txt",
         approved: true,
         auditEvent: {
@@ -75,22 +79,28 @@ describe("Rust runner bridge", () => {
           target: "note.txt"
         }
       });
-      await expect(client.applyPatch({
-        cwd: process.cwd(),
-        filePath: "note.txt",
-        content: "ok",
-        approved: false
-      })).rejects.toThrow(/approved=true/);
+      await expect(
+        client.applyPatch({
+          cwd: process.cwd(),
+          filePath: "note.txt",
+          content: "ok",
+          approved: false
+        })
+      ).rejects.toThrow(/approved=true/);
     } finally {
       client.close();
     }
   });
 
   it("supports runner ping from CLI with MAGI_* configuration", async () => {
-    const result = await runCli(["runner", "ping"], {
-      MAGI_RUNNER_BIN: process.execPath,
-      MAGI_RUNNER_ARGS: JSON.stringify([fixture])
-    }, process.cwd());
+    const result = await runCli(
+      ["runner", "ping"],
+      {
+        MAGI_RUNNER_BIN: process.execPath,
+        MAGI_RUNNER_ARGS: JSON.stringify([fixture])
+      },
+      process.cwd()
+    );
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("runner: magi-runner");
@@ -109,7 +119,11 @@ describe("Rust runner bridge", () => {
     expect(run.stdout).toContain("command: printf ok");
     expect(run.stdout).toContain("stdout:\nmock stdout");
 
-    const timedOut = await runCli(["runner", "run", "sleep 10", "--timeout-ms", "1"], env, process.cwd());
+    const timedOut = await runCli(
+      ["runner", "run", "sleep 10", "--timeout-ms", "1"],
+      env,
+      process.cwd()
+    );
     expect(timedOut.exitCode).toBe(124);
     expect(timedOut.stdout).toContain("timedOut: true");
 
@@ -131,7 +145,11 @@ describe("Rust runner bridge", () => {
     expect(rejected.exitCode).toBe(2);
     expect(rejected.stderr).toContain("requires --approve");
 
-    const applied = await runCli(["runner", "apply", "note.txt", "ok", "--approve"], env, workspace);
+    const applied = await runCli(
+      ["runner", "apply", "note.txt", "ok", "--approve"],
+      env,
+      workspace
+    );
     expect(applied.exitCode).toBe(0);
     expect(applied.stdout).toContain("path: note.txt");
     expect(applied.stdout).toContain("sessionId:");
@@ -142,24 +160,30 @@ describe("Rust runner bridge", () => {
     const store = SessionStore.open(getMagiPaths(env));
     try {
       const audit = store.listAuditEvents();
-      expect(audit).toContainEqual(expect.objectContaining({
-        sessionId,
-        action: "runner.file.applyPatch",
-        target: "note.txt"
-      }));
+      expect(audit).toContainEqual(
+        expect.objectContaining({
+          sessionId,
+          action: "runner.file.applyPatch",
+          target: "note.txt"
+        })
+      );
     } finally {
       store.close();
     }
   });
 
   it("uses MAGI_RUNNER_* as runner configuration", () => {
-    expect(resolveRunnerCommand({
-      MAGI_RUNNER_BIN: "/tmp/magi-runner",
-      MAGI_RUNNER_ARGS: JSON.stringify(["--stdio"])
-    })).toEqual({
+    expect(
+      resolveRunnerCommand({
+        MAGI_RUNNER_BIN: "/tmp/magi-runner",
+        MAGI_RUNNER_ARGS: JSON.stringify(["--stdio"])
+      })
+    ).toEqual({
       command: "/tmp/magi-runner",
       args: ["--stdio"]
     });
-    expect(() => resolveRunnerCommand({ MAGI_RUNNER_ARGS: "--stdio" })).toThrow(/JSON string array/);
+    expect(() => resolveRunnerCommand({ MAGI_RUNNER_ARGS: "--stdio" })).toThrow(
+      /JSON string array/
+    );
   });
 });

@@ -72,9 +72,10 @@ export function createStreamingMarkdown(options?: MarkdownOptions): StreamingMar
     // Compact buffer: drop consumed prefix, force fresh allocation to break
     // V8's retained-string chain (sliced strings keep parent alive → unbounded growth → OOM).
     if (bufOffset > 0) {
-      buffer = bufOffset === buffer.length
-        ? ""
-        : Buffer.from(buffer.substring(bufOffset), "utf8").toString("utf8");
+      buffer =
+        bufOffset === buffer.length
+          ? ""
+          : Buffer.from(buffer.substring(bufOffset), "utf8").toString("utf8");
     }
     // Hard cap: if a single line ever exceeds 1MB without newline, drop the buffer
     // rather than letting downstream regex.replace OOM.
@@ -94,7 +95,9 @@ export function createStreamingMarkdown(options?: MarkdownOptions): StreamingMar
     if (buffer) {
       if (inCodeBlock) {
         // Stream the trailing partial line, then close the block
-        const highlighted = highlight ? highlightLine(buffer, codeBlockLang, highlightState) : buffer;
+        const highlighted = highlight
+          ? highlightLine(buffer, codeBlockLang, highlightState)
+          : buffer;
         out += `${GRAY}│${RESET} ${highlighted}\n`;
         out += `${GRAY}╰${"─".repeat(innerWidth + 2)}╯${RESET}`;
         inCodeBlock = false;
@@ -160,12 +163,19 @@ export function createStreamingMarkdown(options?: MarkdownOptions): StreamingMar
   }
 }
 
-function renderCodeBlockBody(lines: string[], lang: string, innerWidth: number, highlight: boolean): string {
+function renderCodeBlockBody(
+  lines: string[],
+  lang: string,
+  innerWidth: number,
+  highlight: boolean
+): string {
   const state = createHighlightState();
-  return lines.map((l) => {
-    const rendered = highlight ? highlightLine(l, lang, state) : l;
-    return `${GRAY}│${RESET} ${rendered}`;
-  }).join("\n");
+  return lines
+    .map((l) => {
+      const rendered = highlight ? highlightLine(l, lang, state) : l;
+      return `${GRAY}│${RESET} ${rendered}`;
+    })
+    .join("\n");
 }
 
 function isTableRow(line: string): boolean {
@@ -211,7 +221,7 @@ function renderTable(rows: string[], innerWidth: number): string {
   }
 
   const lines: string[] = [];
-  const sep = `${GRAY}+${widths.map(w => "-".repeat(w + 2)).join("+")}+${RESET}`;
+  const sep = `${GRAY}+${widths.map((w) => "-".repeat(w + 2)).join("+")}+${RESET}`;
   lines.push(sep);
   lines.push(rowToLine(header, widths, true));
   lines.push(sep);
@@ -226,7 +236,7 @@ function parseTableRow(line: string): string[] {
   const trimmed = line.trim();
   // Strip leading/trailing |
   const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
-  return inner.split("|").map(s => s.trim());
+  return inner.split("|").map((s) => s.trim());
 }
 
 function rowToLine(cells: string[], widths: number[], isHeader: boolean): string {
@@ -310,7 +320,10 @@ function renderInline(text: string): string {
   text = text.replace(/~~(.+?)~~/g, `${STRIKETHROUGH}$1${RESET}`);
 
   // Links [text](url)
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, `${UNDERLINE}${CYAN}$1${RESET}${GRAY} ($2)${RESET}`);
+  text = text.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    `${UNDERLINE}${CYAN}$1${RESET}${GRAY} ($2)${RESET}`
+  );
 
   return text;
 }

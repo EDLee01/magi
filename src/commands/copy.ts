@@ -30,10 +30,14 @@ export const command = {
 };
 
 function writeClipboard(text: string): { ok: true } | { ok: false; error: string } {
-  const cmd = platform() === "darwin" ? ["pbcopy"]
-            : platform() === "win32" ? ["clip.exe"]
-            : process.env.WAYLAND_DISPLAY ? ["wl-copy"]
-            : ["xclip", "-selection", "clipboard"];
+  const cmd =
+    platform() === "darwin"
+      ? ["pbcopy"]
+      : platform() === "win32"
+        ? ["clip.exe"]
+        : process.env.WAYLAND_DISPLAY
+          ? ["wl-copy"]
+          : ["xclip", "-selection", "clipboard"];
   try {
     const result = spawnSync(cmd[0], cmd.slice(1), { input: text, encoding: "utf8" });
     if (result.error) return { ok: false, error: `${cmd[0]}: ${result.error.message}` };

@@ -40,7 +40,11 @@ describe("isolation", () => {
     mkdirSync(legacyMagi, { recursive: true });
     const before = snapshotTree(legacyRoot);
 
-    const result = await runCli(["doctor"], { ...temp.env, CLAUDE_CONFIG_DIR: legacyRoot }, process.cwd());
+    const result = await runCli(
+      ["doctor"],
+      { ...temp.env, CLAUDE_CONFIG_DIR: legacyRoot },
+      process.cwd()
+    );
 
     expect(result.exitCode).toBe(0);
     expect(snapshotTree(legacyRoot)).toEqual(before);
@@ -52,7 +56,13 @@ describe("isolation", () => {
     const paths = getMagiPaths(temp.env);
     await runCli(["-p", "isolation check"], temp.env, process.cwd());
 
-    for (const forbidden of ["legacy-sessions", "legacy-cache", "legacy-plugins", "legacy-skills", "legacy-logs"]) {
+    for (const forbidden of [
+      "legacy-sessions",
+      "legacy-cache",
+      "legacy-plugins",
+      "legacy-skills",
+      "legacy-logs"
+    ]) {
       expect(existsSync(path.join(temp.path, forbidden))).toBe(false);
     }
     expect(existsSync(paths.root)).toBe(true);
@@ -70,7 +80,10 @@ describe("isolation", () => {
   });
 
   it("does not use CLAUDE_* as primary configuration", () => {
-    const paths = getMagiPaths({ CLAUDE_CONFIG_DIR: "/tmp/forbidden-config-test" }, "/tmp/home-test");
+    const paths = getMagiPaths(
+      { CLAUDE_CONFIG_DIR: "/tmp/forbidden-config-test" },
+      "/tmp/home-test"
+    );
     expect(paths.root).toBe("/tmp/home-test/.magi-next");
   });
 
@@ -164,7 +177,13 @@ describe("isolation", () => {
 
     appendMemory({ paths, scope: "user", cwd: temp.path, text: "theme: quiet interface" });
     appendMemory({ paths, scope: "project", cwd: temp.path, text: "api style: explicit routes" });
-    appendMemory({ paths, scope: "session", cwd: temp.path, sessionId: "memory-isolation", text: "handoff: memory isolation" });
+    appendMemory({
+      paths,
+      scope: "session",
+      cwd: temp.path,
+      sessionId: "memory-isolation",
+      text: "handoff: memory isolation"
+    });
 
     expect(existsSync(path.join(paths.root, "memory.md"))).toBe(true);
     expect(existsSync(path.join(paths.stateRoot, "project-memory"))).toBe(true);
@@ -180,7 +199,11 @@ describe("isolation", () => {
     mkdirSync(legacyRoot, { recursive: true });
     const skillRoot = path.join(paths.skillsRoot, "isolation-helper");
     mkdirSync(skillRoot, { recursive: true });
-    writeFileSync(path.join(skillRoot, "SKILL.md"), "# Isolation Helper\n\nStay isolated.\n", "utf8");
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      "# Isolation Helper\n\nStay isolated.\n",
+      "utf8"
+    );
     const before = snapshotTree(legacyRoot);
 
     const config = await executeRegisteredTool({
@@ -283,10 +306,14 @@ describe("isolation", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
-    writeFileSync(path.join(temp.path, "package.json"), JSON.stringify({
-      scripts: { test: "vitest run" },
-      devDependencies: { vitest: "^3.0.0" }
-    }), "utf8");
+    writeFileSync(
+      path.join(temp.path, "package.json"),
+      JSON.stringify({
+        scripts: { test: "vitest run" },
+        devDependencies: { vitest: "^3.0.0" }
+      }),
+      "utf8"
+    );
     writeFileSync(path.join(temp.path, "index.ts"), "export const isolated = true;\n", "utf8");
     const legacyRoot = path.join(temp.path, ".claude");
     mkdirSync(legacyRoot, { recursive: true });
@@ -320,7 +347,10 @@ describe("isolation", () => {
     const before = snapshotTree(legacyRoot);
     const registry = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
     try {
-      registry.registerJob({ sessionId: "interaction-isolation-session", jobId: "interaction-isolation-job" });
+      registry.registerJob({
+        sessionId: "interaction-isolation-session",
+        jobId: "interaction-isolation-job"
+      });
       const pending = registry.waitForApproval({
         sessionId: "interaction-isolation-session",
         jobId: "interaction-isolation-job",
@@ -339,10 +369,12 @@ describe("isolation", () => {
       });
       await expect(pending).resolves.toBe(false);
       expect(snapshotTree(legacyRoot)).toEqual(before);
-      expect(getRuntimeSettings({ ...temp.env, MAGI_INTERACTION_TIMEOUT_MS: "10" }).controlPort)
-        .toBe(DEFAULT_CONTROL_PORT);
-      expect(getRuntimeSettings({ ...temp.env, CLAUDE_INTERACTION_TIMEOUT_MS: "10" }).controlPort)
-        .toBe(DEFAULT_CONTROL_PORT);
+      expect(
+        getRuntimeSettings({ ...temp.env, MAGI_INTERACTION_TIMEOUT_MS: "10" }).controlPort
+      ).toBe(DEFAULT_CONTROL_PORT);
+      expect(
+        getRuntimeSettings({ ...temp.env, CLAUDE_INTERACTION_TIMEOUT_MS: "10" }).controlPort
+      ).toBe(DEFAULT_CONTROL_PORT);
     } finally {
       registry.close();
     }

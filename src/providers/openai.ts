@@ -18,7 +18,12 @@ export class OpenAiAdapter implements ProviderAdapter {
   private readonly env: NodeJS.ProcessEnv;
   private readonly fetchImpl: FetchLike;
 
-  constructor(input: { name: string; config: ProviderConfig; env?: NodeJS.ProcessEnv; fetchImpl?: FetchLike }) {
+  constructor(input: {
+    name: string;
+    config: ProviderConfig;
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: FetchLike;
+  }) {
     this.name = input.name;
     this.config = input.config;
     this.env = input.env ?? process.env;
@@ -29,15 +34,22 @@ export class OpenAiAdapter implements ProviderAdapter {
     const apiKey = getApiKey(this.name, this.config, this.env);
     const endpoint = this.config.endpoint ?? "chat";
     const baseUrl = normalizeBaseUrl(this.config.baseUrl ?? "https://api.openai.com/v1");
-    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`, {
-      method: "POST",
-      signal: request.signal,
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(endpoint === "responses" ? toResponsesBody(request) : toChatBody(request))
-    });
+    const response = await fetchProvider(
+      this.name,
+      this.fetchImpl,
+      `${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(
+          endpoint === "responses" ? toResponsesBody(request) : toChatBody(request)
+        )
+      }
+    );
 
     if (!response.ok) {
       throw providerErrorFromResponse(this.name, response);
@@ -55,15 +67,24 @@ export class OpenAiAdapter implements ProviderAdapter {
     const apiKey = getApiKey(this.name, this.config, this.env);
     const endpoint = this.config.endpoint ?? "chat";
     const baseUrl = normalizeBaseUrl(this.config.baseUrl ?? "https://api.openai.com/v1");
-    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`, {
-      method: "POST",
-      signal: request.signal,
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(endpoint === "responses" ? toStreamingResponsesBody(request) : toStreamingChatBody(request))
-    });
+    const response = await fetchProvider(
+      this.name,
+      this.fetchImpl,
+      `${baseUrl}/${endpoint === "responses" ? "responses" : "chat/completions"}`,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(
+          endpoint === "responses"
+            ? toStreamingResponsesBody(request)
+            : toStreamingChatBody(request)
+        )
+      }
+    );
 
     if (!response.ok) {
       throw providerErrorFromResponse(this.name, response);
@@ -213,7 +234,7 @@ function toChatMessage(message: MagiMessage): Record<string, unknown> {
     if (toolUses.length > 0) {
       const text = message.content
         .filter((part) => part.type === "text")
-        .map((part) => part.type === "text" ? part.text : "")
+        .map((part) => (part.type === "text" ? part.text : ""))
         .join("");
       return {
         role: "assistant",
@@ -242,7 +263,7 @@ function toChatMessage(message: MagiMessage): Record<string, unknown> {
         parts.push({ type: "text", text: part.text });
       }
     }
-    if (parts.some(p => p.type === "image_url")) {
+    if (parts.some((p) => p.type === "image_url")) {
       return { role: message.role, content: parts };
     }
   }
@@ -254,11 +275,17 @@ function toChatMessage(message: MagiMessage): Record<string, unknown> {
 
 function parseChatResult(data: unknown): ProviderResponse {
   if (!isRecord(data)) {
-    throw new ProviderError("OpenAI chat response must be an object", { kind: "bad-request", retryable: false });
+    throw new ProviderError("OpenAI chat response must be an object", {
+      kind: "bad-request",
+      retryable: false
+    });
   }
   const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
   const text = isRecord(choice) && isRecord(choice.message) ? readMessageText(choice.message) : "";
-  const toolUses = isRecord(choice) && isRecord(choice.message) ? readOpenAiToolUses(choice.message.tool_calls) : [];
+  const toolUses =
+    isRecord(choice) && isRecord(choice.message)
+      ? readOpenAiToolUses(choice.message.tool_calls)
+      : [];
   return {
     text,
     toolUses,
@@ -288,31 +315,37 @@ function readContentText(content: unknown): string {
   if (!Array.isArray(content)) {
     return "";
   }
-  return content.map((part) => {
-    if (typeof part === "string") {
-      return part;
-    }
-    if (!isRecord(part)) {
+  return content
+    .map((part) => {
+      if (typeof part === "string") {
+        return part;
+      }
+      if (!isRecord(part)) {
+        return "";
+      }
+      if (typeof part.text === "string") {
+        return part.text;
+      }
+      if (typeof part.content === "string") {
+        return part.content;
+      }
+      if (isRecord(part.text) && typeof part.text.value === "string") {
+        return part.text.value;
+      }
       return "";
-    }
-    if (typeof part.text === "string") {
-      return part.text;
-    }
-    if (typeof part.content === "string") {
-      return part.content;
-    }
-    if (isRecord(part.text) && typeof part.text.value === "string") {
-      return part.text.value;
-    }
-    return "";
-  }).join("");
+    })
+    .join("");
 }
 
 function parseResponsesResult(data: unknown): ProviderResponse {
   if (!isRecord(data)) {
-    throw new ProviderError("OpenAI responses result must be an object", { kind: "bad-request", retryable: false });
+    throw new ProviderError("OpenAI responses result must be an object", {
+      kind: "bad-request",
+      retryable: false
+    });
   }
-  const text = typeof data.output_text === "string" ? data.output_text : readResponsesOutputText(data);
+  const text =
+    typeof data.output_text === "string" ? data.output_text : readResponsesOutputText(data);
   return {
     text,
     toolUses: readResponsesToolUses(data),
@@ -336,15 +369,21 @@ function readOpenAiToolUses(value: unknown): MagiToolUsePart[] {
     return [];
   }
   return value.flatMap((toolCall): MagiToolUsePart[] => {
-    if (!isRecord(toolCall) || !isRecord(toolCall.function) || typeof toolCall.function.name !== "string") {
+    if (
+      !isRecord(toolCall) ||
+      !isRecord(toolCall.function) ||
+      typeof toolCall.function.name !== "string"
+    ) {
       return [];
     }
-    return [{
-      type: "tool-use",
-      id: typeof toolCall.id === "string" ? toolCall.id : toolCall.function.name,
-      name: toolCall.function.name,
-      input: parseToolInput(toolCall.function.arguments)
-    }];
+    return [
+      {
+        type: "tool-use",
+        id: typeof toolCall.id === "string" ? toolCall.id : toolCall.function.name,
+        name: toolCall.function.name,
+        input: parseToolInput(toolCall.function.arguments)
+      }
+    ];
   });
 }
 
@@ -356,12 +395,14 @@ function readResponsesToolUses(data: Record<string, unknown>): MagiToolUsePart[]
     if (!isRecord(item) || item.type !== "function_call" || typeof item.name !== "string") {
       return [];
     }
-    return [{
-      type: "tool-use",
-      id: typeof item.call_id === "string" ? item.call_id : item.name,
-      name: item.name,
-      input: parseToolInput(item.arguments)
-    }];
+    return [
+      {
+        type: "tool-use",
+        id: typeof item.call_id === "string" ? item.call_id : item.name,
+        name: item.name,
+        input: parseToolInput(item.arguments)
+      }
+    ];
   });
 }
 
@@ -397,19 +438,23 @@ function mergeOpenAiToolCallDeltas(
   }
 }
 
-function toolUsesFromOpenAiStream(toolCalls: Map<number, { id?: string; name?: string; arguments: string }>): MagiToolUsePart[] {
+function toolUsesFromOpenAiStream(
+  toolCalls: Map<number, { id?: string; name?: string; arguments: string }>
+): MagiToolUsePart[] {
   return [...toolCalls.entries()]
     .sort(([left], [right]) => left - right)
     .flatMap(([, toolCall]): MagiToolUsePart[] => {
       if (!toolCall.name) {
         return [];
       }
-      return [{
-        type: "tool-use",
-        id: toolCall.id ?? toolCall.name,
-        name: toolCall.name,
-        input: parseToolInput(toolCall.arguments)
-      }];
+      return [
+        {
+          type: "tool-use",
+          id: toolCall.id ?? toolCall.name,
+          name: toolCall.name,
+          input: parseToolInput(toolCall.arguments)
+        }
+      ];
     });
 }
 
@@ -456,7 +501,8 @@ function readUsage(data: unknown): { inputTokens: number; outputTokens: number }
     return undefined;
   }
   const inputTokens = readNumber(data.usage.prompt_tokens) ?? readNumber(data.usage.input_tokens);
-  const outputTokens = readNumber(data.usage.completion_tokens) ?? readNumber(data.usage.output_tokens);
+  const outputTokens =
+    readNumber(data.usage.completion_tokens) ?? readNumber(data.usage.output_tokens);
   if (inputTokens === undefined || outputTokens === undefined) {
     return undefined;
   }

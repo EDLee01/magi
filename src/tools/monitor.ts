@@ -73,8 +73,10 @@ export function formatMonitorResult(data: MonitorResult, scope: MonitorScope): s
   const lines: string[] = [];
 
   lines.push(`CPU cores: ${data.cpus}`);
-  lines.push(`Load avg (1/5/15m): ${data.loadAvg.map(v => v.toFixed(2)).join(", ")}`);
-  lines.push(`Memory: ${formatBytes(data.memoryUsed)} / ${formatBytes(data.memoryTotal)} (${data.memoryPercent}%)`);
+  lines.push(`Load avg (1/5/15m): ${data.loadAvg.map((v) => v.toFixed(2)).join(", ")}`);
+  lines.push(
+    `Memory: ${formatBytes(data.memoryUsed)} / ${formatBytes(data.memoryTotal)} (${data.memoryPercent}%)`
+  );
   lines.push(`Free disk (/): ${data.freeDiskPercent}`);
 
   if (scope === "full") {

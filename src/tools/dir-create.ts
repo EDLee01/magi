@@ -2,9 +2,16 @@ import { mkdirSync } from "node:fs";
 import { resolveWorkspacePath } from "./workspace.js";
 import { ToolError } from "./errors.js";
 
-export interface DirCreateResult { path: string }
+export interface DirCreateResult {
+  path: string;
+}
 
-export const DirCreateInputSchema = { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } satisfies Record<string, unknown>;
+export const DirCreateInputSchema = {
+  type: "object",
+  properties: { path: { type: "string" } },
+  required: ["path"],
+  additionalProperties: false
+} satisfies Record<string, unknown>;
 
 export function parseDirCreateInput(input: Record<string, unknown>): { path: string } {
   const p = typeof input.path === "string" ? input.path : "";

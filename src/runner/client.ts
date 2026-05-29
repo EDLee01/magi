@@ -50,15 +50,20 @@ export class RunnerClient {
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly lines: readline.Interface;
   private nextId = 1;
-  private readonly pending = new Map<number, {
-    resolve: (value: unknown) => void;
-    reject: (reason: unknown) => void;
-  }>();
+  private readonly pending = new Map<
+    number,
+    {
+      resolve: (value: unknown) => void;
+      reject: (reason: unknown) => void;
+    }
+  >();
 
-  constructor(private readonly input: {
-    command: RunnerCommand;
-    env?: NodeJS.ProcessEnv;
-  }) {
+  constructor(
+    private readonly input: {
+      command: RunnerCommand;
+      env?: NodeJS.ProcessEnv;
+    }
+  ) {
     this.child = spawn(input.command.command, input.command.args, {
       env: { ...process.env, ...input.env },
       stdio: ["pipe", "pipe", "pipe"]
@@ -73,14 +78,20 @@ export class RunnerClient {
 
   async initialize(): Promise<RunnerInitializeResult> {
     const result = await this.request("initialize", {});
-    if (!isRecord(result) || typeof result.runner !== "string" || typeof result.version !== "string") {
+    if (
+      !isRecord(result) ||
+      typeof result.runner !== "string" ||
+      typeof result.version !== "string"
+    ) {
       throw new MagiUsageError("magi-runner initialize returned an invalid response");
     }
     return {
       runner: result.runner,
       version: result.version,
       capabilities: Array.isArray(result.capabilities)
-        ? result.capabilities.filter((capability): capability is string => typeof capability === "string")
+        ? result.capabilities.filter(
+            (capability): capability is string => typeof capability === "string"
+          )
         : []
     };
   }
@@ -119,7 +130,12 @@ export class RunnerClient {
 
   async ptySmoke(): Promise<RunnerPtySmokeResult> {
     const result = await this.request("pty.smoke", {});
-    if (!isRecord(result) || typeof result.ok !== "boolean" || typeof result.stdout !== "string" || typeof result.stderr !== "string") {
+    if (
+      !isRecord(result) ||
+      typeof result.ok !== "boolean" ||
+      typeof result.stdout !== "string" ||
+      typeof result.stderr !== "string"
+    ) {
       throw new MagiUsageError("magi-runner pty.smoke returned an invalid response");
     }
     return {
@@ -226,22 +242,26 @@ function readJsonRpcError(value: unknown): string {
 }
 
 function isRunnerProcessResult(value: unknown): value is RunnerProcessResult {
-  return isRecord(value)
-    && typeof value.command === "string"
-    && typeof value.cwd === "string"
-    && (typeof value.exitCode === "number" || value.exitCode === null)
-    && typeof value.stdout === "string"
-    && typeof value.stderr === "string"
-    && typeof value.timedOut === "boolean";
+  return (
+    isRecord(value) &&
+    typeof value.command === "string" &&
+    typeof value.cwd === "string" &&
+    (typeof value.exitCode === "number" || value.exitCode === null) &&
+    typeof value.stdout === "string" &&
+    typeof value.stderr === "string" &&
+    typeof value.timedOut === "boolean"
+  );
 }
 
 function isRunnerApplyPatchResult(value: unknown): value is RunnerApplyPatchResult {
-  return isRecord(value)
-    && typeof value.path === "string"
-    && typeof value.diff === "string"
-    && value.approved === true
-    && isRecord(value.auditEvent)
-    && typeof value.auditEvent.action === "string"
-    && (typeof value.auditEvent.target === "string" || value.auditEvent.target === undefined)
-    && (isRecord(value.auditEvent.metadata) || value.auditEvent.metadata === undefined);
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.diff === "string" &&
+    value.approved === true &&
+    isRecord(value.auditEvent) &&
+    typeof value.auditEvent.action === "string" &&
+    (typeof value.auditEvent.target === "string" || value.auditEvent.target === undefined) &&
+    (isRecord(value.auditEvent.metadata) || value.auditEvent.metadata === undefined)
+  );
 }

@@ -37,16 +37,20 @@ export interface MemoryDraftRecord {
   createdAt: string;
 }
 
-export function proposeMemoryDraft(input: MemoryRootOptions & {
-  targetFile: string;
-  content: string;
-  reason: string;
-  sourceSession?: string;
-  confidence?: number;
-  id?: string;
-}): MemoryDraft {
+export function proposeMemoryDraft(
+  input: MemoryRootOptions & {
+    targetFile: string;
+    content: string;
+    reason: string;
+    sourceSession?: string;
+    confidence?: number;
+    id?: string;
+  }
+): MemoryDraft {
   if (!isMemoryContentSafe(input.content)) {
-    throw new Error("Memory Draft rejected because it appears to contain a secret, token, password, or API key");
+    throw new Error(
+      "Memory Draft rejected because it appears to contain a secret, token, password, or API key"
+    );
   }
   const root = ensureMemoryStructure(input);
   resolveMemoryFilePath(root, input.targetFile);
@@ -88,13 +92,15 @@ export function listDrafts(input: MemoryRootOptions): MemoryDraftRecord[] {
       try {
         if (!statSync(file).isFile()) return [];
         const draft = readDraftFile(file);
-        return [{
-          id: draft.id,
-          path: file,
-          status: draft.status,
-          targetFile: draft.targetFile,
-          createdAt: draft.createdAt
-        }];
+        return [
+          {
+            id: draft.id,
+            path: file,
+            status: draft.status,
+            targetFile: draft.targetFile,
+            createdAt: draft.createdAt
+          }
+        ];
       } catch {
         return [];
       }
@@ -169,7 +175,9 @@ export function formatDraftReview(input: MemoryRootOptions & { id: string }): st
     "",
     `Apply: magi memory draft apply ${draft.id}`,
     `Reject: magi memory draft reject ${draft.id}`
-  ].filter((line): line is string => line !== undefined).join("\n");
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }
 
 function draftFilePath(root: string, id: string): string {
@@ -187,6 +195,9 @@ function readDraftFile(file: string): MemoryDraft {
 }
 
 function createDraftId(): string {
-  const stamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:T.Z]/g, "")
+    .slice(0, 14);
   return `patch_${stamp}_${randomUUID().slice(0, 8)}`;
 }

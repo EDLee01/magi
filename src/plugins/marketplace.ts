@@ -24,7 +24,10 @@ export interface MarketplaceRecord {
   entries: MarketplaceEntry[];
 }
 
-export function loadMarketplaceSource(value: unknown, source = "marketplace source"): MarketplaceSource {
+export function loadMarketplaceSource(
+  value: unknown,
+  source = "marketplace source"
+): MarketplaceSource {
   if (!isRecord(value)) {
     throw new MagiConfigError(`Invalid ${source}: source must be an object`);
   }
@@ -47,7 +50,9 @@ export function listMarketplaceSources(paths: MagiPaths): MarketplaceSource[] {
   return entries
     .filter((entry) => entry.endsWith(".json"))
     .sort()
-    .map((entry) => loadMarketplaceSource(JSON.parse(readFileSync(path.join(dir, entry), "utf8")), entry));
+    .map((entry) =>
+      loadMarketplaceSource(JSON.parse(readFileSync(path.join(dir, entry), "utf8")), entry)
+    );
 }
 
 export function loadMarketplace(source: MarketplaceSource): MarketplaceRecord {
@@ -61,7 +66,9 @@ export function loadMarketplace(source: MarketplaceSource): MarketplaceRecord {
   }
   return {
     source,
-    entries: parsed.plugins.map((entry, index) => validateMarketplaceEntry(entry, `${file}:plugins.${index}`, source.name))
+    entries: parsed.plugins.map((entry, index) =>
+      validateMarketplaceEntry(entry, `${file}:plugins.${index}`, source.name)
+    )
   };
 }
 
@@ -100,7 +107,11 @@ export function formatMarketplaces(records: MarketplaceRecord[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-function validateMarketplaceEntry(value: unknown, source: string, sourceName: string): MarketplaceEntry {
+function validateMarketplaceEntry(
+  value: unknown,
+  source: string,
+  sourceName: string
+): MarketplaceEntry {
   if (!isRecord(value)) {
     throw new MagiConfigError(`Invalid marketplace entry at ${source}: entry must be an object`);
   }
@@ -108,7 +119,10 @@ function validateMarketplaceEntry(value: unknown, source: string, sourceName: st
     name: readString(value.name, "name", source),
     version: readString(value.version, "version", source),
     source: readString(value.source, "source", source),
-    description: value.description === undefined ? undefined : readString(value.description, "description", source)
+    description:
+      value.description === undefined
+        ? undefined
+        : readString(value.description, "description", source)
   };
 }
 

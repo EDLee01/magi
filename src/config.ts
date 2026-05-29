@@ -156,24 +156,30 @@ export function loadConfig(paths: MagiPaths, env: NodeJS.ProcessEnv = process.en
     parsed = YAML.parse(raw);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new MagiConfigError([
-      `Could not parse ${paths.configFile} as YAML.`,
-      "",
-      `  ${detail}`,
-      "",
-      "Common fixes:",
-      "  - Check indentation (YAML uses spaces, not tabs)",
-      "  - Quote strings with special chars (URLs with :, etc)",
-      "  - Make sure list items start with `- `",
-      "",
-      "Run 'magi config' to see the resolved config (or 'magi doctor' for paths)."
-    ].join("\n"));
+    throw new MagiConfigError(
+      [
+        `Could not parse ${paths.configFile} as YAML.`,
+        "",
+        `  ${detail}`,
+        "",
+        "Common fixes:",
+        "  - Check indentation (YAML uses spaces, not tabs)",
+        "  - Quote strings with special chars (URLs with :, etc)",
+        "  - Make sure list items start with `- `",
+        "",
+        "Run 'magi config' to see the resolved config (or 'magi doctor' for paths)."
+      ].join("\n")
+    );
   }
 
   return validateConfig(parsed, paths.configFile, env);
 }
 
-export function validateConfig(value: unknown, configFile: string, env: NodeJS.ProcessEnv = process.env): MagiConfig {
+export function validateConfig(
+  value: unknown,
+  configFile: string,
+  env: NodeJS.ProcessEnv = process.env
+): MagiConfig {
   if (!isRecord(value)) {
     throw new MagiConfigError(`Invalid Magi config at ${configFile}: root value must be a mapping`);
   }
@@ -200,7 +206,9 @@ export function validateConfig(value: unknown, configFile: string, env: NodeJS.P
   const providers: Record<string, ProviderConfig> = {};
   for (const [name, rawProvider] of Object.entries(providersValue)) {
     if (!isRecord(rawProvider)) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: providers.${name} must be a mapping`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: providers.${name} must be a mapping`
+      );
     }
 
     const type = rawProvider.type;
@@ -210,24 +218,52 @@ export function validateConfig(value: unknown, configFile: string, env: NodeJS.P
       );
     }
 
-    const apiKeyEnv = readOptionalString(rawProvider.apiKeyEnv, `providers.${name}.apiKeyEnv`, configFile);
+    const apiKeyEnv = readOptionalString(
+      rawProvider.apiKeyEnv,
+      `providers.${name}.apiKeyEnv`,
+      configFile
+    );
 
-    const baseUrl = readOptionalString(rawProvider.baseUrl, `providers.${name}.baseUrl`, configFile);
+    const baseUrl = readOptionalString(
+      rawProvider.baseUrl,
+      `providers.${name}.baseUrl`,
+      configFile
+    );
     if (baseUrl !== undefined) {
       validateUrl(baseUrl, `providers.${name}.baseUrl`, configFile);
     }
     if (type === "messages-compatible" && baseUrl === undefined) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: providers.${name}.baseUrl is required`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: providers.${name}.baseUrl is required`
+      );
     }
 
-    const defaultModel = readOptionalString(rawProvider.defaultModel, `providers.${name}.defaultModel`, configFile);
+    const defaultModel = readOptionalString(
+      rawProvider.defaultModel,
+      `providers.${name}.defaultModel`,
+      configFile
+    );
     if (type === "messages-compatible" && defaultModel === undefined) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: providers.${name}.defaultModel is required`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: providers.${name}.defaultModel is required`
+      );
     }
 
-    const endpoint = readOptionalEndpoint(rawProvider.endpoint, `providers.${name}.endpoint`, configFile);
-    const format = readOptionalMessagesFormat(rawProvider.format, `providers.${name}.format`, configFile);
-    const timeoutMs = readOptionalPositiveInteger(rawProvider.timeoutMs, `providers.${name}.timeoutMs`, configFile);
+    const endpoint = readOptionalEndpoint(
+      rawProvider.endpoint,
+      `providers.${name}.endpoint`,
+      configFile
+    );
+    const format = readOptionalMessagesFormat(
+      rawProvider.format,
+      `providers.${name}.format`,
+      configFile
+    );
+    const timeoutMs = readOptionalPositiveInteger(
+      rawProvider.timeoutMs,
+      `providers.${name}.timeoutMs`,
+      configFile
+    );
 
     providers[name] = {
       type,
@@ -243,7 +279,9 @@ export function validateConfig(value: unknown, configFile: string, env: NodeJS.P
   const aliases: Record<string, string> = {};
   for (const [alias, target] of Object.entries(aliasesValue)) {
     if (!alias.trim()) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: model alias names must not be empty`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: model alias names must not be empty`
+      );
     }
     if (typeof target !== "string" || !target.trim()) {
       throw new MagiConfigError(
@@ -256,10 +294,14 @@ export function validateConfig(value: unknown, configFile: string, env: NodeJS.P
   const fallbacks: Record<string, string[]> = {};
   for (const [alias, rawList] of Object.entries(fallbacksValue)) {
     if (!alias.trim()) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: fallback names must not be empty`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: fallback names must not be empty`
+      );
     }
     if (!Array.isArray(rawList)) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: models.fallbacks.${alias} must be a list`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: models.fallbacks.${alias} must be a list`
+      );
     }
     fallbacks[alias] = rawList.map((target, index) => {
       if (typeof target !== "string" || !target.trim()) {
@@ -274,25 +316,40 @@ export function validateConfig(value: unknown, configFile: string, env: NodeJS.P
   const mcpServers: Record<string, McpServerConfig> = {};
   for (const [name, rawServer] of Object.entries(mcpServersValue)) {
     if (!isRecord(rawServer)) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: mcp.servers.${name} must be a mapping`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: mcp.servers.${name} must be a mapping`
+      );
     }
-    const transport = readMcpTransport(rawServer.transport, `mcp.servers.${name}.transport`, configFile);
+    const transport = readMcpTransport(
+      rawServer.transport,
+      `mcp.servers.${name}.transport`,
+      configFile
+    );
     const command = readString(rawServer.command, `mcp.servers.${name}.command`, configFile, "");
     const args = readStringList(rawServer.args, `mcp.servers.${name}.args`, configFile);
     const url = readOptionalString(rawServer.url, `mcp.servers.${name}.url`, configFile);
-    const headers = readOptionalPlainStringMap(rawServer.headers, `mcp.servers.${name}.headers`, configFile);
+    const headers = readOptionalPlainStringMap(
+      rawServer.headers,
+      `mcp.servers.${name}.headers`,
+      configFile
+    );
     const serverEnv = readStringMap(rawServer.env, `mcp.servers.${name}.env`, configFile);
     if (transport === "stdio" && !command) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: mcp.servers.${name}.command is required`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: mcp.servers.${name}.command is required`
+      );
     }
     if (transport !== "stdio") {
       if (!url) {
-        throw new MagiConfigError(`Invalid Magi config at ${configFile}: mcp.servers.${name}.url is required`);
+        throw new MagiConfigError(
+          `Invalid Magi config at ${configFile}: mcp.servers.${name}.url is required`
+        );
       }
       validateMcpUrl(url, `mcp.servers.${name}.url`, configFile, transport);
     }
     mcpServers[name] = {
-      transport: rawServer.transport === undefined || rawServer.transport === null ? undefined : transport,
+      transport:
+        rawServer.transport === undefined || rawServer.transport === null ? undefined : transport,
       command,
       args,
       url,
@@ -304,18 +361,29 @@ export function validateConfig(value: unknown, configFile: string, env: NodeJS.P
   }
   const hooks = readHooks(hooksValue, "hooks", configFile);
   const context = {
-    recentMessages: readOptionalPositiveInteger(contextValue.recentMessages, "context.recentMessages", configFile) ?? 6,
-    autoCompactTokenThreshold: readOptionalPositiveInteger(
-      contextValue.autoCompactTokenThreshold,
-      "context.autoCompactTokenThreshold",
+    recentMessages:
+      readOptionalPositiveInteger(
+        contextValue.recentMessages,
+        "context.recentMessages",
+        configFile
+      ) ?? 6,
+    autoCompactTokenThreshold:
+      readOptionalPositiveInteger(
+        contextValue.autoCompactTokenThreshold,
+        "context.autoCompactTokenThreshold",
+        configFile
+      ) ?? 150_000, // Default: compact at 150k estimated tokens (~75% of 200k context)
+    autoCompactMessageThreshold:
+      readOptionalPositiveInteger(
+        contextValue.autoCompactMessageThreshold,
+        "context.autoCompactMessageThreshold",
+        configFile
+      ) ?? 80, // Default: compact after 80 messages — quality drops well before context fills.
+    compactionModel: readOptionalString(
+      contextValue.compactionModel,
+      "context.compactionModel",
       configFile
-    ) ?? 150_000, // Default: compact at 150k estimated tokens (~75% of 200k context)
-    autoCompactMessageThreshold: readOptionalPositiveInteger(
-      contextValue.autoCompactMessageThreshold,
-      "context.autoCompactMessageThreshold",
-      configFile
-    ) ?? 80, // Default: compact after 80 messages — quality drops well before context fills.
-    compactionModel: readOptionalString(contextValue.compactionModel, "context.compactionModel", configFile)
+    )
   };
   const routerValue = optionalRecord(modelsValue.router, "models.router", configFile);
   const router = readRouterConfig(routerValue, configFile);
@@ -339,7 +407,11 @@ export function formatConfig(config: MagiConfig): string {
   return YAML.stringify(config);
 }
 
-function optionalRecord(value: unknown, field: string, configFile: string): Record<string, unknown> {
+function optionalRecord(
+  value: unknown,
+  field: string,
+  configFile: string
+): Record<string, unknown> {
   if (value === undefined || value === null) {
     return {};
   }
@@ -354,7 +426,9 @@ function readString(value: unknown, field: string, configFile: string, fallback:
     return fallback;
   }
   if (typeof value !== "string" || !value.trim()) {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be a non-empty string`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be a non-empty string`
+    );
   }
   return value;
 }
@@ -364,7 +438,9 @@ function readOptionalString(value: unknown, field: string, configFile: string): 
     return undefined;
   }
   if (typeof value !== "string" || !value.trim()) {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be a non-empty string`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be a non-empty string`
+    );
   }
   return value;
 }
@@ -374,7 +450,9 @@ function readPort(value: unknown, field: string, configFile: string, fallback: n
     return fallback;
   }
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 65535) {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be an integer from 1 to 65535`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be an integer from 1 to 65535`
+    );
   }
   return value;
 }
@@ -388,7 +466,9 @@ function readStringList(value: unknown, field: string, configFile: string): stri
   }
   return value.map((item, index) => {
     if (typeof item !== "string") {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index} must be a string`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: ${field}.${index} must be a string`
+      );
     }
     return item;
   });
@@ -399,17 +479,25 @@ function readStringMap(value: unknown, field: string, configFile: string): Recor
   const result: Record<string, string> = {};
   for (const [key, item] of Object.entries(record)) {
     if (typeof item !== "string") {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${key} must be a string`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: ${field}.${key} must be a string`
+      );
     }
     if (!key.startsWith("MAGI_")) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${key} must use MAGI_*`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: ${field}.${key} must use MAGI_*`
+      );
     }
     result[key] = item;
   }
   return result;
 }
 
-function readOptionalPlainStringMap(value: unknown, field: string, configFile: string): Record<string, string> | undefined {
+function readOptionalPlainStringMap(
+  value: unknown,
+  field: string,
+  configFile: string
+): Record<string, string> | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
@@ -417,24 +505,36 @@ function readOptionalPlainStringMap(value: unknown, field: string, configFile: s
   const result: Record<string, string> = {};
   for (const [key, item] of Object.entries(record)) {
     if (typeof item !== "string") {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${key} must be a string`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: ${field}.${key} must be a string`
+      );
     }
     result[key] = item;
   }
   return result;
 }
 
-function readApproval(value: unknown, field: string, configFile: string): "always" | "dangerous" | "never" {
+function readApproval(
+  value: unknown,
+  field: string,
+  configFile: string
+): "always" | "dangerous" | "never" {
   if (value === undefined || value === null) {
     return "dangerous";
   }
   if (value !== "always" && value !== "dangerous" && value !== "never") {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be always, dangerous, or never`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be always, dangerous, or never`
+    );
   }
   return value;
 }
 
-function readOptionalMcpOAuth(value: unknown, field: string, configFile: string): McpOAuthConfig | undefined {
+function readOptionalMcpOAuth(
+  value: unknown,
+  field: string,
+  configFile: string
+): McpOAuthConfig | undefined {
   if (value === undefined || value === null) return undefined;
   if (!isRecord(value)) {
     throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be a mapping`);
@@ -447,12 +547,24 @@ function readOptionalMcpOAuth(value: unknown, field: string, configFile: string)
   };
 }
 
-function readMcpTransport(value: unknown, field: string, configFile: string): "stdio" | "http" | "sse" | "websocket" | "websocket-ide" {
+function readMcpTransport(
+  value: unknown,
+  field: string,
+  configFile: string
+): "stdio" | "http" | "sse" | "websocket" | "websocket-ide" {
   if (value === undefined || value === null) {
     return "stdio";
   }
-  if (value !== "stdio" && value !== "http" && value !== "sse" && value !== "websocket" && value !== "websocket-ide") {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be stdio, http, sse, websocket, or websocket-ide`);
+  if (
+    value !== "stdio" &&
+    value !== "http" &&
+    value !== "sse" &&
+    value !== "websocket" &&
+    value !== "websocket-ide"
+  ) {
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be stdio, http, sse, websocket, or websocket-ide`
+    );
   }
   return value;
 }
@@ -463,7 +575,9 @@ function readHooks(value: unknown, field: string, configFile: string): HookDefin
   }
   return value.map((item, index) => {
     if (!isRecord(item)) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index} must be a mapping`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: ${field}.${index} must be a mapping`
+      );
     }
     const event = readHookEvent(item.event, `${field}.${index}.event`, configFile);
     const type = readHookType(item.type, `${field}.${index}.type`, configFile);
@@ -476,25 +590,41 @@ function readHooks(value: unknown, field: string, configFile: string): HookDefin
       model: readOptionalString(item.model, `${field}.${index}.model`, configFile),
       url: readOptionalString(item.url, `${field}.${index}.url`, configFile),
       headers: readOptionalPlainStringMap(item.headers, `${field}.${index}.headers`, configFile),
-      allowedEnvVars: readStringList(item.allowedEnvVars, `${field}.${index}.allowedEnvVars`, configFile),
-      timeoutMs: readOptionalPositiveInteger(item.timeoutMs ?? item.timeout, `${field}.${index}.timeoutMs`, configFile),
+      allowedEnvVars: readStringList(
+        item.allowedEnvVars,
+        `${field}.${index}.allowedEnvVars`,
+        configFile
+      ),
+      timeoutMs: readOptionalPositiveInteger(
+        item.timeoutMs ?? item.timeout,
+        `${field}.${index}.timeoutMs`,
+        configFile
+      ),
       once: readOptionalBoolean(item.once, `${field}.${index}.once`, configFile),
       blocking: readOptionalBoolean(item.blocking, `${field}.${index}.blocking`, configFile)
     };
     if (type === "command" && !hook.command) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index}.command is required`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: ${field}.${index}.command is required`
+      );
     }
     if (type === "prompt") {
       if (!hook.prompt) {
-        throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index}.prompt is required`);
+        throw new MagiConfigError(
+          `Invalid Magi config at ${configFile}: ${field}.${index}.prompt is required`
+        );
       }
       if (!hook.model) {
-        throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index}.model is required`);
+        throw new MagiConfigError(
+          `Invalid Magi config at ${configFile}: ${field}.${index}.model is required`
+        );
       }
     }
     if (type === "http") {
       if (!hook.url) {
-        throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index}.url is required`);
+        throw new MagiConfigError(
+          `Invalid Magi config at ${configFile}: ${field}.${index}.url is required`
+        );
       }
       validateUrl(hook.url, `${field}.${index}.url`, configFile);
     }
@@ -508,12 +638,15 @@ function readWebSearchConfig(
   env: NodeJS.ProcessEnv
 ): WebSearchConfig {
   const providerRaw = readOptionalString(value.provider, "webSearch.provider", configFile);
-  const endpoint = readOptionalString(value.endpoint, "webSearch.endpoint", configFile)
-    ?? readOptionalString(env.MAGI_WEBSEARCH_ENDPOINT, "MAGI_WEBSEARCH_ENDPOINT", configFile);
+  const endpoint =
+    readOptionalString(value.endpoint, "webSearch.endpoint", configFile) ??
+    readOptionalString(env.MAGI_WEBSEARCH_ENDPOINT, "MAGI_WEBSEARCH_ENDPOINT", configFile);
   let provider: "http-json" | undefined;
   if (providerRaw !== undefined) {
     if (providerRaw !== "http-json") {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: webSearch.provider must be http-json`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: webSearch.provider must be http-json`
+      );
     }
     provider = providerRaw;
   } else if (endpoint !== undefined) {
@@ -523,8 +656,9 @@ function readWebSearchConfig(
     validateUrl(endpoint, "webSearch.endpoint", configFile);
   }
 
-  const apiKeyEnv = readOptionalString(value.apiKeyEnv, "webSearch.apiKeyEnv", configFile)
-    ?? readOptionalString(env.MAGI_WEBSEARCH_API_KEY_ENV, "MAGI_WEBSEARCH_API_KEY_ENV", configFile);
+  const apiKeyEnv =
+    readOptionalString(value.apiKeyEnv, "webSearch.apiKeyEnv", configFile) ??
+    readOptionalString(env.MAGI_WEBSEARCH_API_KEY_ENV, "MAGI_WEBSEARCH_API_KEY_ENV", configFile);
 
   return {
     provider,
@@ -532,14 +666,18 @@ function readWebSearchConfig(
     apiKeyEnv,
     locale: readOptionalString(value.locale, "webSearch.locale", configFile) ?? "zh-CN",
     market: readOptionalString(value.market, "webSearch.market", configFile) ?? "CN",
-    mainlandBoost: readOptionalBoolean(value.mainlandBoost, "webSearch.mainlandBoost", configFile) ?? true,
+    mainlandBoost:
+      readOptionalBoolean(value.mainlandBoost, "webSearch.mainlandBoost", configFile) ?? true,
     queryParam: readOptionalString(value.queryParam, "webSearch.queryParam", configFile) ?? "q",
     apiKeyHeader: readOptionalString(value.apiKeyHeader, "webSearch.apiKeyHeader", configFile),
-    resultsPath: readOptionalString(value.resultsPath, "webSearch.resultsPath", configFile) ?? "results",
+    resultsPath:
+      readOptionalString(value.resultsPath, "webSearch.resultsPath", configFile) ?? "results",
     titlePath: readOptionalString(value.titlePath, "webSearch.titlePath", configFile) ?? "title",
     urlPath: readOptionalString(value.urlPath, "webSearch.urlPath", configFile) ?? "url",
-    snippetPath: readOptionalString(value.snippetPath, "webSearch.snippetPath", configFile) ?? "snippet",
-    maxResults: readOptionalPositiveInteger(value.maxResults, "webSearch.maxResults", configFile) ?? 10
+    snippetPath:
+      readOptionalString(value.snippetPath, "webSearch.snippetPath", configFile) ?? "snippet",
+    maxResults:
+      readOptionalPositiveInteger(value.maxResults, "webSearch.maxResults", configFile) ?? 10
   };
 }
 
@@ -554,17 +692,27 @@ function readMemoryConfig(value: Record<string, unknown>, configFile: string): M
   };
 }
 
-function readMemoryAutoWrite(value: unknown, field: string, configFile: string): "off" | "explicit" {
+function readMemoryAutoWrite(
+  value: unknown,
+  field: string,
+  configFile: string
+): "off" | "explicit" {
   if (value === undefined || value === null) {
     return "explicit";
   }
   if (value === "off" || value === "explicit") {
     return value;
   }
-  throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be off or explicit`);
+  throw new MagiConfigError(
+    `Invalid Magi config at ${configFile}: ${field} must be off or explicit`
+  );
 }
 
-function readMemoryScopes(value: unknown, field: string, configFile: string): Array<"user" | "project" | "session"> {
+function readMemoryScopes(
+  value: unknown,
+  field: string,
+  configFile: string
+): Array<"user" | "project" | "session"> {
   if (value === undefined || value === null) {
     return ["user", "project", "session"];
   }
@@ -575,54 +723,64 @@ function readMemoryScopes(value: unknown, field: string, configFile: string): Ar
     if (item === "user" || item === "project" || item === "session") {
       return item;
     }
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field}.${index} must be user, project, or session`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field}.${index} must be user, project, or session`
+    );
   });
   return scopes.length === 0 ? ["user", "project", "session"] : scopes;
 }
 
 function readHookEvent(value: unknown, field: string, configFile: string): HookEvent {
   if (
-    value === "pre_tool_use"
-    || value === "post_tool_use"
-    || value === "post_tool_use_failure"
-    || value === "session_start"
-    || value === "session_end"
-    || value === "user_prompt_submit"
-    || value === "pre_compact"
-    || value === "post_compact"
-    || value === "permission_request"
-    || value === "permission_denied"
-    || value === "subagent_start"
-    || value === "subagent_stop"
-    || value === "teammate_idle"
-    || value === "task_created"
-    || value === "task_completed"
-    || value === "elicitation"
-    || value === "elicitation_result"
-    || value === "config_change"
-    || value === "worktree_create"
-    || value === "worktree_remove"
-    || value === "instructions_loaded"
-    || value === "cwd_changed"
-    || value === "file_changed"
-    || value === "notification"
-    || value === "setup"
-    || value === "stop"
-    || value === "stop_failure"
+    value === "pre_tool_use" ||
+    value === "post_tool_use" ||
+    value === "post_tool_use_failure" ||
+    value === "session_start" ||
+    value === "session_end" ||
+    value === "user_prompt_submit" ||
+    value === "pre_compact" ||
+    value === "post_compact" ||
+    value === "permission_request" ||
+    value === "permission_denied" ||
+    value === "subagent_start" ||
+    value === "subagent_stop" ||
+    value === "teammate_idle" ||
+    value === "task_created" ||
+    value === "task_completed" ||
+    value === "elicitation" ||
+    value === "elicitation_result" ||
+    value === "config_change" ||
+    value === "worktree_create" ||
+    value === "worktree_remove" ||
+    value === "instructions_loaded" ||
+    value === "cwd_changed" ||
+    value === "file_changed" ||
+    value === "notification" ||
+    value === "setup" ||
+    value === "stop" ||
+    value === "stop_failure"
   ) {
     return value;
   }
-  throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} is not a supported hook event`);
+  throw new MagiConfigError(
+    `Invalid Magi config at ${configFile}: ${field} is not a supported hook event`
+  );
 }
 
 function readHookType(value: unknown, field: string, configFile: string): HookType {
   if (value === "command" || value === "prompt" || value === "http" || value === "agent") {
     return value;
   }
-  throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} is not a supported hook type`);
+  throw new MagiConfigError(
+    `Invalid Magi config at ${configFile}: ${field} is not a supported hook type`
+  );
 }
 
-function readOptionalBoolean(value: unknown, field: string, configFile: string): boolean | undefined {
+function readOptionalBoolean(
+  value: unknown,
+  field: string,
+  configFile: string
+): boolean | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
@@ -632,32 +790,50 @@ function readOptionalBoolean(value: unknown, field: string, configFile: string):
   return value;
 }
 
-function readOptionalEndpoint(value: unknown, field: string, configFile: string): OpenAiEndpoint | undefined {
+function readOptionalEndpoint(
+  value: unknown,
+  field: string,
+  configFile: string
+): OpenAiEndpoint | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (value !== "chat" && value !== "responses") {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be chat or responses`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be chat or responses`
+    );
   }
   return value;
 }
 
-function readOptionalMessagesFormat(value: unknown, field: string, configFile: string): MessagesCompatibleFormat | undefined {
+function readOptionalMessagesFormat(
+  value: unknown,
+  field: string,
+  configFile: string
+): MessagesCompatibleFormat | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (value !== "openai-chat" && value !== "anthropic-messages") {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be openai-chat or anthropic-messages`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be openai-chat or anthropic-messages`
+    );
   }
   return value;
 }
 
-function readOptionalPositiveInteger(value: unknown, field: string, configFile: string): number | undefined {
+function readOptionalPositiveInteger(
+  value: unknown,
+  field: string,
+  configFile: string
+): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be a positive integer`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be a positive integer`
+    );
   }
   return value;
 }
@@ -669,7 +845,9 @@ function validateUrl(value: string, field: string, configFile: string): void {
       throw new Error("unsupported protocol");
     }
   } catch {
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be an http or https URL`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be an http or https URL`
+    );
   }
 }
 
@@ -681,7 +859,11 @@ function validateMcpUrl(
 ): void {
   try {
     const url = new URL(value);
-    if ((transport === "http" || transport === "sse") && url.protocol !== "https:" && url.protocol !== "http:") {
+    if (
+      (transport === "http" || transport === "sse") &&
+      url.protocol !== "https:" &&
+      url.protocol !== "http:"
+    ) {
       throw new Error("unsupported protocol");
     }
     if (transport === "websocket" && url.protocol !== "wss:" && url.protocol !== "ws:") {
@@ -689,7 +871,9 @@ function validateMcpUrl(
     }
   } catch {
     const expected = transport === "websocket" ? "ws or wss URL" : "http or https URL";
-    throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be a ${expected}`);
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field} must be a ${expected}`
+    );
   }
 }
 
@@ -703,15 +887,34 @@ function readRouterConfig(
   const result: Record<string, import("./routing/model-router.js").ModelCapabilities> = {};
   for (const [alias, raw] of Object.entries(value)) {
     if (!isRecord(raw)) {
-      throw new MagiConfigError(`Invalid Magi config at ${configFile}: models.router.${alias} must be a mapping`);
+      throw new MagiConfigError(
+        `Invalid Magi config at ${configFile}: models.router.${alias} must be a mapping`
+      );
     }
     const family = readString(raw.family, `models.router.${alias}.family`, configFile, "unknown");
     const role = readOptionalString(raw.role, `models.router.${alias}.role`, configFile) as
-      | "haiku" | "sonnet" | "opus" | "main" | undefined;
-    const contextWindow = readOptionalPositiveInteger(raw.contextWindow, `models.router.${alias}.contextWindow`, configFile) ?? 128_000;
+      | "haiku"
+      | "sonnet"
+      | "opus"
+      | "main"
+      | undefined;
+    const contextWindow =
+      readOptionalPositiveInteger(
+        raw.contextWindow,
+        `models.router.${alias}.contextWindow`,
+        configFile
+      ) ?? 128_000;
     const supportsVision = raw.supportsVision === true;
-    const specialty = readOptionalSpecialty(raw.specialty, `models.router.${alias}.specialty`, configFile);
-    const priority = readOptionalInteger(raw.priority, `models.router.${alias}.priority`, configFile);
+    const specialty = readOptionalSpecialty(
+      raw.specialty,
+      `models.router.${alias}.specialty`,
+      configFile
+    );
+    const priority = readOptionalInteger(
+      raw.priority,
+      `models.router.${alias}.priority`,
+      configFile
+    );
     result[alias] = { family, role, contextWindow, supportsVision, specialty, priority };
   }
   return result;
@@ -728,10 +931,16 @@ function readOptionalSpecialty(
   if (value === "coding" || value === "reasoning" || value === "vision" || value === "general") {
     return value;
   }
-  throw new MagiConfigError(`Invalid Magi config at ${configFile}: ${field} must be coding, reasoning, vision, or general`);
+  throw new MagiConfigError(
+    `Invalid Magi config at ${configFile}: ${field} must be coding, reasoning, vision, or general`
+  );
 }
 
-function readOptionalInteger(value: unknown, field: string, configFile: string): number | undefined {
+function readOptionalInteger(
+  value: unknown,
+  field: string,
+  configFile: string
+): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }

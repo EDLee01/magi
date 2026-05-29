@@ -6,7 +6,9 @@ export interface SseEvent {
 
 const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
 
-export async function* readSseEvents(body: ReadableStream<Uint8Array> | null): AsyncGenerator<SseEvent> {
+export async function* readSseEvents(
+  body: ReadableStream<Uint8Array> | null
+): AsyncGenerator<SseEvent> {
   if (!body) {
     throw new Error("Provider returned no event stream body");
   }

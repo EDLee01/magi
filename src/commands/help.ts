@@ -59,7 +59,10 @@ function showCommandDetail(name: string): string {
   if (!cmd) {
     return `Unknown command: /${name}. Use /help to list all commands.`;
   }
-  const aliases = cmd.aliases && cmd.aliases.length > 0 ? ` (aliases: ${cmd.aliases.map(a => `/${a}`).join(", ")})` : "";
+  const aliases =
+    cmd.aliases && cmd.aliases.length > 0
+      ? ` (aliases: ${cmd.aliases.map((a) => `/${a}`).join(", ")})`
+      : "";
   return [
     `/${cmd.name}${aliases}`,
     `  ${cmd.description}`,

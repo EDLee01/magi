@@ -59,7 +59,12 @@ export const command = {
     lines.push(`  ${"ID".padEnd(38)} ${"Status".padEnd(10)} ${"Kind".padEnd(12)} Description`);
     for (const job of jobs) {
       const meta = (job.metadata ?? {}) as Record<string, unknown>;
-      const desc = typeof meta.description === "string" ? meta.description : (typeof meta.subagentType === "string" ? `[${meta.subagentType}]` : "");
+      const desc =
+        typeof meta.description === "string"
+          ? meta.description
+          : typeof meta.subagentType === "string"
+            ? `[${meta.subagentType}]`
+            : "";
       lines.push(`  ${job.id.padEnd(38)} ${job.status.padEnd(10)} ${job.kind.padEnd(12)} ${desc}`);
     }
     lines.push("");

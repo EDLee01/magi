@@ -23,8 +23,16 @@ export const NotebookEditInputSchema = {
     notebook_path: { type: "string", description: "Absolute path to the .ipynb file" },
     cell_number: { type: "number", description: "0-indexed cell number to edit" },
     new_source: { type: "string", description: "New source content for the cell" },
-    cell_type: { type: "string", enum: ["code", "markdown"], description: "Cell type (required for insert)" },
-    edit_mode: { type: "string", enum: ["replace", "insert", "delete"], description: "Edit mode (default: replace)" }
+    cell_type: {
+      type: "string",
+      enum: ["code", "markdown"],
+      description: "Cell type (required for insert)"
+    },
+    edit_mode: {
+      type: "string",
+      enum: ["replace", "insert", "delete"],
+      description: "Edit mode (default: replace)"
+    }
   },
   required: ["notebook_path", "new_source"],
   additionalProperties: false
@@ -49,7 +57,11 @@ export function parseNotebookEditInput(input: Record<string, unknown>): Notebook
   }
   let editMode: "replace" | "insert" | "delete" = "replace";
   if (input.edit_mode !== undefined) {
-    if (input.edit_mode !== "replace" && input.edit_mode !== "insert" && input.edit_mode !== "delete") {
+    if (
+      input.edit_mode !== "replace" &&
+      input.edit_mode !== "insert" &&
+      input.edit_mode !== "delete"
+    ) {
       throw new Error("edit_mode must be replace, insert, or delete");
     }
     editMode = input.edit_mode;
@@ -112,9 +124,9 @@ export function executeNotebookEdit(cwd: string, input: NotebookEditInput): stri
     throw new Error(`Cell index ${cellIndex} out of range (0-${notebook.cells.length - 1})`);
   }
   const cell = notebook.cells[cellIndex];
-  cell.source = input.newSource.split("\n").map((line: string, i: number, arr: string[]) =>
-    i < arr.length - 1 ? line + "\n" : line
-  );
+  cell.source = input.newSource
+    .split("\n")
+    .map((line: string, i: number, arr: string[]) => (i < arr.length - 1 ? line + "\n" : line));
   if (input.cellType) {
     cell.cell_type = input.cellType;
   }
@@ -123,9 +135,9 @@ export function executeNotebookEdit(cwd: string, input: NotebookEditInput): stri
 }
 
 function createCell(cellType: "code" | "markdown", source: string): Record<string, unknown> {
-  const sourceLines = source.split("\n").map((line, i, arr) =>
-    i < arr.length - 1 ? line + "\n" : line
-  );
+  const sourceLines = source
+    .split("\n")
+    .map((line, i, arr) => (i < arr.length - 1 ? line + "\n" : line));
   if (cellType === "code") {
     return {
       cell_type: "code",
@@ -154,7 +166,8 @@ export function parseNotebookReadInput(input: Record<string, unknown>): Notebook
   }
   return {
     notebookPath: notebookPath.trim(),
-    maxCells: typeof input.max_cells === "number" && input.max_cells > 0 ? input.max_cells : undefined
+    maxCells:
+      typeof input.max_cells === "number" && input.max_cells > 0 ? input.max_cells : undefined
   };
 }
 
@@ -175,13 +188,19 @@ export function executeNotebookRead(cwd: string, input: NotebookReadInput): stri
 
   const cells = input.maxCells ? notebook.cells.slice(0, input.maxCells) : notebook.cells;
   const output: string[] = [`Notebook: ${resolved.relativePath}`];
-  output.push(`Cells: ${notebook.cells.length} total${input.maxCells ? ` (showing first ${input.maxCells})` : ""}`);
+  output.push(
+    `Cells: ${notebook.cells.length} total${input.maxCells ? ` (showing first ${input.maxCells})` : ""}`
+  );
   output.push("");
 
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i];
     const cellType = cell.cell_type ?? "unknown";
-    const source = Array.isArray(cell.source) ? cell.source.join("") : (typeof cell.source === "string" ? cell.source : "");
+    const source = Array.isArray(cell.source)
+      ? cell.source.join("")
+      : typeof cell.source === "string"
+        ? cell.source
+        : "";
     const execCount = cell.execution_count != null ? ` [exec: ${cell.execution_count}]` : "";
 
     output.push(`--- Cell ${i} (${cellType})${execCount} ---`);

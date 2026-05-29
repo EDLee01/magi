@@ -3,11 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { listMemdirEntries } from "./memdir.js";
 import { listMemoryFiles, MemoryRootOptions } from "./memory-files.js";
-import {
-  classifyMemoryNodeType,
-  MemoryNodeStore,
-  MemorySourceKind
-} from "./memory-node-store.js";
+import { classifyMemoryNodeType, MemoryNodeStore, MemorySourceKind } from "./memory-node-store.js";
 import { MagiPaths } from "./paths.js";
 
 export interface MemoryWikiSection {
@@ -25,10 +21,12 @@ export interface SyncMemoryGraphResult {
   archivedSourceCount: number;
 }
 
-export function syncMemoryGraph(input: MemoryRootOptions & {
-  paths: MagiPaths;
-  includeMemdir?: boolean;
-}): SyncMemoryGraphResult {
+export function syncMemoryGraph(
+  input: MemoryRootOptions & {
+    paths: MagiPaths;
+    includeMemdir?: boolean;
+  }
+): SyncMemoryGraphResult {
   const store = MemoryNodeStore.open(input.paths);
   try {
     const activeWikiUris = new Set<string>();
@@ -145,19 +143,26 @@ export function parseWikiSections(filePath: string, text: string): MemoryWikiSec
   }
   if (sections.length === 0) {
     const body = text.trim();
-    return body ? [{
-      filePath,
-      heading: filePath,
-      level: 1,
-      body,
-      uri: `memory/${filePath}`,
-      contentHash: hashText(body)
-    }] : [];
+    return body
+      ? [
+          {
+            filePath,
+            heading: filePath,
+            level: 1,
+            body,
+            uri: `memory/${filePath}`,
+            contentHash: hashText(body)
+          }
+        ]
+      : [];
   }
   return sections.flatMap((section, index) => {
     const next = sections[index + 1];
     const end = next?.start ?? lines.length;
-    const body = lines.slice(section.start + 1, end).join("\n").trim();
+    const body = lines
+      .slice(section.start + 1, end)
+      .join("\n")
+      .trim();
     if (!body) {
       return [];
     }
@@ -165,18 +170,24 @@ export function parseWikiSections(filePath: string, text: string): MemoryWikiSec
       return [];
     }
     const uri = `memory/${filePath}#${slugify(section.heading)}`;
-    return [{
-      filePath,
-      heading: section.heading,
-      level: section.level,
-      body,
-      uri,
-      contentHash: hashText(`${section.heading}\n${body}`)
-    }];
+    return [
+      {
+        filePath,
+        heading: section.heading,
+        level: section.level,
+        body,
+        uri,
+        contentHash: hashText(`${section.heading}\n${body}`)
+      }
+    ];
   });
 }
 
-function archiveMissingSources(store: MemoryNodeStore, kind: MemorySourceKind, activeUris: Set<string>): number {
+function archiveMissingSources(
+  store: MemoryNodeStore,
+  kind: MemorySourceKind,
+  activeUris: Set<string>
+): number {
   let archived = 0;
   for (const source of store.listSources({ kind, status: "active" })) {
     if (activeUris.has(source.uri)) {
@@ -189,25 +200,34 @@ function archiveMissingSources(store: MemoryNodeStore, kind: MemorySourceKind, a
 }
 
 function shouldSkipWikiFile(filePath: string): boolean {
-  return filePath === "INDEX.md"
-    || filePath.startsWith("drafts/")
-    || filePath.startsWith("dreams/")
-    || filePath.startsWith("logs/")
-    || filePath.startsWith("archive/");
+  return (
+    filePath === "INDEX.md" ||
+    filePath.startsWith("drafts/") ||
+    filePath.startsWith("dreams/") ||
+    filePath.startsWith("logs/") ||
+    filePath.startsWith("archive/")
+  );
 }
 
 function isBoilerplateSection(filePath: string, heading: string, body: string): boolean {
   const normalized = `${heading}\n${body}`.toLowerCase();
   if (filePath === "INDEX.md") return true;
-  return normalized === "memory\nmemory stores durable preferences, project context, decisions, workflows, and permission notes.\ndream creates reviewable drafts that organize memory without changing formal files automatically."
-    || normalized === "user\nlong-lived user facts and stable context. do not store sensitive personal data unless the user explicitly asks."
-    || normalized === "preferences\ndurable communication, product, writing, and workflow preferences."
-    || normalized === "project: default\nproject context, open questions, and active decisions that are not tied to a more specific project file yet."
-    || normalized === "skills\nskill-specific memory and operating context."
-    || normalized === "workflows\nreusable task flows, operating procedures, and references."
-    || normalized === "decisions\naccepted, rejected, and superseded decisions with reasoning."
-    || normalized === "permissions policy\ndurable permission boundaries and approval rules. changes to this file should be reviewed carefully."
-    || normalized === "sessions\nsession-derived summaries that are worth keeping as durable memory.";
+  return (
+    normalized ===
+      "memory\nmemory stores durable preferences, project context, decisions, workflows, and permission notes.\ndream creates reviewable drafts that organize memory without changing formal files automatically." ||
+    normalized ===
+      "user\nlong-lived user facts and stable context. do not store sensitive personal data unless the user explicitly asks." ||
+    normalized ===
+      "preferences\ndurable communication, product, writing, and workflow preferences." ||
+    normalized ===
+      "project: default\nproject context, open questions, and active decisions that are not tied to a more specific project file yet." ||
+    normalized === "skills\nskill-specific memory and operating context." ||
+    normalized === "workflows\nreusable task flows, operating procedures, and references." ||
+    normalized === "decisions\naccepted, rejected, and superseded decisions with reasoning." ||
+    normalized ===
+      "permissions policy\ndurable permission boundaries and approval rules. changes to this file should be reviewed carefully." ||
+    normalized === "sessions\nsession-derived summaries that are worth keeping as durable memory."
+  );
 }
 
 function weightForWikiPath(filePath: string): number {
@@ -220,7 +240,8 @@ function weightForWikiPath(filePath: string): number {
 }
 
 function summarizeSection(body: string): string {
-  return body.split(/\r?\n/)
+  return body
+    .split(/\r?\n/)
     .map((line) => line.replace(/^[-*]\s+/, "").trim())
     .filter(Boolean)
     .join(" ")
@@ -233,10 +254,13 @@ function firstHeading(text: string): string | undefined {
 }
 
 function slugify(text: string): string {
-  return text.toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "section";
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "section"
+  );
 }
 
 function hashText(text: string): string {

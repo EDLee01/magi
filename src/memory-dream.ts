@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node
 import path from "node:path";
 
 import { atomicWrite } from "./fs-utils.js";
-import { ensureMemoryStructure, listMemoryFiles, memoryRoot, MemoryRootOptions } from "./memory-files.js";
+import {
+  ensureMemoryStructure,
+  listMemoryFiles,
+  memoryRoot,
+  MemoryRootOptions
+} from "./memory-files.js";
 import { MemoryDraft, proposeMemoryDraft } from "./memory-draft.js";
 import { recordMemoryAudit } from "./memory-audit.js";
 
@@ -66,7 +71,10 @@ export function runDream(input: MemoryRootOptions): DreamManifest {
   };
   atomicWrite(path.join(dreamRoot, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   atomicWrite(path.join(dreamRoot, "summary.md"), formatDreamMarkdown(manifest));
-  atomicWrite(path.join(dreamRoot, "proposed_patches.json"), JSON.stringify({ draftIds, operations }, null, 2) + "\n");
+  atomicWrite(
+    path.join(dreamRoot, "proposed_patches.json"),
+    JSON.stringify({ draftIds, operations }, null, 2) + "\n"
+  );
   atomicWrite(path.join(dreamRoot, "conflicts.md"), formatConflictsMarkdown(operations));
   recordMemoryAudit({
     ...input,
@@ -91,14 +99,16 @@ export function listDreams(input: MemoryRootOptions): DreamRecord[] {
       try {
         if (!statSync(manifestFile).isFile()) return [];
         const manifest = readDreamManifest(manifestFile);
-        return [{
-          id: manifest.id,
-          path: path.dirname(manifestFile),
-          status: manifest.status,
-          createdAt: manifest.createdAt,
-          operationCount: manifest.operations.length,
-          draftCount: manifest.draftIds.length
-        }];
+        return [
+          {
+            id: manifest.id,
+            path: path.dirname(manifestFile),
+            status: manifest.status,
+            createdAt: manifest.createdAt,
+            operationCount: manifest.operations.length,
+            draftCount: manifest.draftIds.length
+          }
+        ];
       } catch {
         return [];
       }
@@ -109,7 +119,9 @@ export function showDream(input: MemoryRootOptions & { id: string }): DreamManif
   return readDreamManifest(dreamManifestPath(memoryRoot(input), input.id));
 }
 
-export function applyDream(input: MemoryRootOptions & { id: string; applyDraft: (draftId: string) => MemoryDraft }): DreamManifest {
+export function applyDream(
+  input: MemoryRootOptions & { id: string; applyDraft: (draftId: string) => MemoryDraft }
+): DreamManifest {
   const root = ensureMemoryStructure(input);
   const file = dreamManifestPath(root, input.id);
   const manifest = readDreamManifest(file);
@@ -131,7 +143,9 @@ export function applyDream(input: MemoryRootOptions & { id: string; applyDraft: 
   return applied;
 }
 
-export function rejectDream(input: MemoryRootOptions & { id: string; rejectDraft: (draftId: string) => MemoryDraft }): DreamManifest {
+export function rejectDream(
+  input: MemoryRootOptions & { id: string; rejectDraft: (draftId: string) => MemoryDraft }
+): DreamManifest {
   const root = ensureMemoryStructure(input);
   const file = dreamManifestPath(root, input.id);
   const manifest = readDreamManifest(file);
@@ -155,18 +169,20 @@ export function rejectDream(input: MemoryRootOptions & { id: string; rejectDraft
 
 function analyzeMemory(input: MemoryRootOptions): DreamOperation[] {
   const operations: DreamOperation[] = [];
-  const files = listMemoryFiles(input).filter((file) =>
-    !file.path.startsWith("drafts/")
-      && !file.path.startsWith("dreams/")
-      && !file.path.startsWith("archive/")
-      && !file.path.startsWith("logs/")
+  const files = listMemoryFiles(input).filter(
+    (file) =>
+      !file.path.startsWith("drafts/") &&
+      !file.path.startsWith("dreams/") &&
+      !file.path.startsWith("archive/") &&
+      !file.path.startsWith("logs/")
   );
   const seenLines = new Map<string, { file: string; line: string }>();
   for (const file of files) {
     const text = readFileSync(file.absolutePath, "utf8");
-    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) =>
-      line.length > 12 && !line.startsWith("#") && !line.startsWith("---")
-    );
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 12 && !line.startsWith("#") && !line.startsWith("---"));
     const duplicates: string[] = [];
     for (const line of lines) {
       const key = normalizeLine(line);
@@ -205,9 +221,9 @@ function formatDreamSummary(operations: DreamOperation[]): string {
     acc[op.type] = (acc[op.type] ?? 0) + 1;
     return acc;
   }, {});
-  return `Dream found ${operations.length} review candidate(s): ${
-    Object.entries(counts).map(([type, count]) => `${count} ${type}`).join(", ")
-  }.`;
+  return `Dream found ${operations.length} review candidate(s): ${Object.entries(counts)
+    .map(([type, count]) => `${count} ${type}`)
+    .join(", ")}.`;
 }
 
 function formatDreamMarkdown(manifest: DreamManifest): string {
@@ -220,13 +236,17 @@ function formatDreamMarkdown(manifest: DreamManifest): string {
     `Created: ${manifest.createdAt}`,
     "",
     "## Operations",
-    ...manifest.operations.map((op, index) => [
-      "",
-      `### ${index + 1}. ${op.type}`,
-      `Target: ${op.targetFile}`,
-      `Reason: ${op.reason}`,
-      op.relatedFiles?.length ? `Related: ${op.relatedFiles.join(", ")}` : undefined
-    ].filter(Boolean).join("\n")),
+    ...manifest.operations.map((op, index) =>
+      [
+        "",
+        `### ${index + 1}. ${op.type}`,
+        `Target: ${op.targetFile}`,
+        `Reason: ${op.reason}`,
+        op.relatedFiles?.length ? `Related: ${op.relatedFiles.join(", ")}` : undefined
+      ]
+        .filter(Boolean)
+        .join("\n")
+    ),
     ""
   ].join("\n");
 }
@@ -234,11 +254,10 @@ function formatDreamMarkdown(manifest: DreamManifest): string {
 function formatConflictsMarkdown(operations: DreamOperation[]): string {
   const conflicts = operations.filter((op) => op.type === "conflict");
   if (conflicts.length === 0) return "# Conflicts\n\nNo conflicts detected.\n";
-  return [
-    "# Conflicts",
-    "",
-    ...conflicts.map((op) => `- ${op.targetFile}: ${op.reason}`)
-  ].join("\n") + "\n";
+  return (
+    ["# Conflicts", "", ...conflicts.map((op) => `- ${op.targetFile}: ${op.reason}`)].join("\n") +
+    "\n"
+  );
 }
 
 function dreamManifestPath(root: string, id: string): string {
@@ -256,10 +275,16 @@ function readDreamManifest(file: string): DreamManifest {
 }
 
 function createDreamId(): string {
-  const stamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:T.Z]/g, "")
+    .slice(0, 14);
   return `dream_${stamp}`;
 }
 
 function normalizeLine(line: string): string {
-  return line.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, " ").trim();
+  return line
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+    .trim();
 }

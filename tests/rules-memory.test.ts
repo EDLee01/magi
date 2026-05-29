@@ -66,14 +66,26 @@ describe("AGENTS rules and memory", () => {
 
     appendMemory({ paths, scope: "project", cwd: workspace, text: "project fact" });
     appendMemory({ paths, scope: "user", cwd: workspace, text: "user fact" });
-    appendMemory({ paths, scope: "session", cwd: workspace, sessionId: "session-1", text: "session fact" });
+    appendMemory({
+      paths,
+      scope: "session",
+      cwd: workspace,
+      sessionId: "session-1",
+      text: "session fact"
+    });
 
     expect(readMemory({ paths, scope: "project", cwd: workspace })).toContain("project fact");
     expect(readMemory({ paths, scope: "user", cwd: workspace })).toContain("user fact");
-    expect(readMemory({ paths, scope: "session", cwd: workspace, sessionId: "session-1" })).toContain("session fact");
-    expect(memoryFile(paths, "project", workspace)).toContain(path.join(temp.path, "state", "project-memory"));
+    expect(
+      readMemory({ paths, scope: "session", cwd: workspace, sessionId: "session-1" })
+    ).toContain("session fact");
+    expect(memoryFile(paths, "project", workspace)).toContain(
+      path.join(temp.path, "state", "project-memory")
+    );
     expect(memoryFile(paths, "user", workspace)).toBe(path.join(temp.path, "memory.md"));
-    expect(sessionMemoryFile(paths, "session-1")).toContain(path.join(temp.path, "state", "session-memory"));
+    expect(sessionMemoryFile(paths, "session-1")).toContain(
+      path.join(temp.path, "state", "session-memory")
+    );
   });
 
   it("records memory append audit when a session is supplied", () => {
@@ -83,7 +95,14 @@ describe("AGENTS rules and memory", () => {
     const store = SessionStore.open(paths);
     try {
       const sessionId = store.createSession({ title: "memory", cwd: workspace });
-      appendMemory({ paths, scope: "project", cwd: workspace, text: "audited fact", store, sessionId });
+      appendMemory({
+        paths,
+        scope: "project",
+        cwd: workspace,
+        text: "audited fact",
+        store,
+        sessionId
+      });
       expect(store.countRows("audit_events")).toBe(1);
     } finally {
       store.close();
@@ -121,7 +140,11 @@ describe("AGENTS rules and memory", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
 
-    const result = await runCli(["memory", "append", "project", "api_key: sk-abc123456789012345"], temp.env, workspace);
+    const result = await runCli(
+      ["memory", "append", "project", "api_key: sk-abc123456789012345"],
+      temp.env,
+      workspace
+    );
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("Memory Draft rejected");
@@ -137,7 +160,13 @@ describe("AGENTS rules and memory", () => {
       filePath: "projects/default.md",
       content: "api wiki fact: use explicit routes"
     });
-    appendMemory({ paths, scope: "session", cwd: workspace, sessionId: "s-1", text: "api legacy fact: event streaming" });
+    appendMemory({
+      paths,
+      scope: "session",
+      cwd: workspace,
+      sessionId: "s-1",
+      text: "api legacy fact: event streaming"
+    });
     writeMemdirEntry({
       paths,
       type: "project",
@@ -161,7 +190,9 @@ describe("AGENTS rules and memory", () => {
 
     expect(hits.map((hit) => hit.source)).toEqual(expect.arrayContaining(["graph", "legacy"]));
     expect(hits.map((hit) => hit.sourceKind)).toEqual(expect.arrayContaining(["wiki", "memdir"]));
-    expect(hits.map((hit) => hit.file)).toEqual(expect.arrayContaining(["projects/default.md#Project: Default", "legacy/session"]));
+    expect(hits.map((hit) => hit.file)).toEqual(
+      expect.arrayContaining(["projects/default.md#Project: Default", "legacy/session"])
+    );
   });
 
   it("retrieves wiki-backed graph memory and reinforces matched nodes", () => {
@@ -220,9 +251,20 @@ describe("AGENTS rules and memory", () => {
 
     appendMemory({ paths, scope: "user", cwd: workspace, text: "theme: quiet interface" });
     appendMemory({ paths, scope: "project", cwd: workspace, text: "api style: explicit routes" });
-    appendMemory({ paths, scope: "session", cwd: workspace, sessionId: "s-1", text: "api current task: event streaming" });
+    appendMemory({
+      paths,
+      scope: "session",
+      cwd: workspace,
+      sessionId: "s-1",
+      text: "api current task: event streaming"
+    });
 
-    const results = searchMemory({ paths, cwd: workspace, sessionId: "s-1", query: "api event streaming" });
+    const results = searchMemory({
+      paths,
+      cwd: workspace,
+      sessionId: "s-1",
+      query: "api event streaming"
+    });
     expect(results.map((result) => result.scope)).toEqual(["session", "project"]);
     expect(formatMemorySearchResults(results)).toContain("session: api current task");
   });
@@ -231,9 +273,27 @@ describe("AGENTS rules and memory", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
     const paths = getMagiPaths(temp.env);
-    const first = appendMemory({ paths, scope: "project", cwd: workspace, text: "model: gpt-main", detailed: true });
-    const duplicate = appendMemory({ paths, scope: "project", cwd: workspace, text: "model: gpt-main", detailed: true });
-    const conflict = appendMemory({ paths, scope: "project", cwd: workspace, text: "model: gpt-other", detailed: true });
+    const first = appendMemory({
+      paths,
+      scope: "project",
+      cwd: workspace,
+      text: "model: gpt-main",
+      detailed: true
+    });
+    const duplicate = appendMemory({
+      paths,
+      scope: "project",
+      cwd: workspace,
+      text: "model: gpt-main",
+      detailed: true
+    });
+    const conflict = appendMemory({
+      paths,
+      scope: "project",
+      cwd: workspace,
+      text: "model: gpt-other",
+      detailed: true
+    });
 
     expect(first.appended).toBe(true);
     expect(duplicate).toMatchObject({ appended: false, duplicate: true });
@@ -243,7 +303,9 @@ describe("AGENTS rules and memory", () => {
       existing: expect.objectContaining({ value: "gpt-main" }),
       incoming: expect.objectContaining({ value: "gpt-other" })
     });
-    expect(readMemory({ paths, scope: "project", cwd: workspace }).match(/model:/g)).toHaveLength(1);
+    expect(readMemory({ paths, scope: "project", cwd: workspace }).match(/model:/g)).toHaveLength(
+      1
+    );
   });
 
   it("parses explicit memory write prompts only", () => {

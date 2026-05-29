@@ -25,7 +25,9 @@ export const command = {
       ""
     ];
     for (const msg of session.messages) {
-      lines.push(`## ${msg.role === "user" ? "User" : msg.role === "assistant" ? "Assistant" : msg.role} — ${msg.createdAt}`);
+      lines.push(
+        `## ${msg.role === "user" ? "User" : msg.role === "assistant" ? "Assistant" : msg.role} — ${msg.createdAt}`
+      );
       lines.push("");
       lines.push(msg.content);
       lines.push("");

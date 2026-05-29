@@ -11,54 +11,233 @@
 const ESC = "\x1b[";
 const RESET = `${ESC}0m`;
 const COLOR = {
-  keyword: `${ESC}38;5;141m`,    // light purple
-  string: `${ESC}38;5;108m`,     // green-cyan
-  comment: `${ESC}38;5;243m`,    // gray
-  number: `${ESC}38;5;180m`,     // tan
-  func: `${ESC}38;5;111m`,       // light blue
-  type: `${ESC}38;5;180m`,       // amber
-  punct: `${ESC}38;5;245m`,      // gray
-  operator: `${ESC}38;5;174m`    // pink
+  keyword: `${ESC}38;5;141m`, // light purple
+  string: `${ESC}38;5;108m`, // green-cyan
+  comment: `${ESC}38;5;243m`, // gray
+  number: `${ESC}38;5;180m`, // tan
+  func: `${ESC}38;5;111m`, // light blue
+  type: `${ESC}38;5;180m`, // amber
+  punct: `${ESC}38;5;245m`, // gray
+  operator: `${ESC}38;5;174m` // pink
 };
 
 const TS_JS_KEYWORDS = new Set([
-  "abstract", "any", "as", "async", "await", "boolean", "break", "case",
-  "catch", "class", "const", "constructor", "continue", "debugger", "declare",
-  "default", "delete", "do", "else", "enum", "export", "extends", "false",
-  "finally", "for", "from", "function", "get", "if", "implements", "import",
-  "in", "instanceof", "interface", "is", "let", "namespace", "never", "new",
-  "null", "number", "of", "package", "private", "protected", "public",
-  "readonly", "return", "set", "static", "string", "super", "switch", "this",
-  "throw", "true", "try", "type", "typeof", "undefined", "unknown", "var",
-  "void", "while", "with", "yield"
+  "abstract",
+  "any",
+  "as",
+  "async",
+  "await",
+  "boolean",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "constructor",
+  "continue",
+  "debugger",
+  "declare",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "from",
+  "function",
+  "get",
+  "if",
+  "implements",
+  "import",
+  "in",
+  "instanceof",
+  "interface",
+  "is",
+  "let",
+  "namespace",
+  "never",
+  "new",
+  "null",
+  "number",
+  "of",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "readonly",
+  "return",
+  "set",
+  "static",
+  "string",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "type",
+  "typeof",
+  "undefined",
+  "unknown",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield"
 ]);
 
 const PYTHON_KEYWORDS = new Set([
-  "False", "None", "True", "and", "as", "assert", "async", "await", "break",
-  "class", "continue", "def", "del", "elif", "else", "except", "finally",
-  "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal",
-  "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"
+  "False",
+  "None",
+  "True",
+  "and",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "break",
+  "class",
+  "continue",
+  "def",
+  "del",
+  "elif",
+  "else",
+  "except",
+  "finally",
+  "for",
+  "from",
+  "global",
+  "if",
+  "import",
+  "in",
+  "is",
+  "lambda",
+  "nonlocal",
+  "not",
+  "or",
+  "pass",
+  "raise",
+  "return",
+  "try",
+  "while",
+  "with",
+  "yield"
 ]);
 
 const SHELL_KEYWORDS = new Set([
-  "if", "then", "else", "elif", "fi", "for", "while", "do", "done", "case",
-  "esac", "in", "function", "return", "echo", "exit", "true", "false",
-  "export", "set", "unset", "local", "readonly", "declare", "alias", "source",
-  "cd", "ls", "pwd", "mkdir", "rm", "cp", "mv", "git", "npm", "node", "python"
+  "if",
+  "then",
+  "else",
+  "elif",
+  "fi",
+  "for",
+  "while",
+  "do",
+  "done",
+  "case",
+  "esac",
+  "in",
+  "function",
+  "return",
+  "echo",
+  "exit",
+  "true",
+  "false",
+  "export",
+  "set",
+  "unset",
+  "local",
+  "readonly",
+  "declare",
+  "alias",
+  "source",
+  "cd",
+  "ls",
+  "pwd",
+  "mkdir",
+  "rm",
+  "cp",
+  "mv",
+  "git",
+  "npm",
+  "node",
+  "python"
 ]);
 
 const RUST_KEYWORDS = new Set([
-  "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
-  "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut",
-  "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait",
-  "true", "type", "unsafe", "use", "where", "while", "async", "await", "dyn"
+  "as",
+  "break",
+  "const",
+  "continue",
+  "crate",
+  "else",
+  "enum",
+  "extern",
+  "false",
+  "fn",
+  "for",
+  "if",
+  "impl",
+  "in",
+  "let",
+  "loop",
+  "match",
+  "mod",
+  "move",
+  "mut",
+  "pub",
+  "ref",
+  "return",
+  "self",
+  "Self",
+  "static",
+  "struct",
+  "super",
+  "trait",
+  "true",
+  "type",
+  "unsafe",
+  "use",
+  "where",
+  "while",
+  "async",
+  "await",
+  "dyn"
 ]);
 
 const GO_KEYWORDS = new Set([
-  "break", "case", "chan", "const", "continue", "default", "defer", "else",
-  "fallthrough", "for", "func", "go", "goto", "if", "import", "interface",
-  "map", "package", "range", "return", "select", "struct", "switch", "type",
-  "var", "true", "false", "nil"
+  "break",
+  "case",
+  "chan",
+  "const",
+  "continue",
+  "default",
+  "defer",
+  "else",
+  "fallthrough",
+  "for",
+  "func",
+  "go",
+  "goto",
+  "if",
+  "import",
+  "interface",
+  "map",
+  "package",
+  "range",
+  "return",
+  "select",
+  "struct",
+  "switch",
+  "type",
+  "var",
+  "true",
+  "false",
+  "nil"
 ]);
 
 interface LangSpec {
@@ -73,20 +252,62 @@ interface LangSpec {
 }
 
 const LANGS: Record<string, LangSpec> = {
-  ts: { keywords: TS_JS_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\"", "'", "`"] },
-  js: { keywords: TS_JS_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\"", "'", "`"] },
-  tsx: { keywords: TS_JS_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\"", "'", "`"] },
-  jsx: { keywords: TS_JS_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\"", "'", "`"] },
-  py: { keywords: PYTHON_KEYWORDS, lineComment: /#.*/, stringQuotes: ["\"", "'"] },
-  python: { keywords: PYTHON_KEYWORDS, lineComment: /#.*/, stringQuotes: ["\"", "'"] },
-  sh: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ["\"", "'"] },
-  bash: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ["\"", "'"] },
-  zsh: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ["\"", "'"] },
-  shell: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ["\"", "'"] },
-  rs: { keywords: RUST_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\""] },
-  rust: { keywords: RUST_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\""] },
-  go: { keywords: GO_KEYWORDS, lineComment: /\/\/.*/, blockCommentOpen: "/*", blockCommentClose: "*/", stringQuotes: ["\"", "`"] },
-  json: { keywords: new Set(["true", "false", "null"]), stringQuotes: ["\""] }
+  ts: {
+    keywords: TS_JS_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"', "'", "`"]
+  },
+  js: {
+    keywords: TS_JS_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"', "'", "`"]
+  },
+  tsx: {
+    keywords: TS_JS_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"', "'", "`"]
+  },
+  jsx: {
+    keywords: TS_JS_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"', "'", "`"]
+  },
+  py: { keywords: PYTHON_KEYWORDS, lineComment: /#.*/, stringQuotes: ['"', "'"] },
+  python: { keywords: PYTHON_KEYWORDS, lineComment: /#.*/, stringQuotes: ['"', "'"] },
+  sh: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ['"', "'"] },
+  bash: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ['"', "'"] },
+  zsh: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ['"', "'"] },
+  shell: { keywords: SHELL_KEYWORDS, lineComment: /#.*/, stringQuotes: ['"', "'"] },
+  rs: {
+    keywords: RUST_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"']
+  },
+  rust: {
+    keywords: RUST_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"']
+  },
+  go: {
+    keywords: GO_KEYWORDS,
+    lineComment: /\/\/.*/,
+    blockCommentOpen: "/*",
+    blockCommentClose: "*/",
+    stringQuotes: ['"', "`"]
+  },
+  json: { keywords: new Set(["true", "false", "null"]), stringQuotes: ['"'] }
 };
 
 /** Multi-line block comment state shared across lines. */
@@ -102,7 +323,11 @@ export function createHighlightState(): HighlightState {
  * Highlight one line of source code. Mutates `state` to track multi-line
  * block comment state.
  */
-export function highlightLine(line: string, lang: string | undefined, state: HighlightState): string {
+export function highlightLine(
+  line: string,
+  lang: string | undefined,
+  state: HighlightState
+): string {
   if (!lang) return line;
   const spec = LANGS[lang.toLowerCase()];
   if (!spec) return line;

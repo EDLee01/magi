@@ -39,7 +39,10 @@ export async function executeBuiltinAgentTool(input: {
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
-  approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: { decision: "allow" | "ask" | "deny"; reason: string; diff?: string } }) => Promise<boolean> | boolean;
+  approvalResolver?: (request: {
+    toolUse: MagiToolUsePart;
+    permission: { decision: "allow" | "ask" | "deny"; reason: string; diff?: string };
+  }) => Promise<boolean> | boolean;
   signal?: AbortSignal;
 }): Promise<AgentToolResult> {
   return executeRegisteredTool({
@@ -73,7 +76,10 @@ export async function executeBuiltinAgentTools(input: {
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
-  approvalResolver?: (request: { toolUse: MagiToolUsePart; permission: { decision: "allow" | "ask" | "deny"; reason: string; diff?: string } }) => Promise<boolean> | boolean;
+  approvalResolver?: (request: {
+    toolUse: MagiToolUsePart;
+    permission: { decision: "allow" | "ask" | "deny"; reason: string; diff?: string };
+  }) => Promise<boolean> | boolean;
   signal?: AbortSignal;
 }): Promise<AgentToolResult[]> {
   return executeRegisteredTools({

@@ -27,7 +27,7 @@ const SECTIONS: Section[] = [
       "Magi is a TUI for AI-assisted coding.",
       "",
       "  magi                    Start the interactive TUI",
-      "  magi -p \"hello\"        Run a one-shot prompt and exit",
+      '  magi -p "hello"        Run a one-shot prompt and exit',
       "  magi --version          Show version",
       "  magi doctor             Show config paths and runtime info",
       "",
@@ -43,7 +43,7 @@ const SECTIONS: Section[] = [
       "  /model                  Show current model + picker",
       "  /model fast             Use the haiku alias (cheap)",
       "  /model auto             Smart routing — picks model per task",
-      "  /route test \"<prompt>\"  Preview which model auto would pick",
+      '  /route test "<prompt>"  Preview which model auto would pick',
       "",
       "Auto picks haiku for short questions, sonnet for code, opus for planning."
     ]
@@ -53,11 +53,11 @@ const SECTIONS: Section[] = [
     body: [
       "Magi has tools to read/edit files in the current workspace.",
       "",
-      "  Read a file:           ask \"show me src/index.ts\"",
-      "  Edit a file:           ask \"add error handling to src/foo.ts:42\"",
-      "  Search the repo:       ask \"find all uses of fooBar\"",
+      '  Read a file:           ask "show me src/index.ts"',
+      '  Edit a file:           ask "add error handling to src/foo.ts:42"',
+      '  Search the repo:       ask "find all uses of fooBar"',
       "",
-      "After non-trivial changes, ask \"verify\" to run the verify skill —",
+      'After non-trivial changes, ask "verify" to run the verify skill —',
       "it builds and tests automatically."
     ]
   },

@@ -97,7 +97,11 @@ describe("MCP client and approval", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
-    writeFileSync(paths.configFile, "mcp:\n  servers:\n    remote:\n      transport: http\n", "utf8");
+    writeFileSync(
+      paths.configFile,
+      "mcp:\n  servers:\n    remote:\n      transport: http\n",
+      "utf8"
+    );
 
     expect(() => loadConfig(paths, temp!.env)).toThrow(/mcp\.servers\.remote\.url is required/);
   });
@@ -157,8 +161,9 @@ describe("MCP client and approval", () => {
     });
     try {
       await client.initialize();
-      await expect(client.callTool({ toolName: "write_note", params: { path: "note.txt" } }))
-        .rejects.toBeInstanceOf(McpApprovalRequiredError);
+      await expect(
+        client.callTool({ toolName: "write_note", params: { path: "note.txt" } })
+      ).rejects.toBeInstanceOf(McpApprovalRequiredError);
     } finally {
       client.close();
     }
@@ -177,16 +182,20 @@ describe("MCP client and approval", () => {
     try {
       await client.initialize();
       const resources = await client.listResources();
-      expect(resources).toEqual([expect.objectContaining({
-        uri: "note://alpha",
-        name: "Alpha note",
-        mimeType: "text/plain"
-      })]);
+      expect(resources).toEqual([
+        expect.objectContaining({
+          uri: "note://alpha",
+          name: "Alpha note",
+          mimeType: "text/plain"
+        })
+      ]);
       const content = await client.readResource("note://alpha");
-      expect(content.contents).toEqual([expect.objectContaining({
-        uri: "note://alpha",
-        text: "resource text for note://alpha"
-      })]);
+      expect(content.contents).toEqual([
+        expect.objectContaining({
+          uri: "note://alpha",
+          text: "resource text for note://alpha"
+        })
+      ]);
     } finally {
       client.close();
     }
@@ -215,7 +224,9 @@ describe("MCP client and approval", () => {
     });
     try {
       await client.initialize();
-      await expect(client.listTools()).resolves.toEqual([expect.objectContaining({ name: "read_note" })]);
+      await expect(client.listTools()).resolves.toEqual([
+        expect.objectContaining({ name: "read_note" })
+      ]);
       const result = await client.callTool({ toolName: "read_note", params: { key: "alpha" } });
       expect(JSON.stringify(result.content)).toContain("called read_note");
       const resource = await client.readResource("note://alpha");
@@ -265,7 +276,9 @@ describe("MCP client and approval", () => {
     });
     try {
       await client.initialize();
-      await expect(client.listTools()).resolves.toEqual([expect.objectContaining({ name: "read_note" })]);
+      await expect(client.listTools()).resolves.toEqual([
+        expect.objectContaining({ name: "read_note" })
+      ]);
       const result = await client.callTool({ toolName: "read_note", params: { key: "alpha" } });
       expect(JSON.stringify(result.content)).toContain("called read_note");
       const resource = await client.readResource("note://alpha");
@@ -299,7 +312,9 @@ describe("MCP client and approval", () => {
     });
     try {
       await client.initialize();
-      await expect(client.listTools()).resolves.toEqual([expect.objectContaining({ name: "read_note" })]);
+      await expect(client.listTools()).resolves.toEqual([
+        expect.objectContaining({ name: "read_note" })
+      ]);
       const result = await client.callTool({ toolName: "read_note", params: { key: "alpha" } });
       expect(JSON.stringify(result.content)).toContain("called read_note");
       const resource = await client.readResource("note://alpha");
@@ -356,7 +371,11 @@ describe("MCP client and approval", () => {
     expect(resources.stdout).toContain("note://alpha");
     expect(resources.stdout).toContain("Alpha note");
 
-    const read = await runCli(["mcp", "read-resource", "local", "note://alpha"], temp.env, process.cwd());
+    const read = await runCli(
+      ["mcp", "read-resource", "local", "note://alpha"],
+      temp.env,
+      process.cwd()
+    );
     expect(read.exitCode).toBe(0);
     expect(read.stdout).toContain("resource text for note://alpha");
   });
@@ -476,9 +495,7 @@ function mcpRpcResult(request: McpTestRequest): Record<string, unknown> {
       jsonrpc: "2.0",
       id: request.id,
       result: {
-        tools: [
-          { name: "read_note", description: "Read a note", inputSchema: { type: "object" } }
-        ]
+        tools: [{ name: "read_note", description: "Read a note", inputSchema: { type: "object" } }]
       }
     };
   }
@@ -529,55 +546,57 @@ async function listen(server: http.Server): Promise<string> {
 
 async function closeServer(server: http.Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
+    server.close((error) => (error ? reject(error) : resolve()));
   });
 }
 
 async function closeWebSocketServer(server: WebSocketServer): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
+    server.close((error) => (error ? reject(error) : resolve()));
   });
 }
 
-  it("validates websocket-ide transport config", () => {
-    temp = makeTempRoot();
-    const paths = getMagiPaths(temp.env);
-    ensureMagiHome(paths);
-    writeFileSync(
-      paths.configFile,
-      [
-        "mcp:",
-        "  servers:",
-        "    ide:",
-        "      transport: websocket-ide",
-        "      url: ws://127.0.0.1:9000/mcp-ide",
-        "      headers:",
-        "        x-ide-token: $MAGI_IDE_TOKEN",
-        "      approval: never",
-        ""
-      ].join("\n"),
-      "utf8"
-    );
+it("validates websocket-ide transport config", () => {
+  temp = makeTempRoot();
+  const paths = getMagiPaths(temp.env);
+  ensureMagiHome(paths);
+  writeFileSync(
+    paths.configFile,
+    [
+      "mcp:",
+      "  servers:",
+      "    ide:",
+      "      transport: websocket-ide",
+      "      url: ws://127.0.0.1:9000/mcp-ide",
+      "      headers:",
+      "        x-ide-token: $MAGI_IDE_TOKEN",
+      "      approval: never",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
 
-    const config = loadConfig(paths, temp.env);
-    expect(config.mcp.servers.ide).toMatchObject({
-      transport: "websocket-ide",
-      url: "ws://127.0.0.1:9000/mcp-ide",
-      headers: { "x-ide-token": "$MAGI_IDE_TOKEN" },
-      command: "",
-      approval: "never"
-    });
+  const config = loadConfig(paths, temp.env);
+  expect(config.mcp.servers.ide).toMatchObject({
+    transport: "websocket-ide",
+    url: "ws://127.0.0.1:9000/mcp-ide",
+    headers: { "x-ide-token": "$MAGI_IDE_TOKEN" },
+    command: "",
+    approval: "never"
   });
+});
 
-  it("rejects invalid websocket-ide transport", () => {
-    temp = makeTempRoot();
-    const paths = getMagiPaths(temp.env);
-    ensureMagiHome(paths);
-    writeFileSync(
-      paths.configFile,
-      "mcp:\n  servers:\n    bad:\n      transport: websocket-invalid\n      url: ws://localhost\n",
-      "utf8"
-    );
+it("rejects invalid websocket-ide transport", () => {
+  temp = makeTempRoot();
+  const paths = getMagiPaths(temp.env);
+  ensureMagiHome(paths);
+  writeFileSync(
+    paths.configFile,
+    "mcp:\n  servers:\n    bad:\n      transport: websocket-invalid\n      url: ws://localhost\n",
+    "utf8"
+  );
 
-    expect(() => loadConfig(paths, temp!.env)).toThrow(/must be stdio, http, sse, websocket, or websocket-ide/);
-  });
+  expect(() => loadConfig(paths, temp!.env)).toThrow(
+    /must be stdio, http, sse, websocket, or websocket-ide/
+  );
+});

@@ -24,7 +24,11 @@ export interface AtomicWriteOptions {
  * Approach: open a sibling temp file, write+fsync, rename onto target.
  * Cleans the temp file on any error so we never leave .tmp.* litter.
  */
-export function atomicWrite(targetPath: string, content: string | Buffer, options: AtomicWriteOptions = {}): void {
+export function atomicWrite(
+  targetPath: string,
+  content: string | Buffer,
+  options: AtomicWriteOptions = {}
+): void {
   const dir = path.dirname(targetPath);
   const base = path.basename(targetPath);
   const tmpName = `.${base}.tmp.${process.pid}.${randomBytes(4).toString("hex")}`;
@@ -42,9 +46,13 @@ export function atomicWrite(targetPath: string, content: string | Buffer, option
     renameSync(tmpPath, targetPath);
   } catch (error) {
     if (fd !== undefined) {
-      try { closeSync(fd); } catch {}
+      try {
+        closeSync(fd);
+      } catch {}
     }
-    try { unlinkSync(tmpPath); } catch {}
+    try {
+      unlinkSync(tmpPath);
+    } catch {}
     throw error;
   }
 }

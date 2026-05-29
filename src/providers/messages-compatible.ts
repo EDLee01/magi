@@ -2,7 +2,15 @@ import { ProviderConfig } from "../config.js";
 import { MagiConfigError } from "../errors.js";
 import { providerErrorFromResponse } from "./errors.js";
 import { FetchLike, fetchProvider, getApiKey, normalizeBaseUrl } from "./http.js";
-import { MagiMessage, MagiToolUsePart, ProviderAdapter, ProviderRequest, ProviderResponse, ProviderStreamEvent, messageText } from "./ir.js";
+import {
+  MagiMessage,
+  MagiToolUsePart,
+  ProviderAdapter,
+  ProviderRequest,
+  ProviderResponse,
+  ProviderStreamEvent,
+  messageText
+} from "./ir.js";
 import { readSseEvents } from "./sse.js";
 
 export class MessagesCompatibleAdapter implements ProviderAdapter {
@@ -11,7 +19,12 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
   private readonly env: NodeJS.ProcessEnv;
   private readonly fetchImpl: FetchLike;
 
-  constructor(input: { name: string; config: ProviderConfig; env?: NodeJS.ProcessEnv; fetchImpl?: FetchLike }) {
+  constructor(input: {
+    name: string;
+    config: ProviderConfig;
+    env?: NodeJS.ProcessEnv;
+    fetchImpl?: FetchLike;
+  }) {
     this.name = input.name;
     this.config = input.config;
     this.env = input.env ?? process.env;
@@ -157,7 +170,9 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
     return parseAnthropicMessagesResult(data);
   }
 
-  private async *streamAnthropicMessages(request: ProviderRequest): AsyncGenerator<ProviderStreamEvent, ProviderResponse> {
+  private async *streamAnthropicMessages(
+    request: ProviderRequest
+  ): AsyncGenerator<ProviderStreamEvent, ProviderResponse> {
     if (!this.config.baseUrl) {
       throw new MagiConfigError(`Provider ${this.name} requires baseUrl`);
     }
@@ -266,7 +281,7 @@ function toMessage(message: MagiMessage): Record<string, unknown> {
     if (toolUses.length > 0) {
       const text = message.content
         .filter((part) => part.type === "text")
-        .map((part) => part.type === "text" ? part.text : "")
+        .map((part) => (part.type === "text" ? part.text : ""))
         .join("");
       return {
         role: "assistant",
@@ -293,18 +308,23 @@ function parseCompatibleResult(data: unknown): ProviderResponse {
     return { text: "", raw: data };
   }
   const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
-  const text = isRecord(choice) && isRecord(choice.message) && typeof choice.message.content === "string"
-    ? choice.message.content
-    : "";
-  const toolUses = isRecord(choice) && isRecord(choice.message) ? readOpenAiToolUses(choice.message.tool_calls) : [];
-  const usage = isRecord(data.usage)
-    && typeof data.usage.prompt_tokens === "number"
-    && typeof data.usage.completion_tokens === "number"
-    ? {
-      inputTokens: data.usage.prompt_tokens,
-      outputTokens: data.usage.completion_tokens
-    }
-    : undefined;
+  const text =
+    isRecord(choice) && isRecord(choice.message) && typeof choice.message.content === "string"
+      ? choice.message.content
+      : "";
+  const toolUses =
+    isRecord(choice) && isRecord(choice.message)
+      ? readOpenAiToolUses(choice.message.tool_calls)
+      : [];
+  const usage =
+    isRecord(data.usage) &&
+    typeof data.usage.prompt_tokens === "number" &&
+    typeof data.usage.completion_tokens === "number"
+      ? {
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens
+        }
+      : undefined;
   return { text, toolUses, usage, raw: data };
 }
 
@@ -339,11 +359,13 @@ function toAnthropicMessagesBody(request: ProviderRequest): Record<string, unkno
   // marker on the system block instead so the system prompt itself gets
   // cached. We never add two markers — only the largest static prefix.
   const systemBlocks = systemText
-    ? [{
-      type: "text" as const,
-      text: systemText,
-      ...(hasTools ? {} : { cache_control: { type: "ephemeral" } })
-    }]
+    ? [
+        {
+          type: "text" as const,
+          text: systemText,
+          ...(hasTools ? {} : { cache_control: { type: "ephemeral" } })
+        }
+      ]
     : undefined;
 
   return {
@@ -362,24 +384,31 @@ function parseAnthropicMessagesResult(data: unknown): ProviderResponse {
   }
   const text = Array.isArray(data.content)
     ? data.content
-      .map((part) => (isRecord(part) && part.type === "text" && typeof part.text === "string" ? part.text : ""))
-      .join("")
+        .map((part) =>
+          isRecord(part) && part.type === "text" && typeof part.text === "string" ? part.text : ""
+        )
+        .join("")
     : "";
   const thinking = Array.isArray(data.content)
     ? data.content
-      .map((part) => (isRecord(part) && part.type === "thinking" && typeof part.thinking === "string" ? part.thinking : ""))
-      .join("")
+        .map((part) =>
+          isRecord(part) && part.type === "thinking" && typeof part.thinking === "string"
+            ? part.thinking
+            : ""
+        )
+        .join("")
     : "";
   const toolUses = Array.isArray(data.content) ? readAnthropicToolUses(data.content) : [];
   const finalText = finalizeAnthropicText(text, thinking, toolUses.length);
-  const usage = isRecord(data.usage)
-    && typeof data.usage.input_tokens === "number"
-    && typeof data.usage.output_tokens === "number"
-    ? {
-      inputTokens: data.usage.input_tokens,
-      outputTokens: data.usage.output_tokens
-    }
-    : undefined;
+  const usage =
+    isRecord(data.usage) &&
+    typeof data.usage.input_tokens === "number" &&
+    typeof data.usage.output_tokens === "number"
+      ? {
+          inputTokens: data.usage.input_tokens,
+          outputTokens: data.usage.output_tokens
+        }
+      : undefined;
   return { text: finalText, toolUses, usage, raw: data };
 }
 
@@ -396,7 +425,10 @@ function toAnthropicMessage(message: MagiMessage): Record<string, unknown> {
             input: part.input
           };
         }
-        return { type: "text", text: part.type === "text" ? part.text : (part.type === "tool-result" ? part.content : "") };
+        return {
+          type: "text",
+          text: part.type === "text" ? part.text : part.type === "tool-result" ? part.content : ""
+        };
       })
     };
   }
@@ -443,15 +475,21 @@ function readOpenAiToolUses(value: unknown): MagiToolUsePart[] {
     return [];
   }
   return value.flatMap((toolCall): MagiToolUsePart[] => {
-    if (!isRecord(toolCall) || !isRecord(toolCall.function) || typeof toolCall.function.name !== "string") {
+    if (
+      !isRecord(toolCall) ||
+      !isRecord(toolCall.function) ||
+      typeof toolCall.function.name !== "string"
+    ) {
       return [];
     }
-    return [{
-      type: "tool-use",
-      id: typeof toolCall.id === "string" ? toolCall.id : toolCall.function.name,
-      name: toolCall.function.name,
-      input: parseToolInput(toolCall.function.arguments)
-    }];
+    return [
+      {
+        type: "tool-use",
+        id: typeof toolCall.id === "string" ? toolCall.id : toolCall.function.name,
+        name: toolCall.function.name,
+        input: parseToolInput(toolCall.function.arguments)
+      }
+    ];
   });
 }
 
@@ -460,12 +498,14 @@ function readAnthropicToolUses(content: unknown[]): MagiToolUsePart[] {
     if (!isRecord(part) || part.type !== "tool_use" || typeof part.name !== "string") {
       return [];
     }
-    return [{
-      type: "tool-use",
-      id: typeof part.id === "string" ? part.id : part.name,
-      name: part.name,
-      input: isRecord(part.input) ? part.input : {}
-    }];
+    return [
+      {
+        type: "tool-use",
+        id: typeof part.id === "string" ? part.id : part.name,
+        name: part.name,
+        input: isRecord(part.input) ? part.input : {}
+      }
+    ];
   });
 }
 
@@ -483,9 +523,13 @@ function readOpenAiUsage(data: unknown): { inputTokens: number; outputTokens: nu
   if (!isRecord(data) || !isRecord(data.usage)) {
     return undefined;
   }
-  const inputTokens = typeof data.usage.prompt_tokens === "number" ? data.usage.prompt_tokens : undefined;
-  const outputTokens = typeof data.usage.completion_tokens === "number" ? data.usage.completion_tokens : undefined;
-  return inputTokens !== undefined && outputTokens !== undefined ? { inputTokens, outputTokens } : undefined;
+  const inputTokens =
+    typeof data.usage.prompt_tokens === "number" ? data.usage.prompt_tokens : undefined;
+  const outputTokens =
+    typeof data.usage.completion_tokens === "number" ? data.usage.completion_tokens : undefined;
+  return inputTokens !== undefined && outputTokens !== undefined
+    ? { inputTokens, outputTokens }
+    : undefined;
 }
 
 function mergeOpenAiToolCallDeltas(
@@ -520,19 +564,23 @@ function mergeOpenAiToolCallDeltas(
   }
 }
 
-function toolUsesFromOpenAiStream(toolCalls: Map<number, { id?: string; name?: string; arguments: string }>): MagiToolUsePart[] {
+function toolUsesFromOpenAiStream(
+  toolCalls: Map<number, { id?: string; name?: string; arguments: string }>
+): MagiToolUsePart[] {
   return [...toolCalls.entries()]
     .sort(([left], [right]) => left - right)
     .flatMap(([, toolCall]): MagiToolUsePart[] => {
       if (!toolCall.name) {
         return [];
       }
-      return [{
-        type: "tool-use",
-        id: toolCall.id ?? toolCall.name,
-        name: toolCall.name,
-        input: parseToolInput(toolCall.arguments)
-      }];
+      return [
+        {
+          type: "tool-use",
+          id: toolCall.id ?? toolCall.name,
+          name: toolCall.name,
+          input: parseToolInput(toolCall.arguments)
+        }
+      ];
     });
 }
 
@@ -540,7 +588,9 @@ function readAnthropicStreamText(data: unknown): string | undefined {
   if (!isRecord(data) || data.type !== "content_block_delta" || !isRecord(data.delta)) {
     return undefined;
   }
-  return data.delta.type === "text_delta" && typeof data.delta.text === "string" ? data.delta.text : undefined;
+  return data.delta.type === "text_delta" && typeof data.delta.text === "string"
+    ? data.delta.text
+    : undefined;
 }
 
 function readAnthropicStreamThinking(data: unknown): string | undefined {
@@ -570,13 +620,19 @@ function finalizeAnthropicText(text: string, thinking: string, toolCallCount: nu
   return "\x1b[90m[empty response from model — try again or switch models with /model]\x1b[39m";
 }
 
-function readAnthropicStreamUsage(data: unknown): { inputTokens: number; outputTokens: number } | undefined {
+function readAnthropicStreamUsage(
+  data: unknown
+): { inputTokens: number; outputTokens: number } | undefined {
   if (!isRecord(data) || !isRecord(data.usage)) {
     return undefined;
   }
-  const inputTokens = typeof data.usage.input_tokens === "number" ? data.usage.input_tokens : undefined;
-  const outputTokens = typeof data.usage.output_tokens === "number" ? data.usage.output_tokens : undefined;
-  return inputTokens !== undefined && outputTokens !== undefined ? { inputTokens, outputTokens } : undefined;
+  const inputTokens =
+    typeof data.usage.input_tokens === "number" ? data.usage.input_tokens : undefined;
+  const outputTokens =
+    typeof data.usage.output_tokens === "number" ? data.usage.output_tokens : undefined;
+  return inputTokens !== undefined && outputTokens !== undefined
+    ? { inputTokens, outputTokens }
+    : undefined;
 }
 
 function mergeAnthropicToolUseDeltas(
@@ -586,7 +642,12 @@ function mergeAnthropicToolUseDeltas(
   if (!isRecord(data)) {
     return;
   }
-  if (data.type === "content_block_start" && typeof data.index === "number" && isRecord(data.content_block) && data.content_block.type === "tool_use") {
+  if (
+    data.type === "content_block_start" &&
+    typeof data.index === "number" &&
+    isRecord(data.content_block) &&
+    data.content_block.type === "tool_use"
+  ) {
     toolCalls.set(data.index, {
       id: typeof data.content_block.id === "string" ? data.content_block.id : undefined,
       name: typeof data.content_block.name === "string" ? data.content_block.name : undefined,
@@ -594,7 +655,12 @@ function mergeAnthropicToolUseDeltas(
     });
     return;
   }
-  if (data.type === "content_block_delta" && typeof data.index === "number" && isRecord(data.delta) && data.delta.type === "input_json_delta") {
+  if (
+    data.type === "content_block_delta" &&
+    typeof data.index === "number" &&
+    isRecord(data.delta) &&
+    data.delta.type === "input_json_delta"
+  ) {
     const current = toolCalls.get(data.index) ?? { input: "" };
     if (typeof data.delta.partial_json === "string") {
       current.input += data.delta.partial_json;
@@ -603,19 +669,23 @@ function mergeAnthropicToolUseDeltas(
   }
 }
 
-function toolUsesFromAnthropicStream(toolCalls: Map<number, { id?: string; name?: string; input: string }>): MagiToolUsePart[] {
+function toolUsesFromAnthropicStream(
+  toolCalls: Map<number, { id?: string; name?: string; input: string }>
+): MagiToolUsePart[] {
   return [...toolCalls.entries()]
     .sort(([left], [right]) => left - right)
     .flatMap(([, toolCall]): MagiToolUsePart[] => {
       if (!toolCall.name) {
         return [];
       }
-      return [{
-        type: "tool-use",
-        id: toolCall.id ?? toolCall.name,
-        name: toolCall.name,
-        input: parseToolInput(toolCall.input)
-      }];
+      return [
+        {
+          type: "tool-use",
+          id: toolCall.id ?? toolCall.name,
+          name: toolCall.name,
+          input: parseToolInput(toolCall.input)
+        }
+      ];
     });
 }
 

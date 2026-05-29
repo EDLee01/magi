@@ -11,28 +11,99 @@ import {
 import { ProviderError, providerErrorFromException } from "../providers/errors.js";
 import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
-import { AgentToolResult, CORE_AGENT_TOOLS, executeBuiltinAgentTools, ToolPermissionMode } from "./tools.js";
-import { getBuiltinToolDefinitionByName, getDeferredToolDefinitions, isCoreToolName, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
+import {
+  AgentToolResult,
+  CORE_AGENT_TOOLS,
+  executeBuiltinAgentTools,
+  ToolPermissionMode
+} from "./tools.js";
+import {
+  getBuiltinToolDefinitionByName,
+  getDeferredToolDefinitions,
+  isCoreToolName,
+  SubAgentRequest,
+  SubAgentResult
+} from "../tools/registry.js";
 import { McpToolRegistry } from "../mcp/tool-registry.js";
-import { AskUserQuestionRequest, AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-question.js";
-import { SendUserMessageRequest, SendUserMessageResult, UserMessageSink } from "../tools/user-message.js";
+import {
+  AskUserQuestionRequest,
+  AskUserQuestionAnswer,
+  UserQuestionResolver
+} from "../tools/user-question.js";
+import {
+  SendUserMessageRequest,
+  SendUserMessageResult,
+  UserMessageSink
+} from "../tools/user-message.js";
 
 export type AgentQueryEvent =
   | { type: "request_start" }
-  | { type: "tool_context"; toolCount: number; deferredToolCount: number; schemaChars: number; estimatedSchemaTokens: number; toolNames: string[] }
+  | {
+      type: "tool_context";
+      toolCount: number;
+      deferredToolCount: number;
+      schemaChars: number;
+      estimatedSchemaTokens: number;
+      toolNames: string[];
+    }
   | { type: "text_delta"; text: string }
   | { type: "tool_use"; toolUse: MagiToolUsePart }
   | { type: "assistant_message"; message: MagiMessage }
-  | { type: "tool_result"; toolCallId: string; toolName: string; content: string; isError?: boolean; retryable?: boolean }
-  | { type: "hook_result"; event: string; toolCallId?: string; toolName?: string; result: HookResult }
-  | { type: "compact_boundary"; summaryId: string; sourceMessageCount: number; estimatedTokensBefore: number }
+  | {
+      type: "tool_result";
+      toolCallId: string;
+      toolName: string;
+      content: string;
+      isError?: boolean;
+      retryable?: boolean;
+    }
+  | {
+      type: "hook_result";
+      event: string;
+      toolCallId?: string;
+      toolName?: string;
+      result: HookResult;
+    }
+  | {
+      type: "compact_boundary";
+      summaryId: string;
+      sourceMessageCount: number;
+      estimatedTokensBefore: number;
+    }
   | { type: "approval_request"; toolUse: MagiToolUsePart; reason: string }
-  | { type: "user_question"; toolUse: MagiToolUsePart; question: AskUserQuestionRequest; answer: AskUserQuestionAnswer }
-  | { type: "user_message"; toolUse: MagiToolUsePart; message: SendUserMessageRequest; result: SendUserMessageResult }
+  | {
+      type: "user_question";
+      toolUse: MagiToolUsePart;
+      question: AskUserQuestionRequest;
+      answer: AskUserQuestionAnswer;
+    }
+  | {
+      type: "user_message";
+      toolUse: MagiToolUsePart;
+      message: SendUserMessageRequest;
+      result: SendUserMessageResult;
+    }
   | { type: "usage"; usage: ProviderUsage }
-  | { type: "fallback_switched"; fromProvider: string; fromModel: string; toProvider: string; toModel: string; errorKind?: string }
+  | {
+      type: "fallback_switched";
+      fromProvider: string;
+      fromModel: string;
+      toProvider: string;
+      toModel: string;
+      errorKind?: string;
+    }
   | { type: "cancelled"; reason?: string }
-  | { type: "error"; error: string; retryable: boolean; providerName?: string; model?: string; errorKind?: string; attempt?: number; maxAttempts?: number; nextRetryDelayMs?: number }
+  | {
+      type: "error";
+      error: string;
+      retryable: boolean;
+      providerName?: string;
+      model?: string;
+      errorKind?: string;
+      attempt?: number;
+      maxAttempts?: number;
+      nextRetryDelayMs?: number;
+    }
   | { type: "max_turns_reached" }
   | { type: "done"; text: string; messages: MagiMessage[] };
 
@@ -74,7 +145,11 @@ export interface AgentQueryInput {
   temperature?: number;
   maxOutputTokens?: number;
   permissionMode?: ToolPermissionMode;
-  approvalResolver?: (request: { toolUse: MagiToolUsePart; reason: string; diff?: string }) => Promise<boolean> | boolean;
+  approvalResolver?: (request: {
+    toolUse: MagiToolUsePart;
+    reason: string;
+    diff?: string;
+  }) => Promise<boolean> | boolean;
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
@@ -90,7 +165,9 @@ export interface AgentQueryInput {
   stream?: boolean;
 }
 
-export async function* runAgentQuery(input: AgentQueryInput): AsyncGenerator<AgentQueryEvent, AgentQueryResult> {
+export async function* runAgentQuery(
+  input: AgentQueryInput
+): AsyncGenerator<AgentQueryEvent, AgentQueryResult> {
   const inner = runAgentQueryInner(input);
   let result: IteratorResult<AgentQueryEvent, AgentQueryResult>;
   while (true) {
@@ -101,7 +178,9 @@ export async function* runAgentQuery(input: AgentQueryInput): AsyncGenerator<Age
   }
 }
 
-async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<AgentQueryEvent, AgentQueryResult> {
+async function* runAgentQueryInner(
+  input: AgentQueryInput
+): AsyncGenerator<AgentQueryEvent, AgentQueryResult> {
   const messages = [...input.messages];
   const usage: ProviderUsage = { inputTokens: 0, outputTokens: 0 };
   const maxTurns = input.maxTurns ?? 100;
@@ -110,7 +189,14 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
   let routeIndex = 0;
   let activeRoute = routes[routeIndex];
   let finalText = "";
-  const mcpTools = input.mcp ? new McpToolRegistry({ servers: input.mcp.servers, env: input.env, tokenLookup: input.mcp.tokenLookup, tokenRefresh: input.mcp.tokenRefresh }) : undefined;
+  const mcpTools = input.mcp
+    ? new McpToolRegistry({
+        servers: input.mcp.servers,
+        env: input.env,
+        tokenLookup: input.mcp.tokenLookup,
+        tokenRefresh: input.mcp.tokenRefresh
+      })
+    : undefined;
 
   try {
     const toolCatalog = await createAgentToolCatalog(mcpTools);
@@ -158,7 +244,8 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
 
           // Retry same route for transient errors (502, 503, timeout, rate-limit)
           const sameRouteRetries = attempts.filter(
-            (a) => !a.ok && a.providerName === activeRoute.providerName && a.model === activeRoute.model
+            (a) =>
+              !a.ok && a.providerName === activeRoute.providerName && a.model === activeRoute.model
           ).length;
 
           const nextRoute = routes[routeIndex + 1];
@@ -183,7 +270,12 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
           // No fallback available: keep a short retry tail for network errors,
           // and a longer one for HTTP retryable failures from an overloaded proxy.
           if (retryable && !hasFallback && sameRouteRetries < retryPolicy.totalRetries) {
-            const delayMs = retryDelayMs(providerError, sameRouteRetries, "slow", retryPolicy.fastRetries);
+            const delayMs = retryDelayMs(
+              providerError,
+              sameRouteRetries,
+              "slow",
+              retryPolicy.fastRetries
+            );
             yield formatProviderRetryEvent({
               route: activeRoute,
               error: providerError,
@@ -230,7 +322,12 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
       response = normalized.response;
       let toolUses = normalized.toolUses;
 
-      if (toolUses.length === 0 && !response.text.trim() && response.usage && response.usage.outputTokens > 0) {
+      if (
+        toolUses.length === 0 &&
+        !response.text.trim() &&
+        response.usage &&
+        response.usage.outputTokens > 0
+      ) {
         response = await recoverEmptyFinalAnswer(activeRoute, messages, input.signal);
         if (response.usage) {
           usage.inputTokens += response.usage.inputTokens;
@@ -275,20 +372,39 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
         };
       }
 
-      const promptModel = async ({ model, messages }: { model: string; messages: MagiMessage[] }) => {
+      const promptModel = async ({
+        model,
+        messages
+      }: {
+        model: string;
+        messages: MagiMessage[];
+      }) => {
         throwIfCancelled(input.signal);
-        const response = await activeRoute.adapter.complete({ model, messages, signal: input.signal });
+        const response = await activeRoute.adapter.complete({
+          model,
+          messages,
+          signal: input.signal
+        });
         return { text: response.text };
       };
       const prepared = await prepareToolUsesWithPreHooks(input, toolUses, promptModel);
       for (const hookResult of prepared.hookResults) {
         yield hookResult;
       }
-      const executed = await executePreparedToolUses(input, prepared, mcpTools, async ({ messages }) => {
-        throwIfCancelled(input.signal);
-        const response = await activeRoute.adapter.complete({ model: activeRoute.model, messages, signal: input.signal });
-        return { text: response.text };
-      });
+      const executed = await executePreparedToolUses(
+        input,
+        prepared,
+        mcpTools,
+        async ({ messages }) => {
+          throwIfCancelled(input.signal);
+          const response = await activeRoute.adapter.complete({
+            model: activeRoute.model,
+            messages,
+            signal: input.signal
+          });
+          return { text: response.text };
+        }
+      );
       for (const event of executed.events) {
         yield event;
       }
@@ -319,13 +435,15 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
         };
         toolResultMessages.push({
           role: "tool",
-          content: [{
-            type: "tool-result",
-            toolCallId: result.toolCallId,
-            content: result.content,
-            isError: result.isError,
-            retryable: result.retryable
-          }]
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: result.toolCallId,
+              content: result.content,
+              isError: result.isError,
+              retryable: result.retryable
+            }
+          ]
         });
         const postHooks = await executeHooks({
           event: result.isError ? "post_tool_use_failure" : "post_tool_use",
@@ -373,13 +491,15 @@ async function* runAgentQueryInner(input: AgentQueryInput): AsyncGenerator<Agent
     };
   } catch (error) {
     if (isAbortError(error) || input.signal?.aborted) {
-      yield { type: "cancelled", reason: input.signal?.reason ? String(input.signal.reason) : undefined };
+      yield {
+        type: "cancelled",
+        reason: input.signal?.reason ? String(input.signal.reason) : undefined
+      };
     }
     throw error;
   } finally {
     mcpTools?.close();
   }
-
 }
 
 async function recoverEmptyFinalAnswer(
@@ -402,10 +522,16 @@ async function recoverEmptyFinalAnswer(
   });
 }
 
-async function* completeRoute(route: AgentRoute, request: ProviderRequest): AsyncGenerator<AgentQueryEvent, {
-  response: ProviderResponse;
-  streamedText: string;
-}> {
+async function* completeRoute(
+  route: AgentRoute,
+  request: ProviderRequest
+): AsyncGenerator<
+  AgentQueryEvent,
+  {
+    response: ProviderResponse;
+    streamedText: string;
+  }
+> {
   throwIfCancelled(request.signal);
   if (!route.adapter.stream) {
     return {
@@ -458,7 +584,10 @@ function formatProviderRetryEvent(input: {
   };
 }
 
-function retryPolicyFor(error: unknown, hasFallback: boolean): { fastRetries: number; totalRetries: number } {
+function retryPolicyFor(
+  error: unknown,
+  hasFallback: boolean
+): { fastRetries: number; totalRetries: number } {
   if (error instanceof ProviderError && error.kind === "network") {
     return { fastRetries: hasFallback ? 2 : 2, totalRetries: hasFallback ? 2 : 3 };
   }
@@ -466,7 +595,12 @@ function retryPolicyFor(error: unknown, hasFallback: boolean): { fastRetries: nu
   return { fastRetries, totalRetries: 8 };
 }
 
-function retryDelayMs(error: unknown, sameRouteRetries: number, phase: "fast" | "slow", fastRetries = 0): number {
+function retryDelayMs(
+  error: unknown,
+  sameRouteRetries: number,
+  phase: "fast" | "slow",
+  fastRetries = 0
+): number {
   if (error instanceof ProviderError && error.kind === "network") {
     return Math.min(250 * Math.pow(2, sameRouteRetries - 1), 1000);
   }
@@ -500,8 +634,10 @@ function throwIfCancelled(signal: AbortSignal | undefined): void {
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError"
-    || error instanceof Error && error.name === "AbortError";
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }
 
 interface PreparedToolUses {
@@ -598,11 +734,13 @@ async function executePreparedToolUses(
         return answer;
       },
       userMessageSink: async (request) => {
-        const sink = input.userMessageSink ?? (async () => ({
-          delivered: true,
-          channel: "agent-event",
-          deliveredAt: new Date().toISOString()
-        }));
+        const sink =
+          input.userMessageSink ??
+          (async () => ({
+            delivered: true,
+            channel: "agent-event",
+            deliveredAt: new Date().toISOString()
+          }));
         const result = await sink(request);
         events.push({
           type: "user_message",
@@ -616,7 +754,10 @@ async function executePreparedToolUses(
         if (permission.decision !== "ask") {
           return false;
         }
-        return input.approvalResolver?.({ toolUse, reason: permission.reason, diff: permission.diff }) ?? false;
+        return (
+          input.approvalResolver?.({ toolUse, reason: permission.reason, diff: permission.diff }) ??
+          false
+        );
       },
       spawnSubAgent: input.spawnSubAgent,
       signal: input.signal
@@ -628,8 +769,13 @@ async function executePreparedToolUses(
       for (const { index, toolUse } of mcp) {
         const first = await mcpTools.executeTool({ toolUse });
         if (first.permission?.decision === "ask" && input.approvalResolver) {
-          const approved = await input.approvalResolver({ toolUse, reason: first.permission.reason });
-          results[index] = approved ? await mcpTools.executeTool({ toolUse, approved: true }) : first;
+          const approved = await input.approvalResolver({
+            toolUse,
+            reason: first.permission.reason
+          });
+          results[index] = approved
+            ? await mcpTools.executeTool({ toolUse, approved: true })
+            : first;
         } else {
           results[index] = first;
         }
@@ -654,7 +800,9 @@ interface AgentToolCatalog {
   revealFromResults(results: AgentToolResult[]): void;
 }
 
-async function createAgentToolCatalog(mcpTools: McpToolRegistry | undefined): Promise<AgentToolCatalog> {
+async function createAgentToolCatalog(
+  mcpTools: McpToolRegistry | undefined
+): Promise<AgentToolCatalog> {
   const dynamic = mcpTools ? await mcpTools.getToolDefinitions() : [];
   const dynamicNames = new Set(dynamic.map((tool) => tool.name));
   const exposedBuiltIns = new Set(CORE_AGENT_TOOLS.map((tool) => tool.name));
@@ -668,10 +816,7 @@ async function createAgentToolCatalog(mcpTools: McpToolRegistry | undefined): Pr
         const definition = getBuiltinToolDefinitionByName(name);
         if (definition) builtIns.push(definition);
       }
-      return [
-        ...builtIns,
-        ...dynamic.filter((tool) => !exposedBuiltIns.has(tool.name))
-      ];
+      return [...builtIns, ...dynamic.filter((tool) => !exposedBuiltIns.has(tool.name))];
     },
     deferredCount() {
       return [...allDeferredBuiltIns].filter((name) => !exposedBuiltIns.has(name)).length;
@@ -796,8 +941,15 @@ function parseTextToolArgs(body: string): Record<string, unknown> {
   return input;
 }
 
-function normalizeTextToolInput(toolName: string, input: Record<string, unknown>): Record<string, unknown> {
-  if ((toolName === "FileRead" || toolName === "FileWrite" || toolName === "FileEdit") && input.file_path === undefined && input.path !== undefined) {
+function normalizeTextToolInput(
+  toolName: string,
+  input: Record<string, unknown>
+): Record<string, unknown> {
+  if (
+    (toolName === "FileRead" || toolName === "FileWrite" || toolName === "FileEdit") &&
+    input.file_path === undefined &&
+    input.path !== undefined
+  ) {
     return { ...input, file_path: input.path };
   }
   if (toolName === "Bash" && input.command === undefined && input.cmd !== undefined) {
@@ -815,7 +967,10 @@ function coerceTextToolValue(value: string): unknown {
       return numberValue;
     }
   }
-  if ((value.startsWith("{") && value.endsWith("}")) || (value.startsWith("[") && value.endsWith("]"))) {
+  if (
+    (value.startsWith("{") && value.endsWith("}")) ||
+    (value.startsWith("[") && value.endsWith("]"))
+  ) {
     try {
       return JSON.parse(value) as unknown;
     } catch {
@@ -833,7 +988,7 @@ function readXmlAttribute(attrs: string, name: string): string | undefined {
 
 function decodeXmlEntities(value: string): string {
   return value
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -851,9 +1006,11 @@ function normalizeRoutes(input: AgentQueryInput): AgentRoute[] {
   if (!input.adapter || !input.model) {
     throw new Error("Agent query requires either routes or adapter+model");
   }
-  return [{
-    providerName: input.providerName ?? input.adapter.name,
-    model: input.model,
-    adapter: input.adapter
-  }];
+  return [
+    {
+      providerName: input.providerName ?? input.adapter.name,
+      model: input.model,
+      adapter: input.adapter
+    }
+  ];
 }

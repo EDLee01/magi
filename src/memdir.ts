@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  unlinkSync,
+  statSync
+} from "node:fs";
 import path from "node:path";
 
 import { MagiPaths } from "./paths.js";
@@ -83,11 +91,13 @@ export function listMemdirEntries(input: MemdirInput): MemdirEntry[] {
         const content = readFileSync(filePath, "utf8");
         const parsed = parseMemdirFile(content);
         if (!parsed) return [];
-        return [{
-          ...parsed,
-          filename,
-          path: filePath
-        }];
+        return [
+          {
+            ...parsed,
+            filename,
+            path: filePath
+          }
+        ];
       } catch {
         return [];
       }
@@ -137,10 +147,15 @@ export function deleteMemdirEntry(input: MemdirInput, filename: string): boolean
   return true;
 }
 
-export function findMemdirEntry(input: MemdirInput, filenameOrName: string): MemdirEntry | undefined {
+export function findMemdirEntry(
+  input: MemdirInput,
+  filenameOrName: string
+): MemdirEntry | undefined {
   const entries = listMemdirEntries(input);
-  return entries.find((e) => e.filename === filenameOrName || e.name === filenameOrName)
-    ?? entries.find((e) => slugify(e.name) === slugify(filenameOrName));
+  return (
+    entries.find((e) => e.filename === filenameOrName || e.name === filenameOrName) ??
+    entries.find((e) => slugify(e.name) === slugify(filenameOrName))
+  );
 }
 
 export function searchMemdir(input: {
@@ -151,8 +166,9 @@ export function searchMemdir(input: {
 }): MemdirSearchResult[] {
   const terms = tokenize(input.query);
   if (terms.length === 0) return [];
-  const entries = listMemdirEntries(input.paths)
-    .filter((e) => !input.types || input.types.includes(e.type));
+  const entries = listMemdirEntries(input.paths).filter(
+    (e) => !input.types || input.types.includes(e.type)
+  );
   return entries
     .map((entry) => ({
       ...entry,
@@ -198,7 +214,9 @@ function updateIndex(input: MemdirInput): void {
   atomicWrite(indexFile, content);
 }
 
-function parseMemdirFile(content: string): { name: string; description: string; type: MemdirType; body: string } | undefined {
+function parseMemdirFile(
+  content: string
+): { name: string; description: string; type: MemdirType; body: string } | undefined {
   if (!content.startsWith("---\n")) return undefined;
   const end = content.indexOf("\n---\n", 4);
   if (end === -1) return undefined;
@@ -222,7 +240,12 @@ function parseMemdirFile(content: string): { name: string; description: string; 
   };
 }
 
-function formatMemdirFile(input: { name: string; description: string; type: MemdirType; body: string }): string {
+function formatMemdirFile(input: {
+  name: string;
+  description: string;
+  type: MemdirType;
+  body: string;
+}): string {
   return [
     "---",
     `name: ${input.name}`,
@@ -236,10 +259,13 @@ function formatMemdirFile(input: { name: string; description: string; type: Memd
 }
 
 function slugify(text: string): string {
-  return text.toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 60) || "entry";
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60) || "entry"
+  );
 }
 
 function isValidType(value: string): value is MemdirType {
@@ -247,11 +273,15 @@ function isValidType(value: string): value is MemdirType {
 }
 
 function tokenize(text: string): string[] {
-  return Array.from(new Set(text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 2)));
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .filter((t) => t.length >= 2)
+    )
+  );
 }
 
 function scoreEntry(entry: MemdirEntry, terms: string[]): number {

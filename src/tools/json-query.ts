@@ -1,10 +1,22 @@
 import { ToolError } from "./errors.js";
 
-export interface JsonQueryResult { query: string; input: string; result: string }
+export interface JsonQueryResult {
+  query: string;
+  input: string;
+  result: string;
+}
 
-export const JsonQueryInputSchema = { type: "object", properties: { json: { type: "string" }, path: { type: "string" } }, required: ["json", "path"], additionalProperties: false } satisfies Record<string, unknown>;
+export const JsonQueryInputSchema = {
+  type: "object",
+  properties: { json: { type: "string" }, path: { type: "string" } },
+  required: ["json", "path"],
+  additionalProperties: false
+} satisfies Record<string, unknown>;
 
-export function parseJsonQueryInput(input: Record<string, unknown>): { json: string; path: string } {
+export function parseJsonQueryInput(input: Record<string, unknown>): {
+  json: string;
+  path: string;
+} {
   const json = typeof input.json === "string" ? input.json : "";
   const path = typeof input.path === "string" ? input.path : "";
   if (!json) throw new ToolError("json is required", "bad-input");
@@ -39,7 +51,11 @@ function queryJsonPath(data: unknown, path: string): unknown {
         current = (current as Record<string, unknown>)[part.value];
       } else if (Array.isArray(current) && part.value === "") {
         // [].key — array flatten
-        current = current.map(item => typeof item === "object" && item ? (item as Record<string, unknown>)[part.value] : undefined);
+        current = current.map((item) =>
+          typeof item === "object" && item
+            ? (item as Record<string, unknown>)[part.value]
+            : undefined
+        );
       } else {
         return undefined;
       }
@@ -55,7 +71,9 @@ function queryJsonPath(data: unknown, path: string): unknown {
   return current;
 }
 
-function tokenize(path: string): Array<{ kind: "dot" | "bracket" | "index"; value: string | number }> {
+function tokenize(
+  path: string
+): Array<{ kind: "dot" | "bracket" | "index"; value: string | number }> {
   const tokens: Array<{ kind: "dot" | "bracket" | "index"; value: string | number }> = [];
   const parts = path.split(".");
   for (const part of parts) {

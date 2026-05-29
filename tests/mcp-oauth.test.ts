@@ -13,12 +13,16 @@ describe("OAuth 2.0 client", () => {
     });
 
     it("parses authorization_uri parameter", () => {
-      const result = parseWwwAuthenticate('Bearer authorization_uri="https://auth.example.com/oauth"');
+      const result = parseWwwAuthenticate(
+        'Bearer authorization_uri="https://auth.example.com/oauth"'
+      );
       expect(result?.authServerUrl).toBe("https://auth.example.com/oauth");
     });
 
     it("parses as_uri parameter (MCP-spec compatible)", () => {
-      const result = parseWwwAuthenticate('Bearer as_uri="https://auth.linear.app", scope="mcp.read"');
+      const result = parseWwwAuthenticate(
+        'Bearer as_uri="https://auth.linear.app", scope="mcp.read"'
+      );
       expect(result?.authServerUrl).toBe("https://auth.linear.app");
     });
 

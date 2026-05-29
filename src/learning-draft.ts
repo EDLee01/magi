@@ -3,7 +3,12 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node
 import path from "node:path";
 
 import { atomicWrite } from "./fs-utils.js";
-import { appendMemoryFile, ensureMemoryStructure, isMemoryContentSafe, resolveMemoryFilePath } from "./memory-files.js";
+import {
+  appendMemoryFile,
+  ensureMemoryStructure,
+  isMemoryContentSafe,
+  resolveMemoryFilePath
+} from "./memory-files.js";
 
 export type LearningDraftKind = "memory" | "skill_create" | "skill_patch" | "do_not_save";
 export type LearningDraftStatus = "pending" | "applied" | "rejected";
@@ -38,22 +43,26 @@ export interface LearningDraftRootOptions {
   skillsRoot?: string;
 }
 
-export function proposeLearningDraft(input: LearningDraftRootOptions & {
-  kind: LearningDraftKind;
-  target: string;
-  content: string;
-  reason: string;
-  sourceSession?: string;
-  evidence?: string[];
-  confidence?: number;
-  id?: string;
-}): LearningDraft {
+export function proposeLearningDraft(
+  input: LearningDraftRootOptions & {
+    kind: LearningDraftKind;
+    target: string;
+    content: string;
+    reason: string;
+    sourceSession?: string;
+    evidence?: string[];
+    confidence?: number;
+    id?: string;
+  }
+): LearningDraft {
   const content = input.content.trim();
   if (!content) {
     throw new Error("LearningDraft content must not be empty");
   }
   if (!isMemoryContentSafe(content)) {
-    throw new Error("LearningDraft rejected because it appears to contain a secret, token, password, or API key");
+    throw new Error(
+      "LearningDraft rejected because it appears to contain a secret, token, password, or API key"
+    );
   }
   validateLearningTarget(input);
   const now = new Date().toISOString();
@@ -88,14 +97,16 @@ export function listLearningDrafts(input: LearningDraftRootOptions): LearningDra
       try {
         if (!statSync(file).isFile()) return [];
         const draft = readLearningDraft(file);
-        return [{
-          id: draft.id,
-          path: file,
-          status: draft.status,
-          kind: draft.kind,
-          target: draft.target,
-          createdAt: draft.createdAt
-        }];
+        return [
+          {
+            id: draft.id,
+            path: file,
+            status: draft.status,
+            kind: draft.kind,
+            target: draft.target,
+            createdAt: draft.createdAt
+          }
+        ];
       } catch {
         return [];
       }
@@ -106,7 +117,9 @@ export function showLearningDraft(input: LearningDraftRootOptions & { id: string
   return readLearningDraft(learningDraftFilePath(input.appRoot, input.id));
 }
 
-export function applyLearningDraft(input: LearningDraftRootOptions & { id: string }): LearningDraft {
+export function applyLearningDraft(
+  input: LearningDraftRootOptions & { id: string }
+): LearningDraft {
   const file = learningDraftFilePath(input.appRoot, input.id);
   const draft = readLearningDraft(file);
   if (draft.status !== "pending") {
@@ -116,7 +129,9 @@ export function applyLearningDraft(input: LearningDraftRootOptions & { id: strin
   return updateLearningDraftStatus(file, draft, "applied");
 }
 
-export function rejectLearningDraft(input: LearningDraftRootOptions & { id: string }): LearningDraft {
+export function rejectLearningDraft(
+  input: LearningDraftRootOptions & { id: string }
+): LearningDraft {
   const file = learningDraftFilePath(input.appRoot, input.id);
   const draft = readLearningDraft(file);
   if (draft.status !== "pending") {
@@ -129,11 +144,16 @@ export function formatLearningDraftList(records: LearningDraftRecord[]): string 
   if (records.length === 0) return "No LearningDrafts.";
   return [
     "LearningDrafts:",
-    ...records.map((draft) => `  ${draft.id}  ${draft.status.padEnd(8)}  ${draft.kind.padEnd(12)}  ${draft.target}`)
+    ...records.map(
+      (draft) =>
+        `  ${draft.id}  ${draft.status.padEnd(8)}  ${draft.kind.padEnd(12)}  ${draft.target}`
+    )
   ].join("\n");
 }
 
-export function formatLearningDraftReview(input: LearningDraftRootOptions & { id: string }): string {
+export function formatLearningDraftReview(
+  input: LearningDraftRootOptions & { id: string }
+): string {
   const draft = showLearningDraft(input);
   return [
     `LearningDraft: ${draft.id}`,
@@ -153,22 +173,28 @@ export function formatLearningDraftReview(input: LearningDraftRootOptions & { id
     "",
     `Apply: magi learning draft apply ${draft.id}`,
     `Reject: magi learning draft reject ${draft.id}`
-  ].filter((line): line is string => line !== undefined).join("\n");
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }
 
-export function maybeProposePostTaskLearningDraft(input: LearningDraftRootOptions & {
-  prompt: string;
-  answer: string;
-  sourceSession?: string;
-  cwd: string;
-  events?: Array<Record<string, unknown>>;
-}): LearningDraft | undefined {
+export function maybeProposePostTaskLearningDraft(
+  input: LearningDraftRootOptions & {
+    prompt: string;
+    answer: string;
+    sourceSession?: string;
+    cwd: string;
+    events?: Array<Record<string, unknown>>;
+  }
+): LearningDraft | undefined {
   const events = input.events ?? [];
   const toolResults = events.filter((event) => event.type === "tool_result");
   const failedTools = toolResults.filter((event) => event.isError === true);
-  const explicitLearning = /\b(remember|learn|lesson|workflow|preference|next time)\b/i.test(input.prompt)
-    || /(记住|学习|沉淀|复用|下次|偏好|工作流)/.test(input.prompt);
-  const complexEnough = toolResults.length >= 4 || failedTools.length >= 2 || input.prompt.length > 500;
+  const explicitLearning =
+    /\b(remember|learn|lesson|workflow|preference|next time)\b/i.test(input.prompt) ||
+    /(记住|学习|沉淀|复用|下次|偏好|工作流)/.test(input.prompt);
+  const complexEnough =
+    toolResults.length >= 4 || failedTools.length >= 2 || input.prompt.length > 500;
   if (!explicitLearning && !complexEnough) {
     return undefined;
   }
@@ -264,7 +290,11 @@ function applyLearningDraftContent(input: LearningDraftRootOptions, draft: Learn
   }
 }
 
-function updateLearningDraftStatus(file: string, draft: LearningDraft, status: LearningDraftStatus): LearningDraft {
+function updateLearningDraftStatus(
+  file: string,
+  draft: LearningDraft,
+  status: LearningDraftStatus
+): LearningDraft {
   const next: LearningDraft = {
     ...draft,
     status,
@@ -274,10 +304,12 @@ function updateLearningDraftStatus(file: string, draft: LearningDraft, status: L
   return next;
 }
 
-function validateLearningTarget(input: LearningDraftRootOptions & {
-  kind: LearningDraftKind;
-  target: string;
-}): void {
+function validateLearningTarget(
+  input: LearningDraftRootOptions & {
+    kind: LearningDraftKind;
+    target: string;
+  }
+): void {
   const target = input.target.trim();
   if (!target || target.includes("\0")) {
     throw new Error("LearningDraft target must not be empty");
@@ -298,12 +330,19 @@ function readLearningDraft(file: string): LearningDraft {
   if (!parsed.id || !parsed.kind || !parsed.target || !parsed.status || !parsed.content) {
     throw new Error(`Invalid LearningDraft: ${file}`);
   }
-  if (parsed.kind !== "memory" && parsed.kind !== "skill_create" && parsed.kind !== "skill_patch" && parsed.kind !== "do_not_save") {
+  if (
+    parsed.kind !== "memory" &&
+    parsed.kind !== "skill_create" &&
+    parsed.kind !== "skill_patch" &&
+    parsed.kind !== "do_not_save"
+  ) {
     throw new Error(`Invalid LearningDraft kind: ${parsed.kind}`);
   }
   return {
     ...parsed,
-    evidence: Array.isArray(parsed.evidence) ? parsed.evidence.filter((item) => typeof item === "string") : [],
+    evidence: Array.isArray(parsed.evidence)
+      ? parsed.evidence.filter((item) => typeof item === "string")
+      : [],
     requiresReview: true
   };
 }
@@ -319,7 +358,10 @@ function learningDraftFilePath(appRoot: string, id: string): string {
 }
 
 function createLearningDraftId(): string {
-  const stamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:T.Z]/g, "")
+    .slice(0, 14);
   return `learn_${stamp}_${randomUUID().slice(0, 8)}`;
 }
 
@@ -332,9 +374,10 @@ function normalizeEvidence(value: string[] | undefined): string[] {
 
 function skillNameFromTarget(target: string): string {
   const normalized = target.replace(/\\/g, "/").replace(/^\/+/, "").trim();
-  const match = /^skills\/([^/]+)\/SKILL\.md$/.exec(normalized)
-    ?? /^([^/]+)\/SKILL\.md$/.exec(normalized)
-    ?? /^([^/]+)$/.exec(normalized);
+  const match =
+    /^skills\/([^/]+)\/SKILL\.md$/.exec(normalized) ??
+    /^([^/]+)\/SKILL\.md$/.exec(normalized) ??
+    /^([^/]+)$/.exec(normalized);
   const name = match?.[1];
   if (!name || !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(name)) {
     throw new Error("Skill target must be a skill name or skills/<name>/SKILL.md");

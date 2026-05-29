@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 
-import { clearGoal, createGoal, formatGoal, formatGoalBadge, formatGoalContext, getGoal, goalStorePath, isGoalCreationArgs, listGoals, updateGoalStatus } from "../src/goal.js";
+import {
+  clearGoal,
+  createGoal,
+  formatGoal,
+  formatGoalBadge,
+  formatGoalContext,
+  getGoal,
+  goalStorePath,
+  isGoalCreationArgs,
+  listGoals,
+  updateGoalStatus
+} from "../src/goal.js";
 import { getMagiPaths } from "../src/paths.js";
 import { makeTempRoot } from "./helpers.js";
 
@@ -19,11 +30,18 @@ describe("goal state", () => {
       expect(formatGoal(goal)).toContain("Status: active");
       expect(formatGoalBadge(goal)).toBe("goal active · ship goal support");
 
-      const completed = updateGoalStatus(paths, { sessionId: "session-1", status: "completed", note: "verified" });
+      const completed = updateGoalStatus(paths, {
+        sessionId: "session-1",
+        status: "completed",
+        note: "verified"
+      });
 
       expect(completed?.status).toBe("completed");
       expect(getGoal(paths, "session-1")).toBeUndefined();
-      expect(listGoals(paths, "session-1")[0]).toMatchObject({ status: "completed", note: "verified" });
+      expect(listGoals(paths, "session-1")[0]).toMatchObject({
+        status: "completed",
+        note: "verified"
+      });
     } finally {
       temp.cleanup();
     }
@@ -37,15 +55,21 @@ describe("goal state", () => {
       const replacement = createGoal(paths, { sessionId: "session-1", objective: "second goal" });
 
       expect(replacement.status).toBe("active");
-      expect(listGoals(paths, "session-1")).toContainEqual(expect.objectContaining({
-        objective: "first goal",
-        status: "cancelled",
-        note: "Replaced by a new active goal"
-      }));
+      expect(listGoals(paths, "session-1")).toContainEqual(
+        expect.objectContaining({
+          objective: "first goal",
+          status: "cancelled",
+          note: "Replaced by a new active goal"
+        })
+      );
 
       const cleared = clearGoal(paths, "session-1");
 
-      expect(cleared).toMatchObject({ objective: "second goal", status: "cancelled", note: "Cancelled by user" });
+      expect(cleared).toMatchObject({
+        objective: "second goal",
+        status: "cancelled",
+        note: "Cancelled by user"
+      });
       expect(getGoal(paths, "session-1")).toBeUndefined();
     } finally {
       temp.cleanup();
@@ -65,17 +89,23 @@ describe("goal state", () => {
     try {
       const paths = getMagiPaths(temp.env);
       mkdirSync(paths.stateRoot, { recursive: true });
-      writeFileSync(goalStorePath(paths), `${JSON.stringify({
-        version: 1,
-        goals: [{
-          id: "goal-1",
-          sessionId: "session-1",
-          objective: "finish legacy goal",
-          status: "complete",
-          createdAt: "2026-05-28T00:00:00.000Z",
-          updatedAt: "2026-05-28T00:00:00.000Z"
-        }]
-      })}\n`, "utf8");
+      writeFileSync(
+        goalStorePath(paths),
+        `${JSON.stringify({
+          version: 1,
+          goals: [
+            {
+              id: "goal-1",
+              sessionId: "session-1",
+              objective: "finish legacy goal",
+              status: "complete",
+              createdAt: "2026-05-28T00:00:00.000Z",
+              updatedAt: "2026-05-28T00:00:00.000Z"
+            }
+          ]
+        })}\n`,
+        "utf8"
+      );
 
       const stored = listGoals(paths, "session-1")[0];
       expect(stored.status).toBe("completed");

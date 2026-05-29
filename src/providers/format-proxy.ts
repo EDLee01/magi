@@ -84,7 +84,10 @@ export interface AnthropicMessagesResponse {
 
 // ─── Conversion: Magi IR → OpenAI Chat ──────────────────────────────────────
 
-export function magiToOpenAiChat(request: ProviderRequest, options?: { stream?: boolean }): OpenAiChatRequest {
+export function magiToOpenAiChat(
+  request: ProviderRequest,
+  options?: { stream?: boolean }
+): OpenAiChatRequest {
   const messages: OpenAiChatMessage[] = request.messages.map(magiMessageToOpenAi);
   const tools: OpenAiToolDef[] | undefined = request.tools?.map(magiToolToOpenAi);
   return {
@@ -112,7 +115,11 @@ function magiMessageToOpenAi(message: MagiMessage): OpenAiChatMessage {
     if (toolUses.length > 0) {
       return {
         role: "assistant",
-        content: message.content.filter((p) => p.type === "text").map((p) => p.type === "text" ? p.text : "").join("") || undefined,
+        content:
+          message.content
+            .filter((p) => p.type === "text")
+            .map((p) => (p.type === "text" ? p.text : ""))
+            .join("") || undefined,
         tool_calls: toolUses.map((tu) => ({
           id: tu.id,
           type: "function" as const,
@@ -148,17 +155,22 @@ export function openAiChatToMagi(response: OpenAiChatResponse): ProviderResponse
   return {
     text,
     toolUses: toolUses.length > 0 ? toolUses : undefined,
-    usage: response.usage ? {
-      inputTokens: response.usage.prompt_tokens,
-      outputTokens: response.usage.completion_tokens
-    } : undefined,
+    usage: response.usage
+      ? {
+          inputTokens: response.usage.prompt_tokens,
+          outputTokens: response.usage.completion_tokens
+        }
+      : undefined,
     raw: response
   };
 }
 
 // ─── Conversion: Magi IR → Anthropic Messages ───────────────────────────────
 
-export function magiToAnthropicMessages(request: ProviderRequest, options?: { stream?: boolean }): AnthropicMessagesRequest {
+export function magiToAnthropicMessages(
+  request: ProviderRequest,
+  options?: { stream?: boolean }
+): AnthropicMessagesRequest {
   const system = request.messages
     .filter((m) => m.role === "system")
     .map(messageText)
@@ -188,7 +200,10 @@ function magiMessageToAnthropic(message: MagiMessage): AnthropicMessage {
       if (part.type === "tool-use") {
         return { type: "tool_use", id: part.id, name: part.name, input: part.input };
       }
-      return { type: "text", text: part.type === "text" ? part.text : (part.type === "tool-result" ? part.content : "") };
+      return {
+        type: "text",
+        text: part.type === "text" ? part.text : part.type === "tool-result" ? part.content : ""
+      };
     });
     return { role: "assistant", content: blocks };
   }
@@ -212,22 +227,29 @@ export function anthropicMessagesToMagi(response: AnthropicMessagesResponse): Pr
     .map((b) => b.text)
     .join("");
   const toolUses: MagiToolUsePart[] = response.content
-    .filter((b): b is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } => b.type === "tool_use")
+    .filter(
+      (b): b is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } =>
+        b.type === "tool_use"
+    )
     .map((b) => ({ type: "tool-use", id: b.id, name: b.name, input: b.input }));
   return {
     text,
     toolUses: toolUses.length > 0 ? toolUses : undefined,
-    usage: response.usage ? {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens
-    } : undefined,
+    usage: response.usage
+      ? {
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens
+        }
+      : undefined,
     raw: response
   };
 }
 
 // ─── Cross-format: OpenAI Chat ↔ Anthropic Messages ─────────────────────────
 
-export function openAiChatToAnthropicMessages(request: OpenAiChatRequest): AnthropicMessagesRequest {
+export function openAiChatToAnthropicMessages(
+  request: OpenAiChatRequest
+): AnthropicMessagesRequest {
   const system = request.messages
     .filter((m) => m.role === "system")
     .map((m) => m.content ?? "")
@@ -270,11 +292,13 @@ function openAiMessageToAnthropic(message: OpenAiChatMessage): AnthropicMessage 
   if (message.role === "tool") {
     return {
       role: "user",
-      content: [{
-        type: "tool_result",
-        tool_use_id: message.tool_call_id ?? "unknown",
-        content: message.content ?? ""
-      }]
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: message.tool_call_id ?? "unknown",
+          content: message.content ?? ""
+        }
+      ]
     };
   }
   if (message.role === "assistant") {
@@ -283,30 +307,39 @@ function openAiMessageToAnthropic(message: OpenAiChatMessage): AnthropicMessage 
   return { role: "user", content: message.content ?? "" };
 }
 
-export function anthropicMessagesToOpenAiChat(response: AnthropicMessagesResponse): OpenAiChatResponse {
+export function anthropicMessagesToOpenAiChat(
+  response: AnthropicMessagesResponse
+): OpenAiChatResponse {
   const text = response.content
     .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("");
   const toolCalls: OpenAiToolCall[] = response.content
-    .filter((b): b is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } => b.type === "tool_use")
+    .filter(
+      (b): b is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } =>
+        b.type === "tool_use"
+    )
     .map((b) => ({
       id: b.id,
       type: "function",
       function: { name: b.name, arguments: JSON.stringify(b.input) }
     }));
   return {
-    choices: [{
-      message: {
-        role: "assistant",
-        content: text || undefined,
-        tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: text || undefined,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+        }
       }
-    }],
-    usage: response.usage ? {
-      prompt_tokens: response.usage.input_tokens,
-      completion_tokens: response.usage.output_tokens
-    } : undefined
+    ],
+    usage: response.usage
+      ? {
+          prompt_tokens: response.usage.input_tokens,
+          completion_tokens: response.usage.output_tokens
+        }
+      : undefined
   };
 }
 

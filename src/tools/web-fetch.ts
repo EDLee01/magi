@@ -28,9 +28,10 @@ export async function webFetch(input: WebFetchInput): Promise<WebFetchResult> {
   }
   const contentType = response.headers.get("content-type") ?? "";
   const body = await readLimitedResponse(response, input.maxBytes ?? 1_000_000);
-  const extracted = contentType.includes("text/html") || looksLikeHtml(body.text)
-    ? extractHtml(body.text)
-    : { title: url.toString(), text: body.text };
+  const extracted =
+    contentType.includes("text/html") || looksLikeHtml(body.text)
+      ? extractHtml(body.text)
+      : { title: url.toString(), text: body.text };
   const pageText = collapseWhitespace(extracted.text).slice(0, 60_000);
   if (!pageText.trim()) {
     throw new Error("WebFetch received no readable text");
@@ -38,18 +39,24 @@ export async function webFetch(input: WebFetchInput): Promise<WebFetchResult> {
 
   const summary = await input.promptModel({
     messages: [
-      textMessage("system", [
-        "You are processing fetched web content for Magi.",
-        "Follow the user's extraction prompt using only the provided page content.",
-        "If the content does not contain the answer, say so."
-      ].join("\n")),
-      textMessage("user", [
-        `URL: ${url.toString()}`,
-        `Title: ${extracted.title || url.toString()}`,
-        `Prompt: ${input.prompt}`,
-        "Content:",
-        pageText
-      ].join("\n\n"))
+      textMessage(
+        "system",
+        [
+          "You are processing fetched web content for Magi.",
+          "Follow the user's extraction prompt using only the provided page content.",
+          "If the content does not contain the answer, say so."
+        ].join("\n")
+      ),
+      textMessage(
+        "user",
+        [
+          `URL: ${url.toString()}`,
+          `Title: ${extracted.title || url.toString()}`,
+          `Prompt: ${input.prompt}`,
+          "Content:",
+          pageText
+        ].join("\n\n")
+      )
     ]
   });
 
@@ -89,7 +96,10 @@ export function readWebFetchAllowlist(env: NodeJS.ProcessEnv | undefined): strin
     .filter(Boolean);
 }
 
-async function readLimitedResponse(response: Response, maxBytes: number): Promise<{ text: string; bytes: number }> {
+async function readLimitedResponse(
+  response: Response,
+  maxBytes: number
+): Promise<{ text: string; bytes: number }> {
   if (!response.body) {
     const text = await response.text();
     return { text, bytes: Buffer.byteLength(text, "utf8") };
@@ -123,11 +133,15 @@ function extractHtml(html: string): { title: string; text: string } {
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ");
-  const title = decodeHtmlEntities(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(withoutHidden)?.[1] ?? "").trim();
-  const text = decodeHtmlEntities(withoutHidden
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|section|article|li|h[1-6]|tr)>/gi, "\n")
-    .replace(/<[^>]+>/g, " "));
+  const title = decodeHtmlEntities(
+    /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(withoutHidden)?.[1] ?? ""
+  ).trim();
+  const text = decodeHtmlEntities(
+    withoutHidden
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|section|article|li|h[1-6]|tr)>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+  );
   return { title, text };
 }
 
@@ -150,7 +164,7 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, "\"")
+    .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&#(\d+);/g, (_match, code: string) => {
       const value = Number(code);

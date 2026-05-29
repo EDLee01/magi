@@ -28,17 +28,20 @@ function makePaths(): MagiPaths {
 
 describe("memory-wiki-indexer", () => {
   it("parses markdown headings as wiki memory sections", () => {
-    const sections = parseWikiSections("workflows/release.md", [
-      "# Release",
-      "",
-      "Overview text.",
-      "",
-      "## Verify",
-      "Run typecheck and tests.",
-      "",
-      "## Publish",
-      "Publish package."
-    ].join("\n"));
+    const sections = parseWikiSections(
+      "workflows/release.md",
+      [
+        "# Release",
+        "",
+        "Overview text.",
+        "",
+        "## Verify",
+        "Run typecheck and tests.",
+        "",
+        "## Publish",
+        "Publish package."
+      ].join("\n")
+    );
 
     expect(sections.map((section) => section.heading)).toEqual(["Release", "Verify", "Publish"]);
     expect(sections[1]).toMatchObject({
@@ -85,9 +88,11 @@ describe("memory-wiki-indexer", () => {
         source: expect.objectContaining({ kind: "wiki" }),
         chunk: expect.objectContaining({ heading: "Verify release" })
       });
-      expect(store.searchGraph({ query: "dashboard verification", limit: 5 })).toContainEqual(expect.objectContaining({
-        source: expect.objectContaining({ kind: "memdir" })
-      }));
+      expect(store.searchGraph({ query: "dashboard verification", limit: 5 })).toContainEqual(
+        expect.objectContaining({
+          source: expect.objectContaining({ kind: "memdir" })
+        })
+      );
     } finally {
       store.close();
     }

@@ -62,7 +62,11 @@ export function advertiseMdns(record: MdnsServiceRecord): MdnsAdvertiseHandle {
   socket.on("message", (msg, rinfo) => {
     try {
       const query = parseDnsMessage(msg);
-      if (!query.questions.some((q) => q.name === SERVICE_TYPE && (q.type === 12 /* PTR */ || q.type === 255 /* ANY */))) {
+      if (
+        !query.questions.some(
+          (q) => q.name === SERVICE_TYPE && (q.type === 12 /* PTR */ || q.type === 255) /* ANY */
+        )
+      ) {
         return;
       }
       log(`got query from ${rinfo.address}:${rinfo.port}`);
@@ -85,7 +89,9 @@ export function advertiseMdns(record: MdnsServiceRecord): MdnsAdvertiseHandle {
       socket.send(announce, MDNS_PORT, MDNS_ADDR);
       // Re-announce a couple of times so late-joining browsers catch it
       const interval = setInterval(() => {
-        try { socket.send(announce, MDNS_PORT, MDNS_ADDR); } catch {}
+        try {
+          socket.send(announce, MDNS_PORT, MDNS_ADDR);
+        } catch {}
       }, 1000);
       interval.unref?.();
       socket.once("close", () => clearInterval(interval));
@@ -96,7 +102,9 @@ export function advertiseMdns(record: MdnsServiceRecord): MdnsAdvertiseHandle {
 
   return {
     stop: () => {
-      try { socket.close(); } catch {}
+      try {
+        socket.close();
+      } catch {}
     }
   };
 }
@@ -108,7 +116,9 @@ export function advertiseMdns(record: MdnsServiceRecord): MdnsAdvertiseHandle {
  * running mDNS responder on the same host. It sends queries to the multicast
  * address and listens for responses on its own port.
  */
-export function browseMdns(input: { onPeer?: (peer: DiscoveredPeer) => void } = {}): MdnsBrowserHandle {
+export function browseMdns(
+  input: { onPeer?: (peer: DiscoveredPeer) => void } = {}
+): MdnsBrowserHandle {
   const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
   const peers = new Map<string, DiscoveredPeer>();
 
@@ -137,7 +147,9 @@ export function browseMdns(input: { onPeer?: (peer: DiscoveredPeer) => void } = 
       socket.send(query, MDNS_PORT, MDNS_ADDR);
       // Re-send a couple of times to catch peers that were briefly busy.
       const interval = setInterval(() => {
-        try { socket.send(query, MDNS_PORT, MDNS_ADDR); } catch {}
+        try {
+          socket.send(query, MDNS_PORT, MDNS_ADDR);
+        } catch {}
       }, 750);
       interval.unref?.();
       socket.once("close", () => clearInterval(interval));
@@ -149,7 +161,9 @@ export function browseMdns(input: { onPeer?: (peer: DiscoveredPeer) => void } = 
   return {
     peers: () => [...peers.values()],
     stop: () => {
-      try { socket.close(); } catch {}
+      try {
+        socket.close();
+      } catch {}
     }
   };
 }
@@ -162,7 +176,11 @@ export function getLocalHostname(): string {
       if (iface.family === "IPv4" && !iface.internal) {
         // Use the first non-loopback IPv4 as a fallback hostname seed
         const base = (process.env.HOSTNAME || "").trim() || (process.env.HOST || "").trim();
-        return base ? (base.endsWith(".local.") ? base : `${base}.local.`) : `magi-${iface.address.replace(/\./g, "-")}.local.`;
+        return base
+          ? base.endsWith(".local.")
+            ? base
+            : `${base}.local.`
+          : `magi-${iface.address.replace(/\./g, "-")}.local.`;
       }
     }
   }
@@ -307,7 +325,9 @@ function buildResponse(record: MdnsServiceRecord): Buffer {
   srvData.writeUInt16BE(0, 0); // priority
   srvData.writeUInt16BE(0, 2); // weight
   srvData.writeUInt16BE(record.port, 4);
-  records.push(buildRecord(instanceFqdn, 33, 1, 4500, Buffer.concat([srvData, writeName(hostname)])));
+  records.push(
+    buildRecord(instanceFqdn, 33, 1, 4500, Buffer.concat([srvData, writeName(hostname)]))
+  );
 
   // TXT
   const txtParts: Buffer[] = [];

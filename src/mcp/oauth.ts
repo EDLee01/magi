@@ -54,7 +54,7 @@ export async function discoverOAuthMetadata(authServerUrl: string): Promise<OAut
     try {
       const response = await fetch(url, { headers: { Accept: "application/json" } });
       if (!response.ok) continue;
-      const data = await response.json() as Partial<OAuthMetadata>;
+      const data = (await response.json()) as Partial<OAuthMetadata>;
       if (data.authorization_endpoint && data.token_endpoint) {
         return {
           issuer: data.issuer ?? base,
@@ -99,9 +99,11 @@ export async function registerOAuthClient(input: {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Dynamic Client Registration failed (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `Dynamic Client Registration failed (${response.status}): ${text.slice(0, 200)}`
+    );
   }
-  const data = await response.json() as { client_id?: string; client_secret?: string };
+  const data = (await response.json()) as { client_id?: string; client_secret?: string };
   if (!data.client_id) {
     throw new Error("Dynamic Client Registration response missing client_id");
   }
@@ -191,7 +193,10 @@ export function parseWwwAuthenticate(header: string | null): { authServerUrl: st
   }
 }
 
-async function performTokenRequest(endpoint: string, params: URLSearchParams): Promise<OAuthTokenResponse> {
+async function performTokenRequest(
+  endpoint: string,
+  params: URLSearchParams
+): Promise<OAuthTokenResponse> {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {

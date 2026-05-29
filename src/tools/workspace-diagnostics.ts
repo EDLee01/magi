@@ -119,7 +119,9 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ".tsx": "TypeScript"
 };
 
-export function parseWorkspaceDiagnosticsInput(input: Record<string, unknown>): WorkspaceDiagnosticsRequest {
+export function parseWorkspaceDiagnosticsInput(
+  input: Record<string, unknown>
+): WorkspaceDiagnosticsRequest {
   assertAllowedKeys(input, ["path", "format", "max_files"]);
   const format = input.format === undefined ? "text" : readFormat(input.format);
   const maxFiles = input.max_files === undefined ? 2_000 : readMaxFiles(input.max_files);
@@ -177,7 +179,10 @@ export function runWorkspaceDiagnostics(input: {
   };
 }
 
-export function formatWorkspaceDiagnostics(diagnostics: WorkspaceDiagnostics, format: "text" | "json" = "text"): string {
+export function formatWorkspaceDiagnostics(
+  diagnostics: WorkspaceDiagnostics,
+  format: "text" | "json" = "text"
+): string {
   if (format === "json") {
     return `${JSON.stringify(diagnostics, null, 2)}\n`;
   }
@@ -194,25 +199,37 @@ export function formatWorkspaceDiagnostics(diagnostics: WorkspaceDiagnostics, fo
     `frameworks: ${diagnostics.frameworks.length > 0 ? diagnostics.frameworks.join(", ") : "none detected"}`,
     "",
     "Package scripts:",
-    ...(scripts.length > 0 ? scripts.map(([name, command]) => `- ${name}: ${command}`) : ["- none detected"]),
+    ...(scripts.length > 0
+      ? scripts.map(([name, command]) => `- ${name}: ${command}`)
+      : ["- none detected"]),
     "",
     "Suggested commands:",
-    ...(diagnostics.suggestedCommands.length > 0 ? diagnostics.suggestedCommands.map((command) => `- ${command}`) : ["- none detected"]),
+    ...(diagnostics.suggestedCommands.length > 0
+      ? diagnostics.suggestedCommands.map((command) => `- ${command}`)
+      : ["- none detected"]),
     "",
     "Git:",
     `- available: ${diagnostics.git.available ? "true" : "false"}`,
     `- repository: ${diagnostics.git.repository ? "true" : "false"}`,
     diagnostics.git.branch ? `- branch: ${diagnostics.git.branch}` : undefined,
-    diagnostics.git.status ? `- status:\n${indent(diagnostics.git.status)}` : diagnostics.git.repository ? "- status: clean" : undefined,
+    diagnostics.git.status
+      ? `- status:\n${indent(diagnostics.git.status)}`
+      : diagnostics.git.repository
+        ? "- status: clean"
+        : undefined,
     diagnostics.git.diffStat ? `- diffStat:\n${indent(diagnostics.git.diffStat)}` : undefined,
     diagnostics.git.reason ? `- reason: ${diagnostics.git.reason}` : undefined,
     "",
     "Warnings:",
-    ...(diagnostics.warnings.length > 0 ? diagnostics.warnings.map((warning) => `- ${warning}`) : ["- none"]),
+    ...(diagnostics.warnings.length > 0
+      ? diagnostics.warnings.map((warning) => `- ${warning}`)
+      : ["- none"]),
     "",
     "Note: diagnostics are read-only; suggested commands were not executed.",
     ""
-  ].filter((line): line is string => line !== undefined).join("\n");
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }
 
 function scanWorkspace(root: string, maxFiles: number): WorkspaceDiagnostics["scan"] {
@@ -228,7 +245,9 @@ function scanWorkspace(root: string, maxFiles: number): WorkspaceDiagnostics["sc
     directoryCount += 1;
     let entries;
     try {
-      entries = readdirSync(current, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
+      entries = readdirSync(current, { withFileTypes: true }).sort((left, right) =>
+        left.name.localeCompare(right.name)
+      );
     } catch {
       continue;
     }
@@ -281,13 +300,17 @@ function readPackageJson(root: string): WorkspaceDiagnostics["packageJson"] | un
   };
 }
 
-function detectPackageManager(root: string, packageJson: WorkspaceDiagnostics["packageJson"] | undefined): string | undefined {
+function detectPackageManager(
+  root: string,
+  packageJson: WorkspaceDiagnostics["packageJson"] | undefined
+): string | undefined {
   if (packageJson?.packageManager) {
     return packageJson.packageManager.split("@")[0];
   }
   if (existsSync(path.join(root, "pnpm-lock.yaml"))) return "pnpm";
   if (existsSync(path.join(root, "yarn.lock"))) return "yarn";
-  if (existsSync(path.join(root, "bun.lockb")) || existsSync(path.join(root, "bun.lock"))) return "bun";
+  if (existsSync(path.join(root, "bun.lockb")) || existsSync(path.join(root, "bun.lock")))
+    return "bun";
   if (existsSync(path.join(root, "package-lock.json"))) return "npm";
   return packageJson ? "npm" : undefined;
 }
@@ -311,7 +334,10 @@ function detectFrameworks(
   manifests: string[]
 ): string[] {
   const result = new Set<string>();
-  const deps = new Set([...(packageJson?.dependencies ?? []), ...(packageJson?.devDependencies ?? [])]);
+  const deps = new Set([
+    ...(packageJson?.dependencies ?? []),
+    ...(packageJson?.devDependencies ?? [])
+  ]);
   for (const [dependency, label] of [
     ["next", "Next.js"],
     ["react", "React"],
@@ -328,7 +354,11 @@ function detectFrameworks(
       result.add(label);
     }
   }
-  if (existsSync(path.join(root, "next.config.js")) || existsSync(path.join(root, "next.config.mjs")) || existsSync(path.join(root, "next.config.ts"))) {
+  if (
+    existsSync(path.join(root, "next.config.js")) ||
+    existsSync(path.join(root, "next.config.mjs")) ||
+    existsSync(path.join(root, "next.config.ts"))
+  ) {
     result.add("Next.js");
   }
   if (manifests.some((file) => file.startsWith("vite.config"))) result.add("Vite");
@@ -384,8 +414,13 @@ function buildWarnings(input: {
   if (input.packageJson && !input.packageManager) {
     warnings.push("package.json found but package manager could not be inferred");
   }
-  if (input.languages.some((item) => item.name === "TypeScript") && !input.manifests.includes("tsconfig.json")) {
-    warnings.push("TypeScript files detected but tsconfig.json was not found at the diagnostics root");
+  if (
+    input.languages.some((item) => item.name === "TypeScript") &&
+    !input.manifests.includes("tsconfig.json")
+  ) {
+    warnings.push(
+      "TypeScript files detected but tsconfig.json was not found at the diagnostics root"
+    );
   }
   if (!input.manifests.includes("README.md")) {
     warnings.push("README.md was not found at the diagnostics root");
@@ -475,7 +510,10 @@ function dedupe(values: string[]): string[] {
 }
 
 function indent(value: string): string {
-  return value.split(/\r?\n/).map((line) => `  ${line}`).join("\n");
+  return value
+    .split(/\r?\n/)
+    .map((line) => `  ${line}`)
+    .join("\n");
 }
 
 function toPosix(value: string): string {

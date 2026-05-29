@@ -32,7 +32,7 @@ const LONG_RUNNING_PATTERNS = [
   /\bnode\s+.*server\b/,
   /\bdeno\s+run\b/,
   /\bbun\s+run\s+dev\b/,
-  /\bbun\s+dev\b/,
+  /\bbun\s+dev\b/
 ];
 
 export function isLongRunningCommand(command: string): boolean {
@@ -142,15 +142,22 @@ function isReadOnlySedArgs(args: string[]): boolean {
 }
 
 function isTailFollowFlag(value: string): boolean {
-  return value === "-f"
-    || value === "-F"
-    || value === "--follow"
-    || value.startsWith("--follow=")
-    || /^-[A-Za-z]*[fF][A-Za-z]*$/.test(value);
+  return (
+    value === "-f" ||
+    value === "-F" ||
+    value === "--follow" ||
+    value.startsWith("--follow=") ||
+    /^-[A-Za-z]*[fF][A-Za-z]*$/.test(value)
+  );
 }
 
 function isMutatingSedFlag(value: string): boolean {
-  return value === "-i" || value.startsWith("-i") || value === "--in-place" || value.startsWith("--in-place=");
+  return (
+    value === "-i" ||
+    value.startsWith("-i") ||
+    value === "--in-place" ||
+    value.startsWith("--in-place=")
+  );
 }
 
 function isReadOnlySedPrintScript(value: string): boolean {
@@ -188,7 +195,10 @@ export async function runShellCommand(input: {
   skipAutoBackground?: boolean;
 }): Promise<ShellResult> {
   if (isDangerousShellCommand(input.command) && !input.approveDangerous) {
-    throw new ToolError(`Command requires explicit approval: ${input.command}`, "approval-required");
+    throw new ToolError(
+      `Command requires explicit approval: ${input.command}`,
+      "approval-required"
+    );
   }
 
   // Auto-background long-running commands (dev servers, etc.) to avoid hanging
@@ -198,11 +208,13 @@ export async function runShellCommand(input: {
     // Use nohup and redirect stdio so the detached process survives shell exit.
     const escaped = input.command.replace(/'/g, "'\\''");
     const bgCommand = `nohup bash -c '${escaped}' > ${logFile} 2>&1 < /dev/null & disown; echo "BG_PID=$!"`;
-    const bgResult = await runShellCommand({ ...input, command: bgCommand, skipAutoBackground: true });
+    const bgResult = await runShellCommand({
+      ...input,
+      command: bgCommand,
+      skipAutoBackground: true
+    });
     const pid = parseBackgroundPid(bgResult.stdout);
-    const stopLine = pid
-      ? `To stop: kill ${pid}`
-      : "To stop: use the BG_PID printed below.";
+    const stopLine = pid ? `To stop: kill ${pid}` : "To stop: use the BG_PID printed below.";
     return {
       ...bgResult,
       command: input.command,
@@ -212,7 +224,7 @@ export async function runShellCommand(input: {
         `To check output: cat ${logFile}\n` +
         `${stopLine}\n` +
         `Wait 3-5 seconds before checking the log for the URL/port.\n` +
-        bgResult.stdout,
+        bgResult.stdout
     };
   }
 
@@ -220,7 +232,7 @@ export async function runShellCommand(input: {
     const child = spawn("bash", ["-lc", input.command], {
       cwd: input.cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      detached: true  // create new process group so we can kill the entire tree
+      detached: true // create new process group so we can kill the entire tree
     });
     let stdout = "";
     let stderr = "";
@@ -238,9 +250,11 @@ export async function runShellCommand(input: {
     const TRUNC_NOTE = "\n[output truncated at 1MB]\n";
     const killTree = (sig: NodeJS.Signals = "SIGTERM") => {
       try {
-        if (child.pid) process.kill(-child.pid, sig);  // negative PID = process group
+        if (child.pid) process.kill(-child.pid, sig); // negative PID = process group
       } catch {
-        try { child.kill(sig); } catch {}
+        try {
+          child.kill(sig);
+        } catch {}
       }
     };
 
@@ -289,7 +303,12 @@ export async function runShellCommand(input: {
         return;
       }
       if (timedOut) {
-        reject(new ToolError(`Command timed out after ${input.timeoutMs ?? 30_000}ms: ${input.command}`, "timeout"));
+        reject(
+          new ToolError(
+            `Command timed out after ${input.timeoutMs ?? 30_000}ms: ${input.command}`,
+            "timeout"
+          )
+        );
         return;
       }
       resolve({

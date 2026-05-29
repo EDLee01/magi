@@ -70,7 +70,11 @@ describe("CLI entrypoint", () => {
 
   it("supports json output for headless prompts", async () => {
     temp = makeTempRoot();
-    const result = await runCli(["--output-format", "json", "-p", "write a short status"], temp.env, process.cwd());
+    const result = await runCli(
+      ["--output-format", "json", "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     expect(result.exitCode).toBe(0);
     const body = JSON.parse(result.stdout) as { sessionId: string; jobId: string; message: string };
     expect(body.sessionId).toBeTruthy();
@@ -84,37 +88,49 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
       requests.push({ authorization: request.headers.authorization });
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{ message: { content: "ENV OK" } }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "ENV OK" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
-    writeFileSync(path.join(temp.path, ".env"), [
-      "ANTHROPIC_AUTH_TOKEN=ignored",
-      "export MAGI_OPENAI_API_KEY=runtime-env-key",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(temp.path, ".env"),
+      ["ANTHROPIC_AUTH_TOKEN=ignored", "export MAGI_OPENAI_API_KEY=runtime-env-key", ""].join("\n"),
+      "utf8"
+    );
 
-    const result = await runCli(["--model", "main", "-p", "use configured env"], temp.env, process.cwd());
+    const result = await runCli(
+      ["--model", "main", "-p", "use configured env"],
+      temp.env,
+      process.cwd()
+    );
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("ENV OK");
@@ -125,14 +141,22 @@ describe("CLI entrypoint", () => {
     temp = makeTempRoot();
     const first = await runCli(["-p", "write a short status"], temp.env, process.cwd());
     const firstId = /sessionId: ([^\n]+)/.exec(first.stdout)?.[1];
-    const second = await runCli(["-c", "-p", "write another short status"], temp.env, process.cwd());
+    const second = await runCli(
+      ["-c", "-p", "write another short status"],
+      temp.env,
+      process.cwd()
+    );
     const secondId = /sessionId: ([^\n]+)/.exec(second.stdout)?.[1];
     expect(secondId).toBe(firstId);
   });
 
   it("resumes a specific session with -r and supports session names", async () => {
     temp = makeTempRoot();
-    const first = await runCli(["--name", "named run", "-p", "write a short status"], temp.env, process.cwd());
+    const first = await runCli(
+      ["--name", "named run", "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     const id = /sessionId: ([^\n]+)/.exec(first.stdout)?.[1];
     expect(id).toBeTruthy();
 
@@ -146,7 +170,11 @@ describe("CLI entrypoint", () => {
   it("supports explicit session ids and no session persistence", async () => {
     temp = makeTempRoot();
     const explicitId = "11111111-1111-4111-8111-111111111111";
-    const explicit = await runCli(["--session-id", explicitId, "-p", "write a short status"], temp.env, process.cwd());
+    const explicit = await runCli(
+      ["--session-id", explicitId, "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     expect(explicit.stdout).toContain(`sessionId: ${explicitId}`);
 
     const ephemeral = await runCli(
@@ -197,7 +225,11 @@ describe("CLI entrypoint", () => {
     expect(list.stdout).toContain("cancelled");
     expect(list.stdout).toContain("ship goal support");
 
-    const blocked = await runCli(["goal", "blocked", "waiting", "on", "review"], temp.env, process.cwd());
+    const blocked = await runCli(
+      ["goal", "blocked", "waiting", "on", "review"],
+      temp.env,
+      process.cwd()
+    );
     expect(blocked.exitCode).toBe(0);
     expect(blocked.stdout).toContain("Goal blocked: ship replacement");
 
@@ -205,7 +237,11 @@ describe("CLI entrypoint", () => {
     expect(afterBlocked.exitCode).toBe(0);
     expect(afterBlocked.stdout).toContain("No active goal.");
 
-    const next = await runCli(["goal", "close", "the", "remaining", "work"], temp.env, process.cwd());
+    const next = await runCli(
+      ["goal", "close", "the", "remaining", "work"],
+      temp.env,
+      process.cwd()
+    );
     expect(next.exitCode).toBe(0);
     expect(next.stdout).toContain("Goal started: close the remaining work");
 
@@ -225,8 +261,16 @@ describe("CLI entrypoint", () => {
     await runCli(["--session-id", firstId, "-p", "prepare alpha session"], temp.env, process.cwd());
     await runCli(["--session-id", secondId, "-p", "prepare beta session"], temp.env, process.cwd());
 
-    const firstGoal = await runCli(["goal", "finish", "alpha", "--session-id", firstId], temp.env, process.cwd());
-    const secondGoal = await runCli(["goal", "finish", "beta", "--session-id", secondId], temp.env, process.cwd());
+    const firstGoal = await runCli(
+      ["goal", "finish", "alpha", "--session-id", firstId],
+      temp.env,
+      process.cwd()
+    );
+    const secondGoal = await runCli(
+      ["goal", "finish", "beta", "--session-id", secondId],
+      temp.env,
+      process.cwd()
+    );
     expect(firstGoal.exitCode).toBe(0);
     expect(secondGoal.exitCode).toBe(0);
 
@@ -237,11 +281,19 @@ describe("CLI entrypoint", () => {
     expect(secondStatus.stdout).toContain("Goal: finish beta");
     expect(secondStatus.stdout).not.toContain("finish alpha");
 
-    const doneFirst = await runCli(["goal", "done", "verified", "--session-id", firstId], temp.env, process.cwd());
+    const doneFirst = await runCli(
+      ["goal", "done", "verified", "--session-id", firstId],
+      temp.env,
+      process.cwd()
+    );
     expect(doneFirst.exitCode).toBe(0);
 
     const firstAfterDone = await runCli(["goal", "--session-id", firstId], temp.env, process.cwd());
-    const secondAfterDone = await runCli(["goal", "--session-id", secondId], temp.env, process.cwd());
+    const secondAfterDone = await runCli(
+      ["goal", "--session-id", secondId],
+      temp.env,
+      process.cwd()
+    );
     expect(firstAfterDone.stdout).toContain("No active goal.");
     expect(secondAfterDone.stdout).toContain("Goal: finish beta");
   });
@@ -259,33 +311,45 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
       requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{ message: { content: "GOAL OK" } }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "GOAL OK" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
 
     await runCli(["goal", "finish", "the", "migration"], temp.env, process.cwd());
-    const result = await runCli(["-c", "-p", "continue"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const result = await runCli(
+      ["-c", "-p", "continue"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
 
     expect(result.exitCode).toBe(0);
     expect(requests[0].messages[0].role).toBe("system");
@@ -299,46 +363,64 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
-      const body = JSON.parse(raw) as { messages: Array<{ role: string; content: string }>; tools?: Array<{ function: { name: string } }> };
+      const body = JSON.parse(raw) as {
+        messages: Array<{ role: string; content: string }>;
+        tools?: Array<{ function: { name: string } }>;
+      };
       requests.push(body);
       const hasToolResult = body.messages.some((message) => message.role === "tool");
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{
-          message: hasToolResult
-            ? { content: "WRITE DONE" }
-            : {
-              content: "",
-              tool_calls: [{
-                id: "write-cli-permission",
-                type: "function",
-                function: {
-                  name: "FileWrite",
-                  arguments: JSON.stringify({ file_path: "permission-mode.txt", content: "allowed" })
-                }
-              }]
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: hasToolResult
+                ? { content: "WRITE DONE" }
+                : {
+                    content: "",
+                    tool_calls: [
+                      {
+                        id: "write-cli-permission",
+                        type: "function",
+                        function: {
+                          name: "FileWrite",
+                          arguments: JSON.stringify({
+                            file_path: "permission-mode.txt",
+                            content: "allowed"
+                          })
+                        }
+                      }
+                    ]
+                  }
             }
-        }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
 
     const result = await runCli(
       ["--permission-mode", "acceptEdits", "--model", "main", "-p", "write a file"],
@@ -358,34 +440,46 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
       requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{ message: { content: "GOAL CONTEXT OK" } }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "GOAL CONTEXT OK" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
 
     await runCli(["goal", "finish", "inactive", "migration"], temp.env, process.cwd());
     await runCli(["goal", "blocked", "waiting", "on", "review"], temp.env, process.cwd());
-    const blockedResume = await runCli(["-c", "-p", "continue"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const blockedResume = await runCli(
+      ["-c", "-p", "continue"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
     expect(blockedResume.exitCode).toBe(0);
     expect(requests[0].messages[0].role).toBe("system");
     expect(requests[0].messages[0].content).not.toContain("<active_thread_goal>");
@@ -393,14 +487,22 @@ describe("CLI entrypoint", () => {
 
     await runCli(["goal", "finish", "replacement", "migration"], temp.env, process.cwd());
     await runCli(["goal", "done", "verified"], temp.env, process.cwd());
-    const completedResume = await runCli(["-c", "-p", "continue again"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const completedResume = await runCli(
+      ["-c", "-p", "continue again"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
     expect(completedResume.exitCode).toBe(0);
     expect(requests[1].messages[0].role).toBe("system");
     expect(requests[1].messages[0].content).not.toContain("<active_thread_goal>");
     expect(requests[1].messages[0].content).not.toContain("finish replacement migration");
 
     await runCli(["goal", "finish", "active", "migration"], temp.env, process.cwd());
-    const activeResume = await runCli(["-c", "-p", "continue active"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const activeResume = await runCli(
+      ["-c", "-p", "continue active"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
     expect(activeResume.exitCode).toBe(0);
     expect(requests[2].messages[0].role).toBe("system");
     expect(requests[2].messages[0].content).toContain("<active_thread_goal>");
@@ -413,40 +515,60 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
       requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{ message: { content: "RECALL OK" } }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "RECALL OK" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
     const store = SessionStore.open(paths);
     try {
       const prior = store.createSession({ title: "pixel snake fix", cwd: process.cwd() });
-      store.appendMessage({ sessionId: prior, role: "user", content: "Pixel snake food spawned inside the snake body." });
-      store.appendMessage({ sessionId: prior, role: "assistant", content: "Keep food generation limited to empty grid cells." });
+      store.appendMessage({
+        sessionId: prior,
+        role: "user",
+        content: "Pixel snake food spawned inside the snake body."
+      });
+      store.appendMessage({
+        sessionId: prior,
+        role: "assistant",
+        content: "Keep food generation limited to empty grid cells."
+      });
     } finally {
       store.close();
     }
 
-    const result = await runCli(["--model", "main", "-p", "continue the pixel snake food work"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const result = await runCli(
+      ["--model", "main", "-p", "continue the pixel snake food work"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
 
     expect(result.exitCode).toBe(0);
     expect(requests[0].messages[0].role).toBe("system");
@@ -462,28 +584,40 @@ describe("CLI entrypoint", () => {
         // Drain request body.
       }
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{ message: { content: "Workflow: run focused tests before broad test suites." } }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+      response.end(
+        JSON.stringify({
+          choices: [
+            { message: { content: "Workflow: run focused tests before broad test suites." } }
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
 
-    const result = await runCli(["--model", "main", "-p", "请记住这个工作流：先跑 focused tests，再跑完整测试"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const result = await runCli(
+      ["--model", "main", "-p", "请记住这个工作流：先跑 focused tests，再跑完整测试"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
     const drafts = await runCli(["learning", "list"], temp.env, process.cwd());
 
     expect(result.exitCode).toBe(0);
@@ -495,7 +629,11 @@ describe("CLI entrypoint", () => {
 
   it("lists resume choices when -r has no value", async () => {
     temp = makeTempRoot();
-    await runCli(["--name", "resume search target", "-p", "write a short status"], temp.env, process.cwd());
+    await runCli(
+      ["--name", "resume search target", "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     const result = await runCli(["-r"], temp.env, process.cwd());
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Resume sessions:");
@@ -504,9 +642,16 @@ describe("CLI entrypoint", () => {
 
   it("supports stream-json output as newline-delimited JSON", async () => {
     temp = makeTempRoot();
-    const result = await runCli(["--output-format", "stream-json", "-p", "write a short status"], temp.env, process.cwd());
+    const result = await runCli(
+      ["--output-format", "stream-json", "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     expect(result.exitCode).toBe(0);
-    const lines = result.stdout.trim().split("\n").map((line) => JSON.parse(line) as { type: string; jobId?: string });
+    const lines = result.stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { type: string; jobId?: string });
     expect(lines[0]).toMatchObject({ type: "session.started" });
     expect(lines.at(-1)).toMatchObject({ type: "session.completed" });
     expect(lines.at(-1)?.jobId).toBeTruthy();
@@ -518,38 +663,56 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
       const body = JSON.parse(raw) as { model: string; messages: Array<{ content: string }> };
       calls.push({ model: body.model, body: body as Record<string, unknown> });
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{ message: { content: body.model === "gpt-compact" ? "COMPACT SUMMARY" : "FINAL ANSWER" } }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: body.model === "gpt-compact" ? "COMPACT SUMMARY" : "FINAL ANSWER"
+              }
+            }
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "    compact: main:gpt-compact",
-      "  fallbacks: {}",
-      "context:",
-      "  recentMessages: 2",
-      "  autoCompactTokenThreshold: 1",
-      "  compactionModel: compact",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "    compact: main:gpt-compact",
+        "  fallbacks: {}",
+        "context:",
+        "  recentMessages: 2",
+        "  autoCompactTokenThreshold: 1",
+        "  compactionModel: compact",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
 
-    const first = await runCli(["-p", `${"x".repeat(200)}`], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    const first = await runCli(
+      ["-p", `${"x".repeat(200)}`],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
     expect(first.exitCode).toBe(0);
     const sessionId = /sessionId: ([^\n]+)/.exec(first.stdout)?.[1];
     expect(sessionId).toBeTruthy();
@@ -575,52 +738,68 @@ describe("CLI entrypoint", () => {
     server = http.createServer(async (request, response) => {
       let raw = "";
       for await (const chunk of request) {
-        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
       }
-      const body = JSON.parse(raw) as { model: string; messages: Array<{ role: string }>; tools?: Array<{ function: { name: string } }> };
+      const body = JSON.parse(raw) as {
+        model: string;
+        messages: Array<{ role: string }>;
+        tools?: Array<{ function: { name: string } }>;
+      };
       calls.push({ model: body.model, body: body as Record<string, unknown> });
       const hasToolResult = body.messages.some((message) => message.role === "tool");
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({
-        choices: [{
-          message: hasToolResult
-            ? { content: "MCP FINAL" }
-            : {
-              content: "",
-              tool_calls: [{
-                id: "mcp-cli-1",
-                type: "function",
-                function: {
-                  name: "mcp__notes__read_note",
-                  arguments: JSON.stringify({ key: "alpha" })
-                }
-              }]
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: hasToolResult
+                ? { content: "MCP FINAL" }
+                : {
+                    content: "",
+                    tool_calls: [
+                      {
+                        id: "mcp-cli-1",
+                        type: "function",
+                        function: {
+                          name: "mcp__notes__read_note",
+                          arguments: JSON.stringify({ key: "alpha" })
+                        }
+                      }
+                    ]
+                  }
             }
-        }],
-        usage: { prompt_tokens: 1, completion_tokens: 1 }
-      }));
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
     });
     const baseUrl = await listen(server);
     const paths = getMagiPaths(temp.env);
-    writeFileSync(paths.configFile, [
-      "version: 0.1",
-      "providers:",
-      "  main:",
-      "    type: openai",
-      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
-      `    baseUrl: ${baseUrl}/v1`,
-      "models:",
-      "  aliases:",
-      "    main: main:gpt-main",
-      "  fallbacks: {}",
-      "mcp:",
-      "  servers:",
-      "    notes:",
-      "      command: node",
-      `      args: ["${path.join(process.cwd(), "tests/fixtures/mock-mcp-server.mjs")}"]`,
-      "      approval: dangerous",
-      ""
-    ].join("\n"), "utf8");
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        "mcp:",
+        "  servers:",
+        "    notes:",
+        "      command: node",
+        `      args: ["${path.join(process.cwd(), "tests/fixtures/mock-mcp-server.mjs")}"]`,
+        "      approval: dangerous",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
 
     const result = await runCli(
       ["--model", "main", "-p", "use mcp"],
@@ -645,11 +824,15 @@ describe("CLI entrypoint", () => {
 
   it("runs workspace diagnostics from the CLI", async () => {
     temp = makeTempRoot();
-    writeFileSync(path.join(temp.path, "package.json"), JSON.stringify({
-      name: "cli-diagnostics",
-      scripts: { test: "vitest run" },
-      devDependencies: { vitest: "^3.0.0" }
-    }), "utf8");
+    writeFileSync(
+      path.join(temp.path, "package.json"),
+      JSON.stringify({
+        name: "cli-diagnostics",
+        scripts: { test: "vitest run" },
+        devDependencies: { vitest: "^3.0.0" }
+      }),
+      "utf8"
+    );
     writeFileSync(path.join(temp.path, "package-lock.json"), "{}", "utf8");
     writeFileSync(path.join(temp.path, "index.ts"), "export const ok = true;\n", "utf8");
 
@@ -659,15 +842,24 @@ describe("CLI entrypoint", () => {
     expect(text.stdout).toContain("package manager: npm");
     expect(text.stdout).toContain("- npm run test");
 
-    const json = await runCli(["--output-format", "json", "workspace", "diagnose"], temp.env, temp.path);
+    const json = await runCli(
+      ["--output-format", "json", "workspace", "diagnose"],
+      temp.env,
+      temp.path
+    );
     expect(json.exitCode).toBe(0);
-    const parsed = JSON.parse(json.stdout) as { packageManager: string; languages: Array<{ name: string }> };
+    const parsed = JSON.parse(json.stdout) as {
+      packageManager: string;
+      languages: Array<{ name: string }>;
+    };
     expect(parsed.packageManager).toBe("npm");
     expect(parsed.languages).toContainEqual(expect.objectContaining({ name: "TypeScript" }));
   });
 
   it("does not expose a magi-agent binary or package bin", () => {
-    const packageJson = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(process.cwd(), "package.json"), "utf8")
+    ) as {
       bin?: Record<string, string>;
     };
     expect(packageJson.bin).toEqual({ magi: "./dist/cli.js" });

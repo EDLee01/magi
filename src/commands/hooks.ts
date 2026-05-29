@@ -50,9 +50,8 @@ export const command = {
       lines.push(`  ${event}:`);
       for (const h of list) {
         const condition = h.if ? `  if: ${h.if}` : "";
-        const detail = h.type === "command"
-          ? `${h.command}${condition}`
-          : `[${h.type}]${condition}`;
+        const detail =
+          h.type === "command" ? `${h.command}${condition}` : `[${h.type}]${condition}`;
         lines.push(`    - ${detail}`);
       }
     }

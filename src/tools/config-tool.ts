@@ -17,11 +17,7 @@ export const ConfigToolInputSchema = {
   properties: {
     setting: { type: "string" },
     value: {
-      anyOf: [
-        { type: "string" },
-        { type: "number" },
-        { type: "boolean" }
-      ]
+      anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }]
     }
   },
   required: ["setting"],
@@ -54,7 +50,10 @@ export function parseConfigToolInput(input: Record<string, unknown>): ConfigTool
   if (expected === "string" && typeof value !== "string") {
     throw new Error(`Config setting ${setting} requires a string value`);
   }
-  if (expected === "number" && (typeof value !== "number" || !Number.isInteger(value) || value < 1)) {
+  if (
+    expected === "number" &&
+    (typeof value !== "number" || !Number.isInteger(value) || value < 1)
+  ) {
     throw new Error(`Config setting ${setting} requires a positive integer value`);
   }
   return { setting, value };
@@ -87,7 +86,7 @@ export async function executeConfigTool(input: {
   const text = YAML.stringify(document);
   validateConfigText(input.configFile, text, input.env);
   writeAtomic(input.configFile, text);
-  
+
   if (input.hooks) {
     const { triggerHook } = await import("../hooks/trigger.js");
     void triggerHook({

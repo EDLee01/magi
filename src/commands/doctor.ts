@@ -16,7 +16,7 @@ export const command = {
       `  root: ${diagnostics.root}`,
       `  files: ${diagnostics.scan.fileCount} files, ${diagnostics.scan.directoryCount} dirs`,
       `  package manager: ${diagnostics.packageManager ?? "none"}`,
-      `  languages: ${diagnostics.languages.map(l => l.name).join(", ")}`,
+      `  languages: ${diagnostics.languages.map((l) => l.name).join(", ")}`,
       ...scriptEntries.map(([name, cmd]) => `  script: ${name} → ${cmd}`),
       `  git: ${diagnostics.git.repository ? `branch ${diagnostics.git.branch}` : diagnostics.git.available ? "not a git repository" : "git not available"}`
     ].join("\n");

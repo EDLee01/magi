@@ -25,11 +25,15 @@ function makePaths(): MagiPaths {
 
 describe("memory-node-store", () => {
   it("classifies durable memory into graph node types", () => {
-    expect(classifyMemoryNodeType("User prefers focused checks before broad checks")).toBe("work_habit");
+    expect(classifyMemoryNodeType("User prefers focused checks before broad checks")).toBe(
+      "work_habit"
+    );
     expect(classifyMemoryNodeType("User prefers concise terminal summaries")).toBe("preference");
     expect(classifyMemoryNodeType("I am Edward, Magi's creator")).toBe("user_profile");
     expect(classifyMemoryNodeType("Use this release workflow before publishing")).toBe("workflow");
-    expect(classifyMemoryNodeType("Magi memory architecture uses SQLite graph storage")).toBe("project");
+    expect(classifyMemoryNodeType("Magi memory architecture uses SQLite graph storage")).toBe(
+      "project"
+    );
     expect(classifyMemoryNodeType("Run this process", { scope: "session" })).toBe("session");
   });
 

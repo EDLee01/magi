@@ -75,7 +75,11 @@ describe("configuration", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
-    writeFileSync(paths.configFile, "providers:\n  bad:\n    type: openai\n    apiKeyEnv: CLAUDE_API_KEY\n", "utf8");
+    writeFileSync(
+      paths.configFile,
+      "providers:\n  bad:\n    type: openai\n    apiKeyEnv: CLAUDE_API_KEY\n",
+      "utf8"
+    );
 
     expect(() => loadConfig(paths, temp!.env)).not.toThrow();
   });
@@ -234,7 +238,9 @@ describe("configuration", () => {
     expect(() => loadConfig(paths, temp!.env)).toThrow(/memory\.autoWrite must be off or explicit/);
 
     writeFileSync(paths.configFile, "memory:\n  scopes:\n    - legacy\n", "utf8");
-    expect(() => loadConfig(paths, temp!.env)).toThrow(/memory\.scopes\.0 must be user, project, or session/);
+    expect(() => loadConfig(paths, temp!.env)).toThrow(
+      /memory\.scopes\.0 must be user, project, or session/
+    );
   });
 
   it("validates hook schema", () => {
@@ -256,12 +262,14 @@ describe("configuration", () => {
     );
 
     const config = loadConfig(paths, temp.env);
-    expect(config.hooks).toEqual([expect.objectContaining({
-      event: "pre_tool_use",
-      type: "command",
-      command: "printf ok",
-      timeoutMs: 1000
-    })]);
+    expect(config.hooks).toEqual([
+      expect.objectContaining({
+        event: "pre_tool_use",
+        type: "command",
+        command: "printf ok",
+        timeoutMs: 1000
+      })
+    ]);
   });
 
   it("validates HTTP hook schema", () => {
@@ -333,7 +341,11 @@ describe("configuration", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
-    writeFileSync(paths.configFile, "hooks:\n  - event: session_end\n    type: prompt\n    prompt: summarize\n", "utf8");
+    writeFileSync(
+      paths.configFile,
+      "hooks:\n  - event: session_end\n    type: prompt\n    prompt: summarize\n",
+      "utf8"
+    );
 
     expect(() => loadConfig(paths, temp!.env)).toThrow(/hooks\.0\.model is required/);
   });
@@ -426,7 +438,9 @@ describe("configuration", () => {
     ensureMagiHome(paths);
     writeFileSync(paths.configFile, "providers:\n  bad:\n    type: web-login\n", "utf8");
 
-    expect(() => loadConfig(paths, temp!.env)).toThrow(/providers\.bad\.type must be openai or messages-compatible/);
+    expect(() => loadConfig(paths, temp!.env)).toThrow(
+      /providers\.bad\.type must be openai or messages-compatible/
+    );
   });
 
   it("rejects invalid model alias targets", () => {
@@ -435,7 +449,9 @@ describe("configuration", () => {
     ensureMagiHome(paths);
     writeFileSync(paths.configFile, "models:\n  aliases:\n    fast: ''\n", "utf8");
 
-    expect(() => loadConfig(paths, temp!.env)).toThrow(/models\.aliases\.fast must be a non-empty string/);
+    expect(() => loadConfig(paths, temp!.env)).toThrow(
+      /models\.aliases\.fast must be a non-empty string/
+    );
   });
 
   it("accepts router specialty and priority metadata", () => {

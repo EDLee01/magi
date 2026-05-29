@@ -22,7 +22,9 @@ describe("clean-room compliance", () => {
   });
 
   it("does not publish magi-agent in package metadata", () => {
-    const packageJson = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(process.cwd(), "package.json"), "utf8")
+    ) as {
       name: string;
       bin?: Record<string, string>;
       scripts?: Record<string, string>;
@@ -61,10 +63,12 @@ function filesUnder(root: string): string[] {
 }
 
 function isRuntimeOrPackageFile(file: string): boolean {
-  return file.startsWith("src/")
-    || file.startsWith("tests/")
-    || file === "package.json"
-    || file === "package-lock.json"
-    || file === "tsconfig.json"
-    || file === "tsconfig.build.json";
+  return (
+    file.startsWith("src/") ||
+    file.startsWith("tests/") ||
+    file === "package.json" ||
+    file === "package-lock.json" ||
+    file === "tsconfig.json" ||
+    file === "tsconfig.build.json"
+  );
 }

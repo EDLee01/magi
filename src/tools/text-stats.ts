@@ -2,8 +2,19 @@ import { readFileSync, statSync } from "node:fs";
 import { resolveWorkspacePath } from "./workspace.js";
 import { ToolError } from "./errors.js";
 
-export interface TextStatsResult { path: string; lines: number; words: number; chars: number; bytes: number }
-export const TextStatsInputSchema = { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } satisfies Record<string, unknown>;
+export interface TextStatsResult {
+  path: string;
+  lines: number;
+  words: number;
+  chars: number;
+  bytes: number;
+}
+export const TextStatsInputSchema = {
+  type: "object",
+  properties: { path: { type: "string" } },
+  required: ["path"],
+  additionalProperties: false
+} satisfies Record<string, unknown>;
 
 export function parseTextStatsInput(input: Record<string, unknown>): { path: string } {
   const p = typeof input.path === "string" ? input.path : "";

@@ -37,7 +37,11 @@ class SlashCommandRegistryImpl {
     return this.modules.get(name);
   }
 
-  dispatch(name: string, args: string[], input: SlashCommandInput): string | Promise<string> | undefined {
+  dispatch(
+    name: string,
+    args: string[],
+    input: SlashCommandInput
+  ): string | Promise<string> | undefined {
     const cmd = this.modules.get(name);
     if (!cmd) return undefined;
     return cmd.handler(args, input);
@@ -60,7 +64,11 @@ class SlashCommandRegistryImpl {
     const seen = new Set<string>();
     const result: string[] = [];
     for (const cmd of this.modules.values()) {
-      if (!seen.has(cmd.name) && (cmd.name.startsWith(normalized) || (cmd.aliases ?? []).some(a => a.startsWith(normalized)))) {
+      if (
+        !seen.has(cmd.name) &&
+        (cmd.name.startsWith(normalized) ||
+          (cmd.aliases ?? []).some((a) => a.startsWith(normalized)))
+      ) {
         seen.add(cmd.name);
         result.push(cmd.usage);
       }
@@ -126,9 +134,9 @@ function levenshtein(a: string, b: string): number {
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       curr[j] = Math.min(
-        curr[j - 1] + 1,        // insert
-        prev[j] + 1,             // delete
-        prev[j - 1] + cost       // substitute
+        curr[j - 1] + 1, // insert
+        prev[j] + 1, // delete
+        prev[j - 1] + cost // substitute
       );
     }
     [prev, curr] = [curr, prev];
@@ -161,11 +169,17 @@ export function parseCommandLine(input: string): { name: string; args: string[] 
 
 // --- Shared formatting utilities (used by TUI and CLI) ---
 
-export function formatModelTarget(config: { models: { aliases: Record<string, string> } }, alias: string): string {
+export function formatModelTarget(
+  config: { models: { aliases: Record<string, string> } },
+  alias: string
+): string {
   return config.models.aliases[alias] ?? alias;
 }
 
-export function formatModelPicker(config: { models: { aliases: Record<string, string>; router?: Record<string, unknown> } }, currentModel = "main"): string {
+export function formatModelPicker(
+  config: { models: { aliases: Record<string, string>; router?: Record<string, unknown> } },
+  currentModel = "main"
+): string {
   const aliases = Object.entries(config.models.aliases);
   if (aliases.length === 0) {
     return "No model aliases configured.\nUse /model <provider:model> after configuring the provider.";
@@ -176,12 +190,16 @@ export function formatModelPicker(config: { models: { aliases: Record<string, st
   let index = 1;
   if (autoConfigured) {
     const marker = currentModel === "auto" ? ">" : " ";
-    lines.push(`${marker} ${String(index).padStart(2)} ${"auto".padEnd(16)} ${"smart routing".padEnd(24)} ${Object.keys(config.models.router!).length} candidates`);
+    lines.push(
+      `${marker} ${String(index).padStart(2)} ${"auto".padEnd(16)} ${"smart routing".padEnd(24)} ${Object.keys(config.models.router!).length} candidates`
+    );
     index += 1;
   }
   for (const [alias, target] of aliases) {
     const marker = alias === currentModel ? ">" : " ";
-    lines.push(`${marker} ${String(index).padStart(2)} ${alias.padEnd(16)} ${target.padEnd(24)} configured`);
+    lines.push(
+      `${marker} ${String(index).padStart(2)} ${alias.padEnd(16)} ${target.padEnd(24)} configured`
+    );
     index += 1;
   }
   lines.push("Use /model <alias>.");
@@ -191,7 +209,10 @@ export function formatModelPicker(config: { models: { aliases: Record<string, st
   return lines.join("\n");
 }
 
-export function resolveModelPickerSelection(config: { models: { aliases: Record<string, string>; router?: Record<string, unknown> } }, value: string): string | undefined {
+export function resolveModelPickerSelection(
+  config: { models: { aliases: Record<string, string>; router?: Record<string, unknown> } },
+  value: string
+): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   const autoConfigured = config.models.router && Object.keys(config.models.router).length > 0;
@@ -217,9 +238,11 @@ export function formatSessionSearch(store: SessionStore, query: string): string 
   const normalized = query.trim().toLowerCase();
   const sessions = store.listSessions(25).filter((session) => {
     if (!normalized) return true;
-    return session.id.toLowerCase().includes(normalized)
-      || (session.title ?? "").toLowerCase().includes(normalized)
-      || session.cwd.toLowerCase().includes(normalized);
+    return (
+      session.id.toLowerCase().includes(normalized) ||
+      (session.title ?? "").toLowerCase().includes(normalized) ||
+      session.cwd.toLowerCase().includes(normalized)
+    );
   });
   if (sessions.length === 0) {
     return normalized ? `No sessions match ${query}` : "No sessions";
@@ -234,30 +257,36 @@ export function formatSessionSearch(store: SessionStore, query: string): string 
   ].join("\n");
 }
 
-export function resolveSessionPickerSelection(store: SessionStore, query: string): SessionSummary | undefined {
+export function resolveSessionPickerSelection(
+  store: SessionStore,
+  query: string
+): SessionSummary | undefined {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return undefined;
   const sessions = store.listSessions(25);
   const exactSession = store.getSession(query.trim());
-  const direct = sessions.find((session) => session.id === query.trim()) ?? (exactSession
-    ? {
-      id: exactSession.id,
-      title: exactSession.title,
-      cwd: exactSession.cwd,
-      createdAt: exactSession.createdAt,
-      updatedAt: exactSession.updatedAt,
-      messageCount: exactSession.messages.length
-    }
-    : undefined);
+  const direct =
+    sessions.find((session) => session.id === query.trim()) ??
+    (exactSession
+      ? {
+          id: exactSession.id,
+          title: exactSession.title,
+          cwd: exactSession.cwd,
+          createdAt: exactSession.createdAt,
+          updatedAt: exactSession.updatedAt,
+          messageCount: exactSession.messages.length
+        }
+      : undefined);
   if (direct) return direct;
   if (/^\d+$/.test(normalized)) {
     const index = Number(normalized) - 1;
     if (index >= 0 && index < sessions.length) return sessions[index];
   }
-  const matches = sessions.filter((session) =>
-    session.id.toLowerCase().includes(normalized)
-    || (session.title ?? "").toLowerCase().includes(normalized)
-    || session.cwd.toLowerCase().includes(normalized)
+  const matches = sessions.filter(
+    (session) =>
+      session.id.toLowerCase().includes(normalized) ||
+      (session.title ?? "").toLowerCase().includes(normalized) ||
+      session.cwd.toLowerCase().includes(normalized)
   );
   return matches.length === 1 ? matches[0] : undefined;
 }

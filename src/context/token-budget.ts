@@ -48,7 +48,11 @@ export function computeSessionContextBudget(input: {
       estimatedTokens: estimateTokens("x".repeat(value.chars)),
       items: value.items
     }))
-    .sort((a, b) => categoryOrder(a.category) - categoryOrder(b.category) || a.category.localeCompare(b.category));
+    .sort(
+      (a, b) =>
+        categoryOrder(a.category) - categoryOrder(b.category) ||
+        a.category.localeCompare(b.category)
+    );
 
   const chars = categories.reduce((sum, category) => sum + category.chars, 0);
   return {
@@ -84,13 +88,22 @@ function messageCategory(message: MessageRecord): string {
   if (message.metadata.kind === "context-summary") {
     return "summary";
   }
-  if (message.role === "user" || message.role === "assistant" || message.role === "tool" || message.role === "system") {
+  if (
+    message.role === "user" ||
+    message.role === "assistant" ||
+    message.role === "tool" ||
+    message.role === "system"
+  ) {
     return message.role;
   }
   return "other";
 }
 
-function addBucket(buckets: Map<string, { chars: number; items: number }>, category: string, chars: number): void {
+function addBucket(
+  buckets: Map<string, { chars: number; items: number }>,
+  category: string,
+  chars: number
+): void {
   const existing = buckets.get(category) ?? { chars: 0, items: 0 };
   existing.chars += chars;
   existing.items += 1;

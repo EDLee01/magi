@@ -185,7 +185,9 @@ export function createGitBranch(cwd: string, options: GitBranchCreateOptions): s
     options.checkout ? `Created and checked out branch ${branch}` : `Created branch ${branch}`,
     result.stdout.trim(),
     result.stderr.trim()
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function checkoutGitBranch(cwd: string, options: GitCheckoutOptions): string {
@@ -200,7 +202,9 @@ export function checkoutGitBranch(cwd: string, options: GitCheckoutOptions): str
     options.create ? `Created and checked out branch ${branch}` : `Checked out branch ${branch}`,
     result.stdout.trim(),
     result.stderr.trim()
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function stageGitPaths(cwd: string, options: GitStageOptions): string {
@@ -208,17 +212,23 @@ export function stageGitPaths(cwd: string, options: GitStageOptions): string {
   if (!Array.isArray(options.paths) || options.paths.length < 1 || options.paths.length > 100) {
     throw new Error("GitStage paths must contain 1 to 100 paths");
   }
-  const paths = options.paths.map((requestedPath) => resolveWorkspacePath(cwd, requestedPath).relativePath);
+  const paths = options.paths.map(
+    (requestedPath) => resolveWorkspacePath(cwd, requestedPath).relativePath
+  );
   const uniquePaths = [...new Set(paths)];
   const mode = options.mode ?? "stage";
   const args = mode === "unstage" ? ["restore", "--staged", "--"] : ["add", "--"];
   const result = runGitOrThrow(cwd, [...args, ...uniquePaths]);
   return [
-    mode === "unstage" ? `Unstaged ${uniquePaths.length} path${uniquePaths.length === 1 ? "" : "s"}` : `Staged ${uniquePaths.length} path${uniquePaths.length === 1 ? "" : "s"}`,
+    mode === "unstage"
+      ? `Unstaged ${uniquePaths.length} path${uniquePaths.length === 1 ? "" : "s"}`
+      : `Staged ${uniquePaths.length} path${uniquePaths.length === 1 ? "" : "s"}`,
     ...uniquePaths.map((item) => `- ${item}`),
     result.stdout.trim(),
     result.stderr.trim()
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function requireGitRepository(cwd: string): void {
@@ -231,12 +241,22 @@ function requireGitRepository(cwd: string): void {
 function ensureGitRepository(cwd: string): GitReadiness {
   const version = runGit(cwd, ["--version"]);
   if (version.error) {
-    return { ok: false, gitAvailable: false, isRepository: false, reason: "git executable is not available" };
+    return {
+      ok: false,
+      gitAvailable: false,
+      isRepository: false,
+      reason: "git executable is not available"
+    };
   }
 
   const repo = runGit(cwd, ["rev-parse", "--is-inside-work-tree"]);
   if (repo.status !== 0 || repo.stdout.trim() !== "true") {
-    return { ok: false, gitAvailable: true, isRepository: false, reason: "current directory is not a git repository" };
+    return {
+      ok: false,
+      gitAvailable: true,
+      isRepository: false,
+      reason: "current directory is not a git repository"
+    };
   }
   return { ok: true, gitAvailable: true, isRepository: true };
 }
@@ -253,7 +273,12 @@ function validateRevision(value: string): void {
   if (!value.trim()) {
     throw new Error("GitShow rev must be a non-empty string");
   }
-  if (value.startsWith("-") || value.includes("\0") || value.includes("..") || value.includes(":")) {
+  if (
+    value.startsWith("-") ||
+    value.includes("\0") ||
+    value.includes("..") ||
+    value.includes(":")
+  ) {
     throw new Error("GitShow rev must be a simple revision name, tag, or commit id");
   }
 }
@@ -263,7 +288,12 @@ function validateStartPoint(value: string): string {
   if (!startPoint) {
     throw new Error("Git start_point must be a non-empty string");
   }
-  if (startPoint.startsWith("-") || startPoint.includes("\0") || startPoint.includes("..") || startPoint.includes(":")) {
+  if (
+    startPoint.startsWith("-") ||
+    startPoint.includes("\0") ||
+    startPoint.includes("..") ||
+    startPoint.includes(":")
+  ) {
     throw new Error("Git start_point must be a simple branch, tag, or commit id");
   }
   return startPoint;
@@ -278,22 +308,22 @@ function validateBranchName(value: string): string {
     throw new Error("Git branch name must be 200 characters or fewer");
   }
   if (
-    branch.startsWith("-")
-    || branch.startsWith("/")
-    || branch.endsWith("/")
-    || branch.includes("\\")
-    || branch.includes("\0")
-    || branch.includes("..")
-    || branch.includes("//")
-    || branch.includes("@{")
-    || branch.includes(":")
-    || branch.includes(" ")
-    || branch.includes("~")
-    || branch.includes("^")
-    || branch.includes("?")
-    || branch.includes("*")
-    || branch.includes("[")
-    || branch.includes("]")
+    branch.startsWith("-") ||
+    branch.startsWith("/") ||
+    branch.endsWith("/") ||
+    branch.includes("\\") ||
+    branch.includes("\0") ||
+    branch.includes("..") ||
+    branch.includes("//") ||
+    branch.includes("@{") ||
+    branch.includes(":") ||
+    branch.includes(" ") ||
+    branch.includes("~") ||
+    branch.includes("^") ||
+    branch.includes("?") ||
+    branch.includes("*") ||
+    branch.includes("[") ||
+    branch.includes("]")
   ) {
     throw new Error("Git branch name contains unsafe characters");
   }
@@ -360,9 +390,9 @@ export async function createWorktree(input: {
     args.push("-b", input.branch);
   }
   args.push(input.path);
-  
+
   const result = runGitOrThrow(input.cwd, args);
-  
+
   if (input.hooks) {
     const { triggerHook } = await import("../hooks/trigger.js");
     void triggerHook({
@@ -376,7 +406,7 @@ export async function createWorktree(input: {
       }
     });
   }
-  
+
   return { path: input.path, branch: input.branch ?? "HEAD" };
 }
 
@@ -392,9 +422,9 @@ export async function removeWorktree(input: {
     args.push("--force");
   }
   args.push(input.path);
-  
+
   const result = runGitOrThrow(input.cwd, args);
-  
+
   if (input.hooks) {
     const { triggerHook } = await import("../hooks/trigger.js");
     void triggerHook({
@@ -408,6 +438,6 @@ export async function removeWorktree(input: {
       }
     });
   }
-  
+
   return { path: input.path };
 }

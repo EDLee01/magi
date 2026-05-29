@@ -6,11 +6,23 @@ import path from "node:path";
 import { ToolError } from "./errors.js";
 import { resolveWorkspacePath } from "./workspace.js";
 
-export interface DownloadFileResult { url: string; path: string; sizeBytes: number }
+export interface DownloadFileResult {
+  url: string;
+  path: string;
+  sizeBytes: number;
+}
 
-export const DownloadFileInputSchema = { type: "object", properties: { url: { type: "string" }, path: { type: "string" } }, required: ["url", "path"], additionalProperties: false } satisfies Record<string, unknown>;
+export const DownloadFileInputSchema = {
+  type: "object",
+  properties: { url: { type: "string" }, path: { type: "string" } },
+  required: ["url", "path"],
+  additionalProperties: false
+} satisfies Record<string, unknown>;
 
-export function parseDownloadFileInput(input: Record<string, unknown>): { url: string; path: string } {
+export function parseDownloadFileInput(input: Record<string, unknown>): {
+  url: string;
+  path: string;
+} {
   const url = typeof input.url === "string" ? input.url : "";
   const p = typeof input.path === "string" ? input.path : "";
   if (!url) throw new ToolError("url is required", "bad-input");
@@ -18,7 +30,11 @@ export function parseDownloadFileInput(input: Record<string, unknown>): { url: s
   return { url, path: p };
 }
 
-export async function executeDownloadFile(input: { url: string; path: string; cwd: string }): Promise<DownloadFileResult> {
+export async function executeDownloadFile(input: {
+  url: string;
+  path: string;
+  cwd: string;
+}): Promise<DownloadFileResult> {
   const dst = resolveWorkspacePath(input.cwd, input.path).absolutePath;
   mkdirSync(path.dirname(dst), { recursive: true });
 
@@ -39,7 +55,9 @@ export async function executeDownloadFile(input: { url: string; path: string; cw
         resolve({ url: input.url, path: input.path, sizeBytes: data.length });
       });
       res.on("error", reject);
-    }).on("error", reject).end();
+    })
+      .on("error", reject)
+      .end();
   });
 }
 

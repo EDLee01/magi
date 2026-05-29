@@ -2,7 +2,12 @@ import { MagiConfig } from "../config.js";
 import { MagiConfigError } from "../errors.js";
 import { ProviderError } from "../providers/errors.js";
 import { ProviderRegistry } from "../providers/registry.js";
-import { MagiMessage, MagiToolDefinition, ProviderRequest, ProviderResponse } from "../providers/ir.js";
+import {
+  MagiMessage,
+  MagiToolDefinition,
+  ProviderRequest,
+  ProviderResponse
+} from "../providers/ir.js";
 import { ResolvedModel, resolveFallbackChain } from "./model-alias.js";
 
 export interface RouteAttempt {
@@ -83,7 +88,12 @@ export function hasProviderRoute(config: MagiConfig, alias: string): boolean {
 function toProviderRequest(
   candidate: ResolvedModel,
   messages: MagiMessage[],
-  input: { tools?: MagiToolDefinition[]; temperature?: number; maxOutputTokens?: number; signal?: AbortSignal }
+  input: {
+    tools?: MagiToolDefinition[];
+    temperature?: number;
+    maxOutputTokens?: number;
+    signal?: AbortSignal;
+  }
 ): ProviderRequest {
   return {
     model: candidate.model,

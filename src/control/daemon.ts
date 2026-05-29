@@ -4,7 +4,15 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, openSync, closeSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+  openSync,
+  closeSync
+} from "node:fs";
 import path from "node:path";
 
 import { MagiPaths } from "../paths.js";
@@ -54,7 +62,9 @@ export function getDaemonStatus(paths: MagiPaths): DaemonStatus {
     }
     if (!alive) {
       // Stale PID file
-      try { unlinkSync(pidPath); } catch {}
+      try {
+        unlinkSync(pidPath);
+      } catch {}
       return { running: false, pidFile: pidPath, logFile: logPath };
     }
     // Parse extra metadata
@@ -77,7 +87,10 @@ export function getDaemonStatus(paths: MagiPaths): DaemonStatus {
   }
 }
 
-export function writeDaemonPidFile(paths: MagiPaths, info: { pid: number; port: number; bind: string }): void {
+export function writeDaemonPidFile(
+  paths: MagiPaths,
+  info: { pid: number; port: number; bind: string }
+): void {
   const dir = daemonDir(paths);
   mkdirSync(dir, { recursive: true });
   mkdirSync(paths.logsRoot, { recursive: true });
@@ -96,7 +109,9 @@ export function writeDaemonPidFile(paths: MagiPaths, info: { pid: number; port: 
 export function clearDaemonPidFile(paths: MagiPaths): void {
   const pidPath = pidFile(paths);
   if (existsSync(pidPath)) {
-    try { unlinkSync(pidPath); } catch {}
+    try {
+      unlinkSync(pidPath);
+    } catch {}
   }
 }
 
@@ -104,11 +119,14 @@ export function clearDaemonPidFile(paths: MagiPaths): void {
  * Start the daemon by spawning a detached child process.
  * The child runs `magi serve` (or equivalent) with stdout/stderr redirected to the log file.
  */
-export function startDaemon(paths: MagiPaths, input: {
-  binPath: string; // path to the magi CLI script (process.argv[1])
-  nodePath?: string; // node binary path
-  env?: NodeJS.ProcessEnv;
-}): { pid: number; logFile: string; pidFile: string } {
+export function startDaemon(
+  paths: MagiPaths,
+  input: {
+    binPath: string; // path to the magi CLI script (process.argv[1])
+    nodePath?: string; // node binary path
+    env?: NodeJS.ProcessEnv;
+  }
+): { pid: number; logFile: string; pidFile: string } {
   const status = getDaemonStatus(paths);
   if (status.running) {
     throw new Error(`Magi daemon is already running (pid ${status.pid})`);
@@ -132,7 +150,8 @@ export function startDaemon(paths: MagiPaths, input: {
     // For now, write a tentative one with just the PID so status can find it.
     writeFileSync(
       pidFile(paths),
-      [String(child.pid), "port=0", "bind=", `startedAt=${new Date().toISOString()}`].join("\n") + "\n",
+      [String(child.pid), "port=0", "bind=", `startedAt=${new Date().toISOString()}`].join("\n") +
+        "\n",
       "utf8"
     );
     return { pid: child.pid, logFile: log, pidFile: pidFile(paths) };
@@ -141,7 +160,10 @@ export function startDaemon(paths: MagiPaths, input: {
   }
 }
 
-export function stopDaemon(paths: MagiPaths, signal: NodeJS.Signals = "SIGTERM"): { stopped: boolean; pid?: number } {
+export function stopDaemon(
+  paths: MagiPaths,
+  signal: NodeJS.Signals = "SIGTERM"
+): { stopped: boolean; pid?: number } {
   const status = getDaemonStatus(paths);
   if (!status.running || !status.pid) {
     return { stopped: false };

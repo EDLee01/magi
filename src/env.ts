@@ -59,12 +59,14 @@ function parseEnvValue(raw: string, envFile: string, lineNumber: number): string
     return "";
   }
   const quote = raw[0];
-  if (quote === "'" || quote === "\"") {
+  if (quote === "'" || quote === '"') {
     if (raw.length < 2 || raw.at(-1) !== quote) {
-      throw new MagiConfigError(`Invalid Magi env at ${envFile}:${lineNumber}: unterminated quoted value`);
+      throw new MagiConfigError(
+        `Invalid Magi env at ${envFile}:${lineNumber}: unterminated quoted value`
+      );
     }
     const inner = raw.slice(1, -1);
-    return quote === "\"" ? unescapeDoubleQuotedValue(inner, envFile, lineNumber) : inner;
+    return quote === '"' ? unescapeDoubleQuotedValue(inner, envFile, lineNumber) : inner;
   }
   return raw;
 }
@@ -74,7 +76,9 @@ function unescapeDoubleQuotedValue(value: string, envFile: string, lineNumber: n
     if (escaped === "n") return "\n";
     if (escaped === "r") return "\r";
     if (escaped === "t") return "\t";
-    if (escaped === "\"" || escaped === "\\" || escaped === "$") return escaped;
-    throw new MagiConfigError(`Invalid Magi env at ${envFile}:${lineNumber}: unsupported escape \\${escaped}`);
+    if (escaped === '"' || escaped === "\\" || escaped === "$") return escaped;
+    throw new MagiConfigError(
+      `Invalid Magi env at ${envFile}:${lineNumber}: unsupported escape \\${escaped}`
+    );
   });
 }

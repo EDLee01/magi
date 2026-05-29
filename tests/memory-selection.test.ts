@@ -35,11 +35,11 @@ describe("memory-selection", () => {
 
   it("uses keyword search when no selectionRoute", async () => {
     const paths = makeTempPaths();
-    writeFileSync(path.join(paths.root, "memory.md"), [
-      "preferred language: TypeScript",
-      "database: PostgreSQL",
-      "framework: React"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      path.join(paths.root, "memory.md"),
+      ["preferred language: TypeScript", "database: PostgreSQL", "framework: React"].join("\n"),
+      "utf8"
+    );
 
     const result = await selectRelevantMemories({
       paths,
@@ -55,10 +55,11 @@ describe("memory-selection", () => {
 
   it("returns all entries when count <= maxResults without LLM", async () => {
     const paths = makeTempPaths();
-    writeFileSync(path.join(paths.root, "memory.md"), [
-      "preferred language: TypeScript",
-      "database: PostgreSQL"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      path.join(paths.root, "memory.md"),
+      ["preferred language: TypeScript", "database: PostgreSQL"].join("\n"),
+      "utf8"
+    );
 
     const result = await selectRelevantMemories({
       paths,
@@ -78,16 +79,20 @@ describe("memory-selection", () => {
 
   it("uses LLM selection when entries exceed maxResults and route is provided", async () => {
     const paths = makeTempPaths();
-    writeFileSync(path.join(paths.root, "memory.md"), [
-      "preferred language: TypeScript",
-      "database: PostgreSQL",
-      "framework: React",
-      "editor: VS Code",
-      "os: Linux",
-      "shell: zsh",
-      "cloud: AWS",
-      "ci: GitHub Actions"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      path.join(paths.root, "memory.md"),
+      [
+        "preferred language: TypeScript",
+        "database: PostgreSQL",
+        "framework: React",
+        "editor: VS Code",
+        "os: Linux",
+        "shell: zsh",
+        "cloud: AWS",
+        "ci: GitHub Actions"
+      ].join("\n"),
+      "utf8"
+    );
 
     const mockAdapter = {
       name: "test",
@@ -116,14 +121,18 @@ describe("memory-selection", () => {
 
   it("falls back to keyword search when LLM fails", async () => {
     const paths = makeTempPaths();
-    writeFileSync(path.join(paths.root, "memory.md"), [
-      "preferred language: TypeScript",
-      "database: PostgreSQL",
-      "framework: React",
-      "editor: VS Code",
-      "os: Linux",
-      "shell: zsh"
-    ].join("\n"), "utf8");
+    writeFileSync(
+      path.join(paths.root, "memory.md"),
+      [
+        "preferred language: TypeScript",
+        "database: PostgreSQL",
+        "framework: React",
+        "editor: VS Code",
+        "os: Linux",
+        "shell: zsh"
+      ].join("\n"),
+      "utf8"
+    );
 
     const mockAdapter = {
       name: "test",

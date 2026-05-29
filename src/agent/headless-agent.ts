@@ -113,7 +113,9 @@ async function runAction(input: {
       `Command exited ${result.exitCode}`,
       result.stdout ? `stdout:\n${result.stdout.trimEnd()}` : undefined,
       result.stderr ? `stderr:\n${result.stderr.trimEnd()}` : undefined
-    ].filter((line): line is string => Boolean(line)).join("\n");
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
   }
 
   const git = getGitSummary(input.cwd);

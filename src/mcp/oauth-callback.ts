@@ -22,12 +22,14 @@ export interface CallbackServerHandle {
   close: () => void;
 }
 
-export function startOAuthCallbackServer(input: {
-  /** Path component of the redirect URI. Default: /oauth/callback */
-  path?: string;
-  /** Maximum time to wait for the redirect, in ms. Default: 5 minutes */
-  timeoutMs?: number;
-} = {}): Promise<CallbackServerHandle> {
+export function startOAuthCallbackServer(
+  input: {
+    /** Path component of the redirect URI. Default: /oauth/callback */
+    path?: string;
+    /** Maximum time to wait for the redirect, in ms. Default: 5 minutes */
+    timeoutMs?: number;
+  } = {}
+): Promise<CallbackServerHandle> {
   const path = input.path ?? "/oauth/callback";
   const timeoutMs = input.timeoutMs ?? 5 * 60 * 1000;
 
@@ -54,7 +56,9 @@ export function startOAuthCallbackServer(input: {
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.statusCode = 400;
           res.end(renderErrorPage(error, errorDescription));
-          rejectResult(new Error(`OAuth authorization failed: ${error} ${errorDescription}`.trim()));
+          rejectResult(
+            new Error(`OAuth authorization failed: ${error} ${errorDescription}`.trim())
+          );
           return;
         }
         const code = url.searchParams.get("code");
@@ -126,11 +130,15 @@ function renderErrorPage(error: string, description: string): string {
 }
 
 function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[c] ?? c);
+  return text.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[c] ?? c
+  );
 }

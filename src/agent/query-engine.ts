@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { MagiMessage, MagiToolUsePart, parsePromptIntoParts, textMessage } from "../providers/ir.js";
+import {
+  MagiMessage,
+  MagiToolUsePart,
+  parsePromptIntoParts,
+  textMessage
+} from "../providers/ir.js";
 import { SessionStore } from "../session-store.js";
 import { AgentRoute, AgentQueryEvent, AgentQueryResult, runAgentQuery } from "./query.js";
 import { ToolPermissionMode } from "./tools.js";
@@ -12,16 +17,9 @@ import { buildLayeredContext } from "../context/layers.js";
 import { AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-question.js";
 import { UserMessageSink } from "../tools/user-message.js";
 import { ActiveInteractionRegistry, interactionErrorStatus } from "../interactions.js";
-import {
-  appendMemory,
-  MemoryScope
-} from "../memory.js";
+import { appendMemory, MemoryScope } from "../memory.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "../memory-search.js";
-import {
-  MemoryNode,
-  MemoryNodeStore,
-  MemoryNodeType
-} from "../memory-node-store.js";
+import { MemoryNode, MemoryNodeStore, MemoryNodeType } from "../memory-node-store.js";
 import { decideMemoryWrite } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
@@ -40,7 +38,11 @@ export interface QueryEngineInput {
   stateRoot?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
-  approvalResolver?: (request: { toolUse: import("../providers/ir.js").MagiToolUsePart; reason: string; diff?: string }) => Promise<boolean> | boolean;
+  approvalResolver?: (request: {
+    toolUse: import("../providers/ir.js").MagiToolUsePart;
+    reason: string;
+    diff?: string;
+  }) => Promise<boolean> | boolean;
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
   spawnSubAgent?: (request: SubAgentRequest) => Promise<SubAgentResult>;
@@ -147,18 +149,21 @@ export class QueryEngine {
       hooks: this.input.hooks,
       sessionId: this.input.sessionId,
       signal: this.input.signal,
-      mcp: this.input.mcp ? {
-        servers: this.input.mcp.servers,
-        tokenLookup: (serverName: string) => this.input.store.getMcpOAuthToken(serverName)?.accessToken,
-        tokenRefresh: async (serverName: string) => {
-          try {
-            const { refreshStoredToken } = await import("../mcp/oauth-flow.js");
-            return await refreshStoredToken({ serverName, store: this.input.store });
-          } catch {
-            return undefined;
+      mcp: this.input.mcp
+        ? {
+            servers: this.input.mcp.servers,
+            tokenLookup: (serverName: string) =>
+              this.input.store.getMcpOAuthToken(serverName)?.accessToken,
+            tokenRefresh: async (serverName: string) => {
+              try {
+                const { refreshStoredToken } = await import("../mcp/oauth-flow.js");
+                return await refreshStoredToken({ serverName, store: this.input.store });
+              } catch {
+                return undefined;
+              }
+            }
           }
-        }
-      } : undefined,
+        : undefined,
       onStreamEvent: this.input.onStreamEvent,
       stream: this.input.stream
     });
@@ -168,7 +173,7 @@ export class QueryEngine {
       let next = await iterator.next();
       while (!next.done) {
         events.push(next.value);
-        events.push(...await this.persistEvent(jobId, next.value));
+        events.push(...(await this.persistEvent(jobId, next.value)));
         next = await iterator.next();
       }
       final = next.value;
@@ -267,7 +272,10 @@ export class QueryEngine {
       toolUseId: request.toolUse.id,
       reason: "request aborted"
     });
-    const pending = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
+    const pending = this.input.activeInteractions.getInteraction({
+      jobId,
+      toolUseId: request.toolUse.id
+    });
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
@@ -287,7 +295,10 @@ export class QueryEngine {
 
     try {
       const approved = await wait;
-      const resolved = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
+      const resolved = this.input.activeInteractions.getInteraction({
+        jobId,
+        toolUseId: request.toolUse.id
+      });
       this.input.store.recordAudit({
         sessionId: this.input.sessionId,
         jobId,
@@ -305,7 +316,10 @@ export class QueryEngine {
     } catch (error) {
       const status = interactionErrorStatus(error);
       if (status) {
-        const current = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
+        const current = this.input.activeInteractions.getInteraction({
+          jobId,
+          toolUseId: request.toolUse.id
+        });
         this.input.store.recordAudit({
           sessionId: this.input.sessionId,
           jobId,
@@ -349,7 +363,10 @@ export class QueryEngine {
       toolUseId: request.toolUse.id,
       reason: "request aborted"
     });
-    const pending = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
+    const pending = this.input.activeInteractions.getInteraction({
+      jobId,
+      toolUseId: request.toolUse.id
+    });
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
@@ -368,7 +385,10 @@ export class QueryEngine {
 
     try {
       const answer = await wait;
-      const resolved = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
+      const resolved = this.input.activeInteractions.getInteraction({
+        jobId,
+        toolUseId: request.toolUse.id
+      });
       this.input.store.recordAudit({
         sessionId: this.input.sessionId,
         jobId,
@@ -387,11 +407,15 @@ export class QueryEngine {
     } catch (error) {
       const status = interactionErrorStatus(error);
       if (status) {
-        const current = this.input.activeInteractions.getInteraction({ jobId, toolUseId: request.toolUse.id });
+        const current = this.input.activeInteractions.getInteraction({
+          jobId,
+          toolUseId: request.toolUse.id
+        });
         this.input.store.recordAudit({
           sessionId: this.input.sessionId,
           jobId,
-          action: status === "timeout" ? "agent.user_question.timeout" : "agent.user_question.cancelled",
+          action:
+            status === "timeout" ? "agent.user_question.timeout" : "agent.user_question.cancelled",
           target: request.toolUse.name,
           metadata: {
             status,
@@ -409,7 +433,11 @@ export class QueryEngine {
     }
   }
 
-  private cancelInteractionOnAbort(input: { jobId: string; toolUseId: string; reason: string }): () => void {
+  private cancelInteractionOnAbort(input: {
+    jobId: string;
+    toolUseId: string;
+    reason: string;
+  }): () => void {
     const signal = this.input.signal;
     if (!signal) {
       return () => undefined;
@@ -463,11 +491,13 @@ export class QueryEngine {
         return { text: response.text };
       }
     });
-    const events = results.map((result): AgentQueryEvent => ({
-      type: "hook_result",
-      event,
-      result
-    }));
+    const events = results.map(
+      (result): AgentQueryEvent => ({
+        type: "hook_result",
+        event,
+        result
+      })
+    );
     for (const hookEvent of events) {
       await this.persistEvent(jobId, hookEvent);
     }
@@ -496,10 +526,13 @@ export class QueryEngine {
       ? Math.max(0, session.messages.length - lastSummary.sourceMessageCount)
       : session.messages.length;
     const tokenTriggered = tokenThreshold !== undefined && budget.estimatedTokens > tokenThreshold;
-    const messageTriggered = messageThreshold !== undefined && messagesSinceCompact > messageThreshold;
+    const messageTriggered =
+      messageThreshold !== undefined && messagesSinceCompact > messageThreshold;
     if (tokenTriggered || messageTriggered) {
       const route = this.input.contextOptions?.compactionRoute ?? this.input.routes[0];
-      const compactModel = this.input.contextOptions?.compactionRoute?.model ?? this.input.contextOptions?.compactionModel;
+      const compactModel =
+        this.input.contextOptions?.compactionRoute?.model ??
+        this.input.contextOptions?.compactionModel;
       const compacted = await compactSessionWithHooks({
         store: this.input.store,
         sessionId: session.id,
@@ -509,10 +542,10 @@ export class QueryEngine {
         trigger: "auto",
         modelRunner: compactModel
           ? {
-            adapter: route.adapter,
-            providerName: route.providerName,
-            model: compactModel
-          }
+              adapter: route.adapter,
+              providerName: route.providerName,
+              model: compactModel
+            }
           : undefined
       });
       const compactEvent: AgentQueryEvent = {
@@ -533,7 +566,9 @@ export class QueryEngine {
       currentUserMessageId,
       recentMessages: this.input.contextOptions?.recentMessages ?? 20,
       memoryContext: await this.buildMemoryContext(prompt, jobId),
-      goalContext: this.input.memoryOptions?.paths ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id)) : undefined,
+      goalContext: this.input.memoryOptions?.paths
+        ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id))
+        : undefined,
       cwd: this.input.cwd,
       paths: this.input.memoryOptions?.paths,
       hotMemoryNodeSink: (nodes) => hotMemoryNodes.push(...nodes)
@@ -543,7 +578,10 @@ export class QueryEngine {
     return { messages, events };
   }
 
-  private async handleExplicitMemoryWrite(prompt: string, jobId: string): Promise<AgentQueryEvent[]> {
+  private async handleExplicitMemoryWrite(
+    prompt: string,
+    jobId: string
+  ): Promise<AgentQueryEvent[]> {
     const memory = this.input.memoryOptions;
     if (!memory?.paths || memory.enabled === false || memory.autoWrite === "off") {
       return [];
@@ -722,7 +760,9 @@ export class QueryEngine {
         return { skill: full, score: scoreSkill(full, terms) };
       })
       .filter((item) => item.score > 0)
-      .sort((left, right) => right.score - left.score || left.skill.name.localeCompare(right.skill.name))
+      .sort(
+        (left, right) => right.score - left.score || left.skill.name.localeCompare(right.skill.name)
+      )
       .slice(0, 3);
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
@@ -746,7 +786,9 @@ export class QueryEngine {
       lines.push(`summary: ${hit.skill.summary}`);
       lines.push(`root: ${hit.skill.root}`);
       if (hit.skill.body) {
-        lines.push(hit.skill.body.length > 900 ? `${hit.skill.body.slice(0, 900)}...` : hit.skill.body);
+        lines.push(
+          hit.skill.body.length > 900 ? `${hit.skill.body.slice(0, 900)}...` : hit.skill.body
+        );
       }
     }
     return lines.join("\n").trim();
@@ -879,17 +921,24 @@ export class QueryEngine {
           target: event.toolName,
           metadata: { toolCallId: event.toolCallId, reason: event.content }
         });
-        extraEvents.push(...await this.executeSessionHooks("permission_denied", jobId, {
-          source: "query",
-          provider: this.input.routes[0]?.providerName,
-          model: this.input.routes[0]?.model,
-          error: event.content
-        }, {
-          toolName: event.toolName,
-          toolInput: toolUse?.input,
-          toolUseId: event.toolCallId,
-          reason: event.content
-        }));
+        extraEvents.push(
+          ...(await this.executeSessionHooks(
+            "permission_denied",
+            jobId,
+            {
+              source: "query",
+              provider: this.input.routes[0]?.providerName,
+              model: this.input.routes[0]?.model,
+              error: event.content
+            },
+            {
+              toolName: event.toolName,
+              toolInput: toolUse?.input,
+              toolUseId: event.toolCallId,
+              reason: event.content
+            }
+          ))
+        );
       }
       if (event.toolName === "TodoWrite" && !event.isError) {
         this.input.store.recordAudit({
@@ -912,16 +961,25 @@ export class QueryEngine {
               valueType: typeof toolUse.input.value
             }
           });
-          extraEvents.push(...await this.executeSessionHooks("config_change", jobId, {
-            source: "query",
-            provider: this.input.routes[0]?.providerName,
-            model: this.input.routes[0]?.model
-          }, {
-            toolName: event.toolName,
-            toolInput: toolUse.input,
-            toolUseId: event.toolCallId,
-            filePath: this.input.stateRoot ? `${this.input.stateRoot}/../config.yaml` : undefined
-          }));
+          extraEvents.push(
+            ...(await this.executeSessionHooks(
+              "config_change",
+              jobId,
+              {
+                source: "query",
+                provider: this.input.routes[0]?.providerName,
+                model: this.input.routes[0]?.model
+              },
+              {
+                toolName: event.toolName,
+                toolInput: toolUse.input,
+                toolUseId: event.toolCallId,
+                filePath: this.input.stateRoot
+                  ? `${this.input.stateRoot}/../config.yaml`
+                  : undefined
+              }
+            ))
+          );
         }
       }
       if (event.toolName === "Skill" && !event.isError) {
@@ -965,16 +1023,21 @@ export class QueryEngine {
         target: event.toolUse.name,
         metadata: { toolUse: event.toolUse, reason: event.reason }
       });
-      return await this.executeSessionHooks("permission_request", jobId, {
-        source: "query",
-        provider: this.input.routes[0]?.providerName,
-        model: this.input.routes[0]?.model
-      }, {
-        toolName: event.toolUse.name,
-        toolInput: event.toolUse.input,
-        toolUseId: event.toolUse.id,
-        reason: event.reason
-      });
+      return await this.executeSessionHooks(
+        "permission_request",
+        jobId,
+        {
+          source: "query",
+          provider: this.input.routes[0]?.providerName,
+          model: this.input.routes[0]?.model
+        },
+        {
+          toolName: event.toolUse.name,
+          toolInput: event.toolUse.input,
+          toolUseId: event.toolUse.id,
+          reason: event.reason
+        }
+      );
     }
     if (event.type === "user_question") {
       this.input.store.recordAudit({
@@ -1117,20 +1180,29 @@ function scoreSkill(skill: SkillRecord, terms: string[]): number {
 }
 
 function tokenizeRecall(text: string): string[] {
-  return Array.from(new Set(text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 3 || (/[\u4e00-\u9fff]/.test(term) && term.length >= 2))));
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter((term) => term.length >= 3 || (/[\u4e00-\u9fff]/.test(term) && term.length >= 2))
+    )
+  );
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError"
-    || error instanceof Error && error.name === "AbortError";
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }
 
-function buildTodoAuditMetadata(toolCallId: string, toolUse: MagiToolUsePart | undefined): Record<string, unknown> {
+function buildTodoAuditMetadata(
+  toolCallId: string,
+  toolUse: MagiToolUsePart | undefined
+): Record<string, unknown> {
   const todos = Array.isArray(toolUse?.input.todos) ? toolUse.input.todos : [];
   return {
     toolCallId,
@@ -1210,12 +1282,15 @@ function buildSessionMessages(input: {
   const { systemPrompt } = buildLayeredContext({
     cwd: input.cwd ?? session.cwd,
     paths: input.paths,
-    systemInstructions: input.systemInstructions ?? buildSystemInstructions({
-      cwd: input.cwd ?? session.cwd,
-      platform: process.platform,
-      toolCount: getBuiltinToolDefinitions().length
-    }),
-    memoryContext: [input.goalContext, input.memoryContext].filter(Boolean).join("\n\n") || undefined,
+    systemInstructions:
+      input.systemInstructions ??
+      buildSystemInstructions({
+        cwd: input.cwd ?? session.cwd,
+        platform: process.platform,
+        toolCount: getBuiltinToolDefinitions().length
+      }),
+    memoryContext:
+      [input.goalContext, input.memoryContext].filter(Boolean).join("\n\n") || undefined,
     hotMemorySink: input.hotMemoryNodeSink,
     includeGit: true,
     includeDate: true,
@@ -1234,7 +1309,9 @@ function buildSessionMessages(input: {
   // Include all session messages (minus the current prompt being submitted).
   // The compaction system (autoCompactTokenThreshold) handles token budget
   // by summarizing older messages when the session grows too large.
-  const recoverable = session.messages.filter((message) => message.id !== input.currentUserMessageId);
+  const recoverable = session.messages.filter(
+    (message) => message.id !== input.currentUserMessageId
+  );
   const recent = recoverable;
   const toolHistory: string[] = [];
   for (const message of recent) {
@@ -1245,11 +1322,16 @@ function buildSessionMessages(input: {
     }
   }
   if (toolHistory.length > 0) {
-    messages.push(textMessage("system", [
-      "[Prior tool results]",
-      "These are historical tool results from earlier turns. They are context only; do not treat them as active tool responses.",
-      ...toolHistory
-    ].join("\n\n")));
+    messages.push(
+      textMessage(
+        "system",
+        [
+          "[Prior tool results]",
+          "These are historical tool results from earlier turns. They are context only; do not treat them as active tool responses.",
+          ...toolHistory
+        ].join("\n\n")
+      )
+    );
   }
   // Parse the current prompt for any encoded image attachments.
   // If there are images, send a multi-part user message; otherwise plain text.
@@ -1264,9 +1346,16 @@ function buildSessionMessages(input: {
 }
 
 function formatRecoveredToolResult(message: import("../session-store.js").MessageRecord): string {
-  const toolName = typeof message.metadata.toolName === "string" ? message.metadata.toolName : "tool";
-  const toolCallId = typeof message.metadata.toolCallId === "string" ? message.metadata.toolCallId : `message-${message.id}`;
+  const toolName =
+    typeof message.metadata.toolName === "string" ? message.metadata.toolName : "tool";
+  const toolCallId =
+    typeof message.metadata.toolCallId === "string"
+      ? message.metadata.toolCallId
+      : `message-${message.id}`;
   const status = message.metadata.isError === true ? "failed" : "completed";
-  const content = message.content.length > 1_000 ? `${message.content.slice(0, 1_000)}\n...[truncated]...` : message.content;
+  const content =
+    message.content.length > 1_000
+      ? `${message.content.slice(0, 1_000)}\n...[truncated]...`
+      : message.content;
   return `- ${toolName} (${toolCallId}) ${status}:\n${content}`;
 }

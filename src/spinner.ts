@@ -54,7 +54,9 @@ export function startSpinner(output: { write(s: string): void }, initial?: Spinn
     const parts = [`${color}${char}${reset} ${message}`];
     if (status.model) parts.push(`${dim}${status.model}${reset}`);
     if (status.inputTokens !== undefined && status.outputTokens !== undefined) {
-      parts.push(`${dim}↑${formatTokens(status.inputTokens)} ↓${formatTokens(status.outputTokens)}${reset}`);
+      parts.push(
+        `${dim}↑${formatTokens(status.inputTokens)} ↓${formatTokens(status.outputTokens)}${reset}`
+      );
     }
     parts.push(`${dim}${elapsed}s${reset}`);
     output.write(`\r\x1b[K${parts.join("  ")}`);

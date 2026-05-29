@@ -1,4 +1,9 @@
-import { formatModelPicker, formatModelTarget, resolveModelPickerSelection, SlashCommandInput } from "./registry.js";
+import {
+  formatModelPicker,
+  formatModelTarget,
+  resolveModelPickerSelection,
+  SlashCommandInput
+} from "./registry.js";
 
 export const command = {
   name: "model",

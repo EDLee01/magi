@@ -16,7 +16,7 @@ export const command = {
     }
 
     const messageCount = session.messages.length;
-    const jobs = input.store.listJobs(100).filter(j => j.sessionId === input.sessionId);
+    const jobs = input.store.listJobs(100).filter((j) => j.sessionId === input.sessionId);
     const elapsed = getElapsed(session.createdAt, session.updatedAt);
 
     return [

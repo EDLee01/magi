@@ -142,26 +142,65 @@ export function classifyMemoryNodeType(
   const normalized = normalizeClassifierText(text);
   if (!normalized) return "user_profile";
 
-  if (hasAny(normalized, [
-    "workflow", "process", "procedure", "runbook", "checklist", "playbook",
-    "工作流", "流程", "步骤", "sop"
-  ])) {
+  if (
+    hasAny(normalized, [
+      "workflow",
+      "process",
+      "procedure",
+      "runbook",
+      "checklist",
+      "playbook",
+      "工作流",
+      "流程",
+      "步骤",
+      "sop"
+    ])
+  ) {
     return "workflow";
   }
 
   if (
-    hasAny(normalized, ["work habit", "habit", "usually", "normally", "routine", "工作习惯", "习惯", "通常", "一般"]) ||
-    (
-      hasAny(normalized, ["before", "after", "first", "then", "prioritize", "先", "再", "优先"]) &&
-      hasAny(normalized, ["check", "test", "verify", "verification", "build", "review", "验证", "测试", "检查"])
-    )
+    hasAny(normalized, [
+      "work habit",
+      "habit",
+      "usually",
+      "normally",
+      "routine",
+      "工作习惯",
+      "习惯",
+      "通常",
+      "一般"
+    ]) ||
+    (hasAny(normalized, ["before", "after", "first", "then", "prioritize", "先", "再", "优先"]) &&
+      hasAny(normalized, [
+        "check",
+        "test",
+        "verify",
+        "verification",
+        "build",
+        "review",
+        "验证",
+        "测试",
+        "检查"
+      ]))
   ) {
     return "work_habit";
   }
 
-  if (hasAny(normalized, [
-    "i am", "i'm", "my name is", "call me", "my role is", "身份", "我是", "我叫", "我的名字", "称呼我"
-  ])) {
+  if (
+    hasAny(normalized, [
+      "i am",
+      "i'm",
+      "my name is",
+      "call me",
+      "my role is",
+      "身份",
+      "我是",
+      "我叫",
+      "我的名字",
+      "称呼我"
+    ])
+  ) {
     return "user_profile";
   }
 
@@ -169,26 +208,95 @@ export function classifyMemoryNodeType(
     return "skill_ref";
   }
 
-  if (hasAny(normalized, ["http://", "https://", "docs", "documentation", "reference", "link", "url", "文档", "链接", "参考"])) {
+  if (
+    hasAny(normalized, [
+      "http://",
+      "https://",
+      "docs",
+      "documentation",
+      "reference",
+      "link",
+      "url",
+      "文档",
+      "链接",
+      "参考"
+    ])
+  ) {
     return "reference";
   }
 
-  if (hasAny(normalized, ["project", "repo", "repository", "codebase", "magi", "项目", "仓库", "代码库"])) {
+  if (
+    hasAny(normalized, [
+      "project",
+      "repo",
+      "repository",
+      "codebase",
+      "magi",
+      "项目",
+      "仓库",
+      "代码库"
+    ])
+  ) {
     return "project";
   }
 
-  if (hasAny(normalized, ["decision", "decided", "we chose", "architecture", "technical direction", "决定", "决策", "技术路线", "架构"])) {
+  if (
+    hasAny(normalized, [
+      "decision",
+      "decided",
+      "we chose",
+      "architecture",
+      "technical direction",
+      "决定",
+      "决策",
+      "技术路线",
+      "架构"
+    ])
+  ) {
     return "decision";
   }
 
-  if (hasAny(normalized, ["problem", "issue", "bug", "error", "failure", "failed", "broken", "risk", "问题", "错误", "失败", "异常", "风险"])) {
+  if (
+    hasAny(normalized, [
+      "problem",
+      "issue",
+      "bug",
+      "error",
+      "failure",
+      "failed",
+      "broken",
+      "risk",
+      "问题",
+      "错误",
+      "失败",
+      "异常",
+      "风险"
+    ])
+  ) {
     return "problem";
   }
 
-  if (hasAny(normalized, [
-    "prefer", "preference", "likes", "dislikes", "wants", "default", "style", "tone", "language",
-    "偏好", "喜欢", "不喜欢", "默认", "风格", "语气", "语言", "简洁"
-  ])) {
+  if (
+    hasAny(normalized, [
+      "prefer",
+      "preference",
+      "likes",
+      "dislikes",
+      "wants",
+      "default",
+      "style",
+      "tone",
+      "language",
+      "偏好",
+      "喜欢",
+      "不喜欢",
+      "默认",
+      "风格",
+      "语气",
+      "语言",
+      "简洁"
+    ])
+  ) {
     return "preference";
   }
 
@@ -223,44 +331,52 @@ export class MemoryNodeStore {
     const existing = this.findDuplicate(input.type, body);
     if (existing) {
       const weight = Math.max(existing.weight, input.weight ?? existing.weight);
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         update memory_nodes
         set title = ?, summary = ?, body = ?, weight = ?, status = 'active', source = ?,
             source_session_id = ?, updated_at = ?, metadata_json = ?
         where id = ?
-      `).run(
-        input.title?.trim() || existing.title,
-        input.summary?.trim() || existing.summary,
-        body,
-        weight,
-        input.source,
-        input.sourceSessionId ?? existing.sourceSessionId ?? null,
-        now,
-        encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
-        existing.id
-      );
+      `
+        )
+        .run(
+          input.title?.trim() || existing.title,
+          input.summary?.trim() || existing.summary,
+          body,
+          weight,
+          input.source,
+          input.sourceSessionId ?? existing.sourceSessionId ?? null,
+          now,
+          encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
+          existing.id
+        );
       return this.getNode(existing.id)!;
     }
 
     const id = randomUUID();
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       insert into memory_nodes
         (id, type, title, summary, body, weight, status, source, source_session_id,
          created_at, updated_at, last_used_at, use_count, metadata_json)
       values (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, null, 0, ?)
-    `).run(
-      id,
-      input.type,
-      input.title?.trim() || defaultTitle(input.type, body),
-      input.summary?.trim() || defaultSummary(body),
-      body,
-      input.weight ?? defaultWeight(input.source),
-      input.source,
-      input.sourceSessionId ?? null,
-      now,
-      now,
-      encodeJson(input.metadata)
-    );
+    `
+      )
+      .run(
+        id,
+        input.type,
+        input.title?.trim() || defaultTitle(input.type, body),
+        input.summary?.trim() || defaultSummary(body),
+        body,
+        input.weight ?? defaultWeight(input.source),
+        input.source,
+        input.sourceSessionId ?? null,
+        now,
+        now,
+        encodeJson(input.metadata)
+      );
     return this.getNode(id)!;
   }
 
@@ -273,48 +389,51 @@ export class MemoryNodeStore {
     const now = nowIso();
     const existing = this.getSourceByUri(uri);
     if (existing) {
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         update memory_sources
         set kind = ?, title = ?, content_hash = ?, status = 'active',
             indexed_at = ?, updated_at = ?, metadata_json = ?
         where id = ?
-      `).run(
-        input.kind,
-        title,
-        input.contentHash,
-        now,
-        now,
-        encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
-        existing.id
-      );
+      `
+        )
+        .run(
+          input.kind,
+          title,
+          input.contentHash,
+          now,
+          now,
+          encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
+          existing.id
+        );
       return this.getSource(existing.id)!;
     }
 
     const id = randomUUID();
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       insert into memory_sources
         (id, kind, uri, title, content_hash, status, indexed_at, updated_at, metadata_json)
       values (?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    `).run(
-      id,
-      input.kind,
-      uri,
-      title,
-      input.contentHash,
-      now,
-      now,
-      encodeJson(input.metadata)
-    );
+    `
+      )
+      .run(id, input.kind, uri, title, input.contentHash, now, now, encodeJson(input.metadata));
     return this.getSource(id)!;
   }
 
   getSource(id: string): MemorySource | undefined {
-    const row = this.db.prepare("select * from memory_sources where id = ?").get(id) as DbMemorySource | undefined;
+    const row = this.db.prepare("select * from memory_sources where id = ?").get(id) as
+      | DbMemorySource
+      | undefined;
     return row ? toMemorySource(row) : undefined;
   }
 
   getSourceByUri(uri: string): MemorySource | undefined {
-    const row = this.db.prepare("select * from memory_sources where uri = ?").get(uri) as DbMemorySource | undefined;
+    const row = this.db.prepare("select * from memory_sources where uri = ?").get(uri) as
+      | DbMemorySource
+      | undefined;
     return row ? toMemorySource(row) : undefined;
   }
 
@@ -335,44 +454,52 @@ export class MemoryNodeStore {
     if (existing) {
       const node = this.getNode(existing.nodeId);
       const weight = Math.max(node?.weight ?? 0, input.weight ?? defaultWeight(source.kind));
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         update memory_nodes
         set type = ?, title = ?, summary = ?, body = ?, weight = ?, status = 'active',
             source = ?, updated_at = ?, metadata_json = ?
         where id = ?
-      `).run(
-        input.type,
-        heading,
-        input.summary?.trim() || defaultSummary(body),
-        body,
-        weight,
-        source.kind,
-        now,
-        encodeJson({
-          ...(node?.metadata ?? {}),
-          sourceKind: source.kind,
-          sourceUri: source.uri,
-          sourceId: source.id,
-          ...(input.metadata ?? {})
-        }),
-        existing.nodeId
-      );
-      this.db.prepare(`
+      `
+        )
+        .run(
+          input.type,
+          heading,
+          input.summary?.trim() || defaultSummary(body),
+          body,
+          weight,
+          source.kind,
+          now,
+          encodeJson({
+            ...(node?.metadata ?? {}),
+            sourceKind: source.kind,
+            sourceUri: source.uri,
+            sourceId: source.id,
+            ...(input.metadata ?? {})
+          }),
+          existing.nodeId
+        );
+      this.db
+        .prepare(
+          `
         update memory_chunks
         set uri = ?, heading = ?, body = ?, summary = ?, content_hash = ?, order_index = ?,
             status = 'active', updated_at = ?, metadata_json = ?
         where id = ?
-      `).run(
-        uri,
-        heading,
-        body,
-        input.summary?.trim() || defaultSummary(body),
-        contentHash,
-        input.orderIndex ?? existing.orderIndex,
-        now,
-        encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
-        existing.id
-      );
+      `
+        )
+        .run(
+          uri,
+          heading,
+          body,
+          input.summary?.trim() || defaultSummary(body),
+          contentHash,
+          input.orderIndex ?? existing.orderIndex,
+          now,
+          encodeJson({ ...existing.metadata, ...(input.metadata ?? {}) }),
+          existing.id
+        );
       return this.getChunk(existing.id)!;
     }
 
@@ -391,37 +518,47 @@ export class MemoryNodeStore {
       }
     });
     const id = randomUUID();
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       insert into memory_chunks
         (id, source_id, node_id, uri, heading, body, summary, content_hash, order_index, status, updated_at, metadata_json)
       values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    `).run(
-      id,
-      input.sourceId,
-      node.id,
-      uri,
-      heading,
-      body,
-      input.summary?.trim() || defaultSummary(body),
-      contentHash,
-      input.orderIndex ?? 0,
-      now,
-      encodeJson(input.metadata)
-    );
+    `
+      )
+      .run(
+        id,
+        input.sourceId,
+        node.id,
+        uri,
+        heading,
+        body,
+        input.summary?.trim() || defaultSummary(body),
+        contentHash,
+        input.orderIndex ?? 0,
+        now,
+        encodeJson(input.metadata)
+      );
     return this.getChunk(id)!;
   }
 
   getChunk(id: string): MemoryChunk | undefined {
-    const row = this.db.prepare("select * from memory_chunks where id = ?").get(id) as DbMemoryChunk | undefined;
+    const row = this.db.prepare("select * from memory_chunks where id = ?").get(id) as
+      | DbMemoryChunk
+      | undefined;
     return row ? toMemoryChunk(row) : undefined;
   }
 
   listChunksForSource(sourceId: string): MemoryChunk[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       select * from memory_chunks
       where source_id = ?
       order by order_index asc, heading asc
-    `).all(sourceId) as DbMemoryChunk[];
+    `
+      )
+      .all(sourceId) as DbMemoryChunk[];
     return rows.map(toMemoryChunk);
   }
 
@@ -430,7 +567,9 @@ export class MemoryNodeStore {
     if (terms.length === 0) return [];
     const limit = Math.max(1, Math.min(input.limit ?? 8, 50));
     const minScore = input.minScore ?? 1;
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       select
         n.*,
         s.id as source_id,
@@ -458,7 +597,9 @@ export class MemoryNodeStore {
       join memory_chunks c on c.node_id = n.id
       join memory_sources s on s.id = c.source_id
       where n.status = 'active' and c.status = 'active' and s.status = 'active'
-    `).all() as DbGraphSearchRow[];
+    `
+      )
+      .all() as DbGraphSearchRow[];
     return rows
       .map((row) => {
         const node = toMemoryNode(row);
@@ -472,10 +613,11 @@ export class MemoryNodeStore {
         };
       })
       .filter((hit) => hit.score >= minScore)
-      .sort((a, b) =>
-        b.score - a.score ||
-        b.node.weight - a.node.weight ||
-        a.source.uri.localeCompare(b.source.uri)
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          b.node.weight - a.node.weight ||
+          a.source.uri.localeCompare(b.source.uri)
       )
       .slice(0, limit);
   }
@@ -483,13 +625,21 @@ export class MemoryNodeStore {
   markSourceMissing(sourceId: string): void {
     const now = nowIso();
     this.db.transaction((id: string) => {
-      this.db.prepare("update memory_sources set status = 'archived', updated_at = ? where id = ?").run(now, id);
-      this.db.prepare("update memory_chunks set status = 'archived', updated_at = ? where source_id = ?").run(now, id);
-      this.db.prepare(`
+      this.db
+        .prepare("update memory_sources set status = 'archived', updated_at = ? where id = ?")
+        .run(now, id);
+      this.db
+        .prepare("update memory_chunks set status = 'archived', updated_at = ? where source_id = ?")
+        .run(now, id);
+      this.db
+        .prepare(
+          `
         update memory_nodes
         set status = 'archived', updated_at = ?
         where id in (select node_id from memory_chunks where source_id = ?)
-      `).run(now, id);
+      `
+        )
+        .run(now, id);
     })(sourceId);
   }
 
@@ -500,8 +650,12 @@ export class MemoryNodeStore {
       return;
     }
     const now = nowIso();
-    const archiveChunk = this.db.prepare("update memory_chunks set status = 'archived', updated_at = ? where id = ?");
-    const archiveNode = this.db.prepare("update memory_nodes set status = 'archived', updated_at = ? where id = ?");
+    const archiveChunk = this.db.prepare(
+      "update memory_chunks set status = 'archived', updated_at = ? where id = ?"
+    );
+    const archiveNode = this.db.prepare(
+      "update memory_nodes set status = 'archived', updated_at = ? where id = ?"
+    );
     this.db.transaction((missing: MemoryChunk[]) => {
       for (const chunk of missing) {
         archiveChunk.run(now, chunk.id);
@@ -510,7 +664,9 @@ export class MemoryNodeStore {
     })(chunks);
   }
 
-  listSources(input: { kind?: MemorySourceKind; status?: MemorySourceStatus } = {}): MemorySource[] {
+  listSources(
+    input: { kind?: MemorySourceKind; status?: MemorySourceStatus } = {}
+  ): MemorySource[] {
     const clauses: string[] = [];
     const params: string[] = [];
     if (input.kind) {
@@ -522,19 +678,25 @@ export class MemoryNodeStore {
       params.push(input.status);
     }
     const where = clauses.length > 0 ? `where ${clauses.join(" and ")}` : "";
-    const rows = this.db.prepare(`select * from memory_sources ${where} order by uri asc`).all(...params) as DbMemorySource[];
+    const rows = this.db
+      .prepare(`select * from memory_sources ${where} order by uri asc`)
+      .all(...params) as DbMemorySource[];
     return rows.map(toMemorySource);
   }
 
   getNode(id: string): MemoryNode | undefined {
-    const row = this.db.prepare("select * from memory_nodes where id = ?").get(id) as DbMemoryNode | undefined;
+    const row = this.db.prepare("select * from memory_nodes where id = ?").get(id) as
+      | DbMemoryNode
+      | undefined;
     return row ? toMemoryNode(row) : undefined;
   }
 
   listHotNodes(input: ListHotMemoryNodesInput = {}): MemoryNode[] {
     const limit = Math.max(1, Math.min(input.limit ?? 12, 50));
     const minWeight = input.minWeight ?? 0.25;
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       select * from memory_nodes
       where status = 'active' and weight >= ?
       order by
@@ -555,7 +717,9 @@ export class MemoryNodeStore {
         coalesce(last_used_at, updated_at) desc,
         updated_at desc
       limit ?
-    `).all(minWeight, limit) as DbMemoryNode[];
+    `
+      )
+      .all(minWeight, limit) as DbMemoryNode[];
     return rows.map(toMemoryNode);
   }
 
@@ -585,17 +749,21 @@ export class MemoryNodeStore {
     metadata?: Record<string, unknown>;
   }): MemoryEdge {
     const now = nowIso();
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       insert into memory_edges (from_node_id, to_node_id, relation, weight, created_at, metadata_json)
       values (?, ?, ?, ?, ?, ?)
-    `).run(
-      input.fromNodeId,
-      input.toNodeId,
-      input.relation,
-      input.weight ?? 0.5,
-      now,
-      encodeJson(input.metadata)
-    );
+    `
+      )
+      .run(
+        input.fromNodeId,
+        input.toNodeId,
+        input.relation,
+        input.weight ?? 0.5,
+        now,
+        encodeJson(input.metadata)
+      );
     return {
       id: Number(result.lastInsertRowid),
       fromNodeId: input.fromNodeId,
@@ -608,12 +776,16 @@ export class MemoryNodeStore {
   }
 
   private findDuplicate(type: MemoryNodeType, body: string): MemoryNode | undefined {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       select * from memory_nodes
       where type = ? and lower(body) = lower(?) and status != 'archived'
       order by updated_at desc
       limit 1
-    `).get(type, body) as DbMemoryNode | undefined;
+    `
+      )
+      .get(type, body) as DbMemoryNode | undefined;
     return row ? toMemoryNode(row) : undefined;
   }
 
@@ -691,12 +863,18 @@ export class MemoryNodeStore {
     `);
     this.ensureColumn("memory_chunks", "uri", "text");
     this.ensureColumn("memory_chunks", "order_index", "integer not null default 0");
-    this.db.prepare("update memory_chunks set uri = source_id || '#' || heading where uri is null or uri = ''").run();
+    this.db
+      .prepare(
+        "update memory_chunks set uri = source_id || '#' || heading where uri is null or uri = ''"
+      )
+      .run();
     this.db.exec("create unique index if not exists idx_memory_chunks_uri on memory_chunks(uri)");
   }
 
   private getChunkByUri(uri: string): MemoryChunk | undefined {
-    const row = this.db.prepare("select * from memory_chunks where uri = ? limit 1").get(uri) as DbMemoryChunk | undefined;
+    const row = this.db.prepare("select * from memory_chunks where uri = ? limit 1").get(uri) as
+      | DbMemoryChunk
+      | undefined;
     return row ? toMemoryChunk(row) : undefined;
   }
 
@@ -859,7 +1037,10 @@ function graphRowToChunk(row: DbGraphSearchRow): MemoryChunk {
 }
 
 function defaultTitle(type: MemoryNodeType, body: string): string {
-  const prefix = type.split("_").map((part) => part[0].toUpperCase() + part.slice(1)).join(" ");
+  const prefix = type
+    .split("_")
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(" ");
   return `${prefix}: ${defaultSummary(body).slice(0, 60)}`;
 }
 
@@ -887,12 +1068,16 @@ function hasAny(text: string, needles: string[]): boolean {
 }
 
 function tokenizeSearch(text: string): string[] {
-  return Array.from(new Set(text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter(isSearchTerm)));
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter(isSearchTerm)
+    )
+  );
 }
 
 function isSearchTerm(term: string): boolean {
@@ -901,13 +1086,48 @@ function isSearchTerm(term: string): boolean {
 }
 
 const SEARCH_STOPWORDS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "for", "from",
-  "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "our", "should",
-  "the", "this", "to", "use", "what", "when", "where", "who", "why", "with",
-  "you", "your"
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "can",
+  "do",
+  "for",
+  "from",
+  "how",
+  "i",
+  "in",
+  "is",
+  "it",
+  "me",
+  "my",
+  "of",
+  "on",
+  "or",
+  "our",
+  "should",
+  "the",
+  "this",
+  "to",
+  "use",
+  "what",
+  "when",
+  "where",
+  "who",
+  "why",
+  "with",
+  "you",
+  "your"
 ]);
 
-function scoreGraphHit(input: { node: MemoryNode; source: MemorySource; chunk: MemoryChunk }, terms: string[]): number {
+function scoreGraphHit(
+  input: { node: MemoryNode; source: MemorySource; chunk: MemoryChunk },
+  terms: string[]
+): number {
   const text = `${input.source.uri}\n${input.source.title}\n${input.node.title}\n${input.node.summary}\n${input.chunk.heading}\n${input.chunk.body}`;
   const words = tokenizeSearch(text);
   let score = 0;
@@ -935,7 +1155,9 @@ function encodeJson(value: Record<string, unknown> | undefined): string {
 function decodeJson(value: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }

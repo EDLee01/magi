@@ -13,7 +13,10 @@ export class ProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
 
-  constructor(message: string, input: { kind: ProviderFailureKind; status?: number; retryable?: boolean }) {
+  constructor(
+    message: string,
+    input: { kind: ProviderFailureKind; status?: number; retryable?: boolean }
+  ) {
     super(message);
     this.name = "ProviderError";
     this.kind = input.kind;
@@ -23,7 +26,13 @@ export class ProviderError extends Error {
 }
 
 export function isRetryableFailure(kind: ProviderFailureKind): boolean {
-  return kind === "timeout" || kind === "rate-limit" || kind === "server-error" || kind === "model-unavailable" || kind === "network";
+  return (
+    kind === "timeout" ||
+    kind === "rate-limit" ||
+    kind === "server-error" ||
+    kind === "model-unavailable" ||
+    kind === "network"
+  );
 }
 
 export function classifyHttpStatus(status: number): ProviderFailureKind {
@@ -57,7 +66,11 @@ export function providerErrorFromResponse(providerName: string, response: Respon
   });
 }
 
-function formatProviderErrorMessage(providerName: string, status: number, kind: ProviderFailureKind): string {
+function formatProviderErrorMessage(
+  providerName: string,
+  status: number,
+  kind: ProviderFailureKind
+): string {
   const base = `${providerName} returned HTTP ${status}`;
   switch (kind) {
     case "auth":
@@ -87,20 +100,27 @@ export function providerErrorFromException(providerName: string, error: unknown)
     return error;
   }
   const detail = errorDetail(error);
-  return new ProviderError(`${providerName} request failed (network error, likely transient). Will retry.${detail ? ` ${detail}` : ""}`, {
-    kind: "network",
-    retryable: true
-  });
+  return new ProviderError(
+    `${providerName} request failed (network error, likely transient). Will retry.${detail ? ` ${detail}` : ""}`,
+    {
+      kind: "network",
+      retryable: true
+    }
+  );
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError"
-    || error instanceof Error && error.name === "AbortError";
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }
 
 function isLikelyNetworkError(error: unknown): boolean {
   const text = errorDetail(error);
-  return /fetch failed|failed to fetch|network|socket|connection|terminated|timeout|timed out|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|UND_ERR/i.test(text);
+  return /fetch failed|failed to fetch|network|socket|connection|terminated|timeout|timed out|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|UND_ERR/i.test(
+    text
+  );
 }
 
 function errorDetail(error: unknown): string {
@@ -114,7 +134,12 @@ function errorDetail(error: unknown): string {
       current = (current as Error & { cause?: unknown }).cause;
       continue;
     }
-    if (typeof current === "object" && current !== null && "message" in current && typeof (current as { message?: unknown }).message === "string") {
+    if (
+      typeof current === "object" &&
+      current !== null &&
+      "message" in current &&
+      typeof (current as { message?: unknown }).message === "string"
+    ) {
       parts.push((current as { message: string }).message);
       current = (current as { cause?: unknown }).cause;
       continue;

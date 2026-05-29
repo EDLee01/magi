@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { PassThrough, Writable } from "node:stream";
-import { buildPromptDisplayForTest, readTuiPrompt, shouldContinueOnEnterForTest } from "../src/tui/prompt-reader.js";
+import {
+  buildPromptDisplayForTest,
+  readTuiPrompt,
+  shouldContinueOnEnterForTest
+} from "../src/tui/prompt-reader.js";
 
 function visibleLength(text: string): number {
   return text.replace(/\x1b\[[0-9;?]*m/g, "").length;
@@ -8,7 +12,14 @@ function visibleLength(text: string): number {
 
 function visibleCellWidth(text: string): number {
   return Array.from(text.replace(/\x1b\[[0-9;?]*m/g, "")).reduce((sum, ch) => {
-    return sum + (/[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u.test(ch) ? 2 : 1);
+    return (
+      sum +
+      (/[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u.test(
+        ch
+      )
+        ? 2
+        : 1)
+    );
   }, 0);
 }
 

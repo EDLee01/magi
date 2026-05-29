@@ -55,12 +55,15 @@ export function ghPRView(cwd: string, pr: string): string {
   return runGh(cwd, ["pr", "view", pr]);
 }
 
-export function ghPRList(cwd: string, input: {
-  state?: string;
-  limit?: number;
-  author?: string;
-  label?: string;
-}): string {
+export function ghPRList(
+  cwd: string,
+  input: {
+    state?: string;
+    limit?: number;
+    author?: string;
+    label?: string;
+  }
+): string {
   const args = ["pr", "list"];
   if (input.state) args.push("--state", input.state);
   args.push("--limit", String(input.limit ?? 10));
@@ -83,7 +86,9 @@ function runGh(cwd: string, args: string[]): string {
     stdio: ["ignore", "pipe", "pipe"]
   });
   if (result.status !== 0) {
-    const err = result.stderr?.trim() || `gh ${args[0]} ${args[1] ?? ""} failed with exit code ${result.status}`;
+    const err =
+      result.stderr?.trim() ||
+      `gh ${args[0]} ${args[1] ?? ""} failed with exit code ${result.status}`;
     throw new Error(err);
   }
   return result.stdout?.trim() || "(no output)";

@@ -121,7 +121,7 @@ export interface SessionSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
- }
+}
 
 export class SessionStore {
   private readonly db: Database.Database;
@@ -143,7 +143,12 @@ export class SessionStore {
     this.db.close();
   }
 
-  createSession(input: { id?: string; title?: string; cwd: string; metadata?: Record<string, unknown> }): string {
+  createSession(input: {
+    id?: string;
+    title?: string;
+    cwd: string;
+    metadata?: Record<string, unknown>;
+  }): string {
     const id = input.id ?? randomUUID();
     const now = nowIso();
     this.db
@@ -171,7 +176,9 @@ export class SessionStore {
   }
 
   getSession(sessionId: string): SessionRecord | undefined {
-    const session = this.db.prepare("select * from sessions where id = ?").get(sessionId) as DbSession | undefined;
+    const session = this.db.prepare("select * from sessions where id = ?").get(sessionId) as
+      | DbSession
+      | undefined;
     if (!session) {
       return undefined;
     }
@@ -211,7 +218,9 @@ export class SessionStore {
    * Returns true if the session existed.
    */
   updateSessionMetadata(sessionId: string, partial: Record<string, unknown>): boolean {
-    const session = this.db.prepare("select metadata_json from sessions where id = ?").get(sessionId) as { metadata_json: string } | undefined;
+    const session = this.db
+      .prepare("select metadata_json from sessions where id = ?")
+      .get(sessionId) as { metadata_json: string } | undefined;
     if (!session) return false;
     const current = decodeJson(session.metadata_json);
     const merged: Record<string, unknown> = { ...current };
@@ -252,7 +261,11 @@ export class SessionStore {
    * a new session. If maxMessageId is omitted, copies all messages.
    * Returns the new session id.
    */
-  forkSession(input: { sessionId: string; title?: string; maxMessageId?: number }): string | undefined {
+  forkSession(input: {
+    sessionId: string;
+    title?: string;
+    maxMessageId?: number;
+  }): string | undefined {
     const original = this.getSession(input.sessionId);
     if (!original) return undefined;
     const newId = this.createSession({
@@ -275,8 +288,12 @@ export class SessionStore {
 
   getMostRecentSession(cwd?: string): SessionRecord | undefined {
     const row = cwd
-      ? this.db.prepare("select id from sessions where cwd = ? order by updated_at desc limit 1").get(cwd) as { id: string } | undefined
-      : this.db.prepare("select id from sessions order by updated_at desc limit 1").get() as { id: string } | undefined;
+      ? (this.db
+          .prepare("select id from sessions where cwd = ? order by updated_at desc limit 1")
+          .get(cwd) as { id: string } | undefined)
+      : (this.db.prepare("select id from sessions order by updated_at desc limit 1").get() as
+          | { id: string }
+          | undefined);
     return row ? this.getSession(row.id) : undefined;
   }
 
@@ -316,7 +333,15 @@ export class SessionStore {
       .prepare(
         "insert into jobs (id, session_id, kind, status, created_at, updated_at, metadata_json) values (?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(input.id, input.sessionId, input.kind, input.status, now, now, encodeJson(input.metadata));
+      .run(
+        input.id,
+        input.sessionId,
+        input.kind,
+        input.status,
+        now,
+        now,
+        encodeJson(input.metadata)
+      );
     this.touchSession(input.sessionId, now);
   }
 
@@ -332,7 +357,9 @@ export class SessionStore {
   }
 
   listJobs(limit = 50): StoredJobRecord[] {
-    const rows = this.db.prepare("select * from jobs order by updated_at desc limit ?").all(limit) as DbJob[];
+    const rows = this.db
+      .prepare("select * from jobs order by updated_at desc limit ?")
+      .all(limit) as DbJob[];
     return rows.map(toStoredJob);
   }
 
@@ -342,7 +369,14 @@ export class SessionStore {
       .prepare(
         "insert into audit_events (session_id, job_id, action, target, created_at, metadata_json) values (?, ?, ?, ?, ?, ?)"
       )
-      .run(input.sessionId, input.jobId ?? null, input.action, input.target ?? null, createdAt, encodeJson(input.metadata));
+      .run(
+        input.sessionId,
+        input.jobId ?? null,
+        input.action,
+        input.target ?? null,
+        createdAt,
+        encodeJson(input.metadata)
+      );
     const event: StoredAuditRecord = {
       id: Number(result.lastInsertRowid),
       sessionId: input.sessionId,
@@ -368,13 +402,15 @@ export class SessionStore {
     return this.listRecentAuditEvents({ jobId, limit });
   }
 
-  listRecentAuditEvents(input: {
-    sessionId?: string;
-    jobId?: string;
-    afterId?: number;
-    limit?: number;
-    order?: "asc" | "desc";
-  } = {}): StoredAuditRecord[] {
+  listRecentAuditEvents(
+    input: {
+      sessionId?: string;
+      jobId?: string;
+      afterId?: number;
+      limit?: number;
+      order?: "asc" | "desc";
+    } = {}
+  ): StoredAuditRecord[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (input.sessionId) {
@@ -431,15 +467,17 @@ export class SessionStore {
     createdAt: string;
   }> {
     const rows = this.db
-      .prepare("select provider, model, input_tokens, output_tokens, cost_usd, created_at from usage_events where session_id = ? order by id asc")
+      .prepare(
+        "select provider, model, input_tokens, output_tokens, cost_usd, created_at from usage_events where session_id = ? order by id asc"
+      )
       .all(sessionId) as Array<{
-        provider: string;
-        model: string;
-        input_tokens: number;
-        output_tokens: number;
-        cost_usd: number;
-        created_at: string;
-      }>;
+      provider: string;
+      model: string;
+      input_tokens: number;
+      output_tokens: number;
+      cost_usd: number;
+      created_at: string;
+    }>;
     return rows.map((r) => ({
       provider: r.provider,
       model: r.model,
@@ -460,16 +498,18 @@ export class SessionStore {
     createdAt: string;
   }> {
     const rows = this.db
-      .prepare("select session_id, provider, model, input_tokens, output_tokens, cost_usd, created_at from usage_events order by id desc limit ?")
+      .prepare(
+        "select session_id, provider, model, input_tokens, output_tokens, cost_usd, created_at from usage_events order by id desc limit ?"
+      )
       .all(limit) as Array<{
-        session_id: string;
-        provider: string;
-        model: string;
-        input_tokens: number;
-        output_tokens: number;
-        cost_usd: number;
-        created_at: string;
-      }>;
+      session_id: string;
+      provider: string;
+      model: string;
+      input_tokens: number;
+      output_tokens: number;
+      cost_usd: number;
+      created_at: string;
+    }>;
     return rows.map((r) => ({
       sessionId: r.session_id,
       provider: r.provider,
@@ -482,7 +522,9 @@ export class SessionStore {
   }
 
   countRows(table: "jobs" | "audit_events" | "usage_events"): number {
-    const row = this.db.prepare(`select count(*) as count from ${table}`).get() as { count: number };
+    const row = this.db.prepare(`select count(*) as count from ${table}`).get() as {
+      count: number;
+    };
     return row.count;
   }
 
@@ -508,12 +550,16 @@ export class SessionStore {
   }
 
   getDevice(deviceId: string): DeviceRecord | undefined {
-    const row = this.db.prepare("select * from devices where id = ?").get(deviceId) as DbDevice | undefined;
+    const row = this.db.prepare("select * from devices where id = ?").get(deviceId) as
+      | DbDevice
+      | undefined;
     return row ? toDevice(row) : undefined;
   }
 
   listDevices(): DeviceRecord[] {
-    const rows = this.db.prepare("select * from devices order by created_at desc").all() as DbDevice[];
+    const rows = this.db
+      .prepare("select * from devices order by created_at desc")
+      .all() as DbDevice[];
     return rows.map(toDevice);
   }
 
@@ -532,7 +578,18 @@ export class SessionStore {
         `insert into agent_tasks (id, role, prompt, status, cwd, session_id, result, created_at, updated_at, metadata_json)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(id, input.role, input.prompt, "queued", input.cwd, input.sessionId ?? null, null, now, now, encodeJson(input.metadata));
+      .run(
+        id,
+        input.role,
+        input.prompt,
+        "queued",
+        input.cwd,
+        input.sessionId ?? null,
+        null,
+        now,
+        now,
+        encodeJson(input.metadata)
+      );
     return id;
   }
 
@@ -544,29 +601,47 @@ export class SessionStore {
   }): void {
     const existing = this.getAgentTask(input.id);
     this.db
-      .prepare("update agent_tasks set status = ?, result = ?, updated_at = ?, metadata_json = ? where id = ?")
-      .run(input.status, input.result ?? existing?.result ?? null, nowIso(), encodeJson(input.metadata ?? existing?.metadata), input.id);
+      .prepare(
+        "update agent_tasks set status = ?, result = ?, updated_at = ?, metadata_json = ? where id = ?"
+      )
+      .run(
+        input.status,
+        input.result ?? existing?.result ?? null,
+        nowIso(),
+        encodeJson(input.metadata ?? existing?.metadata),
+        input.id
+      );
   }
 
   getAgentTask(taskId: string): AgentTaskRecord | undefined {
-    const row = this.db.prepare("select * from agent_tasks where id = ?").get(taskId) as DbAgentTask | undefined;
+    const row = this.db.prepare("select * from agent_tasks where id = ?").get(taskId) as
+      | DbAgentTask
+      | undefined;
     return row ? toAgentTask(row) : undefined;
   }
 
   listAgentTasks(limit = 50): AgentTaskRecord[] {
-    const rows = this.db.prepare("select * from agent_tasks order by updated_at desc limit ?").all(limit) as DbAgentTask[];
+    const rows = this.db
+      .prepare("select * from agent_tasks order by updated_at desc limit ?")
+      .all(limit) as DbAgentTask[];
     return rows.map(toAgentTask);
   }
 
   claimWriteFile(input: { taskId: string; filePath: string; ownerRole: string }): WriteClaimRecord {
     const existing = this.db
-      .prepare("select * from write_claims where file_path = ? and task_id != ? order by id asc limit 1")
+      .prepare(
+        "select * from write_claims where file_path = ? and task_id != ? order by id asc limit 1"
+      )
       .get(input.filePath, input.taskId) as DbWriteClaim | undefined;
     if (existing) {
-      throw new MagiUsageError(`Write conflict for ${input.filePath}: already claimed by ${existing.task_id}`);
+      throw new MagiUsageError(
+        `Write conflict for ${input.filePath}: already claimed by ${existing.task_id}`
+      );
     }
     const result = this.db
-      .prepare("insert into write_claims (task_id, file_path, owner_role, created_at) values (?, ?, ?, ?)")
+      .prepare(
+        "insert into write_claims (task_id, file_path, owner_role, created_at) values (?, ?, ?, ?)"
+      )
       .run(input.taskId, input.filePath, input.ownerRole, nowIso());
     return {
       id: Number(result.lastInsertRowid),
@@ -578,7 +653,9 @@ export class SessionStore {
   }
 
   listWriteClaims(): WriteClaimRecord[] {
-    const rows = this.db.prepare("select * from write_claims order by id asc").all() as DbWriteClaim[];
+    const rows = this.db
+      .prepare("select * from write_claims order by id asc")
+      .all() as DbWriteClaim[];
     return rows.map(toWriteClaim);
   }
 
@@ -596,7 +673,14 @@ export class SessionStore {
         `insert into context_summaries (id, session_id, summary, source_message_count, created_at, metadata_json)
          values (?, ?, ?, ?, ?, ?)`
       )
-      .run(id, input.sessionId, input.summary, input.sourceMessageCount, now, encodeJson(input.metadata));
+      .run(
+        id,
+        input.sessionId,
+        input.summary,
+        input.sourceMessageCount,
+        now,
+        encodeJson(input.metadata)
+      );
     this.touchSession(input.sessionId, now);
     return {
       id,
@@ -610,14 +694,18 @@ export class SessionStore {
 
   getLatestContextSummary(sessionId: string): ContextSummaryRecord | undefined {
     const row = this.db
-      .prepare("select * from context_summaries where session_id = ? order by created_at desc, id desc limit 1")
+      .prepare(
+        "select * from context_summaries where session_id = ? order by created_at desc, id desc limit 1"
+      )
       .get(sessionId) as DbContextSummary | undefined;
     return row ? toContextSummary(row) : undefined;
   }
 
   listContextSummaries(sessionId: string): ContextSummaryRecord[] {
     const rows = this.db
-      .prepare("select * from context_summaries where session_id = ? order by created_at desc, id desc")
+      .prepare(
+        "select * from context_summaries where session_id = ? order by created_at desc, id desc"
+      )
       .all(sessionId) as DbContextSummary[];
     return rows.map(toContextSummary);
   }
@@ -682,7 +770,9 @@ export class SessionStore {
   }
 
   getMcpOAuthToken(serverName: string): McpOAuthTokenRecord | undefined {
-    const row = this.db.prepare("select * from mcp_oauth_tokens where server_name = ?").get(serverName) as DbMcpOAuthToken | undefined;
+    const row = this.db
+      .prepare("select * from mcp_oauth_tokens where server_name = ?")
+      .get(serverName) as DbMcpOAuthToken | undefined;
     if (!row) return undefined;
     return {
       serverName: row.server_name,
@@ -704,7 +794,9 @@ export class SessionStore {
   }
 
   listMcpOAuthTokens(): McpOAuthTokenRecord[] {
-    const rows = this.db.prepare("select * from mcp_oauth_tokens order by server_name").all() as DbMcpOAuthToken[];
+    const rows = this.db
+      .prepare("select * from mcp_oauth_tokens order by server_name")
+      .all() as DbMcpOAuthToken[];
     return rows.map((row) => ({
       serverName: row.server_name,
       accessToken: row.access_token,
@@ -1009,7 +1101,9 @@ function encodeJson(value: Record<string, unknown> | undefined): string {
 
 function decodeJson(value: string): Record<string, unknown> {
   const parsed = JSON.parse(value) as unknown;
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
 }
 
 function clampAuditLimit(value: number): number {

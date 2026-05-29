@@ -99,7 +99,7 @@ export async function runInit(input: InitInput): Promise<InitResult> {
   // Detect which providers have credentials available
   const detected: ProviderPreset[] = [];
   for (const preset of Object.values(PRESETS)) {
-    if (preset.envVars.some(v => input.env[v])) {
+    if (preset.envVars.some((v) => input.env[v])) {
       detected.push(preset);
     }
   }
@@ -127,7 +127,8 @@ export async function runInit(input: InitInput): Promise<InitResult> {
       return {
         configFile,
         wrote: false,
-        reason: "no provider credentials detected (set ANTHROPIC_AUTH_TOKEN or similar in env, then re-run)"
+        reason:
+          "no provider credentials detected (set ANTHROPIC_AUTH_TOKEN or similar in env, then re-run)"
       };
     }
     log("No API keys detected in your environment.\n\n");
@@ -152,7 +153,7 @@ export async function runInit(input: InitInput): Promise<InitResult> {
   }
 
   // Build the config
-  const apiKeyEnv = preset.envVars.find(v => input.env[v]) ?? preset.envVars[0];
+  const apiKeyEnv = preset.envVars.find((v) => input.env[v]) ?? preset.envVars[0];
   body = renderConfig({
     preset,
     apiKeyEnv,
@@ -178,7 +179,7 @@ export async function runInit(input: InitInput): Promise<InitResult> {
 }
 
 function envVarsFor(preset: ProviderPreset, env: NodeJS.ProcessEnv): string {
-  const set = preset.envVars.filter(v => env[v]);
+  const set = preset.envVars.filter((v) => env[v]);
   return set[0] ?? "(none)";
 }
 
@@ -192,7 +193,11 @@ async function ask(prompt: string): Promise<string> {
   }
 }
 
-function renderConfig(input: { preset: ProviderPreset; apiKeyEnv: string; baseUrl: string }): string {
+function renderConfig(input: {
+  preset: ProviderPreset;
+  apiKeyEnv: string;
+  baseUrl: string;
+}): string {
   const { preset, apiKeyEnv, baseUrl } = input;
   const formatLine = preset.format ? `    format: ${preset.format}\n` : "";
   return `version: 0.1

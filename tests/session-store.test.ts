@@ -30,7 +30,12 @@ describe("SQLite session store", () => {
       const unsubscribe = store.subscribeAuditEvents((event) => {
         seen.push(`${event.id}:${event.action}:${event.target ?? ""}`);
       });
-      const audit = store.recordAudit({ sessionId, jobId: "job-1", action: "job.created", target: "test" });
+      const audit = store.recordAudit({
+        sessionId,
+        jobId: "job-1",
+        action: "job.created",
+        target: "test"
+      });
       unsubscribe();
       store.recordAudit({ sessionId, jobId: "job-2", action: "job.created", target: "other" });
       store.recordUsage({
@@ -56,9 +61,17 @@ describe("SQLite session store", () => {
       ]);
       expect(store.countRows("jobs")).toBe(1);
       expect(store.countRows("audit_events")).toBe(2);
-      expect(audit).toMatchObject({ sessionId, jobId: "job-1", action: "job.created", target: "test" });
+      expect(audit).toMatchObject({
+        sessionId,
+        jobId: "job-1",
+        action: "job.created",
+        target: "test"
+      });
       expect(seen).toEqual([`${audit.id}:job.created:test`]);
-      expect(store.listSessionAuditEvents(sessionId, 10).map((event) => event.action)).toEqual(["job.created", "job.created"]);
+      expect(store.listSessionAuditEvents(sessionId, 10).map((event) => event.action)).toEqual([
+        "job.created",
+        "job.created"
+      ]);
       expect(store.listRecentAuditEvents({ afterId: audit.id, order: "asc" })).toEqual([
         expect.objectContaining({ action: "job.created", target: "other" })
       ]);
@@ -118,12 +131,17 @@ describe("SQLite session store", () => {
       // List with another server
       store.upsertMcpOAuthToken({ serverName: "notion", accessToken: "n-token" });
       expect(store.listMcpOAuthTokens()).toHaveLength(2);
-      expect(store.listMcpOAuthTokens().map(t => t.serverName).sort()).toEqual(["linear", "notion"]);
+      expect(
+        store
+          .listMcpOAuthTokens()
+          .map((t) => t.serverName)
+          .sort()
+      ).toEqual(["linear", "notion"]);
 
       // Delete
       store.deleteMcpOAuthToken("linear");
       expect(store.getMcpOAuthToken("linear")).toBeUndefined();
-      expect(store.listMcpOAuthTokens().map(t => t.serverName)).toEqual(["notion"]);
+      expect(store.listMcpOAuthTokens().map((t) => t.serverName)).toEqual(["notion"]);
     } finally {
       store.close();
     }
@@ -156,7 +174,7 @@ describe("SQLite session store", () => {
       const removed = store.truncateMessagesAfter(id, m2);
       expect(removed).toBe(1);
       expect(store.getSession(id)?.messages.length).toBe(2);
-      expect(store.getSession(id)?.messages.map(m => m.id)).toEqual([m1, m2]);
+      expect(store.getSession(id)?.messages.map((m) => m.id)).toEqual([m1, m2]);
 
       // Delete cascades messages
       expect(store.deleteSession(id)).toBe(true);

@@ -28,7 +28,10 @@ export interface RuntimeSettings {
   controlPort: number;
 }
 
-export function getMagiPaths(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir()): MagiPaths {
+export function getMagiPaths(
+  env: NodeJS.ProcessEnv = process.env,
+  homeDir = os.homedir()
+): MagiPaths {
   const root = env.MAGI_CONFIG_DIR
     ? path.resolve(env.MAGI_CONFIG_DIR)
     : path.join(homeDir, DEVELOPMENT_ROOT_NAME);
@@ -118,12 +121,16 @@ function parseControlPort(raw: string | undefined): number {
   }
 
   if (!/^[0-9]+$/.test(raw)) {
-    throw new MagiConfigError(`MAGI_CONTROL_PORT must be an integer from 1 to 65535, got ${JSON.stringify(raw)}`);
+    throw new MagiConfigError(
+      `MAGI_CONTROL_PORT must be an integer from 1 to 65535, got ${JSON.stringify(raw)}`
+    );
   }
 
   const port = Number(raw);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new MagiConfigError(`MAGI_CONTROL_PORT must be an integer from 1 to 65535, got ${JSON.stringify(raw)}`);
+    throw new MagiConfigError(
+      `MAGI_CONTROL_PORT must be an integer from 1 to 65535, got ${JSON.stringify(raw)}`
+    );
   }
 
   return port;

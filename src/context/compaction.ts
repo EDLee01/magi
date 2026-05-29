@@ -2,7 +2,12 @@ import { MagiUsageError } from "../errors.js";
 import { HookDefinition } from "../config.js";
 import { triggerHooks } from "../hooks/events.js";
 import { ProviderAdapter } from "../providers/ir.js";
-import { ContextSummaryRecord, MessageRecord, SessionRecord, SessionStore } from "../session-store.js";
+import {
+  ContextSummaryRecord,
+  MessageRecord,
+  SessionRecord,
+  SessionStore
+} from "../session-store.js";
 
 export interface CompactSessionResult {
   summary: ContextSummaryRecord;
@@ -104,25 +109,27 @@ export async function compactSessionWithHooks(input: {
   });
   const block = pre.find((hook) => hook.blocked);
   if (block) {
-    throw new MagiUsageError(`Compaction blocked by hook: ${block.output || block.error || "blocked"}`);
+    throw new MagiUsageError(
+      `Compaction blocked by hook: ${block.output || block.error || "blocked"}`
+    );
   }
 
   const compacted = input.modelRunner
     ? await compactSessionWithModel({
-      store: input.store,
-      sessionId: session.id,
-      adapter: input.modelRunner.adapter,
-      model: input.modelRunner.model,
-      providerName: input.modelRunner.providerName,
-      recentMessages: input.recentMessages,
-      maxSummaryChars: input.maxSummaryChars
-    })
+        store: input.store,
+        sessionId: session.id,
+        adapter: input.modelRunner.adapter,
+        model: input.modelRunner.model,
+        providerName: input.modelRunner.providerName,
+        recentMessages: input.recentMessages,
+        maxSummaryChars: input.maxSummaryChars
+      })
     : compactSession({
-      store: input.store,
-      sessionId: session.id,
-      recentMessages: input.recentMessages,
-      maxSummaryChars: input.maxSummaryChars
-    });
+        store: input.store,
+        sessionId: session.id,
+        recentMessages: input.recentMessages,
+        maxSummaryChars: input.maxSummaryChars
+      });
   const post = await triggerHooks({
     event: "post_compact",
     hooks: input.hooks,
@@ -171,13 +178,17 @@ export async function compactSessionWithModel(input: {
   });
   const response = await input.adapter.complete({
     model: input.model,
-    messages: [{
-      role: "user",
-      content: [{
-        type: "text",
-        text: buildSummarizationPrompt(session, micro.messages)
-      }]
-    }],
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: buildSummarizationPrompt(session, micro.messages)
+          }
+        ]
+      }
+    ],
     maxOutputTokens: input.maxOutputTokens ?? 20_000
   });
   const summaryText = truncateAtLineBoundary(response.text.trim(), input.maxSummaryChars ?? 20_000);
@@ -211,9 +222,12 @@ export async function compactSessionWithModel(input: {
   };
 }
 
-export function microcompactMessages(messages: MessageRecord[], input: {
-  maxToolResultChars?: number;
-} = {}): MicrocompactResult {
+export function microcompactMessages(
+  messages: MessageRecord[],
+  input: {
+    maxToolResultChars?: number;
+  } = {}
+): MicrocompactResult {
   const maxToolResultChars = input.maxToolResultChars ?? 2_000;
   const compacted: MessageRecord[] = [];
   const seenToolResults = new Set<string>();
@@ -289,10 +303,13 @@ export function formatCompactResult(result: CompactSessionResult): string {
   ].join("\n");
 }
 
-function buildDeterministicSummary(session: SessionRecord, input: {
-  recentMessages: number;
-  maxSummaryChars: number;
-}): string {
+function buildDeterministicSummary(
+  session: SessionRecord,
+  input: {
+    recentMessages: number;
+    maxSummaryChars: number;
+  }
+): string {
   const lines: string[] = [
     `Session ${session.id}`,
     `Title: ${session.title ?? "(untitled)"}`,
@@ -308,7 +325,9 @@ function buildDeterministicSummary(session: SessionRecord, input: {
     }
   }
 
-  const recent = session.messages.slice(Math.max(0, session.messages.length - input.recentMessages));
+  const recent = session.messages.slice(
+    Math.max(0, session.messages.length - input.recentMessages)
+  );
   if (recent.length > 0) {
     lines.push("Recent messages:");
     for (const message of recent) {
@@ -434,7 +453,9 @@ function extractRequiredFacts(messages: MessageRecord[]): string[] {
 
 function singleLine(value: string, maxChars: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, Math.max(0, maxChars - 3))}...`;
+  return normalized.length <= maxChars
+    ? normalized
+    : `${normalized.slice(0, Math.max(0, maxChars - 3))}...`;
 }
 
 function truncateAtLineBoundary(value: string, maxChars: number): string {

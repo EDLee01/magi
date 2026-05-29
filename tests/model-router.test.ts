@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { classifyTask, scoreCandidate, routeAuto, routeAutoDetailed, ModelCapabilities, RouteKind } from "../src/routing/model-router.js";
+import {
+  classifyTask,
+  scoreCandidate,
+  routeAuto,
+  routeAutoDetailed,
+  ModelCapabilities,
+  RouteKind
+} from "../src/routing/model-router.js";
 import { MagiConfig } from "../src/config.js";
 
 describe("ModelRouter", () => {
@@ -13,17 +20,31 @@ describe("ModelRouter", () => {
     it("classifies code-related prompts as coding", () => {
       expect(classifyTask("write a function that sorts an array")).toBe("coding");
       expect(classifyTask("fix the import statement in my module")).toBe("coding");
-      expect(classifyTask("add async await to the fetch call and handle the return value")).toBe("coding");
+      expect(classifyTask("add async await to the fetch call and handle the return value")).toBe(
+        "coding"
+      );
     });
 
     it("classifies reasoning prompts without code keywords as reasoning", () => {
-      expect(classifyTask("explain why the earth orbits the sun and analyze the implications of gravity")).toBe("reasoning");
-      expect(classifyTask("compare and evaluate the trade-offs between these two approaches to urban planning")).toBe("reasoning");
+      expect(
+        classifyTask("explain why the earth orbits the sun and analyze the implications of gravity")
+      ).toBe("reasoning");
+      expect(
+        classifyTask(
+          "compare and evaluate the trade-offs between these two approaches to urban planning"
+        )
+      ).toBe("reasoning");
     });
 
     it("classifies review prompts as review", () => {
-      expect(classifyTask("review this code for quality issues and suggest improvements to optimize performance")).toBe("review");
-      expect(classifyTask("refactor the authentication module to simplify the logic")).toBe("review");
+      expect(
+        classifyTask(
+          "review this code for quality issues and suggest improvements to optimize performance"
+        )
+      ).toBe("review");
+      expect(classifyTask("refactor the authentication module to simplify the logic")).toBe(
+        "review"
+      );
     });
 
     it("classifies prompts with images as vision", () => {
@@ -38,10 +59,30 @@ describe("ModelRouter", () => {
   });
 
   describe("scoreCandidate", () => {
-    const claudeOpus: ModelCapabilities = { family: "claude", role: "opus", contextWindow: 200_000, supportsVision: true };
-    const claudeHaiku: ModelCapabilities = { family: "claude", role: "haiku", contextWindow: 200_000, supportsVision: true };
-    const deepseek: ModelCapabilities = { family: "deepseek", role: "main", contextWindow: 128_000, supportsVision: false };
-    const gemini: ModelCapabilities = { family: "gemini", role: "main", contextWindow: 1_000_000, supportsVision: true };
+    const claudeOpus: ModelCapabilities = {
+      family: "claude",
+      role: "opus",
+      contextWindow: 200_000,
+      supportsVision: true
+    };
+    const claudeHaiku: ModelCapabilities = {
+      family: "claude",
+      role: "haiku",
+      contextWindow: 200_000,
+      supportsVision: true
+    };
+    const deepseek: ModelCapabilities = {
+      family: "deepseek",
+      role: "main",
+      contextWindow: 128_000,
+      supportsVision: false
+    };
+    const gemini: ModelCapabilities = {
+      family: "gemini",
+      role: "main",
+      contextWindow: 1_000_000,
+      supportsVision: true
+    };
 
     it("scores claude highest for coding tasks", () => {
       const claudeScore = scoreCandidate(claudeOpus, "coding");
@@ -74,7 +115,12 @@ describe("ModelRouter", () => {
     });
 
     it("scores coding-specialized models higher for coding and review work", () => {
-      const generalGpt: ModelCapabilities = { family: "gpt", role: "main", contextWindow: 1_050_000, supportsVision: true };
+      const generalGpt: ModelCapabilities = {
+        family: "gpt",
+        role: "main",
+        contextWindow: 1_050_000,
+        supportsVision: true
+      };
       const codex: ModelCapabilities = {
         family: "gpt",
         role: "main",
@@ -110,7 +156,17 @@ describe("ModelRouter", () => {
         hooks: [],
         context: { recentMessages: 6 },
         memory: { enabled: false, autoWrite: "off", maxResults: 5, scopes: [] },
-        webSearch: { locale: "en", market: "us", mainlandBoost: false, queryParam: "q", resultsPath: "results", titlePath: "title", urlPath: "url", snippetPath: "snippet", maxResults: 5 }
+        webSearch: {
+          locale: "en",
+          market: "us",
+          mainlandBoost: false,
+          queryParam: "q",
+          resultsPath: "results",
+          titlePath: "title",
+          urlPath: "url",
+          snippetPath: "snippet",
+          maxResults: 5
+        }
       };
     }
 
@@ -124,7 +180,12 @@ describe("ModelRouter", () => {
     it("picks the best alias for a coding prompt", () => {
       const config = makeConfig({
         coding: { family: "claude", role: "opus", contextWindow: 200_000, supportsVision: true },
-        reasoning: { family: "deepseek", role: "main", contextWindow: 128_000, supportsVision: false },
+        reasoning: {
+          family: "deepseek",
+          role: "main",
+          contextWindow: 128_000,
+          supportsVision: false
+        },
         fast: { family: "claude", role: "haiku", contextWindow: 200_000, supportsVision: true }
       });
       const result = routeAuto(config, "write a function that implements binary search");
@@ -135,10 +196,18 @@ describe("ModelRouter", () => {
     it("picks the reasoning alias for reasoning prompts", () => {
       const config = makeConfig({
         coding: { family: "claude", role: "opus", contextWindow: 200_000, supportsVision: true },
-        reasoning: { family: "deepseek", role: "main", contextWindow: 128_000, supportsVision: false },
+        reasoning: {
+          family: "deepseek",
+          role: "main",
+          contextWindow: 128_000,
+          supportsVision: false
+        },
         fast: { family: "claude", role: "haiku", contextWindow: 200_000, supportsVision: true }
       });
-      const result = routeAuto(config, "explain why quantum entanglement implies non-locality and analyze the implications");
+      const result = routeAuto(
+        config,
+        "explain why quantum entanglement implies non-locality and analyze the implications"
+      );
       expect(result).toBeDefined();
       expect(result!.source).toBe("reasoning");
     });
@@ -146,7 +215,12 @@ describe("ModelRouter", () => {
     it("picks the fast alias for quick prompts", () => {
       const config = makeConfig({
         coding: { family: "claude", role: "opus", contextWindow: 200_000, supportsVision: true },
-        reasoning: { family: "deepseek", role: "main", contextWindow: 128_000, supportsVision: false },
+        reasoning: {
+          family: "deepseek",
+          role: "main",
+          contextWindow: 128_000,
+          supportsVision: false
+        },
         fast: { family: "claude", role: "haiku", contextWindow: 200_000, supportsVision: true }
       });
       const result = routeAuto(config, "hi");
@@ -162,13 +236,17 @@ describe("ModelRouter", () => {
     });
 
     it("forces long_context when estimatedContextTokens exceeds threshold", () => {
-      expect(classifyTask("simple prompt", { estimatedContextTokens: 250_000 })).toBe("long_context");
+      expect(classifyTask("simple prompt", { estimatedContextTokens: 250_000 })).toBe(
+        "long_context"
+      );
       // Below threshold — falls through to normal classification
       expect(classifyTask("hi", { estimatedContextTokens: 100_000 })).toBe("quick");
     });
 
     it("respects custom longContextThreshold", () => {
-      expect(classifyTask("simple", { estimatedContextTokens: 100_000, longContextThreshold: 80_000 })).toBe("long_context");
+      expect(
+        classifyTask("simple", { estimatedContextTokens: 100_000, longContextThreshold: 80_000 })
+      ).toBe("long_context");
     });
 
     it("classifies tool_heavy prompts when keywords match", () => {
@@ -178,7 +256,9 @@ describe("ModelRouter", () => {
     });
 
     it("review keywords still take precedence over tool_heavy regex", () => {
-      expect(classifyTask("refactor the authentication module to simplify the logic")).toBe("review");
+      expect(classifyTask("refactor the authentication module to simplify the logic")).toBe(
+        "review"
+      );
     });
   });
 
@@ -197,7 +277,17 @@ describe("ModelRouter", () => {
         hooks: [],
         context: { recentMessages: 6 },
         memory: { enabled: false, autoWrite: "off", maxResults: 5, scopes: [] },
-        webSearch: { locale: "en", market: "us", mainlandBoost: false, queryParam: "q", resultsPath: "results", titlePath: "title", urlPath: "url", snippetPath: "snippet", maxResults: 5 }
+        webSearch: {
+          locale: "en",
+          market: "us",
+          mainlandBoost: false,
+          queryParam: "q",
+          resultsPath: "results",
+          titlePath: "title",
+          urlPath: "url",
+          snippetPath: "snippet",
+          maxResults: 5
+        }
       } as unknown as MagiConfig;
     }
 
@@ -207,7 +297,10 @@ describe("ModelRouter", () => {
         main: { family: "claude", role: "sonnet", contextWindow: 200_000, supportsVision: true },
         deep: { family: "claude", role: "opus", contextWindow: 200_000, supportsVision: true }
       });
-      const decision = routeAutoDetailed(config, "design the architecture for a distributed system with bounded contexts and propose a plan for the migration with clear roadmap");
+      const decision = routeAutoDetailed(
+        config,
+        "design the architecture for a distributed system with bounded contexts and propose a plan for the migration with clear roadmap"
+      );
       expect(decision).toBeDefined();
       expect(decision!.routeKind).toBe("planning");
       expect(decision!.candidates.length).toBe(3);
@@ -233,7 +326,9 @@ describe("ModelRouter", () => {
         fast: { family: "claude", role: "haiku", contextWindow: 200_000, supportsVision: true },
         long: { family: "gemini", role: "main", contextWindow: 1_000_000, supportsVision: false }
       });
-      const decision = routeAutoDetailed(config, "tell me a joke", { estimatedContextTokens: 250_000 });
+      const decision = routeAutoDetailed(config, "tell me a joke", {
+        estimatedContextTokens: 250_000
+      });
       expect(decision!.routeKind).toBe("long_context");
       expect(decision!.chosenAlias).toBe("long");
     });
@@ -256,7 +351,10 @@ describe("ModelRouter", () => {
           priority: 3
         }
       });
-      const decision = routeAutoDetailed(config, "implement a function that parses TypeScript imports and updates every file");
+      const decision = routeAutoDetailed(
+        config,
+        "implement a function that parses TypeScript imports and updates every file"
+      );
       expect(decision!.chosenAlias).toBe("codex");
     });
   });

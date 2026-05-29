@@ -91,7 +91,10 @@ function loadProjectRules(cwd: string): string | undefined {
   return formatAgentInstructions(files).trimEnd();
 }
 
-function loadHotMemory(paths?: MagiPaths, hotMemorySink?: (nodes: MemoryNode[]) => void): string | undefined {
+function loadHotMemory(
+  paths?: MagiPaths,
+  hotMemorySink?: (nodes: MemoryNode[]) => void
+): string | undefined {
   if (!paths) {
     return undefined;
   }
@@ -103,10 +106,16 @@ function loadHotMemory(paths?: MagiPaths, hotMemorySink?: (nodes: MemoryNode[]) 
     "[Hot Memory]",
     "Durable memory graph nodes. Treat these as high-priority context; current explicit user instructions can override them.",
     nodeMemory
-  ].join("\n\n").slice(0, HOT_MEMORY_CHAR_LIMIT).trimEnd();
+  ]
+    .join("\n\n")
+    .slice(0, HOT_MEMORY_CHAR_LIMIT)
+    .trimEnd();
 }
 
-function formatNodeHotMemory(paths: MagiPaths, hotMemorySink?: (nodes: MemoryNode[]) => void): string | undefined {
+function formatNodeHotMemory(
+  paths: MagiPaths,
+  hotMemorySink?: (nodes: MemoryNode[]) => void
+): string | undefined {
   let store: MemoryNodeStore | undefined;
   try {
     store = MemoryNodeStore.open(paths);
@@ -131,7 +140,9 @@ function formatMemoryNode(node: MemoryNode): string {
     `weight: ${node.weight.toFixed(2)}`,
     `summary: ${node.summary}`,
     node.body
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function getGitContext(cwd: string): string | undefined {
@@ -140,7 +151,7 @@ export function getGitContext(cwd: string): string | undefined {
       cwd,
       encoding: "utf8",
       timeout: 3000,
-      stdio: ["ignore", "pipe", "ignore"],
+      stdio: ["ignore", "pipe", "ignore"]
     }).trim();
     let status: string;
     try {
@@ -148,7 +159,7 @@ export function getGitContext(cwd: string): string | undefined {
         cwd,
         encoding: "utf8",
         timeout: 3000,
-        stdio: ["ignore", "pipe", "ignore"],
+        stdio: ["ignore", "pipe", "ignore"]
       }).trim();
       const lines = raw.split("\n").filter(Boolean);
       if (lines.length === 0) {

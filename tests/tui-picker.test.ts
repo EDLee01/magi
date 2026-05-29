@@ -3,7 +3,11 @@ import { PassThrough, Writable } from "node:stream";
 
 import { showTuiPicker } from "../src/tui/picker.js";
 
-function createPickerStreams(): { input: NodeJS.ReadStream; output: NodeJS.WriteStream; chunks: string[] } {
+function createPickerStreams(): {
+  input: NodeJS.ReadStream;
+  output: NodeJS.WriteStream;
+  chunks: string[];
+} {
   const input = new PassThrough() as unknown as NodeJS.ReadStream;
   input.isTTY = true;
   input.setRawMode = () => input;

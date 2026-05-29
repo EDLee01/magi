@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  chmodSync
+} from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -9,7 +17,9 @@ describe("atomicWrite", () => {
   let tmpDir: string | undefined;
   afterEach(() => {
     if (tmpDir) {
-      try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {}
       tmpDir = undefined;
     }
   });
@@ -46,7 +56,7 @@ describe("atomicWrite", () => {
     const target = path.join(dir, "result.txt");
     atomicWrite(target, "ok");
     const files = readdirSync(dir);
-    expect(files.filter(f => f.startsWith(".result.txt.tmp."))).toHaveLength(0);
+    expect(files.filter((f) => f.startsWith(".result.txt.tmp."))).toHaveLength(0);
     expect(files).toContain("result.txt");
   });
 
@@ -65,7 +75,7 @@ describe("atomicWrite", () => {
       chmodSync(subdir, 0o755);
     }
     const files = readdirSync(subdir);
-    expect(files.filter(f => f.startsWith(".file.txt.tmp."))).toHaveLength(0);
+    expect(files.filter((f) => f.startsWith(".file.txt.tmp."))).toHaveLength(0);
   });
 
   it("uses an in-directory temp file (so rename is atomic)", () => {

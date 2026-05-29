@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -9,7 +17,9 @@ describe("createJsonLogger", () => {
   let tmpDir: string | undefined;
   afterEach(() => {
     if (tmpDir) {
-      try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {}
       tmpDir = undefined;
     }
   });
@@ -91,7 +101,7 @@ describe("createJsonLogger", () => {
     log.close();
     const files = readdirSync(dir);
     // Should have cap.log + cap.log.1 + cap.log.2 (no .3+)
-    const rotated = files.filter(f => f.startsWith("cap.log."));
+    const rotated = files.filter((f) => f.startsWith("cap.log."));
     expect(rotated.length).toBeLessThanOrEqual(2);
   });
 

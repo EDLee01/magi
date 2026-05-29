@@ -24,9 +24,18 @@ function formatSessionUsage(input: SlashCommandInput): string {
   }
   // Aggregate per model
   const byModel = new Map<string, { input: number; output: number; cost: number; calls: number }>();
-  let totalIn = 0, totalOut = 0, totalCost = 0;
+  let totalIn = 0,
+    totalOut = 0,
+    totalCost = 0;
   for (const u of usage) {
-    const cost = u.costUsd > 0 ? u.costUsd : calculateCost({ model: u.model, inputTokens: u.inputTokens, outputTokens: u.outputTokens });
+    const cost =
+      u.costUsd > 0
+        ? u.costUsd
+        : calculateCost({
+            model: u.model,
+            inputTokens: u.inputTokens,
+            outputTokens: u.outputTokens
+          });
     const acc = byModel.get(u.model) ?? { input: 0, output: 0, cost: 0, calls: 0 };
     acc.input += u.inputTokens;
     acc.output += u.outputTokens;
@@ -58,9 +67,18 @@ function formatAllUsage(input: SlashCommandInput): string {
   const usage = input.store.listAllUsage(5000);
   if (usage.length === 0) return "No usage recorded yet.";
   const byModel = new Map<string, { input: number; output: number; cost: number; calls: number }>();
-  let totalIn = 0, totalOut = 0, totalCost = 0;
+  let totalIn = 0,
+    totalOut = 0,
+    totalCost = 0;
   for (const u of usage) {
-    const cost = u.costUsd > 0 ? u.costUsd : calculateCost({ model: u.model, inputTokens: u.inputTokens, outputTokens: u.outputTokens });
+    const cost =
+      u.costUsd > 0
+        ? u.costUsd
+        : calculateCost({
+            model: u.model,
+            inputTokens: u.inputTokens,
+            outputTokens: u.outputTokens
+          });
     const acc = byModel.get(u.model) ?? { input: 0, output: 0, cost: 0, calls: 0 };
     acc.input += u.inputTokens;
     acc.output += u.outputTokens;

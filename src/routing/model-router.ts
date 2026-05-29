@@ -6,7 +6,17 @@ import { ResolvedModel, resolveModelAlias } from "./model-alias.js";
  * When alias is "auto", the router picks the best model based on prompt characteristics.
  */
 
-export type RouteKind = "quick" | "coding" | "reasoning" | "vision" | "long_context" | "review" | "planning" | "extraction" | "tool_heavy" | "agent";
+export type RouteKind =
+  | "quick"
+  | "coding"
+  | "reasoning"
+  | "vision"
+  | "long_context"
+  | "review"
+  | "planning"
+  | "extraction"
+  | "tool_heavy"
+  | "agent";
 
 export interface ModelCapabilities {
   family: string;
@@ -50,14 +60,21 @@ export interface RouteDecision {
   context: RouteContext;
 }
 
-const CODE_KEYWORDS = /\b(function|class|import|export|const|let|var|def|fn|struct|impl|interface|enum|module|package|async|await|yield|instanceof|extends|implements|typeof|void|int|string|bool|float|double|null|undefined|nil|None|True|False|self|super|static|private|protected|pub)\b/;
-const REASONING_KEYWORDS = /\b(why|how|explain|analyze|compare|evaluate|reason|think|consider|argue|debate|prove|derive|deduce|infer|conclude|hypothesis|theory|because|therefore|consequently|furthermore|moreover|however|nevertheless|although|whereas|implications?|trade-?offs?|pros?\s+and\s+cons?)\b/i;
-const REVIEW_KEYWORDS = /\b(review|refactor|improve|optimize|clean\s*up|simplify|restructure|rewrite|audit|check|lint|fix\s+style|code\s+quality|best\s+practice|technical\s+debt)\b/i;
-const PLANNING_KEYWORDS = /\b(plan|design|architect|strategy|approach|roadmap|breakdown|decompose|structure|organize|outline|proposal|rfc|spec|specification)\b/i;
-const EXTRACTION_KEYWORDS = /\b(extract|parse|convert|transform|summarize|summarise|list\s+all|find\s+all|collect|gather|enumerate|catalog)\b/i;
-const AGENT_KEYWORDS = /\b(implement|build|create|add\s+feature|set\s+up|configure|deploy|migrate|upgrade|install|scaffold|bootstrap|integrate)\b/i;
+const CODE_KEYWORDS =
+  /\b(function|class|import|export|const|let|var|def|fn|struct|impl|interface|enum|module|package|async|await|yield|instanceof|extends|implements|typeof|void|int|string|bool|float|double|null|undefined|nil|None|True|False|self|super|static|private|protected|pub)\b/;
+const REASONING_KEYWORDS =
+  /\b(why|how|explain|analyze|compare|evaluate|reason|think|consider|argue|debate|prove|derive|deduce|infer|conclude|hypothesis|theory|because|therefore|consequently|furthermore|moreover|however|nevertheless|although|whereas|implications?|trade-?offs?|pros?\s+and\s+cons?)\b/i;
+const REVIEW_KEYWORDS =
+  /\b(review|refactor|improve|optimize|clean\s*up|simplify|restructure|rewrite|audit|check|lint|fix\s+style|code\s+quality|best\s+practice|technical\s+debt)\b/i;
+const PLANNING_KEYWORDS =
+  /\b(plan|design|architect|strategy|approach|roadmap|breakdown|decompose|structure|organize|outline|proposal|rfc|spec|specification)\b/i;
+const EXTRACTION_KEYWORDS =
+  /\b(extract|parse|convert|transform|summarize|summarise|list\s+all|find\s+all|collect|gather|enumerate|catalog)\b/i;
+const AGENT_KEYWORDS =
+  /\b(implement|build|create|add\s+feature|set\s+up|configure|deploy|migrate|upgrade|install|scaffold|bootstrap|integrate)\b/i;
 
-const TOOL_HEAVY_KEYWORDS = /\b(refactor.*(?:files|codebase|repo)|search.*and.*replace|across.*(?:files|repo)|repo-?wide|all.*\.(?:ts|js|tsx|jsx|go|py|rs|java)\b|mass\s+(?:rename|update)|migrate.*(?:codebase|imports?)|run.*(?:tests?|build|lint).*and|setup.*(?:project|repo)|scaffold|bootstrap|find.*(?:and|then).*(?:fix|edit|update).*(?:all|every))\b/i;
+const TOOL_HEAVY_KEYWORDS =
+  /\b(refactor.*(?:files|codebase|repo)|search.*and.*replace|across.*(?:files|repo)|repo-?wide|all.*\.(?:ts|js|tsx|jsx|go|py|rs|java)\b|mass\s+(?:rename|update)|migrate.*(?:codebase|imports?)|run.*(?:tests?|build|lint).*and|setup.*(?:project|repo)|scaffold|bootstrap|find.*(?:and|then).*(?:fix|edit|update).*(?:all|every))\b/i;
 
 export function classifyTask(prompt: string, context: RouteContext | boolean = {}): RouteKind {
   // Backwards compat: second arg used to be `hasImage` boolean
@@ -65,7 +82,10 @@ export function classifyTask(prompt: string, context: RouteContext | boolean = {
   const longContextThreshold = ctx.longContextThreshold ?? 200_000;
 
   // 1. Forced long-context — total context exceeds threshold
-  if (ctx.estimatedContextTokens !== undefined && ctx.estimatedContextTokens >= longContextThreshold) {
+  if (
+    ctx.estimatedContextTokens !== undefined &&
+    ctx.estimatedContextTokens >= longContextThreshold
+  ) {
     return "long_context";
   }
 
@@ -207,7 +227,11 @@ export function scoreCandidate(capabilities: ModelCapabilities, routeKind: Route
   return score;
 }
 
-export function routeAuto(config: MagiConfig, prompt: string, context: RouteContext | boolean = {}): ResolvedModel | undefined {
+export function routeAuto(
+  config: MagiConfig,
+  prompt: string,
+  context: RouteContext | boolean = {}
+): ResolvedModel | undefined {
   const decision = routeAutoDetailed(config, prompt, context);
   return decision?.resolved;
 }
@@ -216,7 +240,11 @@ export function routeAuto(config: MagiConfig, prompt: string, context: RouteCont
  * Like routeAuto but returns a full decision record (task kind, candidate scores, etc.)
  * for telemetry and debugging.
  */
-export function routeAutoDetailed(config: MagiConfig, prompt: string, context: RouteContext | boolean = {}): RouteDecision | undefined {
+export function routeAutoDetailed(
+  config: MagiConfig,
+  prompt: string,
+  context: RouteContext | boolean = {}
+): RouteDecision | undefined {
   const ctx: RouteContext = typeof context === "boolean" ? { hasImage: context } : context;
   const routerConfig = config.models.router;
   if (!routerConfig || Object.keys(routerConfig).length === 0) {

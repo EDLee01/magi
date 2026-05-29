@@ -31,11 +31,13 @@ describe("Agent tool", () => {
     });
 
     it("rejects invalid subagent types", () => {
-      expect(() => parseAgentToolInput({
-        description: "test",
-        prompt: "test",
-        subagent_type: "invalid"
-      })).toThrow();
+      expect(() =>
+        parseAgentToolInput({
+          description: "test",
+          prompt: "test",
+          subagent_type: "invalid"
+        })
+      ).toThrow();
     });
 
     it("rejects empty description or prompt", () => {
@@ -97,7 +99,8 @@ describe("Agent tool", () => {
     });
 
     it("declares all four valid subagent types", () => {
-      const props = (AgentToolInputSchema as { properties: Record<string, { enum?: string[] }> }).properties;
+      const props = (AgentToolInputSchema as { properties: Record<string, { enum?: string[] }> })
+        .properties;
       const enumValues = props.subagent_type.enum;
       expect(enumValues).toEqual(["general", "explore", "plan", "verification"]);
     });

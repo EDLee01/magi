@@ -11,14 +11,19 @@ export interface LocalPlan {
 
 export function parseLocalPlan(prompt: string): LocalPlan | undefined {
   const text = prompt.trim();
-  const write = /^(?:create|write) file (?:"([^"]+)"|(\S+)) with content (?:"([\s\S]*)"|([\s\S]*))$/i.exec(text);
+  const write =
+    /^(?:create|write) file (?:"([^"]+)"|(\S+)) with content (?:"([\s\S]*)"|([\s\S]*))$/i.exec(
+      text
+    );
   if (write) {
     return {
-      actions: [{
-        type: "write-file",
-        filePath: write[1] ?? write[2],
-        content: write[3] ?? write[4] ?? ""
-      }]
+      actions: [
+        {
+          type: "write-file",
+          filePath: write[1] ?? write[2],
+          content: write[3] ?? write[4] ?? ""
+        }
+      ]
     };
   }
 

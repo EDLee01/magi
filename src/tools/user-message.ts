@@ -38,9 +38,8 @@ export const SEND_USER_MESSAGE_SCHEMA = {
 
 export function parseSendUserMessageInput(input: Record<string, unknown>): SendUserMessageRequest {
   const message = readNonEmptyString(input.message, "message");
-  const attachments = input.attachments === undefined
-    ? []
-    : readStringArray(input.attachments, "attachments");
+  const attachments =
+    input.attachments === undefined ? [] : readStringArray(input.attachments, "attachments");
   const status = readStatus(input.status);
   return { message, attachments, status };
 }
@@ -55,10 +54,14 @@ export function formatSendUserMessageResult(
     `channel: ${result.channel}`,
     `delivered: ${result.delivered ? "true" : "false"}`,
     `deliveredAt: ${result.deliveredAt}`,
-    request.attachments.length > 0 ? `attachments:\n${request.attachments.map((item) => `- ${item}`).join("\n")}` : undefined,
+    request.attachments.length > 0
+      ? `attachments:\n${request.attachments.map((item) => `- ${item}`).join("\n")}`
+      : undefined,
     "",
     request.message
-  ].filter((line): line is string => line !== undefined).join("\n");
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }
 
 export function defaultUserMessageSink(): SendUserMessageResult {

@@ -46,7 +46,9 @@ export function goalStorePath(paths: MagiPaths): string {
 }
 
 export function getGoal(paths: MagiPaths, sessionId: string): ThreadGoal | undefined {
-  return readGoalStore(paths).goals.find((goal) => goal.sessionId === sessionId && goal.status === "active");
+  return readGoalStore(paths).goals.find(
+    (goal) => goal.sessionId === sessionId && goal.status === "active"
+  );
 }
 
 export function listGoals(paths: MagiPaths, sessionId?: string): ThreadGoal[] {
@@ -56,7 +58,10 @@ export function listGoals(paths: MagiPaths, sessionId?: string): ThreadGoal[] {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function createGoal(paths: MagiPaths, input: { sessionId: string; objective: string }): ThreadGoal {
+export function createGoal(
+  paths: MagiPaths,
+  input: { sessionId: string; objective: string }
+): ThreadGoal {
   const objective = input.objective.trim();
   if (!objective) {
     throw new Error("Goal objective must not be empty");
@@ -84,13 +89,18 @@ export function createGoal(paths: MagiPaths, input: { sessionId: string; objecti
   return goal;
 }
 
-export function updateGoalStatus(paths: MagiPaths, input: {
-  sessionId: string;
-  status: Exclude<GoalStatus, "active">;
-  note?: string;
-}): ThreadGoal | undefined {
+export function updateGoalStatus(
+  paths: MagiPaths,
+  input: {
+    sessionId: string;
+    status: Exclude<GoalStatus, "active">;
+    note?: string;
+  }
+): ThreadGoal | undefined {
   const data = readGoalStore(paths);
-  const goal = data.goals.find((candidate) => candidate.sessionId === input.sessionId && candidate.status === "active");
+  const goal = data.goals.find(
+    (candidate) => candidate.sessionId === input.sessionId && candidate.status === "active"
+  );
   if (!goal) return undefined;
   const now = new Date().toISOString();
   goal.status = input.status;
@@ -103,7 +113,11 @@ export function updateGoalStatus(paths: MagiPaths, input: {
   return goal;
 }
 
-export function clearGoal(paths: MagiPaths, sessionId: string, note = "Cancelled by user"): ThreadGoal | undefined {
+export function clearGoal(
+  paths: MagiPaths,
+  sessionId: string,
+  note = "Cancelled by user"
+): ThreadGoal | undefined {
   return updateGoalStatus(paths, { sessionId, status: "cancelled", note });
 }
 
@@ -118,7 +132,9 @@ export function formatGoal(goal: ThreadGoal | undefined): string {
     goal.blockedAt ? `Blocked: ${goal.blockedAt}` : undefined,
     goal.cancelledAt ? `Cancelled: ${goal.cancelledAt}` : undefined,
     goal.note ? `Note: ${goal.note}` : undefined
-  ].filter((line): line is string => Boolean(line)).join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 }
 
 export function formatGoalStatus(status: GoalStatus): string {
@@ -130,7 +146,8 @@ export function formatGoalBadge(goal: ThreadGoal | undefined): string | undefine
   if (!goal || goal.status !== "active") {
     return undefined;
   }
-  const objective = goal.objective.length > 96 ? `${goal.objective.slice(0, 93)}...` : goal.objective;
+  const objective =
+    goal.objective.length > 96 ? `${goal.objective.slice(0, 93)}...` : goal.objective;
   return `goal active · ${objective}`;
 }
 
@@ -173,12 +190,16 @@ function normalizeGoal(value: unknown): ThreadGoal | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
   const status = normalizeStoredGoalStatus(record.status);
-  if (!(typeof record.id === "string"
-    && typeof record.sessionId === "string"
-    && typeof record.objective === "string"
-    && status
-    && typeof record.createdAt === "string"
-    && typeof record.updatedAt === "string")) {
+  if (
+    !(
+      typeof record.id === "string" &&
+      typeof record.sessionId === "string" &&
+      typeof record.objective === "string" &&
+      status &&
+      typeof record.createdAt === "string" &&
+      typeof record.updatedAt === "string"
+    )
+  ) {
     return undefined;
   }
   return {

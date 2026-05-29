@@ -33,13 +33,25 @@ describe("cost calculation", () => {
   describe("calculateCost", () => {
     it("computes cost correctly for sonnet pricing", () => {
       // 1k in, 1k out at 3/15 per million = 0.003 + 0.015 = 0.018
-      const cost = calculateCost({ model: "claude-sonnet-4-6", inputTokens: 1000, outputTokens: 1000 });
+      const cost = calculateCost({
+        model: "claude-sonnet-4-6",
+        inputTokens: 1000,
+        outputTokens: 1000
+      });
       expect(cost).toBeCloseTo(0.018, 5);
     });
 
     it("scales linearly with token count", () => {
-      const cost1k = calculateCost({ model: "claude-haiku-4-5", inputTokens: 1000, outputTokens: 1000 });
-      const cost10k = calculateCost({ model: "claude-haiku-4-5", inputTokens: 10000, outputTokens: 10000 });
+      const cost1k = calculateCost({
+        model: "claude-haiku-4-5",
+        inputTokens: 1000,
+        outputTokens: 1000
+      });
+      const cost10k = calculateCost({
+        model: "claude-haiku-4-5",
+        inputTokens: 10000,
+        outputTokens: 10000
+      });
       expect(cost10k).toBeCloseTo(cost1k * 10, 5);
     });
 
@@ -48,7 +60,9 @@ describe("cost calculation", () => {
     });
 
     it("returns 0 for zero tokens", () => {
-      expect(calculateCost({ model: "claude-sonnet-4-6", inputTokens: 0, outputTokens: 0 })).toBe(0);
+      expect(calculateCost({ model: "claude-sonnet-4-6", inputTokens: 0, outputTokens: 0 })).toBe(
+        0
+      );
     });
   });
 

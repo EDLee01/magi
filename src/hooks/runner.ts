@@ -76,13 +76,14 @@ export async function executeHooks(input: {
       continue;
     }
     try {
-      const result = hook.type === "command"
-        ? await runCommandHook(hook, input.context, input.env)
-        : hook.type === "http"
-          ? await runHttpHook(hook, input.context, input.env)
-          : hook.type === "prompt"
-            ? await runPromptHook(hook, input.context, input.promptModel)
-            : unsupportedHookResult(hook);
+      const result =
+        hook.type === "command"
+          ? await runCommandHook(hook, input.context, input.env)
+          : hook.type === "http"
+            ? await runHttpHook(hook, input.context, input.env)
+            : hook.type === "prompt"
+              ? await runPromptHook(hook, input.context, input.promptModel)
+              : unsupportedHookResult(hook);
       results.push(result);
     } catch (error) {
       results.push({
@@ -100,7 +101,9 @@ export async function executeHooks(input: {
 async function runPromptHook(
   hook: HookDefinition,
   context: HookContext,
-  promptModel: ((request: { model: string; messages: MagiMessage[] }) => Promise<{ text: string }>) | undefined
+  promptModel:
+    | ((request: { model: string; messages: MagiMessage[] }) => Promise<{ text: string }>)
+    | undefined
 ): Promise<HookResult> {
   if (!hook.prompt) {
     return {
@@ -132,10 +135,12 @@ async function runPromptHook(
   const prompt = hook.prompt.replace(/\$ARGUMENTS/g, JSON.stringify(context));
   const response = await promptModel({
     model: hook.model,
-    messages: [{
-      role: "user",
-      content: [{ type: "text", text: prompt }]
-    }]
+    messages: [
+      {
+        role: "user",
+        content: [{ type: "text", text: prompt }]
+      }
+    ]
   });
   return {
     hook,
@@ -165,15 +170,20 @@ export function matchesHookCondition(condition: string | undefined, context: Hoo
     }
     return globMatches(selector, toolSelectorHaystack(context));
   }
-  return globMatches(trimmed, [
-    context.toolName,
-    context.notificationType,
-    context.source,
-    context.agentType,
-    context.taskSubject,
-    context.filePath,
-    context.event
-  ].filter((value): value is string => typeof value === "string").join(" "));
+  return globMatches(
+    trimmed,
+    [
+      context.toolName,
+      context.notificationType,
+      context.source,
+      context.agentType,
+      context.taskSubject,
+      context.filePath,
+      context.event
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .join(" ")
+  );
 }
 
 async function runCommandHook(
@@ -212,7 +222,9 @@ async function runCommandHook(
       clearTimeout(timer);
       resolve({
         hook,
-        output: timedOut ? `Hook timed out after ${hook.timeoutMs ?? 30_000}ms` : stdout.trimEnd() || stderr.trimEnd(),
+        output: timedOut
+          ? `Hook timed out after ${hook.timeoutMs ?? 30_000}ms`
+          : stdout.trimEnd() || stderr.trimEnd(),
         exitCode,
         blocked: exitCode === 2,
         timedOut
@@ -318,15 +330,15 @@ function escapeRegExp(value: string): string {
 
 function toolSelectorHaystack(context: HookContext): string {
   return String(
-    context.toolInput?.command
-    ?? context.toolInput?.file_path
-    ?? context.toolInput?.filePath
-    ?? context.toolInput?.pattern
-    ?? context.toolInput?.url
-    ?? context.toolInput?.setting
-    ?? context.toolInput?.skill
-    ?? context.toolInput?.query
-    ?? ""
+    context.toolInput?.command ??
+      context.toolInput?.file_path ??
+      context.toolInput?.filePath ??
+      context.toolInput?.pattern ??
+      context.toolInput?.url ??
+      context.toolInput?.setting ??
+      context.toolInput?.skill ??
+      context.toolInput?.query ??
+      ""
   );
 }
 

@@ -122,7 +122,10 @@ export function executeLspRequest(input: { cwd: string; request: LspRequest }): 
     case "goToImplementation":
       return formatLocations("Implementations", goToImplementation(workspace, input.request));
     case "prepareCallHierarchy":
-      return formatCallHierarchyItems("Call hierarchy items", prepareCallHierarchy(workspace, input.request));
+      return formatCallHierarchyItems(
+        "Call hierarchy items",
+        prepareCallHierarchy(workspace, input.request)
+      );
     case "incomingCalls":
       return formatIncomingCalls(incomingCalls(workspace, input.request));
     case "outgoingCalls":
@@ -132,22 +135,31 @@ export function executeLspRequest(input: { cwd: string; request: LspRequest }): 
 
 export function goToDefinition(workspace: TsWorkspace, request: LspRequest): LspLocation[] {
   const position = requirePosition(workspace, request);
-  const definitions = workspace.languageService.getDefinitionAtPosition(position.fileName, position.offset) ?? [];
-  return definitions.map((definition) => locationFromTextSpan(workspace, definition.fileName, definition.textSpan));
+  const definitions =
+    workspace.languageService.getDefinitionAtPosition(position.fileName, position.offset) ?? [];
+  return definitions.map((definition) =>
+    locationFromTextSpan(workspace, definition.fileName, definition.textSpan)
+  );
 }
 
 export function findReferences(workspace: TsWorkspace, request: LspRequest): LspLocation[] {
   const position = requirePosition(workspace, request);
-  const references = workspace.languageService.findReferences(position.fileName, position.offset) ?? [];
-  return references.flatMap((symbol) => symbol.references.map((reference) => (
-    locationFromTextSpan(workspace, reference.fileName, reference.textSpan)
-  )));
+  const references =
+    workspace.languageService.findReferences(position.fileName, position.offset) ?? [];
+  return references.flatMap((symbol) =>
+    symbol.references.map((reference) =>
+      locationFromTextSpan(workspace, reference.fileName, reference.textSpan)
+    )
+  );
 }
 
 export function goToImplementation(workspace: TsWorkspace, request: LspRequest): LspLocation[] {
   const position = requirePosition(workspace, request);
-  const implementations = workspace.languageService.getImplementationAtPosition(position.fileName, position.offset) ?? [];
-  return implementations.map((implementation) => locationFromTextSpan(workspace, implementation.fileName, implementation.textSpan));
+  const implementations =
+    workspace.languageService.getImplementationAtPosition(position.fileName, position.offset) ?? [];
+  return implementations.map((implementation) =>
+    locationFromTextSpan(workspace, implementation.fileName, implementation.textSpan)
+  );
 }
 
 export function hover(workspace: TsWorkspace, request: LspRequest): string {
@@ -156,11 +168,17 @@ export function hover(workspace: TsWorkspace, request: LspRequest): string {
   if (!info) {
     return "No hover information";
   }
-  return [
-    ts.displayPartsToString(info.displayParts ?? []),
-    ts.displayPartsToString(info.documentation ?? []),
-    ...(info.tags ?? []).map((tag) => `@${tag.name} ${ts.displayPartsToString(tag.text ?? [])}`.trim())
-  ].filter((line) => line.trim()).join("\n") || "No hover information";
+  return (
+    [
+      ts.displayPartsToString(info.displayParts ?? []),
+      ts.displayPartsToString(info.documentation ?? []),
+      ...(info.tags ?? []).map((tag) =>
+        `@${tag.name} ${ts.displayPartsToString(tag.text ?? [])}`.trim()
+      )
+    ]
+      .filter((line) => line.trim())
+      .join("\n") || "No hover information"
+  );
 }
 
 export function documentSymbols(workspace: TsWorkspace, request: LspRequest): LspSymbol[] {
@@ -181,13 +199,24 @@ export function workspaceSymbols(workspace: TsWorkspace, request: LspRequest): L
   });
   return symbols
     .filter((symbol) => !query || symbol.name.toLowerCase().includes(query))
-    .sort((left, right) => left.filePath.localeCompare(right.filePath) || left.line - right.line || left.name.localeCompare(right.name))
+    .sort(
+      (left, right) =>
+        left.filePath.localeCompare(right.filePath) ||
+        left.line - right.line ||
+        left.name.localeCompare(right.name)
+    )
     .slice(0, maxResults);
 }
 
-export function prepareCallHierarchy(workspace: TsWorkspace, request: LspRequest): LspCallHierarchyItem[] {
+export function prepareCallHierarchy(
+  workspace: TsWorkspace,
+  request: LspRequest
+): LspCallHierarchyItem[] {
   const position = requirePosition(workspace, request);
-  const prepared = workspace.languageService.prepareCallHierarchy(position.fileName, position.offset);
+  const prepared = workspace.languageService.prepareCallHierarchy(
+    position.fileName,
+    position.offset
+  );
   if (!prepared) {
     return [];
   }
@@ -197,18 +226,24 @@ export function prepareCallHierarchy(workspace: TsWorkspace, request: LspRequest
 
 export function incomingCalls(workspace: TsWorkspace, request: LspRequest): LspIncomingCall[] {
   const position = requirePosition(workspace, request);
-  return workspace.languageService.provideCallHierarchyIncomingCalls(position.fileName, position.offset).map((call) => ({
-    from: callHierarchyItemFromTs(workspace, call.from),
-    fromSpans: call.fromSpans.map((span) => locationFromTextSpan(workspace, call.from.file, span))
-  }));
+  return workspace.languageService
+    .provideCallHierarchyIncomingCalls(position.fileName, position.offset)
+    .map((call) => ({
+      from: callHierarchyItemFromTs(workspace, call.from),
+      fromSpans: call.fromSpans.map((span) => locationFromTextSpan(workspace, call.from.file, span))
+    }));
 }
 
 export function outgoingCalls(workspace: TsWorkspace, request: LspRequest): LspOutgoingCall[] {
   const position = requirePosition(workspace, request);
-  return workspace.languageService.provideCallHierarchyOutgoingCalls(position.fileName, position.offset).map((call) => ({
-    to: callHierarchyItemFromTs(workspace, call.to),
-    fromSpans: call.fromSpans.map((span) => locationFromTextSpan(workspace, position.fileName, span))
-  }));
+  return workspace.languageService
+    .provideCallHierarchyOutgoingCalls(position.fileName, position.offset)
+    .map((call) => ({
+      to: callHierarchyItemFromTs(workspace, call.to),
+      fromSpans: call.fromSpans.map((span) =>
+        locationFromTextSpan(workspace, position.fileName, span)
+      )
+    }));
 }
 
 export interface TsWorkspace {
@@ -227,7 +262,9 @@ export function createTsWorkspace(cwd: string): TsWorkspace {
     // fall back
   }
   const fileNames = collectSourceFiles(realCwd);
-  const versions = new Map(fileNames.map((fileName) => [fileName, statSync(fileName).mtimeMs.toString()]));
+  const versions = new Map(
+    fileNames.map((fileName) => [fileName, statSync(fileName).mtimeMs.toString()])
+  );
   const compilerOptions = readCompilerOptions(realCwd);
   const host: ts.LanguageServiceHost = {
     getScriptFileNames: () => fileNames,
@@ -313,7 +350,10 @@ function defaultCompilerOptions(): ts.CompilerOptions {
   };
 }
 
-function requirePosition(workspace: TsWorkspace, request: LspRequest): { fileName: string; offset: number } {
+function requirePosition(
+  workspace: TsWorkspace,
+  request: LspRequest
+): { fileName: string; offset: number } {
   const fileName = requireFile(workspace, request.filePath);
   if (request.line === undefined || request.character === undefined) {
     throw new Error("LSP action requires filePath, line, and character");
@@ -322,7 +362,11 @@ function requirePosition(workspace: TsWorkspace, request: LspRequest): { fileNam
   if (!sourceFile) {
     throw new Error(`LSP file is not loaded: ${request.filePath}`);
   }
-  const offset = ts.getPositionOfLineAndCharacter(sourceFile, request.line - 1, request.character - 1);
+  const offset = ts.getPositionOfLineAndCharacter(
+    sourceFile,
+    request.line - 1,
+    request.character - 1
+  );
   return { fileName, offset };
 }
 
@@ -337,7 +381,11 @@ function requireFile(workspace: TsWorkspace, filePath: string | undefined): stri
   return resolved;
 }
 
-function locationFromTextSpan(workspace: TsWorkspace, fileName: string, textSpan: ts.TextSpan): LspLocation {
+function locationFromTextSpan(
+  workspace: TsWorkspace,
+  fileName: string,
+  textSpan: ts.TextSpan
+): LspLocation {
   const sourceFile = workspace.languageService.getProgram()?.getSourceFile(fileName);
   if (!sourceFile) {
     throw new Error(`LSP source file is not loaded: ${fileName}`);
@@ -346,7 +394,9 @@ function locationFromTextSpan(workspace: TsWorkspace, fileName: string, textSpan
   const end = sourceFile.getLineAndCharacterOfPosition(textSpan.start + textSpan.length);
   const startOfLine = sourceFile.getPositionOfLineAndCharacter(start.line, 0);
   const endOfLine = sourceFile.text.indexOf("\n", startOfLine);
-  const lineText = sourceFile.text.slice(startOfLine, endOfLine === -1 ? sourceFile.text.length : endOfLine).trim();
+  const lineText = sourceFile.text
+    .slice(startOfLine, endOfLine === -1 ? sourceFile.text.length : endOfLine)
+    .trim();
   return {
     filePath: path.relative(workspace.cwd, fileName),
     line: start.line + 1,
@@ -357,7 +407,11 @@ function locationFromTextSpan(workspace: TsWorkspace, fileName: string, textSpan
   };
 }
 
-function flattenNavigationItems(workspace: TsWorkspace, fileName: string, items: ts.NavigationTree[]): LspSymbol[] {
+function flattenNavigationItems(
+  workspace: TsWorkspace,
+  fileName: string,
+  items: ts.NavigationTree[]
+): LspSymbol[] {
   return items.flatMap((item) => {
     const spans = item.spans.length > 0 ? item.spans : [];
     const own = spans.map((span): LspSymbol => {
@@ -373,14 +427,14 @@ function flattenNavigationItems(workspace: TsWorkspace, fileName: string, items:
         detail: item.kindModifiers || undefined
       };
     });
-    return [
-      ...own,
-      ...flattenNavigationItems(workspace, fileName, item.childItems ?? [])
-    ];
+    return [...own, ...flattenNavigationItems(workspace, fileName, item.childItems ?? [])];
   });
 }
 
-function callHierarchyItemFromTs(workspace: TsWorkspace, item: ts.CallHierarchyItem): LspCallHierarchyItem {
+function callHierarchyItemFromTs(
+  workspace: TsWorkspace,
+  item: ts.CallHierarchyItem
+): LspCallHierarchyItem {
   const location = locationFromTextSpan(workspace, item.file, item.selectionSpan);
   const whole = locationFromTextSpan(workspace, item.file, item.span);
   return {
@@ -401,10 +455,14 @@ function formatLocations(title: string, locations: LspLocation[]): string {
   }
   return [
     `${title}: ${locations.length} result${locations.length === 1 ? "" : "s"}`,
-    ...locations.map((location) => [
-      `${location.filePath}:${location.line}:${location.character}`,
-      location.text ? `  ${location.text}` : undefined
-    ].filter((line): line is string => Boolean(line)).join("\n"))
+    ...locations.map((location) =>
+      [
+        `${location.filePath}:${location.line}:${location.character}`,
+        location.text ? `  ${location.text}` : undefined
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n")
+    )
   ].join("\n");
 }
 
@@ -414,7 +472,10 @@ function formatSymbols(title: string, symbols: LspSymbol[]): string {
   }
   return [
     `${title}: ${symbols.length} result${symbols.length === 1 ? "" : "s"}`,
-    ...symbols.map((symbol) => `${symbol.filePath}:${symbol.line}:${symbol.character} ${symbol.kind} ${symbol.name}`)
+    ...symbols.map(
+      (symbol) =>
+        `${symbol.filePath}:${symbol.line}:${symbol.character} ${symbol.kind} ${symbol.name}`
+    )
   ].join("\n");
 }
 
@@ -434,10 +495,12 @@ function formatIncomingCalls(calls: LspIncomingCall[]): string {
   }
   return [
     `Incoming calls: ${calls.length} result${calls.length === 1 ? "" : "s"}`,
-    ...calls.map((call) => [
-      `from ${formatCallHierarchyItem(call.from)}`,
-      ...call.fromSpans.map((span) => `  at ${formatLocationLine(span)}`)
-    ].join("\n"))
+    ...calls.map((call) =>
+      [
+        `from ${formatCallHierarchyItem(call.from)}`,
+        ...call.fromSpans.map((span) => `  at ${formatLocationLine(span)}`)
+      ].join("\n")
+    )
   ].join("\n");
 }
 
@@ -447,10 +510,12 @@ function formatOutgoingCalls(calls: LspOutgoingCall[]): string {
   }
   return [
     `Outgoing calls: ${calls.length} result${calls.length === 1 ? "" : "s"}`,
-    ...calls.map((call) => [
-      `to ${formatCallHierarchyItem(call.to)}`,
-      ...call.fromSpans.map((span) => `  from ${formatLocationLine(span)}`)
-    ].join("\n"))
+    ...calls.map((call) =>
+      [
+        `to ${formatCallHierarchyItem(call.to)}`,
+        ...call.fromSpans.map((span) => `  from ${formatLocationLine(span)}`)
+      ].join("\n")
+    )
   ].join("\n");
 }
 
@@ -465,15 +530,15 @@ function formatLocationLine(location: LspLocation): string {
 
 function readAction(value: unknown): LspAction {
   if (
-    value === "goToDefinition"
-    || value === "findReferences"
-    || value === "hover"
-    || value === "documentSymbol"
-    || value === "workspaceSymbol"
-    || value === "goToImplementation"
-    || value === "prepareCallHierarchy"
-    || value === "incomingCalls"
-    || value === "outgoingCalls"
+    value === "goToDefinition" ||
+    value === "findReferences" ||
+    value === "hover" ||
+    value === "documentSymbol" ||
+    value === "workspaceSymbol" ||
+    value === "goToImplementation" ||
+    value === "prepareCallHierarchy" ||
+    value === "incomingCalls" ||
+    value === "outgoingCalls"
   ) {
     return value;
   }

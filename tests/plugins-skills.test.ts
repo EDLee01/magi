@@ -18,28 +18,34 @@ afterEach(() => {
 
 describe("plugins, marketplace, and skills", () => {
   it("validates clean-room plugin manifests and rejects unsafe entries", () => {
-    expect(validatePluginManifest({
-      schemaVersion: "0.1",
-      name: "demo.plugin",
-      version: "0.1.0",
-      entry: "index.js",
-      permissions: ["files.read"]
-    })).toMatchObject({ name: "demo.plugin", permissions: ["files.read"] });
+    expect(
+      validatePluginManifest({
+        schemaVersion: "0.1",
+        name: "demo.plugin",
+        version: "0.1.0",
+        entry: "index.js",
+        permissions: ["files.read"]
+      })
+    ).toMatchObject({ name: "demo.plugin", permissions: ["files.read"] });
 
-    expect(() => validatePluginManifest({
-      schemaVersion: "0.1",
-      name: "Bad Plugin",
-      version: "0.1.0",
-      permissions: []
-    })).toThrow(/lowercase plugin id/);
+    expect(() =>
+      validatePluginManifest({
+        schemaVersion: "0.1",
+        name: "Bad Plugin",
+        version: "0.1.0",
+        permissions: []
+      })
+    ).toThrow(/lowercase plugin id/);
 
-    expect(() => validatePluginManifest({
-      schemaVersion: "0.1",
-      name: "demo.plugin",
-      version: "0.1.0",
-      entry: "../outside.js",
-      permissions: []
-    })).toThrow(/relative in-plugin path/);
+    expect(() =>
+      validatePluginManifest({
+        schemaVersion: "0.1",
+        name: "demo.plugin",
+        version: "0.1.0",
+        entry: "../outside.js",
+        permissions: []
+      })
+    ).toThrow(/relative in-plugin path/);
   });
 
   it("lists local plugins and custom local marketplaces", async () => {
@@ -47,18 +53,26 @@ describe("plugins, marketplace, and skills", () => {
     const paths = getMagiPaths(temp.env);
     const pluginRoot = path.join(paths.pluginsRoot, "demo.plugin");
     mkdirSync(pluginRoot, { recursive: true });
-    writeFileSync(path.join(pluginRoot, "plugin.json"), JSON.stringify({
-      schemaVersion: "0.1",
-      name: "demo.plugin",
-      version: "0.1.0",
-      permissions: ["files.read"]
-    }), "utf8");
+    writeFileSync(
+      path.join(pluginRoot, "plugin.json"),
+      JSON.stringify({
+        schemaVersion: "0.1",
+        name: "demo.plugin",
+        version: "0.1.0",
+        permissions: ["files.read"]
+      }),
+      "utf8"
+    );
 
     const marketplaceRoot = path.join(paths.pluginsRoot, "marketplaces", "local-demo");
     mkdirSync(marketplaceRoot, { recursive: true });
-    writeFileSync(path.join(marketplaceRoot, "marketplace.json"), JSON.stringify({
-      plugins: [{ name: "demo.plugin", version: "0.1.0", source: pluginRoot }]
-    }), "utf8");
+    writeFileSync(
+      path.join(marketplaceRoot, "marketplace.json"),
+      JSON.stringify({
+        plugins: [{ name: "demo.plugin", version: "0.1.0", source: pluginRoot }]
+      }),
+      "utf8"
+    );
 
     expect(listLocalPlugins(paths)).toHaveLength(1);
     const marketplaces = discoverLocalMarketplaceSources(paths).map(loadMarketplace);
@@ -75,7 +89,11 @@ describe("plugins, marketplace, and skills", () => {
     const paths = getMagiPaths(temp.env);
     const skillRoot = path.join(paths.skillsRoot, "review-helper");
     mkdirSync(skillRoot, { recursive: true });
-    writeFileSync(path.join(skillRoot, "SKILL.md"), "# Review Helper\n\nUse this for code review.\n", "utf8");
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      "# Review Helper\n\nUse this for code review.\n",
+      "utf8"
+    );
 
     expect(listSkills(paths)).toMatchObject([{ name: "review-helper", body: undefined }]);
     expect(findSkill(paths, "review-helper")?.body).toContain("Use this for code review.");

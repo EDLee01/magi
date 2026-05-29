@@ -26,7 +26,13 @@ describe("format-proxy", () => {
       const result = magiToOpenAiChat({
         model: "gpt-4",
         messages: [textMessage("user", "read file")],
-        tools: [{ name: "read", description: "Read a file", inputSchema: { type: "object", properties: { path: { type: "string" } } } }]
+        tools: [
+          {
+            name: "read",
+            description: "Read a file",
+            inputSchema: { type: "object", properties: { path: { type: "string" } } }
+          }
+        ]
       });
       expect(result.tools).toHaveLength(1);
       expect(result.tools![0].type).toBe("function");
@@ -59,7 +65,10 @@ describe("format-proxy", () => {
     });
 
     it("sets stream options when streaming", () => {
-      const result = magiToOpenAiChat({ model: "gpt-4", messages: [textMessage("user", "hi")] }, { stream: true });
+      const result = magiToOpenAiChat(
+        { model: "gpt-4", messages: [textMessage("user", "hi")] },
+        { stream: true }
+      );
       expect(result.stream).toBe(true);
       expect(result.stream_options).toEqual({ include_usage: true });
     });
@@ -77,17 +86,21 @@ describe("format-proxy", () => {
 
     it("converts tool calls in response", () => {
       const result = openAiChatToMagi({
-        choices: [{
-          message: {
-            role: "assistant",
-            content: "",
-            tool_calls: [{
-              id: "tc1",
-              type: "function",
-              function: { name: "bash", arguments: '{"command":"ls"}' }
-            }]
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: "",
+              tool_calls: [
+                {
+                  id: "tc1",
+                  type: "function",
+                  function: { name: "bash", arguments: '{"command":"ls"}' }
+                }
+              ]
+            }
           }
-        }]
+        ]
       });
       expect(result.toolUses).toHaveLength(1);
       expect(result.toolUses![0].name).toBe("bash");
@@ -99,10 +112,7 @@ describe("format-proxy", () => {
     it("extracts system messages", () => {
       const result = magiToAnthropicMessages({
         model: "claude-3",
-        messages: [
-          textMessage("system", "You are helpful."),
-          textMessage("user", "hi")
-        ]
+        messages: [textMessage("system", "You are helpful."), textMessage("user", "hi")]
       });
       expect(result.system).toBe("You are helpful.");
       expect(result.messages).toHaveLength(1);
@@ -163,7 +173,12 @@ describe("format-proxy", () => {
           { role: "system", content: "Be helpful" },
           { role: "user", content: "hello" }
         ],
-        tools: [{ type: "function", function: { name: "bash", description: "Run command", parameters: { type: "object" } } }],
+        tools: [
+          {
+            type: "function",
+            function: { name: "bash", description: "Run command", parameters: { type: "object" } }
+          }
+        ],
         max_tokens: 2048
       });
       expect(result.system).toBe("Be helpful");
@@ -194,7 +209,9 @@ describe("format-proxy", () => {
           {
             role: "assistant",
             content: "OK",
-            tool_calls: [{ id: "tc1", type: "function", function: { name: "bash", arguments: '{"cmd":"ls"}' } }]
+            tool_calls: [
+              { id: "tc1", type: "function", function: { name: "bash", arguments: '{"cmd":"ls"}' } }
+            ]
           },
           { role: "tool", tool_call_id: "tc1", content: "file.txt" }
         ]
@@ -203,7 +220,10 @@ describe("format-proxy", () => {
       const assistantContent = result.messages[1].content as Array<{ type: string }>;
       expect(assistantContent[0].type).toBe("text");
       expect(assistantContent[1].type).toBe("tool_use");
-      const toolResult = result.messages[2].content as Array<{ type: string; tool_use_id?: string }>;
+      const toolResult = result.messages[2].content as Array<{
+        type: string;
+        tool_use_id?: string;
+      }>;
       expect(toolResult[0].type).toBe("tool_result");
       expect(toolResult[0].tool_use_id).toBe("tc1");
     });

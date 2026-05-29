@@ -73,7 +73,10 @@ type PendingInteraction = PendingApproval | PendingQuestion;
 
 export class ActiveInteractionRegistry {
   private readonly defaultTimeoutMs: number;
-  private readonly activeJobs = new Map<string, { sessionId: string; jobId: string; createdAt: string }>();
+  private readonly activeJobs = new Map<
+    string,
+    { sessionId: string; jobId: string; createdAt: string }
+  >();
   private readonly interactions = new Map<string, PendingInteraction>();
 
   constructor(input: { timeoutMs?: number } = {}) {
@@ -109,15 +112,17 @@ export class ActiveInteractionRegistry {
     return this.activeJobs.has(jobId);
   }
 
-  listInteractions(input: {
-    jobId?: string;
-    status?: ActiveInteractionStatus;
-    kind?: ActiveInteractionKind;
-  } = {}): ActiveInteractionView[] {
+  listInteractions(
+    input: {
+      jobId?: string;
+      status?: ActiveInteractionStatus;
+      kind?: ActiveInteractionKind;
+    } = {}
+  ): ActiveInteractionView[] {
     return [...this.interactions.values()]
-      .filter((interaction) => input.jobId ? interaction.jobId === input.jobId : true)
-      .filter((interaction) => input.status ? interaction.status === input.status : true)
-      .filter((interaction) => input.kind ? interaction.kind === input.kind : true)
+      .filter((interaction) => (input.jobId ? interaction.jobId === input.jobId : true))
+      .filter((interaction) => (input.status ? interaction.status === input.status : true))
+      .filter((interaction) => (input.kind ? interaction.kind === input.kind : true))
       .map(toView);
   }
 
@@ -131,7 +136,10 @@ export class ActiveInteractionRegistry {
     question: AskUserQuestionRequest;
   } {
     const interaction = this.getPending(input.jobId, input.toolUseId, "question");
-    return toView(interaction) as ActiveInteractionView & { kind: "question"; question: AskUserQuestionRequest };
+    return toView(interaction) as ActiveInteractionView & {
+      kind: "question";
+      question: AskUserQuestionRequest;
+    };
   }
 
   waitForApproval(input: {
@@ -144,7 +152,9 @@ export class ActiveInteractionRegistry {
     this.ensureJob(input.sessionId, input.jobId);
     const key = this.key(input.jobId, input.toolUse.id);
     if (this.interactions.get(key)?.status === "pending") {
-      throw new ActiveInteractionStateError(`Interaction already pending for ${input.jobId}/${input.toolUse.id}`);
+      throw new ActiveInteractionStateError(
+        `Interaction already pending for ${input.jobId}/${input.toolUse.id}`
+      );
     }
     return new Promise<boolean>((resolve, reject) => {
       const now = new Date();
@@ -179,7 +189,9 @@ export class ActiveInteractionRegistry {
     this.ensureJob(input.sessionId, input.jobId);
     const key = this.key(input.jobId, input.toolUse.id);
     if (this.interactions.get(key)?.status === "pending") {
-      throw new ActiveInteractionStateError(`Interaction already pending for ${input.jobId}/${input.toolUse.id}`);
+      throw new ActiveInteractionStateError(
+        `Interaction already pending for ${input.jobId}/${input.toolUse.id}`
+      );
     }
     return new Promise<AskUserQuestionAnswer>((resolve, reject) => {
       const now = new Date();
@@ -204,10 +216,16 @@ export class ActiveInteractionRegistry {
     });
   }
 
-  resolveApproval(input: { jobId: string; toolUseId: string; approved: boolean }): ActiveInteractionView {
+  resolveApproval(input: {
+    jobId: string;
+    toolUseId: string;
+    approved: boolean;
+  }): ActiveInteractionView {
     const interaction = this.getPending(input.jobId, input.toolUseId, "approval");
     if (interaction.kind !== "approval") {
-      throw new ActiveInteractionNotFoundError(`No active approval interaction for ${input.jobId}/${input.toolUseId}`);
+      throw new ActiveInteractionNotFoundError(
+        `No active approval interaction for ${input.jobId}/${input.toolUseId}`
+      );
     }
     interaction.status = "resolved";
     interaction.updatedAt = new Date().toISOString();
@@ -224,7 +242,9 @@ export class ActiveInteractionRegistry {
   }): ActiveInteractionView {
     const interaction = this.getPending(input.jobId, input.toolUseId, "question");
     if (interaction.kind !== "question") {
-      throw new ActiveInteractionNotFoundError(`No active question interaction for ${input.jobId}/${input.toolUseId}`);
+      throw new ActiveInteractionNotFoundError(
+        `No active question interaction for ${input.jobId}/${input.toolUseId}`
+      );
     }
     interaction.status = "resolved";
     interaction.updatedAt = new Date().toISOString();
@@ -234,7 +254,11 @@ export class ActiveInteractionRegistry {
     return toView(interaction);
   }
 
-  cancelInteraction(input: { jobId: string; toolUseId: string; reason?: string }): ActiveInteractionView {
+  cancelInteraction(input: {
+    jobId: string;
+    toolUseId: string;
+    reason?: string;
+  }): ActiveInteractionView {
     const interaction = this.getPending(input.jobId, input.toolUseId);
     this.cancelPendingInteraction(interaction, input.reason);
     return toView(interaction);
@@ -258,7 +282,10 @@ export class ActiveInteractionRegistry {
     }
   }
 
-  private createTimeoutTimer(interaction: PendingInteraction, timeoutMs: number): NodeJS.Timeout | undefined {
+  private createTimeoutTimer(
+    interaction: PendingInteraction,
+    timeoutMs: number
+  ): NodeJS.Timeout | undefined {
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
       return undefined;
     }
@@ -268,9 +295,11 @@ export class ActiveInteractionRegistry {
       }
       interaction.status = "timeout";
       interaction.updatedAt = new Date().toISOString();
-      interaction.reject(new ActiveInteractionTimeoutError(
-        `Interaction ${interaction.jobId}/${interaction.toolUseId} timed out`
-      ));
+      interaction.reject(
+        new ActiveInteractionTimeoutError(
+          `Interaction ${interaction.jobId}/${interaction.toolUseId} timed out`
+        )
+      );
     }, timeoutMs);
     timer.unref?.();
     return timer;
@@ -286,10 +315,14 @@ export class ActiveInteractionRegistry {
       throw new ActiveInteractionNotFoundError(`No active interaction for ${jobId}/${toolUseId}`);
     }
     if (kind && interaction.kind !== kind) {
-      throw new ActiveInteractionNotFoundError(`No active ${kind} interaction for ${jobId}/${toolUseId}`);
+      throw new ActiveInteractionNotFoundError(
+        `No active ${kind} interaction for ${jobId}/${toolUseId}`
+      );
     }
     if (interaction.status !== "pending") {
-      throw new ActiveInteractionStateError(`Interaction ${jobId}/${toolUseId} is ${interaction.status}`);
+      throw new ActiveInteractionStateError(
+        `Interaction ${jobId}/${toolUseId} is ${interaction.status}`
+      );
     }
     return interaction;
   }
@@ -306,9 +339,11 @@ export class ActiveInteractionRegistry {
     interaction.updatedAt = new Date().toISOString();
     interaction.cancelReason = reason;
     this.clearTimer(interaction);
-    interaction.reject(new ActiveInteractionCancelledError(
-      `Interaction ${interaction.jobId}/${interaction.toolUseId} was cancelled${reason ? `: ${reason}` : ""}`
-    ));
+    interaction.reject(
+      new ActiveInteractionCancelledError(
+        `Interaction ${interaction.jobId}/${interaction.toolUseId} was cancelled${reason ? `: ${reason}` : ""}`
+      )
+    );
   }
 
   private key(jobId: string, toolUseId: string): string {

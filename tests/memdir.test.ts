@@ -34,17 +34,35 @@ describe("memdir", () => {
 
   it("lists entries sorted by filename", () => {
     temp = makeTempRoot();
-    writeMemdirEntry({ paths: root(), type: "feedback", name: "Avoid mocks", description: "Use real DB", body: "Why: prod parity." });
-    writeMemdirEntry({ paths: root(), type: "user", name: "Role", description: "DBA", body: "10y postgres." });
+    writeMemdirEntry({
+      paths: root(),
+      type: "feedback",
+      name: "Avoid mocks",
+      description: "Use real DB",
+      body: "Why: prod parity."
+    });
+    writeMemdirEntry({
+      paths: root(),
+      type: "user",
+      name: "Role",
+      description: "DBA",
+      body: "10y postgres."
+    });
     const entries = listMemdirEntries(root());
     expect(entries.length).toBe(2);
-    expect(entries.map(e => e.type)).toContain("feedback");
-    expect(entries.map(e => e.type)).toContain("user");
+    expect(entries.map((e) => e.type)).toContain("feedback");
+    expect(entries.map((e) => e.type)).toContain("user");
   });
 
   it("finds an entry by name or filename", () => {
     temp = makeTempRoot();
-    writeMemdirEntry({ paths: root(), type: "project", name: "Auth rewrite", description: "Compliance-driven", body: "Legal flagged session tokens." });
+    writeMemdirEntry({
+      paths: root(),
+      type: "project",
+      name: "Auth rewrite",
+      description: "Compliance-driven",
+      body: "Legal flagged session tokens."
+    });
     const byName = findMemdirEntry(root(), "Auth rewrite");
     expect(byName?.type).toBe("project");
     const byFilename = findMemdirEntry(root(), "project_auth_rewrite.md");
@@ -53,8 +71,20 @@ describe("memdir", () => {
 
   it("ranks search results by relevance and type weight", () => {
     temp = makeTempRoot();
-    writeMemdirEntry({ paths: root(), type: "user", name: "Database", description: "Uses Postgres", body: "Postgres 14." });
-    writeMemdirEntry({ paths: root(), type: "reference", name: "Grafana", description: "Latency dashboard", body: "URL: grafana.example.com/api" });
+    writeMemdirEntry({
+      paths: root(),
+      type: "user",
+      name: "Database",
+      description: "Uses Postgres",
+      body: "Postgres 14."
+    });
+    writeMemdirEntry({
+      paths: root(),
+      type: "reference",
+      name: "Grafana",
+      description: "Latency dashboard",
+      body: "URL: grafana.example.com/api"
+    });
     const results = searchMemdir({ paths: root(), query: "postgres database" });
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].name).toBe("Database");
@@ -62,7 +92,13 @@ describe("memdir", () => {
 
   it("maintains the MEMORY.md index automatically", () => {
     temp = makeTempRoot();
-    writeMemdirEntry({ paths: root(), type: "user", name: "Tabs", description: "Prefers tabs", body: "User uses tabs not spaces." });
+    writeMemdirEntry({
+      paths: root(),
+      type: "user",
+      name: "Tabs",
+      description: "Prefers tabs",
+      body: "User uses tabs not spaces."
+    });
     const indexBefore = readMemdirIndex(root());
     expect(indexBefore).toContain("Tabs");
     expect(indexBefore).toContain("Prefers tabs");
@@ -76,7 +112,13 @@ describe("memdir", () => {
     temp = makeTempRoot();
     ensureMemdir(root());
     // Only properly formatted entries should appear
-    writeMemdirEntry({ paths: root(), type: "user", name: "Valid", description: "Has frontmatter", body: "OK." });
+    writeMemdirEntry({
+      paths: root(),
+      type: "user",
+      name: "Valid",
+      description: "Has frontmatter",
+      body: "OK."
+    });
     const entries = listMemdirEntries(root());
     expect(entries.length).toBe(1);
     expect(entries[0].name).toBe("Valid");

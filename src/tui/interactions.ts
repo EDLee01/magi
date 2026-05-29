@@ -105,7 +105,9 @@ export async function handleTuiPendingInteraction(input: {
 
     const question = readQuestionMetadata(input.event.metadata.question);
     if (!question) {
-      input.output.write("[question] pending event is missing question metadata; waiting for external control response\n");
+      input.output.write(
+        "[question] pending event is missing question metadata; waiting for external control response\n"
+      );
       return;
     }
     const answer = await askTerminalQuestion({
@@ -151,7 +153,8 @@ async function askTerminalApproval(input: {
   const toolInput = readRecord(toolUse?.input);
   const command = toolName === "Bash" ? readString(toolInput?.command) : undefined;
   const timeoutMs = toolName === "Bash" ? readNumber(toolInput?.timeout_ms) : undefined;
-  const cwd = toolName === "Bash" ? readString(input.event.metadata.cwd) ?? process.cwd() : undefined;
+  const cwd =
+    toolName === "Bash" ? (readString(input.event.metadata.cwd) ?? process.cwd()) : undefined;
   const allowAlways = toolName !== "Bash";
   const lines: string[] = [
     "Approval required",
@@ -165,7 +168,12 @@ async function askTerminalApproval(input: {
 
   if (diff) {
     lines.push("", "Diff preview:");
-    lines.push(...diff.split("\n").slice(0, 80).map((line) => colorizeDiffLine(line)));
+    lines.push(
+      ...diff
+        .split("\n")
+        .slice(0, 80)
+        .map((line) => colorizeDiffLine(line))
+    );
     if (diff.split("\n").length > 80) {
       lines.push(`\x1b[90m... ${diff.split("\n").length - 80} more lines\x1b[39m`);
     }
@@ -180,7 +188,15 @@ async function askTerminalApproval(input: {
       items: [
         { label: "Allow", value: "allow", description: `Run ${toolName}` },
         { label: "Deny", value: "deny", description: "Reject this tool call" },
-        ...(allowAlways ? [{ label: "Always allow", value: "always", description: `Persistently allow ${toolName}` }] : [])
+        ...(allowAlways
+          ? [
+              {
+                label: "Always allow",
+                value: "always",
+                description: `Persistently allow ${toolName}`
+              }
+            ]
+          : [])
       ],
       emptyMessage: "No matching approval actions",
       footer: allowAlways
@@ -204,16 +220,29 @@ async function askTerminalApproval(input: {
     return decision === "allow";
   }
 
-  lines.push("", allowAlways ? "Choose: [y]es / [n]o / [a]lways allow this tool" : "Choose: [y]es / [n]o");
+  lines.push(
+    "",
+    allowAlways ? "Choose: [y]es / [n]o / [a]lways allow this tool" : "Choose: [y]es / [n]o"
+  );
   input.output.write(lines.join("\n") + "\n");
 
   while (true) {
-    const raw = (await askReadlineQuestion(
-      input.rl,
-      allowAlways ? "approve? [y/n/a] " : "approve? [y/n] ",
-      input.signal
-    )).trim().toLowerCase();
-    if (raw === "y" || raw === "yes" || raw === "approve" || raw === "approved" || raw === "allow") {
+    const raw = (
+      await askReadlineQuestion(
+        input.rl,
+        allowAlways ? "approve? [y/n/a] " : "approve? [y/n] ",
+        input.signal
+      )
+    )
+      .trim()
+      .toLowerCase();
+    if (
+      raw === "y" ||
+      raw === "yes" ||
+      raw === "approve" ||
+      raw === "approved" ||
+      raw === "allow"
+    ) {
       return true;
     }
     if (raw === "n" || raw === "no" || raw === "deny" || raw === "denied" || raw === "reject") {
@@ -224,7 +253,9 @@ async function askTerminalApproval(input: {
       input.output.write(`\x1b[32m✓ Added persistent rule: always allow "${toolName}"\x1b[39m\n`);
       return true;
     }
-    input.output.write(allowAlways ? "Enter y/yes, n/no, or a/always.\n" : "Enter y/yes or n/no.\n");
+    input.output.write(
+      allowAlways ? "Enter y/yes, n/no, or a/always.\n" : "Enter y/yes or n/no.\n"
+    );
   }
 }
 
@@ -251,15 +282,18 @@ async function askTerminalQuestion(input: {
   signal?: AbortSignal;
 }): Promise<AskUserQuestionAnswer> {
   const resolver = createTerminalUserQuestionResolver(input.rl, input.output, input.signal);
-  return normalizeAskUserQuestionAnswer(input.question, await resolver({
-    toolUse: {
-      type: "tool-use",
-      id: "AskUserQuestion",
-      name: "AskUserQuestion",
-      input: {}
-    },
-    question: input.question
-  }));
+  return normalizeAskUserQuestionAnswer(
+    input.question,
+    await resolver({
+      toolUse: {
+        type: "tool-use",
+        id: "AskUserQuestion",
+        name: "AskUserQuestion",
+        input: {}
+      },
+      question: input.question
+    })
+  );
 }
 
 async function askReadlineQuestion(
@@ -274,8 +308,10 @@ async function askReadlineQuestion(
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError"
-    || error instanceof Error && error.name === "AbortError";
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
 }
 
 function readQuestionMetadata(value: unknown): AskUserQuestionRequest | undefined {
@@ -283,11 +319,19 @@ function readQuestionMetadata(value: unknown): AskUserQuestionRequest | undefine
     return undefined;
   }
   const questions = value.questions.map((rawQuestion) => {
-    if (!isRecord(rawQuestion) || typeof rawQuestion.question !== "string" || !Array.isArray(rawQuestion.options)) {
+    if (
+      !isRecord(rawQuestion) ||
+      typeof rawQuestion.question !== "string" ||
+      !Array.isArray(rawQuestion.options)
+    ) {
       return undefined;
     }
     const options = rawQuestion.options.map((rawOption) => {
-      if (!isRecord(rawOption) || typeof rawOption.label !== "string" || typeof rawOption.description !== "string") {
+      if (
+        !isRecord(rawOption) ||
+        typeof rawOption.label !== "string" ||
+        typeof rawOption.description !== "string"
+      ) {
         return undefined;
       }
       return {
@@ -304,7 +348,8 @@ function readQuestionMetadata(value: unknown): AskUserQuestionRequest | undefine
       header: typeof rawQuestion.header === "string" ? rawQuestion.header : undefined,
       preview: typeof rawQuestion.preview === "string" ? rawQuestion.preview : undefined,
       options: options as AskUserQuestionRequest["questions"][number]["options"],
-      multiSelect: typeof rawQuestion.multiSelect === "boolean" ? rawQuestion.multiSelect : undefined
+      multiSelect:
+        typeof rawQuestion.multiSelect === "boolean" ? rawQuestion.multiSelect : undefined
     };
   });
   if (questions.some((question) => question === undefined)) {

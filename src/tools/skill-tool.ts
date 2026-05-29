@@ -24,10 +24,7 @@ export function parseSkillToolInput(input: Record<string, unknown>): SkillToolRe
   return { skill, args };
 }
 
-export function executeSkillTool(input: {
-  request: SkillToolRequest;
-  skillsRoot: string;
-}): string {
+export function executeSkillTool(input: { request: SkillToolRequest; skillsRoot: string }): string {
   const paths = {
     root: path.dirname(input.skillsRoot),
     configFile: path.join(path.dirname(input.skillsRoot), "config.yaml"),
@@ -58,7 +55,10 @@ function formatSkillSelection(skill: SkillRecord, args: string | undefined): str
     args ? `Args: ${args}` : undefined,
     "",
     skill.body ?? ""
-  ].filter((line): line is string => line !== undefined).join("\n").trimEnd();
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n")
+    .trimEnd();
 }
 
 function readOptionalString(value: unknown, label: string): string | undefined {

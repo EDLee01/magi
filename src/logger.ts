@@ -12,7 +12,16 @@
  * the agent.
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeSync
+} from "node:fs";
 import path from "node:path";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -46,7 +55,9 @@ export function createJsonLogger(options: LoggerOptions): Logger {
   const minThreshold = LEVEL_ORDER[minLevel];
 
   // Ensure parent dir exists
-  try { mkdirSync(path.dirname(filePath), { recursive: true }); } catch {}
+  try {
+    mkdirSync(path.dirname(filePath), { recursive: true });
+  } catch {}
   let fd: number | undefined;
   let bytesWritten = currentSize(filePath);
 
@@ -59,7 +70,9 @@ export function createJsonLogger(options: LoggerOptions): Logger {
   function rotateIfNeeded(): void {
     if (bytesWritten < maxBytes) return;
     if (fd !== undefined) {
-      try { closeSync(fd); } catch {}
+      try {
+        closeSync(fd);
+      } catch {}
       fd = undefined;
     }
     // Shift .N → .N+1, drop oldest
@@ -68,14 +81,20 @@ export function createJsonLogger(options: LoggerOptions): Logger {
       const dst = `${filePath}.${i + 1}`;
       if (existsSync(src)) {
         if (i + 1 > maxFiles) {
-          try { unlinkSync(src); } catch {}
+          try {
+            unlinkSync(src);
+          } catch {}
         } else {
-          try { renameSync(src, dst); } catch {}
+          try {
+            renameSync(src, dst);
+          } catch {}
         }
       }
     }
     if (existsSync(filePath)) {
-      try { renameSync(filePath, `${filePath}.1`); } catch {}
+      try {
+        renameSync(filePath, `${filePath}.1`);
+      } catch {}
     }
     bytesWritten = 0;
   }
@@ -104,7 +123,9 @@ export function createJsonLogger(options: LoggerOptions): Logger {
     error: (msg, ctx) => write("error", msg, ctx),
     close: () => {
       if (fd !== undefined) {
-        try { closeSync(fd); } catch {}
+        try {
+          closeSync(fd);
+        } catch {}
         fd = undefined;
       }
     }

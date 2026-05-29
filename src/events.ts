@@ -70,7 +70,10 @@ export function formatEventList(events: MagiEventView[]): string {
   }
   return [
     "Recent events:",
-    ...events.map((event) => `${event.createdAt} ${event.action}${event.target ? ` ${event.target}` : ""} - ${event.message}`)
+    ...events.map(
+      (event) =>
+        `${event.createdAt} ${event.action}${event.target ? ` ${event.target}` : ""} - ${event.message}`
+    )
   ].join("\n");
 }
 
@@ -96,14 +99,18 @@ export function formatEventMessage(event: StoredAuditRecord): string {
     return "config updated";
   }
   if (event.action === "agent.user_question.answered") {
-    const count = typeof metadata.questionCount === "number" ? ` (${metadata.questionCount} questions)` : "";
+    const count =
+      typeof metadata.questionCount === "number" ? ` (${metadata.questionCount} questions)` : "";
     return `user question answered${count}`;
   }
   if (event.action === "agent.user_question.pending") {
     const toolUseId = typeof metadata.toolUseId === "string" ? ` ${metadata.toolUseId}` : "";
     return `user question pending${toolUseId}`;
   }
-  if (event.action === "agent.user_question.resolved" || event.action === "control.user_question.resolved") {
+  if (
+    event.action === "agent.user_question.resolved" ||
+    event.action === "control.user_question.resolved"
+  ) {
     const toolUseId = typeof metadata.toolUseId === "string" ? ` ${metadata.toolUseId}` : "";
     return `user question resolved${toolUseId}`;
   }
@@ -111,7 +118,10 @@ export function formatEventMessage(event: StoredAuditRecord): string {
     const toolUseId = typeof metadata.toolUseId === "string" ? ` ${metadata.toolUseId}` : "";
     return `user question timed out${toolUseId}`;
   }
-  if (event.action === "agent.user_question.cancelled" || event.action === "control.user_question.cancelled") {
+  if (
+    event.action === "agent.user_question.cancelled" ||
+    event.action === "control.user_question.cancelled"
+  ) {
     const toolUseId = typeof metadata.toolUseId === "string" ? ` ${metadata.toolUseId}` : "";
     return `user question cancelled${toolUseId}`;
   }
@@ -127,7 +137,10 @@ export function formatEventMessage(event: StoredAuditRecord): string {
   }
   if (event.action === "agent.tool_context.reported") {
     const toolCount = typeof metadata.toolCount === "number" ? metadata.toolCount : undefined;
-    const estimatedTokens = typeof metadata.estimatedSchemaTokens === "number" ? metadata.estimatedSchemaTokens : undefined;
+    const estimatedTokens =
+      typeof metadata.estimatedSchemaTokens === "number"
+        ? metadata.estimatedSchemaTokens
+        : undefined;
     return `tool context ${toolCount ?? "?"} tools${estimatedTokens !== undefined ? ` ~${estimatedTokens} tokens` : ""}`;
   }
   if (event.action === "agent.text.delta") {
@@ -136,11 +149,14 @@ export function formatEventMessage(event: StoredAuditRecord): string {
   }
   if (event.action === "agent.assistant.message") {
     const toolUseCount = typeof metadata.toolUseCount === "number" ? metadata.toolUseCount : 0;
-    return toolUseCount > 0 ? `assistant requested ${toolUseCount} tools` : "assistant message recorded";
+    return toolUseCount > 0
+      ? `assistant requested ${toolUseCount} tools`
+      : "assistant message recorded";
   }
   if (event.action === "agent.usage.reported") {
     const inputTokens = typeof metadata.inputTokens === "number" ? metadata.inputTokens : undefined;
-    const outputTokens = typeof metadata.outputTokens === "number" ? metadata.outputTokens : undefined;
+    const outputTokens =
+      typeof metadata.outputTokens === "number" ? metadata.outputTokens : undefined;
     return inputTokens !== undefined && outputTokens !== undefined
       ? `usage input=${inputTokens} output=${outputTokens}`
       : "usage reported";
@@ -154,7 +170,8 @@ export function formatEventMessage(event: StoredAuditRecord): string {
   }
   if (event.action === "agent.provider.fallback") {
     const from = typeof metadata.fromProvider === "string" ? metadata.fromProvider : "unknown";
-    const to = typeof metadata.toProvider === "string" ? metadata.toProvider : event.target ?? "unknown";
+    const to =
+      typeof metadata.toProvider === "string" ? metadata.toProvider : (event.target ?? "unknown");
     return `provider fallback ${from} -> ${to}`;
   }
   if (event.action === "agent.approval.requested") {
@@ -165,14 +182,18 @@ export function formatEventMessage(event: StoredAuditRecord): string {
     return `approval pending${toolUseId}`;
   }
   if (event.action === "agent.approval.resolved" || event.action === "control.approval.resolved") {
-    const approved = typeof metadata.approved === "boolean" ? ` ${metadata.approved ? "approved" : "denied"}` : "";
+    const approved =
+      typeof metadata.approved === "boolean" ? ` ${metadata.approved ? "approved" : "denied"}` : "";
     return `approval resolved${approved}`;
   }
   if (event.action === "agent.approval.timeout") {
     const toolUseId = typeof metadata.toolUseId === "string" ? ` ${metadata.toolUseId}` : "";
     return `approval timed out${toolUseId}`;
   }
-  if (event.action === "agent.approval.cancelled" || event.action === "control.approval.cancelled") {
+  if (
+    event.action === "agent.approval.cancelled" ||
+    event.action === "control.approval.cancelled"
+  ) {
     const toolUseId = typeof metadata.toolUseId === "string" ? ` ${metadata.toolUseId}` : "";
     return `approval cancelled${toolUseId}`;
   }
@@ -222,12 +243,21 @@ export function formatEventMessage(event: StoredAuditRecord): string {
 function eventCategory(event: StoredAuditRecord): MagiEventCategory {
   const action = event.action;
   const target = event.target ?? "";
-  if (action.startsWith("agent.query") || action === "agent.request.started" || action === "agent.tool_context.reported" || action === "agent.text.delta" || action === "agent.assistant.message" || action === "agent.usage.reported") return "query";
+  if (
+    action.startsWith("agent.query") ||
+    action === "agent.request.started" ||
+    action === "agent.tool_context.reported" ||
+    action === "agent.text.delta" ||
+    action === "agent.assistant.message" ||
+    action === "agent.usage.reported"
+  )
+    return "query";
   if (action.startsWith("agent.tool")) {
     return target.startsWith("Git") ? "git" : "tool";
   }
   if (action.startsWith("agent.hook")) return "hook";
-  if (action.startsWith("agent.approval") || action.startsWith("agent.permission")) return "approval";
+  if (action.startsWith("agent.approval") || action.startsWith("agent.permission"))
+    return "approval";
   if (action.startsWith("agent.user_question")) return "question";
   if (action.startsWith("agent.user_message")) return "message";
   if (action.startsWith("agent.todo")) return "todo";
@@ -247,7 +277,8 @@ function eventCategory(event: StoredAuditRecord): MagiEventCategory {
 function eventStatus(event: StoredAuditRecord): MagiEventStatus {
   const action = event.action;
   if (action.endsWith(".started")) return "started";
-  if (action.endsWith(".completed") || action.endsWith(".executed") || action.endsWith(".loaded")) return "completed";
+  if (action.endsWith(".completed") || action.endsWith(".executed") || action.endsWith(".loaded"))
+    return "completed";
   if (action.endsWith(".failed")) return "failed";
   if (action.endsWith(".requested")) return "requested";
   if (action.endsWith(".pending")) return "pending";
@@ -258,7 +289,8 @@ function eventStatus(event: StoredAuditRecord): MagiEventStatus {
   if (action.endsWith(".updated")) return "updated";
   if (action.endsWith(".sent")) return "sent";
   if (action.endsWith(".answered")) return "answered";
-  if (action.endsWith(".recorded") || action.endsWith(".created") || action.endsWith(".append")) return "recorded";
+  if (action.endsWith(".recorded") || action.endsWith(".created") || action.endsWith(".append"))
+    return "recorded";
   if (action.endsWith(".approved")) return "completed";
   return "info";
 }

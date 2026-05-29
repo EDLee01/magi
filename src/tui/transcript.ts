@@ -29,7 +29,10 @@ export interface TuiTranscriptState {
 }
 
 export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEntry | undefined {
-  const toolUseId = readString(event.metadata.toolUseId) ?? readString(event.metadata.id) ?? readString(event.metadata.toolCallId);
+  const toolUseId =
+    readString(event.metadata.toolUseId) ??
+    readString(event.metadata.id) ??
+    readString(event.metadata.toolCallId);
   const target = event.target ?? "unknown";
   const suffix = toolUseId ? ` (${toolUseId})` : "";
 
@@ -38,8 +41,15 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
     return undefined;
   }
   if (event.action === "agent.plan.created") {
-    const actions = Array.isArray(event.metadata.actions) ? event.metadata.actions.length : undefined;
-    return transcriptEntry(event, "query", "local plan created", actions !== undefined ? `${actions} actions` : undefined);
+    const actions = Array.isArray(event.metadata.actions)
+      ? event.metadata.actions.length
+      : undefined;
+    return transcriptEntry(
+      event,
+      "query",
+      "local plan created",
+      actions !== undefined ? `${actions} actions` : undefined
+    );
   }
   if (event.action === "agent.request.started") {
     return undefined;
@@ -51,7 +61,9 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
     const detail = [
       estimatedTokens !== undefined ? `~${estimatedTokens} schema tokens` : undefined,
       deferred !== undefined ? `${deferred} deferred` : undefined
-    ].filter((item): item is string => Boolean(item)).join(", ");
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join(", ");
     return transcriptEntry(event, "tools", `${toolCount ?? "?"} exposed`, detail || undefined);
   }
   if (event.action === "tool.file.read") {
@@ -65,14 +77,21 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
   }
   if (event.action === "tool.shell.run") {
     const exitCode = readNumber(event.metadata.exitCode);
-    return transcriptEntry(event, "tool", "Bash completed", exitCode !== undefined ? `exit=${exitCode}` : undefined);
+    return transcriptEntry(
+      event,
+      "tool",
+      "Bash completed",
+      exitCode !== undefined ? `exit=${exitCode}` : undefined
+    );
   }
   if (event.action === "tool.git.summary") {
     return transcriptEntry(event, "git", "summary completed");
   }
   if (event.action === "agent.assistant.message") {
     const count = readNumber(event.metadata.toolUseCount) ?? 0;
-    return count > 0 ? transcriptEntry(event, "assistant", `requested ${count} ${count === 1 ? "tool" : "tools"}`) : undefined;
+    return count > 0
+      ? transcriptEntry(event, "assistant", `requested ${count} ${count === 1 ? "tool" : "tools"}`)
+      : undefined;
   }
   if (event.action === "agent.tool.use") {
     return transcriptEntry(event, "tool", `${target} requested`, suffixText(suffix));
@@ -91,7 +110,12 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
   }
   if (event.action === "agent.approval.pending") {
     const reason = readString(event.metadata.reason);
-    return transcriptEntry(event, "approval", `waiting for ${target}${suffix}`, reason ? `reason: ${reason}` : undefined);
+    return transcriptEntry(
+      event,
+      "approval",
+      `waiting for ${target}${suffix}`,
+      reason ? `reason: ${reason}` : undefined
+    );
   }
   if (event.action === "agent.approval.resolved" || event.action === "control.approval.resolved") {
     const approved = readBoolean(event.metadata.approved);
@@ -101,24 +125,43 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
   if (event.action === "agent.approval.timeout") {
     return transcriptEntry(event, "approval", `timed out ${target}`, suffixText(suffix));
   }
-  if (event.action === "agent.approval.cancelled" || event.action === "control.approval.cancelled") {
+  if (
+    event.action === "agent.approval.cancelled" ||
+    event.action === "control.approval.cancelled"
+  ) {
     return transcriptEntry(event, "approval", `cancelled ${target}`, suffixText(suffix));
   }
   if (event.action === "agent.user_question.pending") {
     const count = readNumber(event.metadata.questionCount);
-    return transcriptEntry(event, "question", `waiting for answer${count ? ` (${count})` : ""}${suffix}`, "choose an option below");
+    return transcriptEntry(
+      event,
+      "question",
+      `waiting for answer${count ? ` (${count})` : ""}${suffix}`,
+      "choose an option below"
+    );
   }
-  if (event.action === "agent.user_question.resolved" || event.action === "control.user_question.resolved") {
+  if (
+    event.action === "agent.user_question.resolved" ||
+    event.action === "control.user_question.resolved"
+  ) {
     return transcriptEntry(event, "question", "resolved", suffixText(suffix));
   }
   if (event.action === "agent.user_question.answered") {
     const count = readNumber(event.metadata.questionCount);
-    return transcriptEntry(event, "question", `answered${count ? ` (${count})` : ""}`, suffixText(suffix));
+    return transcriptEntry(
+      event,
+      "question",
+      `answered${count ? ` (${count})` : ""}`,
+      suffixText(suffix)
+    );
   }
   if (event.action === "agent.user_question.timeout") {
     return transcriptEntry(event, "question", "timed out", suffixText(suffix));
   }
-  if (event.action === "agent.user_question.cancelled" || event.action === "control.user_question.cancelled") {
+  if (
+    event.action === "agent.user_question.cancelled" ||
+    event.action === "control.user_question.cancelled"
+  ) {
     return transcriptEntry(event, "question", "cancelled", suffixText(suffix));
   }
   if (event.action === "agent.user_message.sent") {
@@ -126,7 +169,12 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
   }
   if (event.action === "agent.todo.updated") {
     const count = readNumber(event.metadata.todoCount);
-    return transcriptEntry(event, "todo", "updated", count !== undefined ? `${count} items` : undefined);
+    return transcriptEntry(
+      event,
+      "todo",
+      "updated",
+      count !== undefined ? `${count} items` : undefined
+    );
   }
   if (event.action === "agent.config.updated") {
     return transcriptEntry(event, "config", `updated ${target}`);
@@ -139,7 +187,12 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
     const errorKind = readString(event.metadata.errorKind);
     const from = fromModel ? `${fromProvider}/${fromModel}` : fromProvider;
     const to = toModel ? `${toProvider}/${toModel}` : toProvider;
-    return transcriptEntry(event, "fallback", `${from} -> ${to}`, errorKind ? `error: ${errorKind}` : undefined);
+    return transcriptEntry(
+      event,
+      "fallback",
+      `${from} -> ${to}`,
+      errorKind ? `error: ${errorKind}` : undefined
+    );
   }
   if (event.action === "agent.context.compacted") {
     return transcriptEntry(event, "context", "compacted", event.target);
@@ -178,11 +231,14 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
   return undefined;
 }
 
-export function buildTuiTranscriptState(events: MagiEventView[], input: {
-  sessionId?: string;
-  jobId?: string;
-  limit?: number;
-} = {}): TuiTranscriptState {
+export function buildTuiTranscriptState(
+  events: MagiEventView[],
+  input: {
+    sessionId?: string;
+    jobId?: string;
+    limit?: number;
+  } = {}
+): TuiTranscriptState {
   const ordered = [...events].sort((a, b) => a.id - b.id);
   const visibleEntries = ordered
     .map(formatTuiTranscriptEntry)
@@ -194,8 +250,17 @@ export function buildTuiTranscriptState(events: MagiEventView[], input: {
     jobId: input.jobId ?? findLastJobId(ordered),
     entries,
     pending: currentPendingInteractions(ordered),
-    completed: ordered.filter((event) => event.status === "completed" || event.status === "resolved" || event.status === "answered").length,
-    failed: ordered.filter((event) => event.status === "failed" || event.status === "denied" || event.status === "timeout" || event.status === "cancelled").length,
+    completed: ordered.filter(
+      (event) =>
+        event.status === "completed" || event.status === "resolved" || event.status === "answered"
+    ).length,
+    failed: ordered.filter(
+      (event) =>
+        event.status === "failed" ||
+        event.status === "denied" ||
+        event.status === "timeout" ||
+        event.status === "cancelled"
+    ).length,
     lastEventId: ordered.at(-1)?.id
   };
 }
@@ -212,7 +277,9 @@ export function formatTuiTranscriptStatus(state: TuiTranscriptState): string {
   return [
     "Transcript:",
     header,
-    state.pending.length > 0 ? formatPendingTuiInteractions(state.pending) : "Pending interactions: none",
+    state.pending.length > 0
+      ? formatPendingTuiInteractions(state.pending)
+      : "Pending interactions: none",
     ...state.entries.map((entry) => {
       const detail = entry.detail ? ` - ${entry.detail}` : "";
       return `${entry.timestamp} ${entry.channel.padEnd(9)} ${entry.status.padEnd(9)} ${entry.title}${detail}`;
@@ -220,7 +287,10 @@ export function formatTuiTranscriptStatus(state: TuiTranscriptState): string {
   ].join("\n");
 }
 
-export function formatTuiLiveEvent(event: MagiEventView, options: { showToolTrace?: boolean } = {}): string | undefined {
+export function formatTuiLiveEvent(
+  event: MagiEventView,
+  options: { showToolTrace?: boolean } = {}
+): string | undefined {
   if (isNoisyLiveEvent(event) && options.showToolTrace !== true) {
     return undefined;
   }
@@ -229,7 +299,11 @@ export function formatTuiLiveEvent(event: MagiEventView, options: { showToolTrac
     return undefined;
   }
   const detail = entry.detail
-    ? entry.detail.startsWith("(") || entry.detail.startsWith("on ") || entry.detail.startsWith("exit=") ? ` ${entry.detail}` : ` - ${entry.detail}`
+    ? entry.detail.startsWith("(") ||
+      entry.detail.startsWith("on ") ||
+      entry.detail.startsWith("exit=")
+      ? ` ${entry.detail}`
+      : ` - ${entry.detail}`
     : "";
   const channelColor = getChannelColor(entry.channel);
   const statusIcon = getStatusIcon(entry.status);
@@ -243,7 +317,13 @@ function isNoisyLiveEvent(event: MagiEventView): boolean {
   if (event.action === "agent.tool.use" || event.action === "agent.tool.completed") {
     return true;
   }
-  if (event.action === "tool.file.read" || event.action === "tool.file.write.approved" || event.action === "tool.search" || event.action === "tool.shell.run" || event.action === "tool.git.summary") {
+  if (
+    event.action === "tool.file.read" ||
+    event.action === "tool.file.write.approved" ||
+    event.action === "tool.search" ||
+    event.action === "tool.shell.run" ||
+    event.action === "tool.git.summary"
+  ) {
     return true;
   }
   return false;
@@ -279,7 +359,13 @@ function currentPendingInteractions(events: MagiEventView[]): MagiEventView[] {
     const key = `${event.jobId ?? ""}\0${kind}\0${toolUseId}`;
     if (event.status === "pending") {
       pending.set(key, event);
-    } else if (event.status === "resolved" || event.status === "answered" || event.status === "timeout" || event.status === "cancelled" || event.status === "denied") {
+    } else if (
+      event.status === "resolved" ||
+      event.status === "answered" ||
+      event.status === "timeout" ||
+      event.status === "cancelled" ||
+      event.status === "denied"
+    ) {
       pending.delete(key);
     }
   }
@@ -309,36 +395,61 @@ function suffixText(value: string): string | undefined {
 
 function getChannelColor(channel: string): string {
   switch (channel) {
-    case "tool": return "\x1b[36m"; // cyan
-    case "tools": return "\x1b[36m"; // cyan
-    case "query": return "\x1b[34m"; // blue
-    case "approval": return "\x1b[33m"; // yellow
-    case "question": return "\x1b[33m"; // yellow
-    case "git": return "\x1b[35m"; // magenta
-    case "hook": return "\x1b[90m"; // gray
-    case "memory": return "\x1b[32m"; // green
-    case "fallback": return "\x1b[31m"; // red
-    case "context": return "\x1b[90m"; // gray
-    case "config": return "\x1b[90m"; // gray
-    case "todo": return "\x1b[32m"; // green
-    case "assistant": return "\x1b[34m"; // blue
-    case "message": return "\x1b[37m"; // white
-    default: return "\x1b[39m"; // default
+    case "tool":
+      return "\x1b[36m"; // cyan
+    case "tools":
+      return "\x1b[36m"; // cyan
+    case "query":
+      return "\x1b[34m"; // blue
+    case "approval":
+      return "\x1b[33m"; // yellow
+    case "question":
+      return "\x1b[33m"; // yellow
+    case "git":
+      return "\x1b[35m"; // magenta
+    case "hook":
+      return "\x1b[90m"; // gray
+    case "memory":
+      return "\x1b[32m"; // green
+    case "fallback":
+      return "\x1b[31m"; // red
+    case "context":
+      return "\x1b[90m"; // gray
+    case "config":
+      return "\x1b[90m"; // gray
+    case "todo":
+      return "\x1b[32m"; // green
+    case "assistant":
+      return "\x1b[34m"; // blue
+    case "message":
+      return "\x1b[37m"; // white
+    default:
+      return "\x1b[39m"; // default
   }
 }
 
 function getStatusIcon(status: string): string {
   switch (status) {
-    case "started": return "▶";
-    case "completed": return "✓";
-    case "resolved": return "✓";
-    case "answered": return "✓";
-    case "failed": return "✗";
-    case "denied": return "✗";
-    case "timeout": return "⏱";
-    case "cancelled": return "⊘";
-    case "pending": return "⏳";
-    default: return "·";
+    case "started":
+      return "▶";
+    case "completed":
+      return "✓";
+    case "resolved":
+      return "✓";
+    case "answered":
+      return "✓";
+    case "failed":
+      return "✗";
+    case "denied":
+      return "✗";
+    case "timeout":
+      return "⏱";
+    case "cancelled":
+      return "⊘";
+    case "pending":
+      return "⏳";
+    default:
+      return "·";
   }
 }
 

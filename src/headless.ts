@@ -78,11 +78,12 @@ async function runHeadlessPromptAsync(input: {
 }): Promise<HeadlessResult> {
   const shouldPersist = input.persistSession ?? true;
   const sessionId = shouldPersist
-    ? input.sessionId ?? input.store.createSession({
-      title: input.sessionName ?? input.prompt.slice(0, 80),
-      cwd: input.cwd,
-      metadata: { mode: "headless" }
-    })
+    ? (input.sessionId ??
+      input.store.createSession({
+        title: input.sessionName ?? input.prompt.slice(0, 80),
+        cwd: input.cwd,
+        metadata: { mode: "headless" }
+      }))
     : randomUUID();
 
   if (!shouldPersist) {
@@ -94,26 +95,30 @@ async function runHeadlessPromptAsync(input: {
   return runPersistedHeadless(input, sessionId, jobId);
 }
 
-async function runEphemeralHeadless(input: {
-  prompt: string;
-  cwd: string;
-  store: SessionStore;
-  config: MagiConfig;
-  env?: NodeJS.ProcessEnv;
-  paths?: MagiPaths;
-  stateRoot?: string;
-  modelAlias?: string;
-  jobId?: string;
-  collectEvents?: boolean;
-  permissionMode?: ToolPermissionMode;
-  userQuestionResolver?: UserQuestionResolver;
-  userMessageSink?: UserMessageSink;
-  activeInteractions?: ActiveInteractionRegistry;
-  interactionTimeoutMs?: number;
-  signal?: AbortSignal;
-  onStreamEvent?: (event: AgentQueryEvent) => void;
-  stream?: boolean;
-}, sessionId: string, jobId: string): Promise<HeadlessResult> {
+async function runEphemeralHeadless(
+  input: {
+    prompt: string;
+    cwd: string;
+    store: SessionStore;
+    config: MagiConfig;
+    env?: NodeJS.ProcessEnv;
+    paths?: MagiPaths;
+    stateRoot?: string;
+    modelAlias?: string;
+    jobId?: string;
+    collectEvents?: boolean;
+    permissionMode?: ToolPermissionMode;
+    userQuestionResolver?: UserQuestionResolver;
+    userMessageSink?: UserMessageSink;
+    activeInteractions?: ActiveInteractionRegistry;
+    interactionTimeoutMs?: number;
+    signal?: AbortSignal;
+    onStreamEvent?: (event: AgentQueryEvent) => void;
+    stream?: boolean;
+  },
+  sessionId: string,
+  jobId: string
+): Promise<HeadlessResult> {
   const routeCtx = buildRouteContext(input);
   const resolvedAlias = resolveAutoAlias(input.modelAlias, input.config, input.prompt, routeCtx);
   if (resolvedAlias && hasProviderRoute(input.config, resolvedAlias)) {
@@ -122,8 +127,7 @@ async function runEphemeralHeadless(input: {
       config: input.config,
       registry,
       alias: resolvedAlias,
-      messages: [textMessage("user", input.prompt)]
-      ,
+      messages: [textMessage("user", input.prompt)],
       signal: input.signal
     });
     return {
@@ -137,30 +141,35 @@ async function runEphemeralHeadless(input: {
   return {
     sessionId,
     jobId,
-    message: "No provider is configured. Run 'magi init' to set up a provider + API key, then try again."
+    message:
+      "No provider is configured. Run 'magi init' to set up a provider + API key, then try again."
   };
 }
 
-async function runPersistedHeadless(input: {
-  prompt: string;
-  cwd: string;
-  store: SessionStore;
-  config: MagiConfig;
-  env?: NodeJS.ProcessEnv;
-  paths?: MagiPaths;
-  stateRoot?: string;
-  modelAlias?: string;
-  jobId?: string;
-  collectEvents?: boolean;
-  permissionMode?: ToolPermissionMode;
-  userQuestionResolver?: UserQuestionResolver;
-  userMessageSink?: UserMessageSink;
-  activeInteractions?: ActiveInteractionRegistry;
-  interactionTimeoutMs?: number;
-  signal?: AbortSignal;
-  onStreamEvent?: (event: AgentQueryEvent) => void;
-  stream?: boolean;
-}, sessionId: string, jobId: string): Promise<HeadlessResult> {
+async function runPersistedHeadless(
+  input: {
+    prompt: string;
+    cwd: string;
+    store: SessionStore;
+    config: MagiConfig;
+    env?: NodeJS.ProcessEnv;
+    paths?: MagiPaths;
+    stateRoot?: string;
+    modelAlias?: string;
+    jobId?: string;
+    collectEvents?: boolean;
+    permissionMode?: ToolPermissionMode;
+    userQuestionResolver?: UserQuestionResolver;
+    userMessageSink?: UserMessageSink;
+    activeInteractions?: ActiveInteractionRegistry;
+    interactionTimeoutMs?: number;
+    signal?: AbortSignal;
+    onStreamEvent?: (event: AgentQueryEvent) => void;
+    stream?: boolean;
+  },
+  sessionId: string,
+  jobId: string
+): Promise<HeadlessResult> {
   const local = await runLocalHeadlessAgent({
     prompt: input.prompt,
     cwd: input.cwd,
@@ -200,7 +209,15 @@ async function runPersistedHeadless(input: {
   }
 
   const persistedRouteCtx = buildRouteContext(input, sessionId);
-  const modelAlias = resolveAutoAlias(input.modelAlias, input.config, input.prompt, persistedRouteCtx, input.store, sessionId, jobId);
+  const modelAlias = resolveAutoAlias(
+    input.modelAlias,
+    input.config,
+    input.prompt,
+    persistedRouteCtx,
+    input.store,
+    sessionId,
+    jobId
+  );
   if (modelAlias && hasProviderRoute(input.config, modelAlias)) {
     const registry = buildProviderRegistry({ config: input.config, env: input.env });
     const routes = resolveFallbackChain(input.config, modelAlias).map((candidate) => {
@@ -216,10 +233,10 @@ async function runPersistedHeadless(input: {
     });
     const compactionRoute = input.config.context.compactionModel
       ? resolveCompactionRoute({
-        config: input.config,
-        registry,
-        modelRef: input.config.context.compactionModel
-      })
+          config: input.config,
+          registry,
+          modelRef: input.config.context.compactionModel
+        })
       : undefined;
     const queryEngine = new QueryEngine({
       store: input.store,
@@ -263,10 +280,18 @@ async function runPersistedHeadless(input: {
         maxResults: input.config.memory.maxResults,
         scopes: input.config.memory.scopes,
         selectionRoute: input.config.memory.selectionModel
-          ? resolveSelectionRoute({ config: input.config, registry, modelRef: input.config.memory.selectionModel })
+          ? resolveSelectionRoute({
+              config: input.config,
+              registry,
+              modelRef: input.config.memory.selectionModel
+            })
           : undefined,
         writeDecisionRoute: input.config.memory.selectionModel
-          ? resolveSelectionRoute({ config: input.config, registry, modelRef: input.config.memory.selectionModel })
+          ? resolveSelectionRoute({
+              config: input.config,
+              registry,
+              modelRef: input.config.memory.selectionModel
+            })
           : undefined
       }
     });
@@ -309,7 +334,8 @@ async function runPersistedHeadless(input: {
   return {
     sessionId,
     jobId,
-    message: "No provider is configured for this prompt.\n\nQuick start:\n  1. Set ANTHROPIC_AUTH_TOKEN (or your provider's API key) in your environment\n  2. Run 'magi init' to set up a default provider + model alias\n  3. Or run 'magi config' to see current config\n\nYour prompt is saved — re-run after configuring."
+    message:
+      "No provider is configured for this prompt.\n\nQuick start:\n  1. Set ANTHROPIC_AUTH_TOKEN (or your provider's API key) in your environment\n  2. Run 'magi init' to set up a default provider + model alias\n  3. Or run 'magi config' to see current config\n\nYour prompt is saved — re-run after configuring."
   };
 }
 
@@ -330,7 +356,9 @@ function resolveCompactionRoute(input: {
   const resolved = resolveModelAlias(input.config, input.modelRef);
   const adapter = input.registry.get(resolved.providerName);
   if (!adapter) {
-    throw new Error(`Provider ${resolved.providerName} is not configured for context.compactionModel`);
+    throw new Error(
+      `Provider ${resolved.providerName} is not configured for context.compactionModel`
+    );
   }
   return {
     providerName: resolved.providerName,
@@ -418,7 +446,10 @@ function buildSpawnSubAgent(input: {
       if (request.target) {
         try {
           const { dispatchToPeer, resolvePeerByName } = await import("./control/peer-client.js");
-          const baseUrl = await resolvePeerByName(request.target, { timeoutMs: 2500, store: input.store });
+          const baseUrl = await resolvePeerByName(request.target, {
+            timeoutMs: 2500,
+            store: input.store
+          });
           if (!baseUrl) {
             return {
               agentId,
@@ -440,9 +471,11 @@ function buildSpawnSubAgent(input: {
           const result = await dispatchToPeer({
             peer: {
               baseUrl,
-              deviceId: peerToken?.metadata && typeof (peerToken.metadata as Record<string, unknown>).deviceId === "string"
-                ? (peerToken.metadata as Record<string, unknown>).deviceId as string
-                : undefined,
+              deviceId:
+                peerToken?.metadata &&
+                typeof (peerToken.metadata as Record<string, unknown>).deviceId === "string"
+                  ? ((peerToken.metadata as Record<string, unknown>).deviceId as string)
+                  : undefined,
               token: peerToken?.accessToken
             },
             prompt: subAgentPrompt,
@@ -472,7 +505,11 @@ function buildSpawnSubAgent(input: {
         const subSessionId = input.store.createSession({
           title: request.description,
           cwd: input.cwd,
-          metadata: { mode: "sub-agent", parentAgentId: agentId, subagentType: request.subagentType }
+          metadata: {
+            mode: "sub-agent",
+            parentAgentId: agentId,
+            subagentType: request.subagentType
+          }
         });
         input.store.recordJob({
           id: agentId,
@@ -502,40 +539,50 @@ function buildSpawnSubAgent(input: {
           jobId: agentId,
           modelAlias: subModelAlias,
           persistSession: true
-        }).then(async (result) => {
-          input.store.updateJobStatus({
-            id: agentId,
-            status: "completed",
-            metadata: { subagentType: request.subagentType, description: request.description, result: result.message }
+        })
+          .then(async (result) => {
+            input.store.updateJobStatus({
+              id: agentId,
+              status: "completed",
+              metadata: {
+                subagentType: request.subagentType,
+                description: request.description,
+                result: result.message
+              }
+            });
+            await fireSubAgentHook({
+              event: "subagent_stop",
+              config: input.config,
+              env: input.env,
+              cwd: input.cwd,
+              agentId,
+              agentType: request.subagentType,
+              description: request.description,
+              agentResult: result.message
+            });
+          })
+          .catch(async (error) => {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            input.store.updateJobStatus({
+              id: agentId,
+              status: "failed",
+              metadata: {
+                subagentType: request.subagentType,
+                description: request.description,
+                error: errorMsg
+              }
+            });
+            await fireSubAgentHook({
+              event: "subagent_stop",
+              config: input.config,
+              env: input.env,
+              cwd: input.cwd,
+              agentId,
+              agentType: request.subagentType,
+              description: request.description,
+              error: errorMsg
+            });
           });
-          await fireSubAgentHook({
-            event: "subagent_stop",
-            config: input.config,
-            env: input.env,
-            cwd: input.cwd,
-            agentId,
-            agentType: request.subagentType,
-            description: request.description,
-            agentResult: result.message
-          });
-        }).catch(async (error) => {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          input.store.updateJobStatus({
-            id: agentId,
-            status: "failed",
-            metadata: { subagentType: request.subagentType, description: request.description, error: errorMsg }
-          });
-          await fireSubAgentHook({
-            event: "subagent_stop",
-            config: input.config,
-            env: input.env,
-            cwd: input.cwd,
-            agentId,
-            agentType: request.subagentType,
-            description: request.description,
-            error: errorMsg
-          });
-        });
         return { agentId, status: "running" };
       }
 
@@ -599,7 +646,7 @@ function buildSpawnSubAgent(input: {
 
 function wrapSubAgentPrompt(subagentType: string, prompt: string): string {
   const roleInstructions: Record<string, string> = {
-    "verification": [
+    verification: [
       "You are a VERIFICATION sub-agent. Your job is to verify implementation work and return a verdict.",
       "",
       "Process:",
@@ -617,12 +664,12 @@ function wrapSubAgentPrompt(subagentType: string, prompt: string): string {
       "- <issue with file:line reference>",
       ""
     ].join("\n"),
-    "explore": [
+    explore: [
       "You are an EXPLORE sub-agent. Quickly find and report relevant code without making changes.",
       "Use Glob, Grep, and Read. Do not modify files. Return a concise summary with file:line references.",
       ""
     ].join("\n"),
-    "plan": [
+    plan: [
       "You are a PLAN sub-agent. Design an implementation strategy.",
       "Read relevant code with Read, Grep, Glob. Do not modify files. Return a step-by-step plan with critical files identified and trade-offs considered.",
       ""
@@ -633,12 +680,15 @@ function wrapSubAgentPrompt(subagentType: string, prompt: string): string {
   return `${prefix}\n---\n${prompt}`;
 }
 
-function buildRouteContext(input: {
-  config: MagiConfig;
-  store: SessionStore;
-  permissionMode?: ToolPermissionMode;
-  prompt: string;
-}, sessionId?: string): RouteContext {
+function buildRouteContext(
+  input: {
+    config: MagiConfig;
+    store: SessionStore;
+    permissionMode?: ToolPermissionMode;
+    prompt: string;
+  },
+  sessionId?: string
+): RouteContext {
   const ctx: RouteContext = {
     isPlanMode: input.permissionMode === "plan"
   };
@@ -664,10 +714,10 @@ function buildRouteContext(input: {
 function pickSubAgentAlias(subagentType: string, parentAlias?: string): string {
   // Map known subagent types to aliases. Falls back to parent alias or "main".
   const aliasMap: Record<string, string> = {
-    "Explore": "fast",
+    Explore: "fast",
     "general-purpose": parentAlias ?? "main",
-    "verification": "review",
-    "Plan": "deep",
+    verification: "review",
+    Plan: "deep",
     "magi-guide": "fast",
     "statusline-setup": "fast"
   };

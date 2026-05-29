@@ -16,7 +16,7 @@ export async function showSlashMenu(input: {
     stdin: input.stdin,
     stdout: input.stdout,
     title: "commands",
-    items: input.items.map(item => ({
+    items: input.items.map((item) => ({
       label: item.name,
       value: `/${item.name}`,
       description: item.description

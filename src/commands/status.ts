@@ -13,8 +13,11 @@ export const command = {
       ? input.store.listSessionAuditEvents(input.sessionId, 50)
       : input.store.listAuditEvents(50);
     const views = recentRecords.map(toEventView);
-    const pending = views
-      .filter((event) => event.status === "pending" && (event.category === "approval" || event.category === "question"));
+    const pending = views.filter(
+      (event) =>
+        event.status === "pending" &&
+        (event.category === "approval" || event.category === "question")
+    );
     const events = views.slice(0, 5);
     const renderState = buildTuiRenderState({
       events: views,
@@ -36,7 +39,10 @@ export const command = {
   }
 };
 
-function formatModelTarget(config: { models: { aliases: Record<string, string> } }, alias: string): string {
+function formatModelTarget(
+  config: { models: { aliases: Record<string, string> } },
+  alias: string
+): string {
   return config.models.aliases[alias] ?? alias;
 }
 
@@ -47,7 +53,10 @@ function formatPendingInteractions(events: ReturnType<typeof toEventView>[]): st
   return [
     "Pending interactions:",
     ...events.map((event) => {
-      const toolUseId = typeof event.metadata.toolUseId === "string" ? event.metadata.toolUseId : event.target ?? "unknown";
+      const toolUseId =
+        typeof event.metadata.toolUseId === "string"
+          ? event.metadata.toolUseId
+          : (event.target ?? "unknown");
       return `- ${event.category} ${toolUseId} job=${event.metadata.jobId ?? "unknown"} ${event.message}`;
     })
   ].join("\n");

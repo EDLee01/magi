@@ -5,7 +5,8 @@ import { runOAuthFlow } from "../mcp/oauth-flow.js";
 export const command = {
   name: "mcp",
   description: "List, connect, or inspect configured MCP servers",
-  usage: "/mcp [list|tools <server>|resources <server>|prompts <server>|connect <server>|disconnect <server>|health <server>|health-all|auth <server>|logout <server>|tokens]",
+  usage:
+    "/mcp [list|tools <server>|resources <server>|prompts <server>|connect <server>|disconnect <server>|health <server>|health-all|auth <server>|logout <server>|tokens]",
   group: "Configuration",
   handler: async (args: string[], input: SlashCommandInput): Promise<string> => {
     const servers = input.config.mcp?.servers ?? {};
@@ -21,9 +22,9 @@ export const command = {
         "    servers:",
         "      linear:",
         "        command: npx",
-        "        args: [\"-y\", \"@modelcontextprotocol/server-linear\"]",
+        '        args: ["-y", "@modelcontextprotocol/server-linear"]',
         "        env:",
-        "          LINEAR_API_KEY: \"...\"",
+        '          LINEAR_API_KEY: "..."',
         "",
         "Or for HTTP/SSE servers:",
         "  mcp:",
@@ -31,7 +32,7 @@ export const command = {
         "      remote:",
         "        url: https://example.com/mcp",
         "        headers:",
-        "          Authorization: \"Bearer ...\""
+        '          Authorization: "Bearer ..."'
       ].join("\n");
     }
 
@@ -42,7 +43,9 @@ export const command = {
       for (const name of serverNames) {
         const server = servers[name];
         const transport = server.transport ?? (server.url ? "http" : "stdio");
-        const detail = server.url ? `${transport}: ${server.url}` : `${transport}: ${server.command}`;
+        const detail = server.url
+          ? `${transport}: ${server.url}`
+          : `${transport}: ${server.command}`;
         lines.push(`  ${name.padEnd(20)} ${detail}`);
       }
       lines.push("");
@@ -58,7 +61,9 @@ export const command = {
       }
       const lines = ["Stored OAuth tokens:", ""];
       for (const t of tokens) {
-        const expires = t.expiresAt ? `expires ${new Date(t.expiresAt).toISOString().slice(0, 19)}` : "no expiry";
+        const expires = t.expiresAt
+          ? `expires ${new Date(t.expiresAt).toISOString().slice(0, 19)}`
+          : "no expiry";
         const refresh = t.refreshToken ? "refresh ✓" : "refresh ✗";
         lines.push(`  ${t.serverName.padEnd(20)} ${refresh.padEnd(12)} ${expires}`);
       }
@@ -93,7 +98,7 @@ export const command = {
           "        url: https://...",
           "        oauth:",
           "          authServerUrl: https://auth.example.com",
-          "          scope: \"mcp.read mcp.write\"",
+          '          scope: "mcp.read mcp.write"',
           "          # clientId: optional, falls back to Dynamic Client Registration"
         ].join("\n");
       }
@@ -107,10 +112,14 @@ export const command = {
           clientSecret: oauthCfg?.clientSecret,
           onAuthorizationUrl: (url) => {
             // Note: this is async, the user already sees prompt return below
-            console.log(`\nOpen this URL in your browser if it doesn't open automatically:\n${url}\n`);
+            console.log(
+              `\nOpen this URL in your browser if it doesn't open automatically:\n${url}\n`
+            );
           }
         });
-        const expires = result.expiresAt ? `expires ${new Date(result.expiresAt).toISOString().slice(0, 19)}` : "no expiry";
+        const expires = result.expiresAt
+          ? `expires ${new Date(result.expiresAt).toISOString().slice(0, 19)}`
+          : "no expiry";
         return [
           `✓ Authorized ${serverName}`,
           `  Token type: Bearer`,
@@ -144,7 +153,14 @@ export const command = {
       }
     }
 
-    if (sub === "tools" || sub === "resources" || sub === "prompts" || sub === "health" || sub === "connect" || sub === "disconnect") {
+    if (
+      sub === "tools" ||
+      sub === "resources" ||
+      sub === "prompts" ||
+      sub === "health" ||
+      sub === "connect" ||
+      sub === "disconnect"
+    ) {
       const serverName = args[1];
       if (!serverName) return `Usage: /mcp ${sub} <server>`;
       if (!servers[serverName]) {
@@ -158,11 +174,13 @@ export const command = {
         }
         const client = await manager.connect(serverName);
         if (sub === "connect") {
-          const transport = servers[serverName].transport ?? (servers[serverName].url ? "http" : "stdio");
+          const transport =
+            servers[serverName].transport ?? (servers[serverName].url ? "http" : "stdio");
           return `Connected to ${serverName} (transport: ${transport})`;
         }
         if (sub === "health") {
-          const transport = servers[serverName].transport ?? (servers[serverName].url ? "http" : "stdio");
+          const transport =
+            servers[serverName].transport ?? (servers[serverName].url ? "http" : "stdio");
           const ok = await client.ping(3000);
           return ok
             ? `${serverName}: OK (transport: ${transport})`
@@ -192,9 +210,10 @@ export const command = {
           if (prompts.length === 0) return `${serverName}: no prompts advertised`;
           const lines = [`${serverName}: ${prompts.length} prompts`, ""];
           for (const p of prompts) {
-            const argList = p.arguments && p.arguments.length > 0
-              ? ` (args: ${p.arguments.map(a => a.required ? a.name : `${a.name}?`).join(", ")})`
-              : "";
+            const argList =
+              p.arguments && p.arguments.length > 0
+                ? ` (args: ${p.arguments.map((a) => (a.required ? a.name : `${a.name}?`)).join(", ")})`
+                : "";
             lines.push(`  ${p.name.padEnd(30)} ${p.description ?? ""}${argList}`);
           }
           return lines.join("\n");

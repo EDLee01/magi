@@ -20,20 +20,22 @@ export interface MemorySearchHit {
   sourceKind?: string;
 }
 
-export function retrieveRelevantMemory(input: MemoryRootOptions & {
-  query: string;
-  maxResults?: number;
-  includeMemdir?: boolean;
-  includeLegacy?: boolean;
-  legacy?: {
-    paths: MagiPaths;
-    cwd: string;
+export function retrieveRelevantMemory(
+  input: MemoryRootOptions & {
+    query: string;
+    maxResults?: number;
+    includeMemdir?: boolean;
+    includeLegacy?: boolean;
+    legacy?: {
+      paths: MagiPaths;
+      cwd: string;
+      sessionId?: string;
+      scopes?: MemoryScope[];
+    };
+    audit?: boolean;
     sessionId?: string;
-    scopes?: MemoryScope[];
-  };
-  audit?: boolean;
-  sessionId?: string;
-}): MemorySearchHit[] {
+  }
+): MemorySearchHit[] {
   const terms = tokenize(input.query);
   if (terms.length === 0) return [];
   const hits: MemorySearchHit[] = [];
@@ -127,17 +129,20 @@ export function formatMemoryContext(hits: MemorySearchHit[]): string {
   return lines.join("\n").trim();
 }
 
-function retrieveGraphMemory(input: MemoryRootOptions & {
-  query: string;
-  maxResults?: number;
-  includeMemdir?: boolean;
-  legacy?: {
-    paths: MagiPaths;
-    cwd: string;
-    sessionId?: string;
-    scopes?: MemoryScope[];
-  };
-}, terms: string[]): MemorySearchHit[] {
+function retrieveGraphMemory(
+  input: MemoryRootOptions & {
+    query: string;
+    maxResults?: number;
+    includeMemdir?: boolean;
+    legacy?: {
+      paths: MagiPaths;
+      cwd: string;
+      sessionId?: string;
+      scopes?: MemoryScope[];
+    };
+  },
+  terms: string[]
+): MemorySearchHit[] {
   const paths = input.legacy?.paths;
   if (!paths) {
     return [];
@@ -155,7 +160,10 @@ function retrieveGraphMemory(input: MemoryRootOptions & {
         query: input.query,
         limit: input.maxResults ?? 8
       });
-      store.markUsed(hits.map((hit) => hit.node.id), 0.03);
+      store.markUsed(
+        hits.map((hit) => hit.node.id),
+        0.03
+      );
       return hits.map((hit) => graphHitToMemorySearchHit(hit, terms));
     } finally {
       store.close();
@@ -187,12 +195,16 @@ function graphHitFile(uri: string, heading: string): string {
 }
 
 function tokenize(text: string): string[] {
-  return Array.from(new Set(text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((term) => term.trim())
-    .filter(isSearchTerm)));
+  return Array.from(
+    new Set(
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+        .split(/\s+/)
+        .map((term) => term.trim())
+        .filter(isSearchTerm)
+    )
+  );
 }
 
 function scoreText(text: string, terms: string[]): number {
@@ -214,9 +226,12 @@ function pathScore(filePath: string, terms: string[]): number {
   for (const term of terms) {
     if (normalized.includes(term)) score += 3;
   }
-  if (normalized === "preferences.md") score += terms.some((term) => ["prefer", "preference", "偏好", "喜欢"].includes(term)) ? 4 : 0;
-  if (normalized.startsWith("projects/")) score += terms.some((term) => ["project", "项目", "产品"].includes(term)) ? 4 : 0;
-  if (normalized.startsWith("decisions/")) score += terms.some((term) => ["decision", "决定", "决策"].includes(term)) ? 4 : 0;
+  if (normalized === "preferences.md")
+    score += terms.some((term) => ["prefer", "preference", "偏好", "喜欢"].includes(term)) ? 4 : 0;
+  if (normalized.startsWith("projects/"))
+    score += terms.some((term) => ["project", "项目", "产品"].includes(term)) ? 4 : 0;
+  if (normalized.startsWith("decisions/"))
+    score += terms.some((term) => ["decision", "决定", "决策"].includes(term)) ? 4 : 0;
   return score;
 }
 
@@ -232,7 +247,10 @@ function makeSnippet(text: string, terms: string[]): string {
     return terms.some((term) => lower.includes(term));
   });
   const start = matching ? Math.max(0, lines.indexOf(matching) - 1) : 0;
-  return lines.slice(start, start + 8).join("\n").slice(0, 900);
+  return lines
+    .slice(start, start + 8)
+    .join("\n")
+    .slice(0, 900);
 }
 
 function isSearchTerm(term: string): boolean {
@@ -242,8 +260,40 @@ function isSearchTerm(term: string): boolean {
 }
 
 const SEARCH_STOPWORDS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "for", "from",
-  "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "our", "should",
-  "the", "this", "to", "use", "what", "when", "where", "who", "why", "with",
-  "you", "your"
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "can",
+  "do",
+  "for",
+  "from",
+  "how",
+  "i",
+  "in",
+  "is",
+  "it",
+  "me",
+  "my",
+  "of",
+  "on",
+  "or",
+  "our",
+  "should",
+  "the",
+  "this",
+  "to",
+  "use",
+  "what",
+  "when",
+  "where",
+  "who",
+  "why",
+  "with",
+  "you",
+  "your"
 ]);

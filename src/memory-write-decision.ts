@@ -137,7 +137,7 @@ function parseMemoryDecisionJson(text: string): Record<string, unknown> | undefi
   try {
     const parsed = JSON.parse(objectText);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
+      ? (parsed as Record<string, unknown>)
       : undefined;
   } catch {
     return undefined;

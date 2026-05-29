@@ -26,11 +26,20 @@ export interface PeerDispatchResult {
 }
 
 /** Resolve a peer name (mDNS instance name or hostname) to a base URL. */
-export async function resolvePeerByName(name: string, options: {
-  timeoutMs?: number;
-  /** Optional store to look up saved peer credentials before falling back to mDNS. */
-  store?: { listMcpOAuthTokens(): Array<{ serverName: string; metadata: Record<string, unknown>; authServerUrl?: string }> };
-} = {}): Promise<string | undefined> {
+export async function resolvePeerByName(
+  name: string,
+  options: {
+    timeoutMs?: number;
+    /** Optional store to look up saved peer credentials before falling back to mDNS. */
+    store?: {
+      listMcpOAuthTokens(): Array<{
+        serverName: string;
+        metadata: Record<string, unknown>;
+        authServerUrl?: string;
+      }>;
+    };
+  } = {}
+): Promise<string | undefined> {
   // If it already looks like a URL, use it directly
   if (/^https?:\/\//.test(name)) return name;
   // If it's host:port, use it directly
@@ -38,7 +47,7 @@ export async function resolvePeerByName(name: string, options: {
   // Try saved peer credentials first (faster than mDNS, works without multicast)
   if (options.store) {
     const tokens = options.store.listMcpOAuthTokens();
-    const saved = tokens.find(t => t.serverName === `peer:${name}`);
+    const saved = tokens.find((t) => t.serverName === `peer:${name}`);
     if (saved) {
       const url = (saved.metadata?.peerUrl as string) ?? saved.authServerUrl;
       if (url) return url;
@@ -46,14 +55,15 @@ export async function resolvePeerByName(name: string, options: {
   }
   // Otherwise, browse mDNS
   const browser = browseMdns({});
-  await new Promise(resolve => setTimeout(resolve, options.timeoutMs ?? 2000));
+  await new Promise((resolve) => setTimeout(resolve, options.timeoutMs ?? 2000));
   const peers = browser.peers();
   browser.stop();
-  const match = peers.find(p =>
-    p.instanceName === name ||
-    p.instanceName.startsWith(name) ||
-    p.hostname.startsWith(name) ||
-    p.hostname === `${name}.local.`
+  const match = peers.find(
+    (p) =>
+      p.instanceName === name ||
+      p.instanceName.startsWith(name) ||
+      p.hostname.startsWith(name) ||
+      p.hostname === `${name}.local.`
   );
   return match ? `http://${match.address}:${match.port}` : undefined;
 }
@@ -61,16 +71,20 @@ export async function resolvePeerByName(name: string, options: {
 /** List all discoverable peers. */
 export async function listPeers(timeoutMs = 2500): Promise<DiscoveredPeer[]> {
   const browser = browseMdns({});
-  await new Promise(resolve => setTimeout(resolve, timeoutMs));
+  await new Promise((resolve) => setTimeout(resolve, timeoutMs));
   const peers = browser.peers();
   browser.stop();
   return peers;
 }
 
 /** Make an authenticated request to a peer. */
-async function peerFetch(endpoint: PeerEndpoint, path: string, init: RequestInit = {}): Promise<Response> {
+async function peerFetch(
+  endpoint: PeerEndpoint,
+  path: string,
+  init: RequestInit = {}
+): Promise<Response> {
   const headers: Record<string, string> = {
-    ...(init.headers as Record<string, string> | undefined ?? {})
+    ...((init.headers as Record<string, string> | undefined) ?? {})
   };
   if (endpoint.deviceId) headers["X-Magi-Device-Id"] = endpoint.deviceId;
   if (endpoint.token) headers["Authorization"] = `Bearer ${endpoint.token}`;
@@ -105,20 +119,26 @@ export async function dispatchToPeer(input: {
   if (!sessionResp.ok) {
     const text = await sessionResp.text();
     if (sessionResp.status === 401) {
-      throw new Error([
-        `Peer rejected the request: token is invalid or expired.`,
-        ``,
-        `Re-pair with the peer:`,
-        `  1. On the peer host: 'magi pair <name>'`,
-        `  2. Locally: 'magi peers add <name> <url> <device-id> <token>' with the new credentials`
-      ].join("\n"));
+      throw new Error(
+        [
+          `Peer rejected the request: token is invalid or expired.`,
+          ``,
+          `Re-pair with the peer:`,
+          `  1. On the peer host: 'magi pair <name>'`,
+          `  2. Locally: 'magi peers add <name> <url> <device-id> <token>' with the new credentials`
+        ].join("\n")
+      );
     }
-    throw new Error(`Peer rejected session create (HTTP ${sessionResp.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `Peer rejected session create (HTTP ${sessionResp.status}): ${text.slice(0, 200)}`
+    );
   }
-  const sessionEnvelope = await sessionResp.json() as { id?: string; session?: { id: string } };
+  const sessionEnvelope = (await sessionResp.json()) as { id?: string; session?: { id: string } };
   const sessionId = sessionEnvelope.id ?? sessionEnvelope.session?.id;
   if (!sessionId) {
-    throw new Error(`Peer session response missing id: ${JSON.stringify(sessionEnvelope).slice(0, 200)}`);
+    throw new Error(
+      `Peer session response missing id: ${JSON.stringify(sessionEnvelope).slice(0, 200)}`
+    );
   }
 
   // 2. Post the message
@@ -137,7 +157,7 @@ export async function dispatchToPeer(input: {
     const text = await msgResp.text();
     throw new Error(`Peer rejected message post (${msgResp.status}): ${text.slice(0, 200)}`);
   }
-  const msg = await msgResp.json() as { jobId?: string; message?: string };
+  const msg = (await msgResp.json()) as { jobId?: string; message?: string };
   const jobId = msg.jobId;
   // If the peer returned a synchronous message (e.g. provider not configured),
   // surface it directly instead of waiting for SSE.
@@ -164,18 +184,24 @@ export async function dispatchToPeer(input: {
     const jobResp = await peerFetch(input.peer, `/jobs/${jobId}`, { signal: input.signal });
     if (!jobResp.ok) {
       // Some servers return 404 until first event; tolerate briefly
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       continue;
     }
-    const jobBody = await jobResp.json() as { job?: { status?: string; metadata?: Record<string, unknown> }; status?: string; metadata?: Record<string, unknown> };
+    const jobBody = (await jobResp.json()) as {
+      job?: { status?: string; metadata?: Record<string, unknown> };
+      status?: string;
+      metadata?: Record<string, unknown>;
+    };
     // Server wraps the job as { job: {...} }; tolerate either shape.
     const job = jobBody.job ?? jobBody;
     const status = job.status;
     if (status === "completed" || status === "failed" || status === "cancelled") {
       // Fetch all events
-      const eventsResp = await peerFetch(input.peer, `/jobs/${jobId}/events`, { signal: input.signal });
+      const eventsResp = await peerFetch(input.peer, `/jobs/${jobId}/events`, {
+        signal: input.signal
+      });
       if (eventsResp.ok) {
-        const eventsBody = await eventsResp.json() as { events?: Array<Record<string, unknown>> };
+        const eventsBody = (await eventsResp.json()) as { events?: Array<Record<string, unknown>> };
         const eventList = eventsBody.events ?? [];
         // Reverse to chronological order (server returns newest first)
         const chronological = [...eventList].reverse();
@@ -183,7 +209,11 @@ export async function dispatchToPeer(input: {
           events.push(evt);
           input.onEvent?.(evt);
           const action = evt.action ?? evt.eventName;
-          if (action === "agent.text.delta" && evt.metadata && typeof (evt.metadata as Record<string, unknown>).preview === "string") {
+          if (
+            action === "agent.text.delta" &&
+            evt.metadata &&
+            typeof (evt.metadata as Record<string, unknown>).preview === "string"
+          ) {
             assistantText += (evt.metadata as Record<string, string>).preview;
           }
         }
@@ -195,7 +225,7 @@ export async function dispatchToPeer(input: {
       break;
     }
     // Still running — wait briefly and poll again
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   return { sessionId, jobId, text: assistantText, events, errorText };

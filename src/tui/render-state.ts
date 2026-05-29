@@ -127,7 +127,10 @@ function pendingEventToBlock(event: MagiEventView): TuiPendingBlock {
     jobId: event.jobId,
     toolUseId,
     target: event.target,
-    title: kind === "question" ? `Question waiting (${toolUseId})` : `Approval waiting for ${event.target ?? "tool"}`,
+    title:
+      kind === "question"
+        ? `Question waiting (${toolUseId})`
+        : `Approval waiting for ${event.target ?? "tool"}`,
     detail: reason ?? event.message
   };
 }

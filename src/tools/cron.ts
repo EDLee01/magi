@@ -105,7 +105,8 @@ export function createCronJob(input: CronCreateInput): CronJobRecord {
 export function updateCronJob(job: CronJobRecord, input: CronUpdateInput): CronJobRecord {
   const now = input.now ?? new Date();
   const cron = input.cron === undefined ? job.cron : normalizeCron(input.cron);
-  const prompt = input.prompt === undefined ? job.prompt : readNonEmptyString(input.prompt, "prompt");
+  const prompt =
+    input.prompt === undefined ? job.prompt : readNonEmptyString(input.prompt, "prompt");
   return {
     ...job,
     cron,
@@ -114,9 +115,10 @@ export function updateCronJob(job: CronJobRecord, input: CronUpdateInput): CronJ
     durable: input.durable ?? job.durable,
     enabled: input.enabled ?? job.enabled,
     updatedAt: now.toISOString(),
-    nextRunAt: cron !== job.cron || input.enabled === true
-      ? nextCronRun(cron, now).toISOString()
-      : job.nextRunAt
+    nextRunAt:
+      cron !== job.cron || input.enabled === true
+        ? nextCronRun(cron, now).toISOString()
+        : job.nextRunAt
   };
 }
 
@@ -177,7 +179,9 @@ export function deleteCronJob(filePath: string, id: string): CronJobRecord {
 }
 
 export function listCronJobs(filePath: string): CronJobRecord[] {
-  return loadCronStore(filePath).jobs.sort((left, right) => left.nextRunAt.localeCompare(right.nextRunAt));
+  return loadCronStore(filePath).jobs.sort((left, right) =>
+    left.nextRunAt.localeCompare(right.nextRunAt)
+  );
 }
 
 export function takeDueCronJobs(filePath: string, now = new Date()): CronRunResult[] {
@@ -189,7 +193,12 @@ export function takeDueCronJobs(filePath: string, now = new Date()): CronRunResu
     }
     due.push({ job, prompt: job.prompt });
     const next = job.recurring
-      ? { ...job, lastRunAt: now.toISOString(), nextRunAt: nextCronRun(job.cron, now).toISOString(), updatedAt: now.toISOString() }
+      ? {
+          ...job,
+          lastRunAt: now.toISOString(),
+          nextRunAt: nextCronRun(job.cron, now).toISOString(),
+          updatedAt: now.toISOString()
+        }
       : { ...job, lastRunAt: now.toISOString(), enabled: false, updatedAt: now.toISOString() };
     return next;
   });
@@ -209,7 +218,9 @@ export function formatCronJob(job: CronJobRecord): string {
     `enabled: ${job.enabled ? "true" : "false"}`,
     job.lastRunAt ? `lastRunAt: ${job.lastRunAt}` : undefined,
     `nextRunAt: ${job.nextRunAt}`
-  ].filter((line): line is string => Boolean(line)).join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 }
 
 export function formatCronList(jobs: CronJobRecord[]): string {
@@ -222,7 +233,9 @@ export function formatCronList(jobs: CronJobRecord[]): string {
 export function normalizeCron(value: string): string {
   const fields = value.trim().split(/\s+/);
   if (fields.length !== 5) {
-    throw new Error("Cron expression must have exactly 5 fields: minute hour day-of-month month day-of-week");
+    throw new Error(
+      "Cron expression must have exactly 5 fields: minute hour day-of-month month day-of-week"
+    );
   }
   fields.forEach((field, index) => {
     parseCronField(field, CRON_FIELD_BOUNDS[index], CRON_FIELD_NAMES[index]);
@@ -247,7 +260,9 @@ export function nextCronRun(expression: string, from = new Date()): Date {
 
 function parseCron(expression: string): Array<Set<number>> {
   const fields = normalizeCron(expression).split(" ");
-  return fields.map((field, index) => parseCronField(field, CRON_FIELD_BOUNDS[index], CRON_FIELD_NAMES[index]));
+  return fields.map((field, index) =>
+    parseCronField(field, CRON_FIELD_BOUNDS[index], CRON_FIELD_NAMES[index])
+  );
 }
 
 function matchesCron(cron: Array<Set<number>>, date: Date): boolean {
@@ -261,7 +276,11 @@ function matchesCron(cron: Array<Set<number>>, date: Date): boolean {
   return cron.every((field, index) => field.has(values[index]));
 }
 
-function parseCronField(field: string, bounds: { min: number; max: number }, name: string): Set<number> {
+function parseCronField(
+  field: string,
+  bounds: { min: number; max: number },
+  name: string
+): Set<number> {
   const values = new Set<number>();
   for (const piece of field.split(",")) {
     parseCronPiece(piece, bounds, name).forEach((value) => values.add(value));
@@ -272,7 +291,11 @@ function parseCronField(field: string, bounds: { min: number; max: number }, nam
   return values;
 }
 
-function parseCronPiece(piece: string, bounds: { min: number; max: number }, name: string): number[] {
+function parseCronPiece(
+  piece: string,
+  bounds: { min: number; max: number },
+  name: string
+): number[] {
   const [rangePart, stepPart] = piece.split("/");
   if (piece.includes("/") && (stepPart === undefined || stepPart === "")) {
     throw new Error(`Cron field ${name} has an empty step`);
@@ -281,9 +304,10 @@ function parseCronPiece(piece: string, bounds: { min: number; max: number }, nam
   if (step < 1) {
     throw new Error(`Cron field ${name} step must be >= 1`);
   }
-  const range = rangePart === "*"
-    ? { start: bounds.min, end: bounds.max }
-    : readCronRange(rangePart, bounds, name);
+  const range =
+    rangePart === "*"
+      ? { start: bounds.min, end: bounds.max }
+      : readCronRange(rangePart, bounds, name);
   const values: number[] = [];
   for (let value = range.start; value <= range.end; value += step) {
     values.push(value);
@@ -291,7 +315,11 @@ function parseCronPiece(piece: string, bounds: { min: number; max: number }, nam
   return values;
 }
 
-function readCronRange(value: string, bounds: { min: number; max: number }, name: string): { start: number; end: number } {
+function readCronRange(
+  value: string,
+  bounds: { min: number; max: number },
+  name: string
+): { start: number; end: number } {
   if (value.includes("-")) {
     const [startText, endText] = value.split("-");
     const start = readCronNumber(startText, bounds, `${name} range start`);
@@ -305,7 +333,11 @@ function readCronRange(value: string, bounds: { min: number; max: number }, name
   return { start: number, end: number };
 }
 
-function readCronNumber(value: string | undefined, bounds: { min: number; max: number }, name: string): number {
+function readCronNumber(
+  value: string | undefined,
+  bounds: { min: number; max: number },
+  name: string
+): number {
   if (value === undefined || !/^\d+$/.test(value)) {
     throw new Error(`Cron field ${name} must be a number`);
   }
@@ -329,7 +361,8 @@ function readCronJob(value: unknown): CronJobRecord {
     enabled: readBoolean(value.enabled, "enabled"),
     createdAt: readNonEmptyString(value.createdAt, "createdAt"),
     updatedAt: readNonEmptyString(value.updatedAt, "updatedAt"),
-    lastRunAt: value.lastRunAt === undefined ? undefined : readNonEmptyString(value.lastRunAt, "lastRunAt"),
+    lastRunAt:
+      value.lastRunAt === undefined ? undefined : readNonEmptyString(value.lastRunAt, "lastRunAt"),
     nextRunAt: readNonEmptyString(value.nextRunAt, "nextRunAt")
   };
 }
@@ -360,10 +393,4 @@ const CRON_FIELD_BOUNDS = [
   { min: 0, max: 6 }
 ] as const;
 
-const CRON_FIELD_NAMES = [
-  "minute",
-  "hour",
-  "day-of-month",
-  "month",
-  "day-of-week"
-] as const;
+const CRON_FIELD_NAMES = ["minute", "hour", "day-of-month", "month", "day-of-week"] as const;

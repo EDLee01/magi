@@ -51,21 +51,66 @@ export interface SlashCommandSpec {
 // --- Backward-compatible constants ---
 
 export const SLASH_COMMANDS: SlashCommandSpec[] = [
-  { name: "help", usage: "/help [command]", group: "Help", description: "Show command groups and shortcuts" },
-  { name: "status", usage: "/status", group: "Session", description: "Show cwd, providers, aliases, and state" },
+  {
+    name: "help",
+    usage: "/help [command]",
+    group: "Help",
+    description: "Show command groups and shortcuts"
+  },
+  {
+    name: "status",
+    usage: "/status",
+    group: "Session",
+    description: "Show cwd, providers, aliases, and state"
+  },
   { name: "sessions", usage: "/sessions", group: "Session", description: "List recent sessions" },
-  { name: "resume", usage: "/resume [query]", group: "Session", description: "Search and resume a session" },
-  { name: "model", usage: "/model [alias]", group: "Model", description: "Show or switch model alias" },
-  { name: "memory", usage: "/memory [init|list|show|search|drafts|draft|dream|dreams]", group: "Memory", description: "Manage Memory files, drafts, and Dream runs" },
-  { name: "review", usage: "/review [target]", group: "Tools", description: "Switch to review-oriented route" },
-  { name: "commit", usage: "/commit [-m <msg>]", group: "Git", description: "Commit staged git changes" },
+  {
+    name: "resume",
+    usage: "/resume [query]",
+    group: "Session",
+    description: "Search and resume a session"
+  },
+  {
+    name: "model",
+    usage: "/model [alias]",
+    group: "Model",
+    description: "Show or switch model alias"
+  },
+  {
+    name: "memory",
+    usage: "/memory [init|list|show|search|drafts|draft|dream|dreams]",
+    group: "Memory",
+    description: "Manage Memory files, drafts, and Dream runs"
+  },
+  {
+    name: "review",
+    usage: "/review [target]",
+    group: "Tools",
+    description: "Switch to review-oriented route"
+  },
+  {
+    name: "commit",
+    usage: "/commit [-m <msg>]",
+    group: "Git",
+    description: "Commit staged git changes"
+  },
   { name: "diff", usage: "/diff [path]", group: "Git", description: "Show git diff" },
   { name: "clear", usage: "/clear", group: "Session", description: "Start a fresh session" },
   { name: "summary", usage: "/summary", group: "Session", description: "Show session summary" },
-  { name: "goal", usage: "/goal <objective> | /goal", group: "Session", description: "Start or show the current session goal" },
+  {
+    name: "goal",
+    usage: "/goal <objective> | /goal",
+    group: "Session",
+    description: "Start or show the current session goal"
+  },
   { name: "cost", usage: "/cost", group: "Session", description: "Show job and cost info" },
   { name: "doctor", usage: "/doctor", group: "Tools", description: "Run workspace diagnostics" },
-  { name: "compact", usage: "/compact", group: "Session", description: "Trigger context compaction" },
+  {
+    name: "compact",
+    usage: "/compact",
+    group: "Session",
+    description: "Trigger context compaction"
+  },
   { name: "exit", usage: "/exit", group: "Help", description: "Exit the interactive terminal" }
 ];
 
@@ -86,7 +131,8 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
   if (n === "sessions") return { type: "sessions" };
   if (n === "resume") return { type: "resume", sessionId: rest[0] };
   if (n === "memory") {
-    const scope = rest[0] === "user" || rest[0] === "project" || rest[0] === "session" ? rest[0] : undefined;
+    const scope =
+      rest[0] === "user" || rest[0] === "project" || rest[0] === "session" ? rest[0] : undefined;
     return { type: "memory", scope };
   }
   if (n === "review") return { type: "review" };
@@ -115,7 +161,14 @@ export function runSlashCommand(input: {
 }): string {
   const { command, ...context } = input;
   const cmd = command; // avoid shadowing the import
-  const registryContext = { config: context.config, store: context.store, cwd: context.cwd, paths: context.paths, sessionId: context.sessionId, currentModel: context.currentModel };
+  const registryContext = {
+    config: context.config,
+    store: context.store,
+    cwd: context.cwd,
+    paths: context.paths,
+    sessionId: context.sessionId,
+    currentModel: context.currentModel
+  };
 
   const name = cmd.type === "unknown" ? cmd.name : cmd.type;
   let args: string[] = [];
@@ -142,10 +195,12 @@ export function formatSlashSuggestions(query = ""): string {
   const normalized = query.replace(/^\//, "").trim().toLowerCase();
   const matches = SLASH_COMMANDS.filter((cmd) => {
     if (!normalized) return true;
-    return cmd.name.includes(normalized)
-      || cmd.usage.toLowerCase().includes(normalized)
-      || cmd.description.toLowerCase().includes(normalized)
-      || cmd.group.toLowerCase().includes(normalized);
+    return (
+      cmd.name.includes(normalized) ||
+      cmd.usage.toLowerCase().includes(normalized) ||
+      cmd.description.toLowerCase().includes(normalized) ||
+      cmd.group.toLowerCase().includes(normalized)
+    );
   });
   if (matches.length === 0) {
     return `No slash commands match /${normalized}\n`;

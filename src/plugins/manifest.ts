@@ -32,8 +32,12 @@ export function validatePluginManifest(value: unknown, source = "plugin.json"): 
   }
   const name = readName(value.name, "name", source);
   const version = readString(value.version, "version", source);
-  const description = value.description === undefined ? undefined : readString(value.description, "description", source);
-  const entry = value.entry === undefined ? undefined : readRelativePath(value.entry, "entry", source);
+  const description =
+    value.description === undefined
+      ? undefined
+      : readString(value.description, "description", source);
+  const entry =
+    value.entry === undefined ? undefined : readRelativePath(value.entry, "entry", source);
   const permissions = readStringList(value.permissions, "permissions", source);
   return { schemaVersion: "0.1", name, version, description, entry, permissions };
 }
@@ -49,12 +53,16 @@ export function formatPluginList(plugins: PluginRecord[]): string {
   if (plugins.length === 0) {
     return "No plugins installed\n";
   }
-  return `${plugins.map((plugin) => [
-    plugin.manifest.name,
-    plugin.manifest.version,
-    plugin.manifest.permissions.join(",") || "no-permissions",
-    plugin.root
-  ].join("\t")).join("\n")}\n`;
+  return `${plugins
+    .map((plugin) =>
+      [
+        plugin.manifest.name,
+        plugin.manifest.version,
+        plugin.manifest.permissions.join(",") || "no-permissions",
+        plugin.root
+      ].join("\t")
+    )
+    .join("\n")}\n`;
 }
 
 function listManifestDirectories(root: string, manifestName: string): string[] {
@@ -86,7 +94,9 @@ function listManifestDirectories(root: string, manifestName: string): string[] {
 function readName(value: unknown, field: string, source: string): string {
   const name = readString(value, field, source);
   if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(name)) {
-    throw new MagiConfigError(`Invalid plugin manifest at ${source}: ${field} must be a lowercase plugin id`);
+    throw new MagiConfigError(
+      `Invalid plugin manifest at ${source}: ${field} must be a lowercase plugin id`
+    );
   }
   return name;
 }
@@ -94,14 +104,18 @@ function readName(value: unknown, field: string, source: string): string {
 function readRelativePath(value: unknown, field: string, source: string): string {
   const filePath = readString(value, field, source);
   if (path.isAbsolute(filePath) || filePath.includes("..")) {
-    throw new MagiConfigError(`Invalid plugin manifest at ${source}: ${field} must be a relative in-plugin path`);
+    throw new MagiConfigError(
+      `Invalid plugin manifest at ${source}: ${field} must be a relative in-plugin path`
+    );
   }
   return filePath;
 }
 
 function readString(value: unknown, field: string, source: string): string {
   if (typeof value !== "string" || !value.trim()) {
-    throw new MagiConfigError(`Invalid plugin manifest at ${source}: ${field} must be a non-empty string`);
+    throw new MagiConfigError(
+      `Invalid plugin manifest at ${source}: ${field} must be a non-empty string`
+    );
   }
   return value;
 }
@@ -111,7 +125,9 @@ function readStringList(value: unknown, field: string, source: string): string[]
     return [];
   }
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && item.trim())) {
-    throw new MagiConfigError(`Invalid plugin manifest at ${source}: ${field} must be a string list`);
+    throw new MagiConfigError(
+      `Invalid plugin manifest at ${source}: ${field} must be a string list`
+    );
   }
   return value;
 }

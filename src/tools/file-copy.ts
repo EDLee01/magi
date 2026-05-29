@@ -22,14 +22,23 @@ export const FileCopyInputSchema = {
   additionalProperties: false
 } satisfies Record<string, unknown>;
 
-export function parseFileCopyInput(input: Record<string, unknown>): { source: string; destination: string; overwrite: boolean } {
+export function parseFileCopyInput(input: Record<string, unknown>): {
+  source: string;
+  destination: string;
+  overwrite: boolean;
+} {
   const source = readString(input, "source");
   const destination = readString(input, "destination");
   const overwrite = input.overwrite === true;
   return { source, destination, overwrite };
 }
 
-export function executeFileCopy(input: { source: string; destination: string; overwrite: boolean; cwd: string }): FileCopyResult {
+export function executeFileCopy(input: {
+  source: string;
+  destination: string;
+  overwrite: boolean;
+  cwd: string;
+}): FileCopyResult {
   const src = resolveWorkspacePath(input.cwd, input.source).absolutePath;
   const dst = resolveWorkspacePath(input.cwd, input.destination).absolutePath;
 
@@ -38,14 +47,22 @@ export function executeFileCopy(input: { source: string; destination: string; ov
   }
   const dstExistedBefore = existsSync(dst);
   if (dstExistedBefore && !input.overwrite) {
-    throw new ToolError(`Destination exists: ${input.destination}. Use overwrite: true to replace.`, "outside-workspace");
+    throw new ToolError(
+      `Destination exists: ${input.destination}. Use overwrite: true to replace.`,
+      "outside-workspace"
+    );
   }
 
   mkdirSync(path.dirname(dst), { recursive: true });
   copyFileSync(src, dst);
   const stat = statSync(dst);
 
-  return { source: input.source, destination: input.destination, sizeBytes: stat.size, overwritten: dstExistedBefore };
+  return {
+    source: input.source,
+    destination: input.destination,
+    sizeBytes: stat.size,
+    overwritten: dstExistedBefore
+  };
 }
 
 export function formatFileCopyResult(result: FileCopyResult): string {

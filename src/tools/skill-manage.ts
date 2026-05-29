@@ -21,7 +21,10 @@ export const SkillManageInputSchema = {
     action: { type: "string", enum: ["list", "show", "create", "patch", "write_file"] },
     name: { type: "string", description: "Skill directory name, e.g. debug-api-flake." },
     content: { type: "string", description: "Full file content for create/write_file." },
-    file_path: { type: "string", description: "Skill-relative file path. Defaults to SKILL.md for patch." },
+    file_path: {
+      type: "string",
+      description: "Skill-relative file path. Defaults to SKILL.md for patch."
+    },
     old_string: { type: "string", description: "Existing text to replace for patch." },
     new_string: { type: "string", description: "Replacement text for patch." },
     replace_all: { type: "boolean" }
@@ -31,7 +34,11 @@ export const SkillManageInputSchema = {
 } satisfies Record<string, unknown>;
 
 export function parseSkillManageInput(input: Record<string, unknown>): SkillManageRequest {
-  assertAllowedKeys(input, ["action", "name", "content", "file_path", "old_string", "new_string", "replace_all"], "SkillManage input");
+  assertAllowedKeys(
+    input,
+    ["action", "name", "content", "file_path", "old_string", "new_string", "replace_all"],
+    "SkillManage input"
+  );
   const action = readAction(input.action);
   return {
     action,
@@ -63,7 +70,9 @@ export function executeSkillManage(input: {
       `Summary: ${skill.summary}`,
       "",
       skill.body ?? ""
-    ].join("\n").trimEnd();
+    ]
+      .join("\n")
+      .trimEnd();
   }
   if (request.action === "create") {
     const content = requireContent(request.content, "content");
@@ -91,11 +100,14 @@ export function executeSkillManage(input: {
       throw new Error(`old_string was not found in ${path.relative(input.skillsRoot, skillFile)}`);
     }
     if (occurrences > 1 && request.replaceAll !== true) {
-      throw new Error(`old_string appears ${occurrences} times; set replace_all=true or make it unique`);
+      throw new Error(
+        `old_string appears ${occurrences} times; set replace_all=true or make it unique`
+      );
     }
-    const after = request.replaceAll === true
-      ? before.split(oldString).join(newString)
-      : before.replace(oldString, newString);
+    const after =
+      request.replaceAll === true
+        ? before.split(oldString).join(newString)
+        : before.replace(oldString, newString);
     atomicWrite(skillFile, after);
     const rel = path.relative(path.dirname(input.skillsRoot), skillFile).replace(/\\/g, "/");
     return [
@@ -139,15 +151,18 @@ export function skillManagePreview(input: {
       const before = readFileSync(skillFile, "utf8");
       const oldString = requireContent(request.oldString, "old_string");
       const newString = request.newString ?? "";
-      const after = request.replaceAll === true
-        ? before.split(oldString).join(newString)
-        : before.replace(oldString, newString);
+      const after =
+        request.replaceAll === true
+          ? before.split(oldString).join(newString)
+          : before.replace(oldString, newString);
       const rel = path.relative(path.dirname(input.skillsRoot), skillFile).replace(/\\/g, "/");
       return createUnifiedDiff(rel, before, after);
     }
     if (request.action === "write_file") {
       const name = requireSkillName(request.name);
-      const skillFile = resolveSkillFile(input.skillsRoot, name, request.filePath ?? "SKILL.md", { allowMissing: true });
+      const skillFile = resolveSkillFile(input.skillsRoot, name, request.filePath ?? "SKILL.md", {
+        allowMissing: true
+      });
       const before = existsSync(skillFile) ? readFileSync(skillFile, "utf8") : "";
       const after = normalizeMarkdown(requireContent(request.content, "content"));
       const rel = path.relative(path.dirname(input.skillsRoot), skillFile).replace(/\\/g, "/");
@@ -212,7 +227,13 @@ function pathsFromSkillsRoot(skillsRoot: string) {
 }
 
 function readAction(value: unknown): SkillManageRequest["action"] {
-  if (value === "list" || value === "show" || value === "create" || value === "patch" || value === "write_file") {
+  if (
+    value === "list" ||
+    value === "show" ||
+    value === "create" ||
+    value === "patch" ||
+    value === "write_file"
+  ) {
     return value;
   }
   throw new Error("Tool input action must be list, show, create, patch, or write_file");

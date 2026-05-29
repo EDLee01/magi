@@ -6,7 +6,13 @@ import { PassThrough } from "node:stream";
 
 import { runCli } from "../src/cli.js";
 import { registry } from "../src/commands/registry.js";
-import { formatModelPicker, formatSessionSearch, formatSlashSuggestions, parseSlashCommand, runSlashCommand } from "../src/slash.js";
+import {
+  formatModelPicker,
+  formatSessionSearch,
+  formatSlashSuggestions,
+  parseSlashCommand,
+  runSlashCommand
+} from "../src/slash.js";
 import {
   buildTuiTranscriptState,
   buildModelPickerItems,
@@ -26,7 +32,11 @@ import { ActiveInteractionRegistry } from "../src/interactions.js";
 import { getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
 import { MagiConfig } from "../src/config.js";
-import { addPermissionRule, clearPermissionRules, isToolAlwaysAllowed } from "../src/permissions.js";
+import {
+  addPermissionRule,
+  clearPermissionRules,
+  isToolAlwaysAllowed
+} from "../src/permissions.js";
 import { getGoal } from "../src/goal.js";
 
 function stripAnsi(str: string | undefined): string | undefined {
@@ -86,12 +96,15 @@ describe("TUI, slash commands, and session resume", () => {
   });
 
   it("formats startup banner with version, tools, cwd, and model", () => {
-    const banner = stripAnsi(formatTuiStartupBanner({
-      cwd: "/repo",
-      modelDisplay: "openai:gpt-5.5",
-      toolCount: 86,
-      version: "1.2.3"
-    })) ?? "";
+    const banner =
+      stripAnsi(
+        formatTuiStartupBanner({
+          cwd: "/repo",
+          modelDisplay: "openai:gpt-5.5",
+          toolCount: 86,
+          version: "1.2.3"
+        })
+      ) ?? "";
 
     expect(banner).toContain("Magi v1.2.3 · 86 tools");
     expect(banner).toContain("cwd: /repo");
@@ -128,25 +141,93 @@ describe("TUI, slash commands, and session resume", () => {
         mcp: { servers: {} },
         hooks: [],
         context: { recentMessages: 6 },
-        memory: { enabled: true, autoWrite: "explicit" as const, maxResults: 8, scopes: ["user" as const, "project" as const, "session" as const] },
+        memory: {
+          enabled: true,
+          autoWrite: "explicit" as const,
+          maxResults: 8,
+          scopes: ["user" as const, "project" as const, "session" as const]
+        },
         webSearch: WEB_SEARCH_CONFIG
       };
 
-      expect(runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })).toContain("aliases: fast");
-      expect(runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo", sessionId: "session-1", currentModel: "fast" })).toContain("model: fast (main:gpt-fast)");
-      expect(runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })).toContain("tool completed git-status-tui");
-      expect(runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })).toContain("Pending interactions:");
-      expect(runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })).toContain("approval approval-tui");
-      expect(runSlashCommand({ command: { type: "sessions" }, config, store, cwd: "/repo" })).toContain("session-1");
-      expect(runSlashCommand({ command: { type: "model", alias: "fast" }, config, store, cwd: "/repo" })).toContain("Selected model fast: main:gpt-fast");
-      expect(runSlashCommand({ command: { type: "model", alias: "1" }, config, store, cwd: "/repo" })).toContain("Selected model fast");
-      expect(runSlashCommand({ command: { type: "model" }, config, store, cwd: "/repo", currentModel: "fast" })).toContain("Model picker:");
-      expect(runSlashCommand({ command: { type: "review" }, config, store, cwd: "/repo" })).toContain("Review route");
-      expect(runSlashCommand({ command: { type: "resume" }, config, store, cwd: "/repo" })).toContain("Resume sessions:");
-      expect(runSlashCommand({ command: { type: "resume", sessionId: "1" }, config, store, cwd: "/repo" })).toContain("Resumed session-1");
-      expect(registry.dispatch("permissions", [], { cwd: "/repo", config, store, permissionMode: "bypassPermissions" })).toContain("Permission mode: bypassPermissions");
-      expect(registry.dispatch("permissions", ["mode"], { cwd: "/repo", config, store, permissionMode: "acceptEdits" })).toContain("> acceptEdits");
-      expect(registry.dispatch("permissions", ["mode", "plan"], { cwd: "/repo", config, store, permissionMode: "default" })).toContain("Permission mode: plan");
+      expect(
+        runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })
+      ).toContain("aliases: fast");
+      expect(
+        runSlashCommand({
+          command: { type: "status" },
+          config,
+          store,
+          cwd: "/repo",
+          sessionId: "session-1",
+          currentModel: "fast"
+        })
+      ).toContain("model: fast (main:gpt-fast)");
+      expect(
+        runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })
+      ).toContain("tool completed git-status-tui");
+      expect(
+        runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })
+      ).toContain("Pending interactions:");
+      expect(
+        runSlashCommand({ command: { type: "status" }, config, store, cwd: "/repo" })
+      ).toContain("approval approval-tui");
+      expect(
+        runSlashCommand({ command: { type: "sessions" }, config, store, cwd: "/repo" })
+      ).toContain("session-1");
+      expect(
+        runSlashCommand({ command: { type: "model", alias: "fast" }, config, store, cwd: "/repo" })
+      ).toContain("Selected model fast: main:gpt-fast");
+      expect(
+        runSlashCommand({ command: { type: "model", alias: "1" }, config, store, cwd: "/repo" })
+      ).toContain("Selected model fast");
+      expect(
+        runSlashCommand({
+          command: { type: "model" },
+          config,
+          store,
+          cwd: "/repo",
+          currentModel: "fast"
+        })
+      ).toContain("Model picker:");
+      expect(
+        runSlashCommand({ command: { type: "review" }, config, store, cwd: "/repo" })
+      ).toContain("Review route");
+      expect(
+        runSlashCommand({ command: { type: "resume" }, config, store, cwd: "/repo" })
+      ).toContain("Resume sessions:");
+      expect(
+        runSlashCommand({
+          command: { type: "resume", sessionId: "1" },
+          config,
+          store,
+          cwd: "/repo"
+        })
+      ).toContain("Resumed session-1");
+      expect(
+        registry.dispatch("permissions", [], {
+          cwd: "/repo",
+          config,
+          store,
+          permissionMode: "bypassPermissions"
+        })
+      ).toContain("Permission mode: bypassPermissions");
+      expect(
+        registry.dispatch("permissions", ["mode"], {
+          cwd: "/repo",
+          config,
+          store,
+          permissionMode: "acceptEdits"
+        })
+      ).toContain("> acceptEdits");
+      expect(
+        registry.dispatch("permissions", ["mode", "plan"], {
+          cwd: "/repo",
+          config,
+          store,
+          permissionMode: "default"
+        })
+      ).toContain("Permission mode: plan");
       expect(formatSessionSearch(store, "one")).toContain("session-");
       expect(formatSessionResume(store, "session-1")).toContain("approval approval-tui");
       expect(formatSessionResume(store, "session-1")).toContain("Transcript:");
@@ -182,7 +263,12 @@ describe("TUI, slash commands, and session resume", () => {
         mcp: { servers: {} },
         hooks: [],
         context: { recentMessages: 6 },
-        memory: { enabled: true, autoWrite: "explicit" as const, maxResults: 8, scopes: ["user" as const, "project" as const, "session" as const] },
+        memory: {
+          enabled: true,
+          autoWrite: "explicit" as const,
+          maxResults: 8,
+          scopes: ["user" as const, "project" as const, "session" as const]
+        },
         webSearch: WEB_SEARCH_CONFIG
       };
 
@@ -192,14 +278,20 @@ describe("TUI, slash commands, and session resume", () => {
         { label: "main", value: "main", description: "main:gpt-main" }
       ]);
       const sessionItems = buildSessionPickerItems(store);
-      expect(sessionItems.map(item => item.value)).toEqual(expect.arrayContaining(["session-newer", "session-older"]));
-      expect(sessionItems.find(item => item.value === "session-newer")?.detail).toContain("/repo/new");
-      expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(expect.objectContaining({
-        label: "bypassPermissions",
-        value: "bypassPermissions",
-        description: "skip approval prompts",
-        detail: "current"
-      }));
+      expect(sessionItems.map((item) => item.value)).toEqual(
+        expect.arrayContaining(["session-newer", "session-older"])
+      );
+      expect(sessionItems.find((item) => item.value === "session-newer")?.detail).toContain(
+        "/repo/new"
+      );
+      expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(
+        expect.objectContaining({
+          label: "bypassPermissions",
+          value: "bypassPermissions",
+          description: "skip approval prompts",
+          detail: "current"
+        })
+      );
     } finally {
       store.close();
     }
@@ -243,7 +335,11 @@ describe("TUI, slash commands, and session resume", () => {
     temp = makeTempRoot();
     const store = SessionStore.open(getMagiPaths(temp.env));
     try {
-      const sessionId = store.createSession({ id: "live-format-session", title: "live", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "live-format-session",
+        title: "live",
+        cwd: process.cwd()
+      });
       const toolUse = store.recordAudit({
         sessionId,
         jobId: "job-live-format",
@@ -288,12 +384,22 @@ describe("TUI, slash commands, and session resume", () => {
       });
 
       expect(formatTuiLiveEvent(toEventView(toolUse))).toBeUndefined();
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolUse), { showToolTrace: true }))).toBe("· [tool] FileRead requested (read-live)");
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(approval)))).toBe("⏳ [approval] waiting for FileWrite (write-live)");
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(fallback)))).toBe("· [fallback] main -> backup");
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolContext)))).toBe("· [tools] 18 exposed - ~2100 schema tokens, 64 deferred");
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolUse), { showToolTrace: true }))).toBe(
+        "· [tool] FileRead requested (read-live)"
+      );
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(approval)))).toBe(
+        "⏳ [approval] waiting for FileWrite (write-live)"
+      );
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(fallback)))).toBe(
+        "· [fallback] main -> backup"
+      );
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(toolContext)))).toBe(
+        "· [tools] 18 exposed - ~2100 schema tokens, 64 deferred"
+      );
       expect(formatTuiLiveEvent(toEventView(localTool))).toBeUndefined();
-      expect(stripAnsi(formatTuiLiveEvent(toEventView(localTool), { showToolTrace: true }))).toBe("· [tool] Bash completed exit=0");
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(localTool), { showToolTrace: true }))).toBe(
+        "· [tool] Bash completed exit=0"
+      );
       expect(formatTuiLiveEvent(toEventView(textDelta))).toBeUndefined();
     } finally {
       store.close();
@@ -304,7 +410,11 @@ describe("TUI, slash commands, and session resume", () => {
     temp = makeTempRoot();
     const store = SessionStore.open(getMagiPaths(temp.env));
     try {
-      const sessionId = store.createSession({ id: "transcript-session", title: "transcript", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "transcript-session",
+        title: "transcript",
+        cwd: process.cwd()
+      });
       store.recordAudit({
         sessionId,
         jobId: "job-transcript",
@@ -339,10 +449,13 @@ describe("TUI, slash commands, and session resume", () => {
         metadata: { reason: "operator stop" }
       });
 
-      const state = buildTuiTranscriptState(store.listSessionAuditEvents(sessionId, 20).map(toEventView), {
-        sessionId,
-        limit: 10
-      });
+      const state = buildTuiTranscriptState(
+        store.listSessionAuditEvents(sessionId, 20).map(toEventView),
+        {
+          sessionId,
+          limit: 10
+        }
+      );
       const formatted = formatTuiTranscriptStatus(state);
 
       expect(state.pending).toHaveLength(1);
@@ -361,8 +474,16 @@ describe("TUI, slash commands, and session resume", () => {
     const store = SessionStore.open(getMagiPaths(temp.env));
     const output: string[] = [];
     try {
-      const firstSession = store.createSession({ id: "live-session-1", title: "one", cwd: process.cwd() });
-      const secondSession = store.createSession({ id: "live-session-2", title: "two", cwd: process.cwd() });
+      const firstSession = store.createSession({
+        id: "live-session-1",
+        title: "one",
+        cwd: process.cwd()
+      });
+      const secondSession = store.createSession({
+        id: "live-session-2",
+        title: "two",
+        cwd: process.cwd()
+      });
       const writer = startTuiLiveEventWriter({
         store,
         sessionId: firstSession,
@@ -411,7 +532,11 @@ describe("TUI, slash commands, and session resume", () => {
     const store = SessionStore.open(getMagiPaths(temp.env));
     const output: string[] = [];
     try {
-      const sessionId = store.createSession({ id: "live-debug-session", title: "debug", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "live-debug-session",
+        title: "debug",
+        cwd: process.cwd()
+      });
       const writer = startTuiLiveEventWriter({
         store,
         env: { MAGI_DEBUG_TOOLS: "1" },
@@ -446,7 +571,11 @@ describe("TUI, slash commands, and session resume", () => {
     const output: string[] = [];
     const prompts: string[] = [];
     try {
-      const sessionId = store.createSession({ id: "approval-tui-session", title: "approval", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "approval-tui-session",
+        title: "approval",
+        cwd: process.cwd()
+      });
       const wait = interactions.waitForApproval({
         sessionId,
         jobId: "job-approval-tui",
@@ -493,7 +622,9 @@ describe("TUI, slash commands, and session resume", () => {
       await expect(wait).resolves.toBe(true);
       writer.stop();
 
-      expect(stripAnsi(output.join(""))).toContain("[approval] waiting for ApprovalTestTool (approve-terminal)");
+      expect(stripAnsi(output.join(""))).toContain(
+        "[approval] waiting for ApprovalTestTool (approve-terminal)"
+      );
       expect(output.join("")).toContain("Approval required");
       expect(prompts).toEqual(["approve? [y/n/a] "]);
     } finally {
@@ -511,7 +642,11 @@ describe("TUI, slash commands, and session resume", () => {
     const output: string[] = [];
     const prompts: string[] = [];
     try {
-      const sessionId = store.createSession({ id: "bash-approval-session", title: "bash approval", cwd: "/repo" });
+      const sessionId = store.createSession({
+        id: "bash-approval-session",
+        title: "bash approval",
+        cwd: "/repo"
+      });
       const wait = interactions.waitForApproval({
         sessionId,
         jobId: "job-bash-approval",
@@ -588,7 +723,11 @@ describe("TUI, slash commands, and session resume", () => {
     const output: string[] = [];
     const stdin = createTtyInput();
     try {
-      const sessionId = store.createSession({ id: "approval-picker-session", title: "approval picker", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "approval-picker-session",
+        title: "approval picker",
+        cwd: process.cwd()
+      });
       const wait = interactions.waitForApproval({
         sessionId,
         jobId: "job-approval-picker",
@@ -656,7 +795,11 @@ describe("TUI, slash commands, and session resume", () => {
     const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
     const stdin = createTtyInput();
     try {
-      const sessionId = store.createSession({ id: "approval-picker-deny-session", title: "approval picker deny", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "approval-picker-deny-session",
+        title: "approval picker deny",
+        cwd: process.cwd()
+      });
       const wait = interactions.waitForApproval({
         sessionId,
         jobId: "job-approval-picker-deny",
@@ -711,7 +854,11 @@ describe("TUI, slash commands, and session resume", () => {
     const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
     const stdin = createTtyInput();
     try {
-      const sessionId = store.createSession({ id: "approval-picker-always-session", title: "approval picker always", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "approval-picker-always-session",
+        title: "approval picker always",
+        cwd: process.cwd()
+      });
       const wait = interactions.waitForApproval({
         sessionId,
         jobId: "job-approval-picker-always",
@@ -767,16 +914,22 @@ describe("TUI, slash commands, and session resume", () => {
     const output: string[] = [];
     const prompts: string[] = [];
     try {
-      const sessionId = store.createSession({ id: "question-tui-session", title: "question", cwd: process.cwd() });
+      const sessionId = store.createSession({
+        id: "question-tui-session",
+        title: "question",
+        cwd: process.cwd()
+      });
       const question = {
-        questions: [{
-          question: "Choose lane",
-          preview: "Review this rollout plan before choosing.",
-          options: [
-            { label: "canary", description: "Small rollout" },
-            { label: "stable", description: "Broad rollout" }
-          ]
-        }]
+        questions: [
+          {
+            question: "Choose lane",
+            preview: "Review this rollout plan before choosing.",
+            options: [
+              { label: "canary", description: "Small rollout" },
+              { label: "stable", description: "Broad rollout" }
+            ]
+          }
+        ]
       };
       const wait = interactions.waitForQuestion({
         sessionId,
@@ -822,13 +975,17 @@ describe("TUI, slash commands, and session resume", () => {
       });
 
       await expect(wait).resolves.toMatchObject({
-        answers: [{
-          selectedLabels: ["stable"]
-        }]
+        answers: [
+          {
+            selectedLabels: ["stable"]
+          }
+        ]
       });
       writer.stop();
 
-      expect(stripAnsi(output.join(""))).toContain("[question] waiting for answer (1) (ask-terminal)");
+      expect(stripAnsi(output.join(""))).toContain(
+        "[question] waiting for answer (1) (ask-terminal)"
+      );
       expect(output.join("")).toContain("Choose lane");
       expect(output.join("")).toContain("Review this rollout plan before choosing.");
       expect(prompts).toEqual(["? "]);
@@ -843,8 +1000,16 @@ describe("TUI, slash commands, and session resume", () => {
     const store = SessionStore.open(getMagiPaths(temp.env));
     const output: string[] = [];
     try {
-      const firstSession = store.createSession({ id: "live-new-1", title: "one", cwd: process.cwd() });
-      const secondSession = store.createSession({ id: "live-new-2", title: "two", cwd: process.cwd() });
+      const firstSession = store.createSession({
+        id: "live-new-1",
+        title: "one",
+        cwd: process.cwd()
+      });
+      const secondSession = store.createSession({
+        id: "live-new-2",
+        title: "two",
+        cwd: process.cwd()
+      });
       const writer = startTuiLiveEventWriter({
         store,
         output: {
@@ -892,7 +1057,12 @@ describe("TUI, slash commands, and session resume", () => {
         mcp: { servers: {} },
         hooks: [],
         context: { recentMessages: 6 },
-        memory: { enabled: true, autoWrite: "explicit" as const, maxResults: 8, scopes: ["user" as const, "project" as const, "session" as const] },
+        memory: {
+          enabled: true,
+          autoWrite: "explicit" as const,
+          maxResults: 8,
+          scopes: ["user" as const, "project" as const, "session" as const]
+        },
         webSearch: WEB_SEARCH_CONFIG
       };
       const output = runSlashCommand({
@@ -911,7 +1081,11 @@ describe("TUI, slash commands, and session resume", () => {
   it("lists and resumes sessions from CLI", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tui-session-"));
-    const create = await runCli(["-p", 'create file "note.txt" with content "session text"'], temp.env, workspace);
+    const create = await runCli(
+      ["-p", 'create file "note.txt" with content "session text"'],
+      temp.env,
+      workspace
+    );
     expect(create.exitCode).toBe(0);
     const id = /sessionId: ([^\n]+)/.exec(create.stdout)?.[1];
     expect(id).toBeTruthy();
@@ -937,17 +1111,20 @@ describe("TUI, slash commands, and session resume", () => {
     const prompts: string[] = [];
     const output: string[] = [];
     const answers = ["9", "1,2"];
-    const resolver = createTerminalUserQuestionResolver({
-      question: async (prompt: string) => {
-        prompts.push(prompt);
-        return answers.shift() ?? "";
+    const resolver = createTerminalUserQuestionResolver(
+      {
+        question: async (prompt: string) => {
+          prompts.push(prompt);
+          return answers.shift() ?? "";
+        }
+      },
+      {
+        write: (chunk: unknown) => {
+          output.push(String(chunk));
+          return true;
+        }
       }
-    }, {
-      write: (chunk: unknown) => {
-        output.push(String(chunk));
-        return true;
-      }
-    });
+    );
 
     const result = await resolver({
       toolUse: {
@@ -957,15 +1134,17 @@ describe("TUI, slash commands, and session resume", () => {
         input: {}
       },
       question: {
-        questions: [{
-          header: "Scope",
-          question: "Which scopes should run?",
-          multiSelect: true,
-          options: [
-            { label: "type", description: "Run type check" },
-            { label: "test", description: "Run tests" }
-          ]
-        }]
+        questions: [
+          {
+            header: "Scope",
+            question: "Which scopes should run?",
+            multiSelect: true,
+            options: [
+              { label: "type", description: "Run type check" },
+              { label: "test", description: "Run tests" }
+            ]
+          }
+        ]
       }
     });
 
@@ -975,128 +1154,130 @@ describe("TUI, slash commands, and session resume", () => {
   });
 });
 
-  it("colorizeDiffLine applies ANSI colors to diff lines", () => {
-    expect(colorizeDiffLine("--- a/foo.ts")).toContain("\x1b[36m");
-    expect(colorizeDiffLine("+++ b/foo.ts")).toContain("\x1b[36m");
-    expect(colorizeDiffLine("+added line")).toContain("\x1b[32m");
-    expect(colorizeDiffLine("-removed line")).toContain("\x1b[31m");
-    expect(colorizeDiffLine("@@ -1,3 +1,4 @@")).toContain("\x1b[90m");
-    expect(colorizeDiffLine(" context line")).toBe(" context line");
+it("colorizeDiffLine applies ANSI colors to diff lines", () => {
+  expect(colorizeDiffLine("--- a/foo.ts")).toContain("\x1b[36m");
+  expect(colorizeDiffLine("+++ b/foo.ts")).toContain("\x1b[36m");
+  expect(colorizeDiffLine("+added line")).toContain("\x1b[32m");
+  expect(colorizeDiffLine("-removed line")).toContain("\x1b[31m");
+  expect(colorizeDiffLine("@@ -1,3 +1,4 @@")).toContain("\x1b[90m");
+  expect(colorizeDiffLine(" context line")).toBe(" context line");
+});
+
+it("generates diff preview for FileWrite approval in registry", async () => {
+  workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-approval-"));
+  const existingFile = path.join(workspace, "hello.ts");
+  writeFileSync(existingFile, "const x = 1;\n", "utf8");
+
+  const { checkToolPermission } = await import("../src/tools/registry.js");
+  const permission = checkToolPermission({
+    toolUse: {
+      type: "tool-use",
+      id: "fw-1",
+      name: "FileWrite",
+      input: { file_path: "hello.ts", content: "const x = 2;\n" }
+    },
+    mode: "default",
+    env: {}
   });
 
-  it("generates diff preview for FileWrite approval in registry", async () => {
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-approval-"));
-    const existingFile = path.join(workspace, "hello.ts");
-    writeFileSync(existingFile, "const x = 1;\n", "utf8");
-
-    const { checkToolPermission } = await import("../src/tools/registry.js");
-    const permission = checkToolPermission({
-      toolUse: {
-        type: "tool-use",
-        id: "fw-1",
-        name: "FileWrite",
-        input: { file_path: "hello.ts", content: "const x = 2;\n" }
-      },
-      mode: "default",
-      env: {}
-    });
-
-    expect(permission.decision).toBe("ask");
-    // diff is generated in executeRegisteredTool, not checkToolPermission
-    // so we test the full execution path
-    const { executeRegisteredTool } = await import("../src/tools/registry.js");
-    let capturedDiff: string | undefined;
-    await executeRegisteredTool({
-      cwd: workspace,
-      toolUse: {
-        type: "tool-use",
-        id: "fw-2",
-        name: "FileWrite",
-        input: { file_path: "hello.ts", content: "const x = 2;\n" }
-      },
-      permissionMode: "default",
-      approvalResolver: async ({ permission }) => {
-        capturedDiff = permission.diff;
-        return true;
-      }
-    });
-
-    expect(capturedDiff).toBeDefined();
-    expect(capturedDiff).toContain("-const x = 1;");
-    expect(capturedDiff).toContain("+const x = 2;");
+  expect(permission.decision).toBe("ask");
+  // diff is generated in executeRegisteredTool, not checkToolPermission
+  // so we test the full execution path
+  const { executeRegisteredTool } = await import("../src/tools/registry.js");
+  let capturedDiff: string | undefined;
+  await executeRegisteredTool({
+    cwd: workspace,
+    toolUse: {
+      type: "tool-use",
+      id: "fw-2",
+      name: "FileWrite",
+      input: { file_path: "hello.ts", content: "const x = 2;\n" }
+    },
+    permissionMode: "default",
+    approvalResolver: async ({ permission }) => {
+      capturedDiff = permission.diff;
+      return true;
+    }
   });
 
-  it("generates diff preview for FileEdit approval in registry", async () => {
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-edit-"));
-    const existingFile = path.join(workspace, "edit.ts");
-    writeFileSync(existingFile, "const a = 1;\nconst b = 2;\n", "utf8");
+  expect(capturedDiff).toBeDefined();
+  expect(capturedDiff).toContain("-const x = 1;");
+  expect(capturedDiff).toContain("+const x = 2;");
+});
 
-    const { executeRegisteredTool } = await import("../src/tools/registry.js");
-    let capturedDiff: string | undefined;
-    await executeRegisteredTool({
-      cwd: workspace,
-      toolUse: {
-        type: "tool-use",
-        id: "fe-1",
-        name: "FileEdit",
-        input: { file_path: "edit.ts", old_string: "const a = 1;", new_string: "const a = 99;" }
-      },
-      permissionMode: "default",
-      approvalResolver: async ({ permission }) => {
-        capturedDiff = permission.diff;
-        return true;
-      }
-    });
+it("generates diff preview for FileEdit approval in registry", async () => {
+  workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-edit-"));
+  const existingFile = path.join(workspace, "edit.ts");
+  writeFileSync(existingFile, "const a = 1;\nconst b = 2;\n", "utf8");
 
-    expect(capturedDiff).toBeDefined();
-    expect(capturedDiff).toContain("-const a = 1;");
-    expect(capturedDiff).toContain("+const a = 99;");
+  const { executeRegisteredTool } = await import("../src/tools/registry.js");
+  let capturedDiff: string | undefined;
+  await executeRegisteredTool({
+    cwd: workspace,
+    toolUse: {
+      type: "tool-use",
+      id: "fe-1",
+      name: "FileEdit",
+      input: { file_path: "edit.ts", old_string: "const a = 1;", new_string: "const a = 99;" }
+    },
+    permissionMode: "default",
+    approvalResolver: async ({ permission }) => {
+      capturedDiff = permission.diff;
+      return true;
+    }
   });
 
-  it("passes diff through approval chain to audit metadata", async () => {
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-chain-"));
-    writeFileSync(path.join(workspace, "chain.ts"), "old content\n", "utf8");
+  expect(capturedDiff).toBeDefined();
+  expect(capturedDiff).toContain("-const a = 1;");
+  expect(capturedDiff).toContain("+const a = 99;");
+});
 
-    const { SessionStore } = await import("../src/session-store.js");
-    const { QueryEngine } = await import("../src/agent/query-engine.js");
-    const { textMessage } = await import("../src/providers/ir.js");
-    const store = new SessionStore(path.join(workspace, "sessions.sqlite"));
-    try {
-      const sessionId = store.createSession({ title: "diff chain", cwd: workspace });
-      let callCount = 0;
-      const adapter = {
-        name: "diff-chain",
-        complete: async () => {
-          callCount++;
-          if (callCount === 1) {
-            return {
-              text: "",
-              toolUses: [{
+it("passes diff through approval chain to audit metadata", async () => {
+  workspace = mkdtempSync(path.join(os.tmpdir(), "magi-diff-chain-"));
+  writeFileSync(path.join(workspace, "chain.ts"), "old content\n", "utf8");
+
+  const { SessionStore } = await import("../src/session-store.js");
+  const { QueryEngine } = await import("../src/agent/query-engine.js");
+  const { textMessage } = await import("../src/providers/ir.js");
+  const store = new SessionStore(path.join(workspace, "sessions.sqlite"));
+  try {
+    const sessionId = store.createSession({ title: "diff chain", cwd: workspace });
+    let callCount = 0;
+    const adapter = {
+      name: "diff-chain",
+      complete: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            text: "",
+            toolUses: [
+              {
                 type: "tool-use" as const,
                 id: "fw-chain",
                 name: "FileWrite",
                 input: { file_path: "chain.ts", content: "new content\n" }
-              }]
-            };
-          }
-          return { text: "done" };
+              }
+            ]
+          };
         }
-      };
-      const engine = new QueryEngine({
-        store,
-        sessionId,
-        cwd: workspace,
-        routes: [{ providerName: "p", model: "m", adapter }],
-        permissionMode: "default"
-      });
+        return { text: "done" };
+      }
+    };
+    const engine = new QueryEngine({
+      store,
+      sessionId,
+      cwd: workspace,
+      routes: [{ providerName: "p", model: "m", adapter }],
+      permissionMode: "default"
+    });
 
-      await engine.submitMessage("update file");
+    await engine.submitMessage("update file");
 
-      const audits = store.listAuditEvents(50);
-      const approvalRequested = audits.find((e) => e.action === "agent.approval.requested");
-      expect(approvalRequested).toBeDefined();
-      expect(approvalRequested?.target).toBe("FileWrite");
-    } finally {
-      store.close();
-    }
-  });
+    const audits = store.listAuditEvents(50);
+    const approvalRequested = audits.find((e) => e.action === "agent.approval.requested");
+    expect(approvalRequested).toBeDefined();
+    expect(approvalRequested?.target).toBe("FileWrite");
+  } finally {
+    store.close();
+  }
+});

@@ -31,8 +31,10 @@ export const command = {
       const id = args[2];
       if (!action || !id) return "Usage: /learning draft <show|apply|reject> <id>";
       if (action === "show") return formatLearningDraftReview({ ...rootInput, id });
-      if (action === "apply") return `Applied LearningDraft: ${applyLearningDraft({ ...rootInput, id }).id}`;
-      if (action === "reject") return `Rejected LearningDraft: ${rejectLearningDraft({ ...rootInput, id }).id}`;
+      if (action === "apply")
+        return `Applied LearningDraft: ${applyLearningDraft({ ...rootInput, id }).id}`;
+      if (action === "reject")
+        return `Rejected LearningDraft: ${rejectLearningDraft({ ...rootInput, id }).id}`;
       return `Unknown LearningDraft action: ${action}`;
     }
     return `Unknown learning command: ${sub}. Usage: ${command.usage}`;

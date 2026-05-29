@@ -29,7 +29,9 @@ export class McpConnectionManager {
     }
   }
 
-  async runHealthCheck(): Promise<Array<{ serverName: string; healthy: boolean; reconnected: boolean }>> {
+  async runHealthCheck(): Promise<
+    Array<{ serverName: string; healthy: boolean; reconnected: boolean }>
+  > {
     const results: Array<{ serverName: string; healthy: boolean; reconnected: boolean }> = [];
     for (const [name, client] of this.clients) {
       const healthy = await client.ping().catch(() => false);
@@ -93,7 +95,9 @@ export class McpConnectionManager {
         await client.initialize();
         if (this.connecting.get(serverName) !== connection) {
           client.close();
-          throw new Error(`MCP connection to ${serverName} was closed before initialization completed`);
+          throw new Error(
+            `MCP connection to ${serverName} was closed before initialization completed`
+          );
         }
         this.clients.set(serverName, client);
         return client;

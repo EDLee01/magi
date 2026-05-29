@@ -46,7 +46,10 @@ export interface McpPrompt {
 
 export interface McpPromptMessage {
   role: "user" | "assistant" | "system";
-  content: { type: "text"; text: string } | { type: "image"; data: string; mimeType: string } | { type: "resource"; resource: McpResourceContent };
+  content:
+    | { type: "text"; text: string }
+    | { type: "image"; data: string; mimeType: string }
+    | { type: "resource"; resource: McpResourceContent };
 }
 
 export interface McpGetPromptResult {
