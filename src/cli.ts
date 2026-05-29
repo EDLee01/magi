@@ -555,6 +555,7 @@ async function runCliUnsafeWithParsed(
       }
       if (sub === "adopt" || sub === "migrate") {
         const planId = parsed.rest[1];
+        const force = parsed.rest.includes("--force");
         const session = resolvePlanSessionForCommand({
           store,
           sessionId: parsed.sessionId ?? parsed.resumeSessionId,
@@ -574,7 +575,8 @@ async function runCliUnsafeWithParsed(
         const adopted = adoptPlanReview({
           stateRoot: paths.stateRoot,
           sourcePlanId: planId,
-          targetSessionId: session.id
+          targetSessionId: session.id,
+          force
         });
         return {
           exitCode: 0,

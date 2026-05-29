@@ -303,6 +303,9 @@ describe("capability report", () => {
         migrationPlanExecutionVerified: false,
         crossSessionPlanAdopted: false,
         crossSessionAdoptedPlanContextSeen: false,
+        parallelPlanIsolationSeen: false,
+        parallelPlanConflictRejected: false,
+        parallelPlanAdoptedExplicitly: false,
         assertions: 3,
         filesVerified: 1,
         toolCallCount: 2,
@@ -339,7 +342,10 @@ describe("capability report", () => {
         "multiStepPlanDeviationRecovered=false",
         "migrationPlanExecutionVerified=false",
         "crossSessionPlanAdopted=false",
-        "crossSessionAdoptedPlanContextSeen=false"
+        "crossSessionAdoptedPlanContextSeen=false",
+        "parallelPlanIsolationSeen=false",
+        "parallelPlanConflictRejected=false",
+        "parallelPlanAdoptedExplicitly=false"
       ])
     );
   });
@@ -1036,6 +1042,9 @@ function goalPlanReport(
     migrationPlanExecutionVerified: boolean;
     crossSessionPlanAdopted: boolean;
     crossSessionAdoptedPlanContextSeen: boolean;
+    parallelPlanIsolationSeen: boolean;
+    parallelPlanConflictRejected: boolean;
+    parallelPlanAdoptedExplicitly: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
     assertions: number;
@@ -1049,7 +1058,7 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 27,
+      assertions: overrides.assertions ?? 30,
       filesVerified: overrides.filesVerified ?? 4,
       toolCallCount: overrides.toolCallCount ?? 10,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1064,7 +1073,7 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 27 },
+            { length: overrides.assertions ?? 30 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1100,6 +1109,9 @@ function goalPlanReport(
           migrationPlanExecutionVerified: true,
           crossSessionPlanAdopted: true,
           crossSessionAdoptedPlanContextSeen: true,
+          parallelPlanIsolationSeen: true,
+          parallelPlanConflictRejected: true,
+          parallelPlanAdoptedExplicitly: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

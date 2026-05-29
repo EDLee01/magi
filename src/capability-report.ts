@@ -606,7 +606,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 27) failures.push(`assertions=${assertions}`);
+  if (assertions < 30) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 10) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -653,6 +653,13 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.crossSessionAdoptedPlanContextSeen !== true) {
     failures.push("crossSessionAdoptedPlanContextSeen=false");
   }
+  if (details.parallelPlanIsolationSeen !== true) failures.push("parallelPlanIsolationSeen=false");
+  if (details.parallelPlanConflictRejected !== true) {
+    failures.push("parallelPlanConflictRejected=false");
+  }
+  if (details.parallelPlanAdoptedExplicitly !== true) {
+    failures.push("parallelPlanAdoptedExplicitly=false");
+  }
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -688,6 +695,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       migrationPlanExecutionVerified: details.migrationPlanExecutionVerified === true,
       crossSessionPlanAdopted: details.crossSessionPlanAdopted === true,
       crossSessionAdoptedPlanContextSeen: details.crossSessionAdoptedPlanContextSeen === true,
+      parallelPlanIsolationSeen: details.parallelPlanIsolationSeen === true,
+      parallelPlanConflictRejected: details.parallelPlanConflictRejected === true,
+      parallelPlanAdoptedExplicitly: details.parallelPlanAdoptedExplicitly === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },

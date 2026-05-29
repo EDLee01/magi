@@ -88,6 +88,7 @@ export function adoptPlanReview(input: {
   sourcePlanId: string;
   targetSessionId: string;
   response?: string;
+  force?: boolean;
 }): PlanReviewRecord {
   const source = getPlanReview(input.stateRoot, input.sourcePlanId);
   if (!source) {
@@ -95,6 +96,12 @@ export function adoptPlanReview(input: {
   }
   if (source.status !== "approved") {
     throw new Error(`Can only adopt approved plans: ${input.sourcePlanId}`);
+  }
+  const existing = getLatestActivePlanReview(input.stateRoot, input.targetSessionId);
+  if (existing && !input.force) {
+    throw new Error(
+      `Session already has an approved or submitted plan: ${existing.id}. Use --force to adopt anyway.`
+    );
   }
   return recordPlanReview({
     stateRoot: input.stateRoot,
@@ -137,6 +144,15 @@ export function getLatestPlanReview(
   sessionId?: string
 ): PlanReviewRecord | undefined {
   return listPlanReviews(stateRoot, sessionId)[0];
+}
+
+export function getLatestActivePlanReview(
+  stateRoot: string,
+  sessionId: string
+): PlanReviewRecord | undefined {
+  return listPlanReviews(stateRoot, sessionId).find(
+    (plan) => plan.status === "approved" || plan.status === "submitted"
+  );
 }
 
 export function getPlanReview(stateRoot: string, id: string): PlanReviewRecord | undefined {

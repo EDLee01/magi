@@ -128,4 +128,51 @@ describe("plan review state", () => {
       temp.cleanup();
     }
   });
+
+  it("rejects adopting over an active target plan unless forced", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const source = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "source-session",
+        plan: "1. Inspect source\n2. Implement target",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      const target = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "target-session",
+        plan: "1. Preserve target plan",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+
+      expect(() =>
+        adoptPlanReview({
+          stateRoot: paths.stateRoot,
+          sourcePlanId: source.id,
+          targetSessionId: "target-session"
+        })
+      ).toThrow("already has an approved or submitted plan");
+
+      expect(getLatestPlanReview(paths.stateRoot, "target-session")?.id).toBe(target.id);
+
+      const forced = adoptPlanReview({
+        stateRoot: paths.stateRoot,
+        sourcePlanId: source.id,
+        targetSessionId: "target-session",
+        force: true
+      });
+
+      expect(forced).toMatchObject({
+        sessionId: "target-session",
+        status: "approved",
+        adoptedFromPlanId: source.id
+      });
+      expect(getLatestPlanReview(paths.stateRoot, "target-session")?.id).toBe(forced.id);
+    } finally {
+      temp.cleanup();
+    }
+  });
 });

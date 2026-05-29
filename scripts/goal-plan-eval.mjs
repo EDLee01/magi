@@ -22,6 +22,9 @@ const workDir = path.join(root, "work");
 const sessionId = "goal-plan-eval-session";
 const secondSessionId = "goal-plan-eval-second-session";
 const adoptedSessionId = "goal-plan-eval-adopted-session";
+const parallelAlphaSessionId = "goal-plan-eval-parallel-alpha";
+const parallelBetaSessionId = "goal-plan-eval-parallel-beta";
+const parallelAdoptSessionId = "goal-plan-eval-parallel-adopt";
 const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
 const blockedGoalObjective = "wait for Goal/Plan blocked audit";
 const completedGoalObjective = "complete Goal/Plan lifecycle eval";
@@ -43,6 +46,16 @@ const approvedPlanText = [
   "3. Patch migration-target.txt to the migrated policy",
   "4. Re-read migration-target.txt after patching",
   "5. Write inherited-plan-output.txt only after migration-target.txt is migrated"
+].join("\n");
+const parallelAlphaPlanText = [
+  "1. Read alpha-source.txt",
+  "2. Patch alpha-target.txt",
+  "3. Verify alpha result"
+].join("\n");
+const parallelBetaPlanText = [
+  "1. Read beta-source.txt",
+  "2. Patch beta-target.txt",
+  "3. Verify beta result"
 ].join("\n");
 const inheritedPlanSourcePath = "inherited-plan-source.txt";
 const inheritedPlanOutputPath = "inherited-plan-output.txt";
@@ -78,7 +91,10 @@ try {
     blockedGoalPersisted: false,
     repeatedPlanDeviationBlocked: false,
     multiStepPlanDeviationRecovered: false,
-    migrationPlanExecutionVerified: false
+    migrationPlanExecutionVerified: false,
+    parallelPlanIsolationSeen: false,
+    parallelPlanConflictRejected: false,
+    parallelPlanAdoptedExplicitly: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -262,6 +278,7 @@ try {
       planRevision.secondRevisionPlanId
     );
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
+    const parallelPlans = await runParallelPlanConflictFlow(tools.executeRegisteredTool);
     const planRevisionChainLinked = assertPlanRevisionChainLinked(
       planRevision.revisionPlanId,
       planRevision.secondRevisionPlanId,
@@ -341,6 +358,7 @@ try {
     assert(state.migrationPlanExecutionVerified, "provider did not verify migration execution");
     assert(state.inheritedPlanExecutionCompleted, "provider did not complete inherited plan");
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
+    assert(state.parallelPlanIsolationSeen, "provider did not see isolated parallel plan contexts");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
     const toolCounts = mergeToolCounts(provider.metrics().toolCounts, planRevision.toolCounts);
@@ -371,7 +389,10 @@ try {
       "migration target re-read after patch",
       "inherited plan output written after migration verification",
       "approved plan adopted across sessions",
-      "adopted plan context included source metadata"
+      "adopted plan context included source metadata",
+      "parallel approved plans stayed isolated by session",
+      "parallel conflicting plan was rejected without explicit adopt",
+      "parallel approved plan adopted only when requested"
     ];
     const filesVerified = [
       "state/goals.json",
@@ -419,6 +440,9 @@ try {
             migrationPlanExecutionVerified: state.migrationPlanExecutionVerified,
             crossSessionPlanAdopted,
             crossSessionAdoptedPlanContextSeen: state.crossSessionAdoptedPlanContextSeen,
+            parallelPlanIsolationSeen: state.parallelPlanIsolationSeen,
+            parallelPlanConflictRejected: parallelPlans.conflictRejected,
+            parallelPlanAdoptedExplicitly: parallelPlans.adoptedExplicitly,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -662,6 +686,32 @@ function createRouter(state) {
       );
       state.crossSessionAdoptedPlanContextSeen = true;
       return messageText("Adopted cross-session plan context is present.");
+    }
+
+    if (latestUser.includes("Verify parallel alpha plan context is isolated")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "parallel alpha plan context missing");
+      assert(systemPrompt.includes(parallelAlphaPlanText), "parallel alpha plan text missing");
+      assert(!systemPrompt.includes(parallelBetaPlanText), "parallel beta plan leaked into alpha");
+      return messageText("Parallel alpha plan context is isolated.");
+    }
+
+    if (latestUser.includes("Verify parallel beta plan context is isolated")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "parallel beta plan context missing");
+      assert(systemPrompt.includes(parallelBetaPlanText), "parallel beta plan text missing");
+      assert(!systemPrompt.includes(parallelAlphaPlanText), "parallel alpha plan leaked into beta");
+      state.parallelPlanIsolationSeen = true;
+      return messageText("Parallel beta plan context is isolated.");
+    }
+
+    if (latestUser.includes("Verify explicitly adopted parallel plan context")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "parallel adopted context missing");
+      assert(systemPrompt.includes(parallelAlphaPlanText), "adopted alpha plan text missing");
+      assert(!systemPrompt.includes(parallelBetaPlanText), "unrequested beta plan leaked into adopt");
+      assert(
+        systemPrompt.includes(`Adopted from session: ${parallelAlphaSessionId}`),
+        "parallel adopted context missed source session"
+      );
+      return messageText("Explicitly adopted parallel plan context is present.");
     }
 
     return messageText("OK");
@@ -1052,6 +1102,184 @@ async function assertCrossSessionPlanAdopted(sourcePlanId) {
   );
   assert(status.includes(approvedPlanText), "adopted plan missed approved plan text");
   return true;
+}
+
+async function runParallelPlanConflictFlow(executeRegisteredTool) {
+  await runCli(
+    [
+      "--session-id",
+      parallelAlphaSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare parallel alpha Goal/Plan eval session."
+    ],
+    "seed parallel alpha session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      parallelBetaSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare parallel beta Goal/Plan eval session."
+    ],
+    "seed parallel beta session"
+  );
+
+  const alpha = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: parallelAlphaSessionId,
+    toolUseId: "approve-parallel-alpha-plan",
+    plan: parallelAlphaPlanText
+  });
+  const beta = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: parallelBetaSessionId,
+    toolUseId: "approve-parallel-beta-plan",
+    plan: parallelBetaPlanText
+  });
+
+  assertPlanRecord({
+    planId: alpha.planId,
+    sessionId: parallelAlphaSessionId,
+    plan: parallelAlphaPlanText,
+    status: "approved"
+  });
+  assertPlanRecord({
+    planId: beta.planId,
+    sessionId: parallelBetaSessionId,
+    plan: parallelBetaPlanText,
+    status: "approved"
+  });
+
+  const alphaStatus = await runCli(
+    ["plan", "--session-id", parallelAlphaSessionId],
+    "parallel alpha plan status"
+  );
+  assert(alphaStatus.includes(parallelAlphaPlanText), "parallel alpha status missed alpha plan");
+  assert(!alphaStatus.includes(parallelBetaPlanText), "parallel beta plan leaked into alpha status");
+  const betaStatus = await runCli(
+    ["plan", "--session-id", parallelBetaSessionId],
+    "parallel beta plan status"
+  );
+  assert(betaStatus.includes(parallelBetaPlanText), "parallel beta status missed beta plan");
+  assert(!betaStatus.includes(parallelAlphaPlanText), "parallel alpha plan leaked into beta status");
+
+  const alphaContext = await runCli(
+    [
+      "--session-id",
+      parallelAlphaSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify parallel alpha plan context is isolated."
+    ],
+    "parallel alpha plan context"
+  );
+  assert(alphaContext.includes("Parallel alpha plan context is isolated"), "alpha context failed");
+  const betaContext = await runCli(
+    [
+      "--session-id",
+      parallelBetaSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify parallel beta plan context is isolated."
+    ],
+    "parallel beta plan context"
+  );
+  assert(betaContext.includes("Parallel beta plan context is isolated"), "beta context failed");
+
+  let conflictRejected = false;
+  try {
+    await runCli(
+      ["plan", "adopt", beta.planId, "--session-id", parallelAlphaSessionId],
+      "reject conflicting parallel adopt"
+    );
+  } catch (error) {
+    conflictRejected = String(error).includes("already has an approved or submitted plan");
+  }
+  assert(conflictRejected, "parallel conflicting plan adopt was not rejected");
+
+  await runCli(
+    [
+      "--session-id",
+      parallelAdoptSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare parallel adopt Goal/Plan eval session."
+    ],
+    "seed parallel adopt session"
+  );
+  const adopted = await runCli(
+    ["plan", "adopt", alpha.planId, "--session-id", parallelAdoptSessionId],
+    "adopt parallel alpha plan"
+  );
+  assert(adopted.includes("Plan adopted:"), "parallel alpha adopt did not confirm");
+  const adoptContext = await runCli(
+    [
+      "--session-id",
+      parallelAdoptSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify explicitly adopted parallel plan context."
+    ],
+    "parallel adopted plan context"
+  );
+  assert(
+    adoptContext.includes("Explicitly adopted parallel plan context is present"),
+    "parallel adopted context failed"
+  );
+
+  return {
+    conflictRejected,
+    adoptedExplicitly: true
+  };
+}
+
+async function approvePlanWithTool(input) {
+  const result = await input.executeRegisteredTool({
+    cwd: workDir,
+    stateRoot: path.join(configDir, "state"),
+    sessionId: input.sessionId,
+    toolUse: {
+      type: "tool-use",
+      id: input.toolUseId,
+      name: "ExitPlanMode",
+      input: { plan: input.plan }
+    },
+    userQuestionResolver: ({ question }) => ({
+      answers: [
+        {
+          question: question.questions[0].question,
+          selectedLabels: ["Yes, proceed"],
+          selectedOptions: [question.questions[0].options[0]]
+        }
+      ]
+    })
+  });
+  assert(!result.isError, `parallel plan approval failed: ${result.content}`);
+  assert(result.content.includes("Plan approved."), "parallel plan was not approved");
+  return { planId: parsePlanId(result.content) };
+}
+
+function assertPlanRecord(input) {
+  const plans = JSON.parse(readFileSync(path.join(configDir, "state", "plans.json"), "utf8")).plans;
+  const plan = plans.find((candidate) => candidate.id === input.planId);
+  assert(plan, `plan record not found: ${input.planId}`);
+  assert(plan.sessionId === input.sessionId, "plan record used wrong session");
+  assert(plan.plan === input.plan, "plan record persisted wrong text");
+  assert(plan.status === input.status, "plan record persisted wrong status");
 }
 
 function parsePlanId(output) {
