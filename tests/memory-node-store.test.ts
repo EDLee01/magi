@@ -191,6 +191,16 @@ describe("memory-node-store", () => {
         lastSignal: "irrelevant",
         lastReason: "Wrong context for this task."
       });
+
+      const trends = store.listFeedbackTrends({ limit: 5 });
+      expect(trends[0]).toMatchObject({
+        node: { id: node.id, title: "Verification output" },
+        useful: 1,
+        irrelevant: 1,
+        net: 0,
+        lastSignal: "irrelevant",
+        lastReason: "Wrong context for this task."
+      });
     } finally {
       store.close();
     }

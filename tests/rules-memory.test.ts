@@ -1006,6 +1006,17 @@ describe("AGENTS rules and memory", () => {
     expect(helpful.stdout).toContain("signal: useful");
     expect(helpful.stdout).toContain("weight: 0.60 -> 0.68");
 
+    const trends = await runCli(
+      ["memory", "feedback", "trends", "--limit", "3"],
+      temp.env,
+      workspace
+    );
+    expect(trends.exitCode).toBe(0);
+    expect(trends.stdout).toContain("Memory feedback trends: 1");
+    expect(trends.stdout).toContain("Focused verification workflow");
+    expect(trends.stdout).toContain("useful=1 irrelevant=0 net=1");
+    expect(trends.stdout).toContain("This workflow matched the task.");
+
     const wrong = await runCli(
       [
         "memory",

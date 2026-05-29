@@ -87,6 +87,7 @@ multi-machine, sub-agents). Press `q` to quit early.
 | `magi memory search <q>`   | Search durable Memory                     |
 | `magi memory link --from <node> --to <node>` | Link Memory graph nodes       |
 | `magi memory feedback --target <node> --signal useful` | Reinforce or dispute Memory |
+| `magi memory feedback trends` | Show Memory nodes shaped by user feedback |
 | `magi memory eval --case-file <file>` | Run Memory recall quality cases |
 | `magi learning list`       | List reviewable LearningDrafts            |
 | `magi learning draft <show|apply|reject> <id>` | Review or resolve a LearningDraft |

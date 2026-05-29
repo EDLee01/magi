@@ -1324,6 +1324,7 @@ describe("CLI entrypoint", () => {
     expect(result.stdout).toContain("workspace diagnose");
     expect(result.stdout).toContain("memory link --from");
     expect(result.stdout).toContain("memory feedback --target");
+    expect(result.stdout).toContain("memory feedback trends");
     expect(result.stdout).toContain("memory conflicts");
     expect(result.stdout).toContain("memory maintain config");
   });

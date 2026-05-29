@@ -283,7 +283,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   );
   const userFeedbackTrendSeen =
     assertionList.includes("user feedback increased useful memory weight") &&
-    assertionList.includes("user feedback persisted memory trend metadata");
+    assertionList.includes("user feedback persisted memory trend metadata") &&
+    assertionList.includes("user feedback trend view rendered useful memory");
   const assertions = assertionList.length;
   const filesVerified = readStringList(details.filesVerified).length;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);

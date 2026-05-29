@@ -279,8 +279,13 @@ function assertUserFeedbackTrendLifecycle() {
   const trend = feedbackTrendByNodeId(workflow.id);
   assert(trend.useful >= 1, "memory feedback trend did not count useful feedback");
   assert(trend.lastSignal === "useful", "memory feedback trend did not persist latest signal");
+  const trends = runCli(["memory", "feedback", "trends", "--limit", "5"], "memory feedback trends");
+  assert(trends.includes("Memory feedback trends:"), "memory feedback trends did not render");
+  assert(trends.includes("Deployment gate workflow"), "memory feedback trends missed workflow");
+  assert(trends.includes("useful=1"), "memory feedback trends missed useful count");
   recordAssertion("user feedback increased useful memory weight");
   recordAssertion("user feedback persisted memory trend metadata");
+  recordAssertion("user feedback trend view rendered useful memory");
 }
 
 async function assertNaturalLanguageCorrectionLifecycle() {

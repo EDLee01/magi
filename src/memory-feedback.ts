@@ -2,6 +2,7 @@ import { recordMemoryAudit } from "./memory-audit.js";
 import { MemoryRootOptions } from "./memory-files.js";
 import {
   ApplyMemoryFeedbackResult,
+  MemoryFeedbackTrend,
   MemoryFeedbackSignal,
   MemoryNode,
   MemoryNodeStore,
@@ -24,6 +25,12 @@ export interface MemoryFeedbackInput extends MemoryRootOptions {
 }
 
 export type MemoryFeedbackResult = ApplyMemoryFeedbackResult;
+
+export interface ListMemoryFeedbackTrendsInput extends MemoryRootOptions {
+  paths: MagiPaths;
+  limit?: number;
+  minEvents?: number;
+}
 
 export function applyMemoryFeedback(input: MemoryFeedbackInput): MemoryFeedbackResult {
   syncMemoryGraph({ appRoot: input.appRoot, root: input.root, paths: input.paths });
@@ -84,6 +91,42 @@ export function formatMemoryFeedbackResult(result: MemoryFeedbackResult): string
     lines.push(`replacement: ${result.replacement.id}`);
     lines.push(`replacement title: ${result.replacement.title}`);
     lines.push(`edges: ${result.edges.length}`);
+  }
+  return lines.join("\n");
+}
+
+export function listMemoryFeedbackTrends(
+  input: ListMemoryFeedbackTrendsInput
+): MemoryFeedbackTrend[] {
+  syncMemoryGraph({ appRoot: input.appRoot, root: input.root, paths: input.paths });
+  const store = MemoryNodeStore.open(input.paths);
+  try {
+    return store.listFeedbackTrends({ limit: input.limit, minEvents: input.minEvents });
+  } finally {
+    store.close();
+  }
+}
+
+export function formatMemoryFeedbackTrends(trends: MemoryFeedbackTrend[]): string {
+  if (trends.length === 0) {
+    return "No Memory feedback trends.";
+  }
+  const lines = [`Memory feedback trends: ${trends.length}`];
+  for (const [index, trend] of trends.entries()) {
+    lines.push("");
+    lines.push(`${index + 1}. ${trend.node.title} (${trend.node.id})`);
+    lines.push(`   signal: useful=${trend.useful} irrelevant=${trend.irrelevant} net=${trend.net}`);
+    lines.push(
+      `   status: ${trend.node.status} type=${trend.node.type} weight=${trend.node.weight.toFixed(2)}`
+    );
+    if (trend.lastSignal) {
+      lines.push(
+        `   last: ${trend.lastSignal}${trend.lastFeedbackAt ? ` at ${trend.lastFeedbackAt}` : ""}`
+      );
+    }
+    if (trend.lastReason) {
+      lines.push(`   reason: ${trend.lastReason}`);
+    }
   }
   return lines.join("\n");
 }

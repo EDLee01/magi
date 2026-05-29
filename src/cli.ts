@@ -23,7 +23,12 @@ import {
 import { formatMemoryMerges, listMemoryMerges } from "./memory-merges.js";
 import { formatMemoryEvalReport, runMemoryEval, writeMemoryEvalReport } from "./memory-eval.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
-import { applyMemoryFeedback, formatMemoryFeedbackResult } from "./memory-feedback.js";
+import {
+  applyMemoryFeedback,
+  formatMemoryFeedbackResult,
+  formatMemoryFeedbackTrends,
+  listMemoryFeedbackTrends
+} from "./memory-feedback.js";
 import {
   configureMemoryMaintenance,
   formatMemoryMaintenancePolicy,
@@ -707,6 +712,16 @@ async function runCliUnsafeWithParsed(
       return { exitCode: 0, stdout: `${formatMemoryCorrectionResult(result)}\n`, stderr: "" };
     }
     if (subcommand === "feedback") {
+      if (parsed.rest[1] === "trends") {
+        const options = parseMemoryFeedbackTrendsArgs(parsed.rest.slice(2));
+        const trends = listMemoryFeedbackTrends({
+          ...rootInput,
+          paths,
+          limit: options.limit,
+          minEvents: options.minEvents
+        });
+        return { exitCode: 0, stdout: `${formatMemoryFeedbackTrends(trends)}\n`, stderr: "" };
+      }
       const options = parseMemoryFeedbackArgs(parsed.rest.slice(1));
       const result = applyMemoryFeedback({
         ...rootInput,
@@ -1914,6 +1929,7 @@ function helpText(): string {
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
     "  magi memory feedback --target <node|query> --signal <useful|irrelevant|wrong|stale> [--reason <text>] [--replacement <text>]",
+    "  magi memory feedback trends [--limit <n>] [--min-events <n>]",
     "  magi memory conflicts [--groups] [--limit <n>]",
     "  magi memory merges [--limit <n>]",
     "  magi memory eval --case-file <file> [--max-results <n>] [--min-score <0..1>] [--report <file>]",
@@ -2143,6 +2159,24 @@ function parseMemoryFeedbackArgs(args: string[]): {
     replacementSummary,
     replacementType
   };
+}
+
+function parseMemoryFeedbackTrendsArgs(args: string[]): { limit?: number; minEvents?: number } {
+  let limit: number | undefined;
+  let minEvents: number | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--limit") {
+      limit = readPositiveNumberArg(args[++index], "magi memory feedback trends --limit");
+      continue;
+    }
+    if (arg === "--min-events") {
+      minEvents = readPositiveNumberArg(args[++index], "magi memory feedback trends --min-events");
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory feedback trends option: ${arg}`);
+  }
+  return { limit, minEvents };
 }
 
 function parseMemoryConflictsArgs(args: string[]): { groups?: boolean; limit?: number } {

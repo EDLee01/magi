@@ -600,7 +600,8 @@ function memoryReport(input: {
           ? []
           : [
               "user feedback increased useful memory weight",
-              "user feedback persisted memory trend metadata"
+              "user feedback persisted memory trend metadata",
+              "user feedback trend view rendered useful memory"
             ]),
         ...Array.from(
           { length: input.assertions ?? 16 },

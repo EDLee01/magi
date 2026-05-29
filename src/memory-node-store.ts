@@ -183,6 +183,16 @@ export interface ApplyMemoryFeedbackResult {
   edges: MemoryEdge[];
 }
 
+export interface MemoryFeedbackTrend {
+  node: MemoryNode;
+  useful: number;
+  irrelevant: number;
+  net: number;
+  lastSignal?: string;
+  lastReason?: string;
+  lastFeedbackAt?: string;
+}
+
 export interface DecayUnusedMemoryResult {
   applied: boolean;
   olderThanDays: number;
@@ -1376,6 +1386,43 @@ export class MemoryNodeStore {
       signal: input.signal,
       edges: []
     };
+  }
+
+  listFeedbackTrends(input: { limit?: number; minEvents?: number } = {}): MemoryFeedbackTrend[] {
+    const limit = Math.max(1, Math.min(input.limit ?? 20, 200));
+    const minEvents = Math.max(1, Math.floor(input.minEvents ?? 1));
+    const rows = this.db
+      .prepare(
+        `
+      select *
+      from memory_nodes
+      where json_extract(metadata_json, '$.feedbackTrend') is not null
+      order by
+        coalesce(json_extract(metadata_json, '$.feedbackTrend.lastFeedbackAt'), updated_at) desc,
+        weight desc
+      limit ?
+    `
+      )
+      .all(limit * 4) as DbMemoryNode[];
+    return rows
+      .map(toMemoryNode)
+      .map((node) => {
+        const trend = readRecord(node.metadata.feedbackTrend);
+        const useful = readNumber(trend?.useful) ?? 0;
+        const irrelevant = readNumber(trend?.irrelevant) ?? 0;
+        return {
+          node,
+          useful,
+          irrelevant,
+          net: useful - irrelevant,
+          lastSignal: readString(trend?.lastSignal),
+          lastReason: readString(trend?.lastReason),
+          lastFeedbackAt: readString(trend?.lastFeedbackAt)
+        };
+      })
+      .filter((trend) => trend.useful + trend.irrelevant >= minEvents)
+      .sort(compareFeedbackTrends)
+      .slice(0, limit);
   }
 
   getNode(id: string): MemoryNode | undefined {
@@ -2754,6 +2801,17 @@ function compareGraphSearchHits(a: MemoryGraphSearchHit, b: MemoryGraphSearchHit
     b.node.useCount - a.node.useCount ||
     a.source.uri.localeCompare(b.source.uri) ||
     a.chunk.heading.localeCompare(b.chunk.heading)
+  );
+}
+
+function compareFeedbackTrends(a: MemoryFeedbackTrend, b: MemoryFeedbackTrend): number {
+  return (
+    b.net - a.net ||
+    b.useful + b.irrelevant - (a.useful + a.irrelevant) ||
+    Date.parse(b.lastFeedbackAt ?? b.node.updatedAt) -
+      Date.parse(a.lastFeedbackAt ?? a.node.updatedAt) ||
+    b.node.weight - a.node.weight ||
+    a.node.title.localeCompare(b.node.title)
   );
 }
 
