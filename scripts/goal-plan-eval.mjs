@@ -318,6 +318,38 @@ try {
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
+    const toolCounts = mergeToolCounts(provider.metrics().toolCounts, planRevision.toolCounts);
+    const assertions = [
+      "active goal status visible in CLI",
+      "active goal injected into model context",
+      "plan mode denied FileWrite mutation",
+      "submitted plan feedback returned to model",
+      "plan review persisted in state",
+      "scoped plan list isolated second session",
+      "cross-session plan list included submitted plan",
+      "blocked goal persisted in state",
+      "blocked goal suppressed from context",
+      "completed goal persisted with note",
+      "completed goal suppressed from context",
+      "revision feedback returned to tool caller",
+      "revision plan persisted as needs_revision",
+      "approved plan persisted as approved",
+      "revision chain linked replacement plan",
+      "revision chain visible from CLI",
+      "inherited approved plan injected into context",
+      "plan execution guard blocked early write",
+      "required read result visible before write",
+      "inherited plan output written after read",
+      "approved plan adopted across sessions",
+      "adopted plan context included source metadata"
+    ];
+    const filesVerified = [
+      "state/goals.json",
+      "state/plans.json",
+      inheritedPlanSourcePath,
+      inheritedPlanOutputPath
+    ];
+
     const report = harnessReport.buildHarnessReport({
       name: "goal-plan-eval",
       startedAt,
@@ -330,6 +362,9 @@ try {
           failureKind: null,
           details: {
             provider: { callCount: provider.calls.length },
+            toolCounts,
+            assertions,
+            filesVerified,
             activeGoalContextSeen: state.activeGoalContextSeen,
             completedGoalSuppressed: state.completedGoalSuppressed,
             blockedGoalSuppressed: state.blockedGoalSuppressed,
@@ -530,6 +565,7 @@ function createRouter(state) {
 
 async function startProvider({ routeRequest }) {
   const calls = [];
+  const plannedToolCounts = {};
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -546,8 +582,13 @@ async function startProvider({ routeRequest }) {
         };
         calls.push(call);
         const result = routeRequest(call);
+        const responseBody = result.body ?? result;
+        for (const toolCall of responseBody.choices?.[0]?.message?.tool_calls ?? []) {
+          plannedToolCounts[toolCall.function.name] =
+            (plannedToolCounts[toolCall.function.name] ?? 0) + 1;
+        }
         response.writeHead(result.status ?? 200, { "content-type": "application/json" });
-        response.end(JSON.stringify(result.body ?? result));
+        response.end(JSON.stringify(responseBody));
       } catch (error) {
         response.writeHead(400, { "content-type": "application/json" });
         response.end(
@@ -564,8 +605,25 @@ async function startProvider({ routeRequest }) {
   return {
     calls,
     port: address.port,
+    metrics() {
+      return {
+        toolCounts: plannedToolCounts
+      };
+    },
     close: () => new Promise((resolve) => server.close(resolve))
   };
+}
+
+function mergeToolCounts(...countsList) {
+  const merged = {};
+  for (const counts of countsList) {
+    for (const [name, count] of Object.entries(counts ?? {})) {
+      if (typeof count === "number" && Number.isFinite(count) && count > 0) {
+        merged[name] = (merged[name] ?? 0) + count;
+      }
+    }
+  }
+  return merged;
 }
 
 function runCli(args, label, timeoutMs = 30_000) {
@@ -653,6 +711,7 @@ function assertPlanStoreSubmitted() {
 }
 
 async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
+  const toolCounts = { ExitPlanMode: 2 };
   const revision = await executeRegisteredTool({
     cwd: workDir,
     stateRoot: path.join(configDir, "state"),
@@ -707,7 +766,8 @@ async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
     revisionFeedbackSeen: true,
     approvalSeen: true,
     revisionPlanId,
-    approvedPlanId
+    approvedPlanId,
+    toolCounts
   };
 }
 

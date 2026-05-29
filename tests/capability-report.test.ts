@@ -234,7 +234,11 @@ describe("capability report", () => {
         inheritedPlanExecutionFollowed: false,
         inheritedPlanDeviationCorrected: false,
         crossSessionPlanAdopted: false,
-        crossSessionAdoptedPlanContextSeen: false
+        crossSessionAdoptedPlanContextSeen: false,
+        assertions: 3,
+        filesVerified: 1,
+        toolCallCount: 2,
+        uniqueToolCount: 1
       }),
       toolDiscovery: toolDiscoveryReport(),
       controlApi: controlApiReport()
@@ -244,6 +248,10 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(goalPlan?.failures).toEqual(
       expect.arrayContaining([
+        "assertions=3",
+        "filesVerified=1",
+        "toolCallCount=2",
+        "uniqueToolCount=1",
         "completedGoalSuppressed=false",
         "blockedGoalPersisted=false",
         "planReviewPersisted=false",
@@ -642,10 +650,22 @@ function goalPlanReport(
     crossSessionAdoptedPlanContextSeen: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
+    assertions: number;
+    filesVerified: number;
+    toolCallCount: number;
+    uniqueToolCount: number;
   }> = {}
 ): Record<string, unknown> {
   return {
-    ...harnessReport({ name: "goal-plan-eval", scenarios: 1, providerCalls: 5 }),
+    ...harnessReport({
+      name: "goal-plan-eval",
+      scenarios: 1,
+      providerCalls: 5,
+      assertions: overrides.assertions ?? 22,
+      filesVerified: overrides.filesVerified ?? 4,
+      toolCallCount: overrides.toolCallCount ?? 7,
+      uniqueToolCount: overrides.uniqueToolCount ?? 3
+    }),
     scenarios: [
       {
         name: "goal-plan lifecycle workflow",
@@ -655,6 +675,19 @@ function goalPlanReport(
         failureKind: null,
         details: {
           provider: { callCount: 5 },
+          assertions: Array.from(
+            { length: overrides.assertions ?? 22 },
+            (_, index) => `goal-plan assertion ${index + 1}`
+          ),
+          filesVerified: Array.from(
+            { length: overrides.filesVerified ?? 4 },
+            (_, index) => `goal-plan-file-${index + 1}.json`
+          ),
+          toolCounts: {
+            FileWrite: 3,
+            ExitPlanMode: 3,
+            FileRead: 1
+          },
           activeGoalContextSeen: true,
           completedGoalSuppressed: true,
           blockedGoalSuppressed: true,
