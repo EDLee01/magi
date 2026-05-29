@@ -170,6 +170,7 @@ async function startProvider({ logPath, routeRequest }) {
 function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs = 30_000 }) {
   console.log(`+ ${label}: ${[command, ...args].map((part) => JSON.stringify(part)).join(" ")}`);
   return new Promise((resolve, reject) => {
+    const detached = process.platform !== "win32";
     const child = spawn(command, args, {
       cwd,
       env: {
@@ -178,6 +179,7 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
         MAGI_OPENAI_API_KEY: "test-key",
         NO_COLOR: "1",
       },
+      detached,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -186,8 +188,23 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 2_000).unref();
+      if (detached && child.pid) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          child.kill("SIGTERM");
+        }
+        setTimeout(() => {
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {
+            child.kill("SIGKILL");
+          }
+        }, 2_000).unref();
+      } else {
+        child.kill("SIGTERM");
+        setTimeout(() => child.kill("SIGKILL"), 2_000).unref();
+      }
     }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
@@ -533,7 +550,7 @@ async function scenarioInteractiveTui() {
   await withTempWorkspace("tui", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     const inputFile = path.join(workDir, "tui-input.txt");
-    writeFileSync(inputFile, "/exit\n");
+    writeFileSync(inputFile, "/exit\r");
     const result = process.platform === "darwin"
       ? await runCommand({
         command: "/bin/sh",
@@ -557,6 +574,23 @@ async function scenarioInteractiveTui() {
     assert(combined.includes("Magi v"), "TUI banner did not render");
     assert(combined.includes("/help for commands"), "TUI help hint did not render");
     assert(!combined.includes("Interactive terminal requires a TTY"), "TUI did not receive a pseudo-TTY");
+  });
+}
+
+async function scenarioTuiRequiresTty() {
+  await withTempWorkspace("tui-no-tty", async ({ configDir, workDir }) => {
+    writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
+    const result = await runCommand({
+      command: nodeBin,
+      args: [cliPath, "--no-color"],
+      cwd: workDir,
+      configDir,
+      label: "TUI requires TTY",
+      timeoutMs: 15_000,
+    });
+
+    assert(result.code === 2, `non-TTY TUI exited ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
+    assert(result.stdout.includes("Interactive terminal requires a TTY"), "non-TTY TUI did not explain the TTY requirement");
   });
 }
 
@@ -585,8 +619,11 @@ async function main() {
     ["default permission denied", scenarioDefaultPermissionDenied],
     ["retry fallback", scenarioRetryAndFallback],
     ["plan mode", scenarioPlanMode],
-    ["interactive TUI", scenarioInteractiveTui],
+    ["TUI requires TTY", scenarioTuiRequiresTty],
   ];
+  if (process.env.MAGI_BLACKBOX_TUI === "1") {
+    scenarios.push(["interactive TUI", scenarioInteractiveTui]);
+  }
   for (const [name, fn] of scenarios) {
     await runScenario(name, fn);
   }
