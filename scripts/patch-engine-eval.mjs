@@ -33,7 +33,8 @@ try {
   const scenarios = [
     await runFilePatchRecoveryScenario({ approvalDiffPreviewSeen }),
     await runMultiFilePatchRecoveryScenario(),
-    await runPatchConflictExplanationScenario()
+    await runPatchConflictExplanationScenario(),
+    await runPatchRollbackQualityScenario()
   ];
   const report = addPatchSummary(
     harnessReport.buildHarnessReport({
@@ -98,6 +99,31 @@ function initialConflictConfig() {
     '  mode: "safe",',
     "  retries: 2,",
     '  output: "summary"',
+    "};",
+    ""
+  ].join("\n");
+}
+
+function initialBillingRules() {
+  return [
+    "export interface Invoice {",
+    "  subtotal: number;",
+    "  discountCode?: string;",
+    "}",
+    "",
+    "export function calculateTotal(invoice: Invoice): number {",
+    "  const discounted = invoice.discountCode ? invoice.subtotal * 0.9 : invoice.subtotal;",
+    "  return Math.round(discounted * 100) / 100;",
+    "}",
+    ""
+  ].join("\n");
+}
+
+function initialBillingFixture() {
+  return [
+    "export const sampleInvoice = {",
+    "  subtotal: 125,",
+    '  discountCode: "SAVE10"',
     "};",
     ""
   ].join("\n");
@@ -303,6 +329,85 @@ async function runPatchConflictExplanationScenario() {
   }
 }
 
+async function runPatchRollbackQualityScenario() {
+  const sourcePath = path.join(workDir, "src", "billing.ts");
+  const fixturePath = path.join(workDir, "src", "billing-fixture.ts");
+  const originalSource = initialBillingRules();
+  const originalFixture = initialBillingFixture();
+  writeFileSync(sourcePath, originalSource, "utf8");
+  writeFileSync(fixturePath, originalFixture, "utf8");
+  const started = Date.now();
+  const provider = await startProvider({ route: routePatchRollbackQualityEval });
+  try {
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig({ port: provider.port }),
+      "utf8"
+    );
+    const result = await runCli([
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      [
+        "Run the Patch Engine rollback quality eval.",
+        "Change src/billing.ts so discounts are applied after tax at an 8% tax rate.",
+        "If an earlier patch changes the wrong behavior, recover with FilePatch.",
+        "Do not edit src/billing-fixture.ts."
+      ].join(" ")
+    ]);
+    assert(result.includes("session.completed"), "rollback quality patch eval did not complete");
+    assert(result.includes("rollback quality verified"), "rollback quality final report missing");
+
+    const finalSource = readFileSync(sourcePath, "utf8");
+    const finalFixture = readFileSync(fixturePath, "utf8");
+    assert(finalFixture === originalFixture, "unrelated billing fixture changed");
+    assert(finalSource.includes("const taxed = invoice.subtotal * 1.08;"), "tax calculation missing");
+    assert(
+      finalSource.includes("const discounted = invoice.discountCode ? taxed * 0.9 : taxed;"),
+      "discount-after-tax calculation missing"
+    );
+    assert(!finalSource.includes("invoice.subtotal * 0.85"), "bad interim discount survived");
+    assert(!finalSource.includes("discounted * 1.08"), "discount-before-tax behavior survived");
+
+    const metrics = provider.metrics();
+    assert(metrics.toolCounts.FilePatch === 4, "rollback quality should use four FilePatch calls");
+    assert(!metrics.toolCounts.FileWrite, "rollback quality should not use FileWrite");
+    assert(metrics.rollbackQualitySeen, "rollback quality recovery transcript was not visible");
+    const sourceChanged = finalSource !== originalSource;
+    const fixtureChanged = finalFixture !== originalFixture;
+    assert(sourceChanged, "target billing source did not change");
+    assert(!fixtureChanged, "final diff should not include unrelated fixture");
+
+    return passedScenario({
+      name: "patch rollback final diff quality workflow",
+      started,
+      provider,
+      details: {
+        toolCounts: metrics.toolCounts,
+        patchUsageRate: patchUsageRate(metrics.toolCounts),
+        rollbackQualitySeen: metrics.rollbackQualitySeen,
+        finalDiffQualityVerified: true,
+        unrelatedFilePreserved: true,
+        fileWriteAvoided: !metrics.toolCounts.FileWrite,
+        assertions: [
+          "bad successful patch was recovered",
+          "final patch moved discount after tax",
+      "interim wrong discount removed from final source",
+      "unrelated fixture stayed unchanged",
+      "final diff excluded unrelated file"
+        ],
+        filesVerified: ["src/billing.ts", "src/billing-fixture.ts"]
+      }
+    });
+  } finally {
+    await provider.close();
+  }
+}
+
 async function verifyFilePatchApprovalDiffPreview() {
   const previewFile = path.join(workDir, "src", "approval-preview.ts");
   writeFileSync(previewFile, "const label = 'old';\nconst count = 1;\n", "utf8");
@@ -358,6 +463,7 @@ async function startProvider({ route }) {
   let recoverySeen = false;
   let toolSearchRankedFilePatch = false;
   let patchConflictExplained = false;
+  let rollbackQualitySeen = false;
   const server = http.createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -370,6 +476,7 @@ async function startProvider({ route }) {
         const result = route({ transcript, toolNames, turn });
         turn += 1;
         const responseBody = result.body ?? result;
+        const assistantContent = responseBody.choices?.[0]?.message?.content ?? "";
         for (const call of responseBody.choices?.[0]?.message?.tool_calls ?? []) {
           plannedToolCounts[call.function.name] = (plannedToolCounts[call.function.name] ?? 0) + 1;
         }
@@ -388,6 +495,12 @@ async function startProvider({ route }) {
         }
         if (transcript.includes("1. FilePatch") && transcript.includes("intent: file-edit")) {
           toolSearchRankedFilePatch = true;
+        }
+        if (
+          `${transcript}\n${assistantContent}`.includes("wrong discount was removed") &&
+          `${transcript}\n${assistantContent}`.includes("billing-fixture.ts stayed unchanged")
+        ) {
+          rollbackQualitySeen = true;
         }
         response.writeHead(result.status ?? 200, { "content-type": "application/json" });
         response.end(JSON.stringify(result.body ?? result));
@@ -415,7 +528,8 @@ async function startProvider({ route }) {
         toolCounts: plannedToolCounts,
         recoverySeen,
         toolSearchRankedFilePatch,
-        patchConflictExplained
+        patchConflictExplained,
+        rollbackQualitySeen
       };
     },
     close: () => new Promise((resolve) => server.close(resolve))
@@ -616,6 +730,85 @@ function routePatchConflictEval({ transcript, toolNames, turn }) {
   return messageText("Patch conflict eval already completed.");
 }
 
+function routePatchRollbackQualityEval({ transcript, toolNames, turn }) {
+  if (turn === 0) {
+    assert(toolNames.includes("FilePatch"), "FilePatch was not exposed for rollback quality eval");
+    assert(transcript.includes("use FilePatch for multi-line edits"), "missing FilePatch guidance");
+    return toolResponse([
+      toolCall("read-billing-source", "FileRead", { file_path: "src/billing.ts" }),
+      toolCall("read-billing-fixture", "FileRead", { file_path: "src/billing-fixture.ts" })
+    ]);
+  }
+  if (turn === 1) {
+    assert(transcript.includes("calculateTotal"), "billing source was not visible");
+    assert(transcript.includes("sampleInvoice"), "billing fixture was not visible");
+    return toolResponse([
+      toolCall("bad-billing-patch", "FilePatch", {
+        file_path: "src/billing.ts",
+        patch: [
+          "@@",
+          " export function calculateTotal(invoice: Invoice): number {",
+          "-  const discounted = invoice.discountCode ? invoice.subtotal * 0.9 : invoice.subtotal;",
+          "+  const discounted = invoice.discountCode ? invoice.subtotal * 0.85 : invoice.subtotal;",
+          "   return Math.round(discounted * 100) / 100;",
+          " }"
+        ].join("\n")
+      }),
+      toolCall("bad-fixture-patch", "FilePatch", {
+        file_path: "src/billing-fixture.ts",
+        patch: [
+          "@@",
+          " export const sampleInvoice = {",
+          "-  subtotal: 125,",
+          "+  subtotal: 130,",
+          '   discountCode: "SAVE10"',
+          " };"
+        ].join("\n")
+      })
+    ]);
+  }
+  if (turn === 2) {
+    assert(transcript.includes("Patched src/billing.ts"), "bad billing patch result was not visible");
+    assert(
+      transcript.includes("Patched src/billing-fixture.ts"),
+      "bad fixture patch result was not visible"
+    );
+    return toolResponse([
+      toolCall("recover-billing-patch", "FilePatch", {
+        file_path: "src/billing.ts",
+        patch: [
+          "@@",
+          " export function calculateTotal(invoice: Invoice): number {",
+          "-  const discounted = invoice.discountCode ? invoice.subtotal * 0.85 : invoice.subtotal;",
+          "+  const taxed = invoice.subtotal * 1.08;",
+          "+  const discounted = invoice.discountCode ? taxed * 0.9 : taxed;",
+          "   return Math.round(discounted * 100) / 100;",
+          " }"
+        ].join("\n")
+      }),
+      toolCall("restore-fixture-patch", "FilePatch", {
+        file_path: "src/billing-fixture.ts",
+        patch: [
+          "@@",
+          " export const sampleInvoice = {",
+          "-  subtotal: 130,",
+          "+  subtotal: 125,",
+          '   discountCode: "SAVE10"',
+          " };"
+        ].join("\n")
+      })
+    ]);
+  }
+  if (turn === 3) {
+    assert(transcript.includes("Patched src/billing.ts"), "recovery billing patch result missing");
+    assert(transcript.includes("Patched src/billing-fixture.ts"), "fixture restore patch result missing");
+    return messageText(
+      "Patch rollback quality verified: wrong discount was removed and billing-fixture.ts stayed unchanged."
+    );
+  }
+  return messageText("Patch rollback quality eval already completed.");
+}
+
 function passedScenario({ name, started, provider, details }) {
   return {
     name,
@@ -648,6 +841,8 @@ function addPatchSummary(report) {
   let toolSearchRankedFilePatch = false;
   let conflictExplanationSeen = false;
   let rollbackVerified = false;
+  let finalDiffQualityVerified = false;
+  let unrelatedFilePreserved = false;
   for (const scenario of report.scenarios) {
     const details = scenario.details ?? {};
     const counts = details.toolCounts ?? {};
@@ -657,7 +852,7 @@ function addPatchSummary(report) {
     const denominator = (counts.FilePatch ?? 0) + (counts.FileEdit ?? 0) + (counts.FileWrite ?? 0);
     totalPatchUsageNumerator += counts.FilePatch ?? 0;
     totalPatchUsageDenominator += denominator;
-    if (details.recoverySeen || details.multiFileRecoverySeen) {
+    if (details.recoverySeen || details.multiFileRecoverySeen || details.rollbackQualitySeen) {
       recoveryScenarioCount += 1;
     }
     multiFileRecoverySeen = multiFileRecoverySeen || details.multiFileRecoverySeen === true;
@@ -665,6 +860,9 @@ function addPatchSummary(report) {
     conflictExplanationSeen =
       conflictExplanationSeen || details.conflictExplanationSeen === true;
     rollbackVerified = rollbackVerified || details.rollbackVerified === true;
+    finalDiffQualityVerified =
+      finalDiffQualityVerified || details.finalDiffQualityVerified === true;
+    unrelatedFilePreserved = unrelatedFilePreserved || details.unrelatedFilePreserved === true;
     toolSearchRankedFilePatch =
       toolSearchRankedFilePatch || details.toolSearchRankedFilePatch === true;
   }
@@ -683,6 +881,8 @@ function addPatchSummary(report) {
       approvalDiffPreviewSeen,
       conflictExplanationSeen,
       rollbackVerified,
+      finalDiffQualityVerified,
+      unrelatedFilePreserved,
       toolSearchRankedFilePatch
     }
   };

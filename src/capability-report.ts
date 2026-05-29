@@ -541,6 +541,8 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
   const multiFileRecoverySeen = details.multiFileRecoverySeen === true;
   const conflictExplanationSeen = details.conflictExplanationSeen === true;
   const rollbackVerified = details.rollbackVerified === true;
+  const finalDiffQualityVerified = details.finalDiffQualityVerified === true;
+  const unrelatedFilePreserved = details.unrelatedFilePreserved === true;
   const toolSearchRankedFilePatch =
     details.toolSearchRankedFilePatch === true ||
     scenarios.some((scenario) => readRecord(scenario.details).toolSearchRankedFilePatch === true);
@@ -548,16 +550,18 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
     details.approvalDiffPreviewSeen === true ||
     scenarios.some((scenario) => readRecord(scenario.details).approvalDiffPreviewSeen === true);
   const failures = [...base.failures];
-  if (scenarioCount < 3) {
+  if (scenarioCount < 4) {
     failures.push(`scenarios=${scenarioCount}`);
   }
-  if (filePatchCalls < 6) failures.push("FilePatch calls < 6");
+  if (filePatchCalls < 10) failures.push("FilePatch calls < 10");
   if (fileEditCalls !== 1) failures.push("FileEdit calls != 1");
   if (fileWriteCalls !== 0) failures.push("FileWrite used");
-  if (recoveryScenarioCount < 3) failures.push(`recoveryScenarioCount=${recoveryScenarioCount}`);
+  if (recoveryScenarioCount < 4) failures.push(`recoveryScenarioCount=${recoveryScenarioCount}`);
   if (!multiFileRecoverySeen) failures.push("multiFileRecoverySeen=false");
   if (!conflictExplanationSeen) failures.push("conflictExplanationSeen=false");
   if (!rollbackVerified) failures.push("rollbackVerified=false");
+  if (!finalDiffQualityVerified) failures.push("finalDiffQualityVerified=false");
+  if (!unrelatedFilePreserved) failures.push("unrelatedFilePreserved=false");
   if (!toolSearchRankedFilePatch) failures.push("toolSearchRankedFilePatch=false");
   if (!approvalDiffPreviewSeen) failures.push("approvalDiffPreviewSeen=false");
   if (patchUsageRate < 0.8) failures.push(`patchUsageRate=${patchUsageRate}`);
@@ -575,6 +579,8 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
       multiFileRecoverySeen,
       conflictExplanationSeen,
       rollbackVerified,
+      finalDiffQualityVerified,
+      unrelatedFilePreserved,
       toolSearchRankedFilePatch,
       approvalDiffPreviewSeen
     },

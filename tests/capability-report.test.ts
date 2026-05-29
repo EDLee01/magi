@@ -10,7 +10,7 @@ describe("capability report", () => {
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
@@ -18,7 +18,7 @@ describe("capability report", () => {
         rollbackVerified: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
@@ -54,6 +54,8 @@ describe("capability report", () => {
         multiFileRecoverySeen: false,
         conflictExplanationSeen: false,
         rollbackVerified: false,
+        finalDiffQualityVerified: false,
+        unrelatedFilePreserved: false,
         toolSearchRankedFilePatch: false,
         approvalDiffPreviewSeen: false,
         patchUsageRate: 1 / 3
@@ -68,12 +70,14 @@ describe("capability report", () => {
     expect(patch?.failures).toEqual(
       expect.arrayContaining([
         "scenarios=1",
-        "FilePatch calls < 6",
+        "FilePatch calls < 10",
         "FileWrite used",
         "recoveryScenarioCount=1",
         "multiFileRecoverySeen=false",
         "conflictExplanationSeen=false",
         "rollbackVerified=false",
+        "finalDiffQualityVerified=false",
+        "unrelatedFilePreserved=false",
         "toolSearchRankedFilePatch=false",
         "approvalDiffPreviewSeen=false",
         "patchUsageRate=0.3333333333333333"
@@ -96,7 +100,7 @@ describe("capability report", () => {
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
@@ -104,7 +108,7 @@ describe("capability report", () => {
         rollbackVerified: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
@@ -149,13 +153,13 @@ describe("capability report", () => {
         filesVerified: 1
       }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
@@ -203,13 +207,13 @@ describe("capability report", () => {
       }),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
@@ -270,13 +274,13 @@ describe("capability report", () => {
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport({
         completedGoalSuppressed: false,
@@ -346,13 +350,13 @@ describe("capability report", () => {
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport({
@@ -426,13 +430,13 @@ describe("capability report", () => {
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
-        filePatchCalls: 6,
+        filePatchCalls: 10,
         fileEditCalls: 1,
         fileWriteCalls: 0,
         recoverySeen: true,
         toolSearchRankedFilePatch: true,
         approvalDiffPreviewSeen: true,
-        patchUsageRate: 6 / 7
+        patchUsageRate: 10 / 11
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
@@ -882,13 +886,17 @@ function patchReport(input: {
   multiFileRecoverySeen?: boolean;
   conflictExplanationSeen?: boolean;
   rollbackVerified?: boolean;
+  finalDiffQualityVerified?: boolean;
+  unrelatedFilePreserved?: boolean;
   toolSearchRankedFilePatch: boolean;
   approvalDiffPreviewSeen: boolean;
   patchUsageRate: number;
 }): Record<string, unknown> {
-  const scenarioCount = input.multiFileRecoverySeen === false ? 1 : 3;
+  const scenarioCount = input.multiFileRecoverySeen === false ? 1 : 4;
   const conflictExplanationSeen = input.conflictExplanationSeen !== false;
   const rollbackVerified = input.rollbackVerified !== false;
+  const finalDiffQualityVerified = input.finalDiffQualityVerified !== false;
+  const unrelatedFilePreserved = input.unrelatedFilePreserved !== false;
   return {
     ...harnessReport({ name: "patch-engine-eval", scenarios: scenarioCount, providerCalls: 5 }),
     details: {
@@ -898,10 +906,12 @@ function patchReport(input: {
       patchUsageRate: input.patchUsageRate,
       recoveryScenarioCount:
         input.recoveryScenarioCount ??
-        (input.recoverySeen && input.multiFileRecoverySeen !== false ? 3 : 0),
+        (input.recoverySeen && input.multiFileRecoverySeen !== false ? 4 : 0),
       multiFileRecoverySeen: input.multiFileRecoverySeen !== false,
       conflictExplanationSeen,
       rollbackVerified,
+      finalDiffQualityVerified,
+      unrelatedFilePreserved,
       toolSearchRankedFilePatch: input.toolSearchRankedFilePatch,
       approvalDiffPreviewSeen: input.approvalDiffPreviewSeen
     },
@@ -964,6 +974,28 @@ function patchReport(input: {
                 recoverySeen: input.recoverySeen,
                 conflictExplanationSeen,
                 rollbackVerified
+              }
+            }
+          ]),
+      ...(input.multiFileRecoverySeen === false
+        ? []
+        : [
+            {
+              name: "patch rollback final diff quality workflow",
+              status: "passed",
+              durationMs: 300,
+              score: 1,
+              failureKind: null,
+              details: {
+                provider: { callCount: 4 },
+                toolCounts: {
+                  FilePatch: 3,
+                  FileWrite: input.fileWriteCalls
+                },
+                patchUsageRate: input.patchUsageRate,
+                recoverySeen: input.recoverySeen,
+                finalDiffQualityVerified,
+                unrelatedFilePreserved
               }
             }
           ])
