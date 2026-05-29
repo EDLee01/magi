@@ -123,13 +123,23 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const summary = readRecord(report.summary);
   const toolEfficiency = readRecord(summary.toolEfficiency);
   const failures = [...base.failures];
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios.map(readRecord) : [];
+  const assertionList = scenarios.flatMap((scenario) =>
+    readStringList(readRecord(scenario.details).assertions)
+  );
+  const learningDraftApplySeen =
+    assertionList.includes("learning draft listed") &&
+    assertionList.includes("learning draft review showed evidence") &&
+    assertionList.includes("learning draft applied to memory") &&
+    assertionList.includes("applied learning indexed into memory graph");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 25) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 2) failures.push(`filesVerified=${filesVerified}`);
+  if (assertions < 28) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 3) failures.push(`filesVerified=${filesVerified}`);
+  if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -147,6 +157,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       filesVerified,
       toolCallCount,
       uniqueToolCount,
+      learningDraftApplySeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

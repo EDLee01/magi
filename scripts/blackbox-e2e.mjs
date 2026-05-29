@@ -811,6 +811,64 @@ async function scenarioComplexWorkflow() {
         learningList.includes("workflows/focused-cli-e2e.md"),
         "learning draft target was not listed"
       );
+      const learningDraftId = learningList
+        .split(/\r?\n/)
+        .find((line) => line.includes("workflows/focused-cli-e2e.md"))
+        ?.match(/learn_[a-z0-9_]+/i)?.[0];
+      assert(learningDraftId, "learning draft id was not listed");
+      const learningReview = await runCli({
+        args: ["learning", "draft", "show", learningDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning draft show"
+      });
+      assert(
+        learningReview.includes("Validated by scripts/blackbox-e2e.mjs"),
+        "learning draft review missed evidence"
+      );
+      assert(
+        learningReview.includes("Use real Magi CLI commands with a temp config and mock provider"),
+        "learning draft review missed reason"
+      );
+      const learningApply = await runCli({
+        args: ["learning", "draft", "apply", learningDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning draft apply"
+      });
+      assert(learningApply.includes("Applied LearningDraft:"), "learning draft apply did not run");
+      const learningListAfterApply = await runCli({
+        args: ["learning", "list"],
+        cwd: workDir,
+        configDir,
+        label: "learning list after apply"
+      });
+      assert(
+        learningListAfterApply.includes(`${learningDraftId}  applied`),
+        "learning draft status was not applied"
+      );
+      const appliedWorkflowPath = path.join(configDir, "memory", "workflows", "focused-cli-e2e.md");
+      assert(existsSync(appliedWorkflowPath), "applied learning draft did not write memory file");
+      assert(
+        readFileSync(appliedWorkflowPath, "utf8").includes(
+          "Run the real CLI with an isolated MAGI_CONFIG_DIR"
+        ),
+        "applied learning memory file missed workflow content"
+      );
+      const appliedLearningSearch = await runCli({
+        args: ["memory", "search", "isolated MAGI_CONFIG_DIR mock provider learning drafts"],
+        cwd: workDir,
+        configDir,
+        label: "applied learning memory search"
+      });
+      assert(
+        appliedLearningSearch.includes("Focused CLI E2E workflow"),
+        "applied LearningDraft workflow was not indexed into memory graph"
+      );
+      assert(
+        appliedLearningSearch.includes("isolated MAGI_CONFIG_DIR"),
+        "applied LearningDraft workflow content was not recalled"
+      );
 
       const memorySearch = await runCli({
         args: ["memory", "search", "CLI E2E workflow"],
@@ -984,9 +1042,16 @@ async function scenarioComplexWorkflow() {
           "Dream fused duplicate workflow weight",
           "memory merge audit listed duplicate workflow",
           "memory recall quality eval passed",
-          "learning draft listed"
+          "learning draft listed",
+          "learning draft review showed evidence",
+          "learning draft applied to memory",
+          "applied learning indexed into memory graph"
         ],
-        filesVerified: ["reports/e2e-result.md", "state/todos.json"],
+        filesVerified: [
+          "reports/e2e-result.md",
+          "state/todos.json",
+          "memory/workflows/focused-cli-e2e.md"
+        ],
         provider: provider.summary()
       };
     } catch (error) {
