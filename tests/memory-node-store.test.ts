@@ -166,6 +166,47 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("lists low-weight cleanup candidates from stale graph nodes", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const stale = store.upsertNode({
+        type: "workflow",
+        title: "Dormant workflow",
+        summary: "Dormant workflow.",
+        body: "An old workflow that has not been used recently.",
+        source: "explicit",
+        weight: 0.3
+      });
+      const important = store.upsertNode({
+        type: "workflow",
+        title: "Important workflow",
+        summary: "Important workflow.",
+        body: "A retained workflow.",
+        source: "explicit",
+        weight: 0.9
+      });
+      const db = new Database(paths.sessionDbFile);
+      db.prepare(
+        "update memory_nodes set created_at = ?, updated_at = ?, last_used_at = null where id in (?, ?)"
+      ).run("2026-01-01T00:00:00.000Z", "2026-05-28T00:00:00.000Z", stale.id, important.id);
+      db.close();
+
+      const candidates = store.listCleanupCandidates({
+        now: new Date("2026-05-29T00:00:00Z"),
+        olderThanDays: 30,
+        maxWeight: 0.35
+      });
+      expect(candidates.map((item) => item.node.id)).toEqual([stale.id]);
+      expect(candidates[0]).toMatchObject({
+        ageDays: 148,
+        reason: expect.stringContaining("low-weight")
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("disputes incorrect nodes and recalls corrected replacements through supersedes edges", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);
@@ -409,6 +450,46 @@ describe("memory-node-store", () => {
       store.archiveChunksForSourceExcept(source.id, []);
       expect(store.searchGraph({ query: "typecheck", limit: 5 })).toHaveLength(0);
       expect(store.getNode(chunk.nodeId)?.status).toBe("archived");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("preserves manually decayed chunk node weight across graph re-index", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "wiki",
+        uri: "memory/workflows/archive.md",
+        title: "Archive workflow",
+        contentHash: "hash-archive-1"
+      });
+      const chunk = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/workflows/archive.md#dormant",
+        type: "workflow",
+        heading: "Dormant workflow",
+        body: "Review dormant graph cleanup workflow.",
+        summary: "Review dormant workflow.",
+        contentHash: "chunk-archive-1",
+        weight: 0.7
+      });
+      const db = new Database(paths.sessionDbFile);
+      db.prepare("update memory_nodes set weight = ? where id = ?").run(0.25, chunk.nodeId);
+      db.close();
+
+      store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/workflows/archive.md#dormant",
+        type: "workflow",
+        heading: "Dormant workflow",
+        body: "Review dormant graph cleanup workflow.",
+        summary: "Review dormant workflow.",
+        contentHash: "chunk-archive-2",
+        weight: 0.7
+      });
+      expect(store.getNode(chunk.nodeId)?.weight).toBeCloseTo(0.25);
     } finally {
       store.close();
     }

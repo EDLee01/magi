@@ -99,6 +99,12 @@ export interface DecayedMemoryNode {
   ageDays: number;
 }
 
+export interface MemoryCleanupCandidate {
+  node: MemoryNode;
+  ageDays: number;
+  reason: string;
+}
+
 export interface DecayUnusedMemoryResult {
   applied: boolean;
   olderThanDays: number;
@@ -507,7 +513,7 @@ export class MemoryNodeStore {
     const existing = this.getChunkByUri(uri);
     if (existing) {
       const node = this.getNode(existing.nodeId);
-      const weight = Math.max(node?.weight ?? 0, input.weight ?? defaultWeight(source.kind));
+      const weight = node?.weight ?? input.weight ?? defaultWeight(source.kind);
       const nodeStatus = node?.status === "disputed" ? "disputed" : "active";
       this.db
         .prepare(
@@ -870,6 +876,40 @@ export class MemoryNodeStore {
         return [];
       }
       return [{ edge, from, to, ...recommendConflictResolution(from, to) }];
+    });
+  }
+
+  listCleanupCandidates(
+    input: { olderThanDays?: number; maxWeight?: number; limit?: number; now?: Date } = {}
+  ): MemoryCleanupCandidate[] {
+    const olderThanDays = clampNumber(input.olderThanDays ?? 90, 0, 3650);
+    const maxWeight = clampNumber(input.maxWeight ?? 0.35, 0, 1);
+    const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
+    const now = input.now ?? new Date();
+    const cutoff = new Date(now.getTime() - olderThanDays * 24 * 60 * 60 * 1000);
+    const rows = this.db
+      .prepare(
+        `
+      select * from memory_nodes
+      where status = 'active'
+        and weight <= ?
+        and coalesce(last_used_at, created_at) < ?
+      order by weight asc, coalesce(last_used_at, created_at) asc
+      limit ?
+    `
+      )
+      .all(maxWeight, cutoff.toISOString(), limit) as DbMemoryNode[];
+    return rows.map(toMemoryNode).map((node) => {
+      const lastSignal = node.lastUsedAt ?? node.createdAt;
+      const ageDays = Math.max(
+        0,
+        Math.floor((now.getTime() - Date.parse(lastSignal)) / 86_400_000)
+      );
+      return {
+        node,
+        ageDays,
+        reason: `${node.title} is low-weight (${node.weight.toFixed(2)}) and unused for ${ageDays}d.`
+      };
     });
   }
 

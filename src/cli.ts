@@ -714,7 +714,7 @@ async function runCliUnsafeWithParsed(
       const action = parsed.rest[1];
       const id = parsed.rest[2];
       if (!action) {
-        const dream = runDream(rootInput);
+        const dream = runDream({ ...rootInput, paths });
         return {
           exitCode: 0,
           stdout: `Experimental Dream created: ${dream.id}\n${dream.summary}\nDrafts: ${dream.draftIds.length}\n`,

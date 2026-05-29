@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
+import Database from "better-sqlite3";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,6 +24,7 @@ import { getMagiPaths } from "../src/paths.js";
 import { loadAgentInstructions } from "../src/rules/agents-loader.js";
 import { SessionStore } from "../src/session-store.js";
 import { listDrafts, showDraft } from "../src/memory-draft.js";
+import { listDreams, showDream } from "../src/memory-dream.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let workspace: string | undefined;
@@ -135,6 +137,43 @@ describe("AGENTS rules and memory", () => {
     expect(shown.stdout).toContain(`Memory Draft: ${draft.id}`);
     expect(shown.stdout).toContain("Preview:");
     expect(shown.stdout).toContain("cli fact");
+  });
+
+  it("adds SQLite graph cleanup candidates to memory dream runs", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const stale = nodeStore.upsertNode({
+      type: "workflow",
+      title: "Dormant CLI workflow",
+      summary: "Dormant CLI workflow.",
+      body: "An old workflow that should be reviewed for archive.",
+      source: "explicit",
+      weight: 0.25
+    });
+    nodeStore.close();
+    const db = new Database(paths.sessionDbFile);
+    db.prepare(
+      "update memory_nodes set created_at = ?, updated_at = ?, last_used_at = null where id = ?"
+    ).run("2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", stale.id);
+    db.close();
+
+    const dream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(dream.exitCode).toBe(0);
+    expect(dream.stdout).toContain("Experimental Dream created:");
+    expect(dream.stdout).toContain("archive_candidate");
+
+    const dreams = listDreams({ appRoot: paths.root });
+    expect(dreams).toHaveLength(1);
+    const manifest = showDream({ appRoot: paths.root, id: dreams[0].id });
+    expect(manifest.operations).toContainEqual(
+      expect.objectContaining({
+        type: "archive_candidate",
+        reason: expect.stringContaining(stale.id),
+        relatedFiles: [`graph:${stale.id}`]
+      })
+    );
   });
 
   it("rejects memory drafts that look like secrets", async () => {

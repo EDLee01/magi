@@ -10,6 +10,9 @@ import {
 } from "./memory-files.js";
 import { MemoryDraft, proposeMemoryDraft } from "./memory-draft.js";
 import { recordMemoryAudit } from "./memory-audit.js";
+import { MagiPaths } from "./paths.js";
+import { MemoryNodeStore } from "./memory-node-store.js";
+import { syncMemoryGraph } from "./memory-wiki-indexer.js";
 
 export type DreamStatus = "pending" | "applied" | "rejected";
 
@@ -39,7 +42,7 @@ export interface DreamRecord {
   draftCount: number;
 }
 
-export function runDream(input: MemoryRootOptions): DreamManifest {
+export function runDream(input: MemoryRootOptions & { paths?: MagiPaths }): DreamManifest {
   const root = ensureMemoryStructure(input);
   const id = createDreamId();
   const dreamRoot = path.join(root, "dreams", id);
@@ -167,7 +170,7 @@ export function rejectDream(
   return rejected;
 }
 
-function analyzeMemory(input: MemoryRootOptions): DreamOperation[] {
+function analyzeMemory(input: MemoryRootOptions & { paths?: MagiPaths }): DreamOperation[] {
   const operations: DreamOperation[] = [];
   const files = listMemoryFiles(input).filter(
     (file) =>
@@ -210,7 +213,28 @@ function analyzeMemory(input: MemoryRootOptions): DreamOperation[] {
       });
     }
   }
+  if (input.paths) {
+    syncMemoryGraph({ ...input, paths: input.paths });
+    operations.push(...analyzeGraphCleanupCandidates(input.paths));
+  }
   return operations.slice(0, 20);
+}
+
+function analyzeGraphCleanupCandidates(paths: MagiPaths): DreamOperation[] {
+  const store = MemoryNodeStore.open(paths);
+  try {
+    return store
+      .listCleanupCandidates({ olderThanDays: 90, maxWeight: 0.35, limit: 10 })
+      .map((candidate) => ({
+        type: "archive_candidate" as const,
+        targetFile: "archive/README.md",
+        reason: `Graph node ${candidate.node.id}: ${candidate.reason}`,
+        content: `\n<!-- Dream graph archive candidate -->\n- ${candidate.node.title} (${candidate.node.id}): ${candidate.reason}\n`,
+        relatedFiles: [`graph:${candidate.node.id}`]
+      }));
+  } finally {
+    store.close();
+  }
 }
 
 function formatDreamSummary(operations: DreamOperation[]): string {
