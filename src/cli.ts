@@ -61,6 +61,8 @@ import {
   formatLearningDraftList,
   formatLearningDraftReview,
   listLearningDrafts,
+  LearningDraftKind,
+  proposeLearningDraft,
   rejectLearningDraft
 } from "./learning-draft.js";
 import { McpConnectionManager } from "./mcp/connection-manager.js";
@@ -1023,6 +1025,24 @@ async function runCliUnsafeWithParsed(
       return {
         exitCode: 0,
         stdout: `${formatLearningDraftList(listLearningDrafts(rootInput))}\n`,
+        stderr: ""
+      };
+    }
+    if (subcommand === "propose") {
+      const options = parseLearningProposeArgs(parsed.rest.slice(1));
+      const draft = proposeLearningDraft({
+        ...rootInput,
+        kind: options.kind,
+        target: options.target,
+        content: options.content,
+        reason: options.reason,
+        evidence: options.evidence,
+        confidence: options.confidence,
+        sourceSession: parsed.resumeSessionId ?? parsed.sessionId
+      });
+      return {
+        exitCode: 0,
+        stdout: `Created LearningDraft: ${draft.id} -> ${draft.kind}:${draft.target}\nApply it with: magi learning draft apply ${draft.id}\n`,
         stderr: ""
       };
     }
@@ -2013,6 +2033,7 @@ function helpText(): string {
     "  magi memory maintain config [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>] [--limit <n>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
     "  magi learning list",
+    "  magi learning propose --kind <memory|skill_create|skill_patch|do_not_save> --target <path> --reason <text> [--evidence <text>] [--confidence <0..1>] <content>",
     "  magi learning draft <show|apply|reject> <id>",
     "  magi mcp list [server]",
     "  magi mcp resources <server>",
@@ -2380,6 +2401,76 @@ function parseMemoryMaintainConfigArgs(args: string[]): {
     minWeight: options.minWeight,
     limit: options.limit
   };
+}
+
+function parseLearningProposeArgs(args: string[]): {
+  kind: LearningDraftKind;
+  target: string;
+  content: string;
+  reason: string;
+  evidence?: string[];
+  confidence?: number;
+} {
+  let kind: LearningDraftKind = "memory";
+  let target = "";
+  let reason = "";
+  const evidence: string[] = [];
+  let confidence: number | undefined;
+  const contentParts: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--kind") {
+      kind = readLearningDraftKind(args[++index]);
+      continue;
+    }
+    if (arg === "--target") {
+      target = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--reason") {
+      reason = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--evidence") {
+      evidence.push(args[++index] ?? "");
+      continue;
+    }
+    if (arg === "--confidence") {
+      confidence = readUnitNumberArg(args[++index], "magi learning propose --confidence");
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      throw new MagiUsageError(`Unknown magi learning propose option: ${arg}`);
+    }
+    contentParts.push(...args.slice(index));
+    break;
+  }
+  const content = contentParts.join(" ").trim();
+  if (!target || !reason || !content) {
+    throw new MagiUsageError(
+      "magi learning propose requires --target <path>, --reason <text>, and content"
+    );
+  }
+  return {
+    kind,
+    target,
+    content,
+    reason,
+    evidence: evidence.map((item) => item.trim()).filter(Boolean),
+    confidence
+  };
+}
+
+function readLearningDraftKind(value: string | undefined): LearningDraftKind {
+  if (
+    value === "memory" ||
+    value === "skill_create" ||
+    value === "skill_patch" ||
+    value === "do_not_save"
+  ) {
+    return value;
+  }
+  throw new MagiUsageError(`Invalid learning draft --kind: ${value ?? ""}`);
 }
 
 function readPositiveNumberArg(value: string | undefined, label: string): number {

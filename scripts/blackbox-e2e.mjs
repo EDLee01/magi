@@ -550,6 +550,16 @@ async function seedMemoryAndGoal({ workDir, configDir }) {
 function createComplexRouter() {
   let complexTurns = 0;
   return ({ transcript, toolNames }) => {
+    if (transcript.includes("Use the blackbox verify skill for isolated provider validation.")) {
+      assert(transcript.includes("[Relevant Skills]"), "skill recall request missed skills context");
+      assert(transcript.includes("## blackbox-verify"), "skill recall missed learned skill name");
+      assert(
+        transcript.includes("Run isolated provider validation before broad checks."),
+        "skill recall missed learned skill body"
+      );
+      return messageText("Use blackbox-verify: run isolated provider validation before broad checks.");
+    }
+
     if (transcript.includes("What should you remember about my verification preference?")) {
       assert(
         transcript.includes("focused CLI black-box verification"),
@@ -869,6 +879,72 @@ async function scenarioComplexWorkflow() {
         appliedLearningSearch.includes("isolated MAGI_CONFIG_DIR"),
         "applied LearningDraft workflow content was not recalled"
       );
+      const skillDraft = await runCli({
+        args: [
+          "learning",
+          "propose",
+          "--kind",
+          "skill_create",
+          "--target",
+          "skills/blackbox-verify/SKILL.md",
+          "--reason",
+          "Promote a repeated black-box verification workflow into a reusable skill.",
+          "--evidence",
+          "Validated by scripts/blackbox-e2e.mjs",
+          "--confidence",
+          "0.9",
+          "# Blackbox Verify\n\nRun isolated provider validation before broad checks.\n\n## Steps\n\n1. Start a mock provider.\n2. Run focused black-box CLI flow.\n3. Verify memory, tools, and learning evidence before broad suites.\n"
+        ],
+        cwd: workDir,
+        configDir,
+        label: "learning skill draft propose"
+      });
+      assert(skillDraft.includes("Created LearningDraft:"), "skill LearningDraft was not proposed");
+      const skillDraftId = /learn_[a-z0-9_]+/i.exec(skillDraft)?.[0];
+      assert(skillDraftId, "skill LearningDraft id was not returned");
+      const skillReview = await runCli({
+        args: ["learning", "draft", "show", skillDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning skill draft show"
+      });
+      assert(
+        skillReview.includes("Promote a repeated black-box verification workflow"),
+        "skill LearningDraft review missed reason"
+      );
+      assert(
+        skillReview.includes("Validated by scripts/blackbox-e2e.mjs"),
+        "skill LearningDraft review missed evidence"
+      );
+      const skillApply = await runCli({
+        args: ["learning", "draft", "apply", skillDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning skill draft apply"
+      });
+      assert(skillApply.includes("Applied LearningDraft:"), "skill LearningDraft apply did not run");
+      const skillFile = path.join(configDir, "skills", "blackbox-verify", "SKILL.md");
+      assert(existsSync(skillFile), "applied skill LearningDraft did not write SKILL.md");
+      assert(
+        readFileSync(skillFile, "utf8").includes("Run isolated provider validation before broad checks."),
+        "applied skill file missed learned workflow"
+      );
+      const skillRecall = await runCli({
+        args: [
+          "--model",
+          "main",
+          "-c",
+          "-p",
+          "Use the blackbox verify skill for isolated provider validation."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "learned skill recall"
+      });
+      assert(
+        skillRecall.includes("blackbox-verify"),
+        "learned skill recall answer missed skill name"
+      );
 
       const memorySearch = await runCli({
         args: ["memory", "search", "CLI E2E workflow"],
@@ -1045,12 +1121,16 @@ async function scenarioComplexWorkflow() {
           "learning draft listed",
           "learning draft review showed evidence",
           "learning draft applied to memory",
-          "applied learning indexed into memory graph"
+          "applied learning indexed into memory graph",
+          "skill learning draft reviewed",
+          "skill learning draft applied",
+          "learned skill recalled in model context"
         ],
         filesVerified: [
           "reports/e2e-result.md",
           "state/todos.json",
-          "memory/workflows/focused-cli-e2e.md"
+          "memory/workflows/focused-cli-e2e.md",
+          "skills/blackbox-verify/SKILL.md"
         ],
         provider: provider.summary()
       };

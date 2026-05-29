@@ -132,14 +132,19 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("learning draft review showed evidence") &&
     assertionList.includes("learning draft applied to memory") &&
     assertionList.includes("applied learning indexed into memory graph");
+  const skillLearningApplySeen =
+    assertionList.includes("skill learning draft reviewed") &&
+    assertionList.includes("skill learning draft applied") &&
+    assertionList.includes("learned skill recalled in model context");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 28) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 3) failures.push(`filesVerified=${filesVerified}`);
+  if (assertions < 31) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
+  if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -158,6 +163,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       toolCallCount,
       uniqueToolCount,
       learningDraftApplySeen,
+      skillLearningApplySeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

@@ -96,7 +96,8 @@ describe("capability report", () => {
         toolCallCount: 3,
         uniqueToolCount: 2,
         regressions: 1,
-        learningDraftApplySeen: false
+        learningDraftApplySeen: false,
+        skillLearningApplySeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -123,6 +124,7 @@ describe("capability report", () => {
         "assertions=4",
         "filesVerified=0",
         "learningDraftApplySeen=false",
+        "skillLearningApplySeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -612,6 +614,7 @@ function harnessReport(input: {
   uniqueToolCount?: number;
   regressions?: number;
   learningDraftApplySeen?: boolean;
+  skillLearningApplySeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -629,8 +632,8 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 39,
-      filesVerified: input.filesVerified ?? 5,
+      assertions: input.assertions ?? 42,
+      filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
         uniqueToolCount: input.uniqueToolCount ?? 12,
@@ -652,17 +655,42 @@ function harnessReport(input: {
         details: {
           assertions:
             input.learningDraftApplySeen === false
-              ? ["learning draft listed"]
+              ? [
+                  "learning draft listed",
+                  ...(input.skillLearningApplySeen === false
+                    ? []
+                    : [
+                        "skill learning draft reviewed",
+                        "skill learning draft applied",
+                        "learned skill recalled in model context"
+                      ])
+                ]
               : [
                   "learning draft listed",
                   "learning draft review showed evidence",
                   "learning draft applied to memory",
-                  "applied learning indexed into memory graph"
+                  "applied learning indexed into memory graph",
+                  ...(input.skillLearningApplySeen === false
+                    ? []
+                    : [
+                        "skill learning draft reviewed",
+                        "skill learning draft applied",
+                        "learned skill recalled in model context"
+                      ])
                 ],
           filesVerified:
-            input.learningDraftApplySeen === false
+            input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
               ? ["reports/e2e-result.md", "state/todos.json"]
-              : ["reports/e2e-result.md", "state/todos.json", "memory/workflows/focused-cli-e2e.md"]
+              : [
+                  "reports/e2e-result.md",
+                  "state/todos.json",
+                  ...(input.learningDraftApplySeen === false
+                    ? []
+                    : ["memory/workflows/focused-cli-e2e.md"]),
+                  ...(input.skillLearningApplySeen === false
+                    ? []
+                    : ["skills/blackbox-verify/SKILL.md"])
+                ]
         }
       }
     ]
