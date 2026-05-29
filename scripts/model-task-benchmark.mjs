@@ -424,8 +424,7 @@ async function scenarioMemoryDrivenTask() {
     await seedMemory({
       workDir,
       configDir,
-      text:
-        "Project release workflow: before broad checks, run focused CLI E2E and summarize only key failures."
+      text: "Project release workflow: before broad checks, run focused CLI E2E and summarize only key failures."
     });
     const providerLog = path.join(root, "provider-log.json");
     let turn = 0;
@@ -475,11 +474,7 @@ async function scenarioMemoryDrivenTask() {
       assert(plan.includes("key failures"), "release plan missed concise summary memory");
       return {
         score: 1,
-        assertions: [
-          "relevant memory injected",
-          "memory shaped output",
-          "release plan written"
-        ],
+        assertions: ["relevant memory injected", "memory shaped output", "release plan written"],
         filesVerified: ["release-plan.md"],
         provider: provider.summary(),
         taskClass: "memory_driven"
@@ -602,7 +597,7 @@ async function scenarioCrossFileVerifiedEditTask() {
         'const pricing = readFileSync("src/pricing.ts", "utf8");',
         'const docs = readFileSync("docs/pricing.md", "utf8");',
         "",
-        'if (!pricing.includes(\'return 10;\')) throw new Error("starter monthly price missing");',
+        "if (!pricing.includes('return 10;')) throw new Error(\"starter monthly price missing\");",
         'if (!pricing.includes("monthlyPrice(tier) * 10")) throw new Error("annual discount missing");',
         'if (!docs.includes("Starter: $10/mo")) throw new Error("docs monthly price missing");',
         'if (!docs.includes("10 months")) throw new Error("docs annual note missing");',
@@ -706,11 +701,17 @@ async function scenarioCrossFileVerifiedEditTask() {
         configDir,
         label: "cross-file verified edit task"
       });
-      assert(output.includes("session.completed"), "cross-file verified edit task did not complete");
+      assert(
+        output.includes("session.completed"),
+        "cross-file verified edit task did not complete"
+      );
       const source = readFileSync(path.join(workDir, "src", "pricing.ts"), "utf8");
       const docs = readFileSync(path.join(workDir, "docs", "pricing.md"), "utf8");
       assert(source.includes("return 10;"), "source starter price was not updated");
-      assert(source.includes("monthlyPrice(tier) * 10"), "source annual multiplier was not updated");
+      assert(
+        source.includes("monthlyPrice(tier) * 10"),
+        "source annual multiplier was not updated"
+      );
       assert(docs.includes("Starter: $10/mo"), "docs starter price was not updated");
       assert(docs.includes("10 months"), "docs annual note was not updated");
       return {
@@ -799,7 +800,10 @@ async function scenarioPatchStrategyTask() {
           ]);
         }
         if (turn === 3) {
-          assert(transcript.includes("Patched src/formatter.ts"), "FilePatch result was not visible");
+          assert(
+            transcript.includes("Patched src/formatter.ts"),
+            "FilePatch result was not visible"
+          );
           return toolResponse([
             toolCall("edit-format-version", "FileEdit", {
               file_path: "src/formatter.ts",
@@ -809,7 +813,9 @@ async function scenarioPatchStrategyTask() {
           ]);
         }
         assert(transcript.includes("Wrote src/formatter.ts"), "FileEdit result was not visible");
-        return messageText("Formatter updated with FilePatch for the body and FileEdit for version.");
+        return messageText(
+          "Formatter updated with FilePatch for the body and FileEdit for version."
+        );
       }
     });
 
@@ -849,7 +855,8 @@ async function scenarioPatchStrategyTask() {
       const toolCounts = summary.toolCounts;
       const patchToolCalls =
         (toolCounts.FilePatch ?? 0) + (toolCounts.FileEdit ?? 0) + (toolCounts.FileWrite ?? 0);
-      const patchUsageRate = patchToolCalls === 0 ? 0 : (toolCounts.FilePatch ?? 0) / patchToolCalls;
+      const patchUsageRate =
+        patchToolCalls === 0 ? 0 : (toolCounts.FilePatch ?? 0) / patchToolCalls;
       assert(toolCounts.FilePatch === 1, "patch strategy should use one FilePatch call");
       assert(toolCounts.FileEdit === 1, "patch strategy should use one FileEdit call");
       assert(!toolCounts.FileWrite, "patch strategy should not use FileWrite for existing file");
@@ -869,6 +876,198 @@ async function scenarioPatchStrategyTask() {
         toolCounts,
         patchUsageRate,
         fileWriteAvoided: !toolCounts.FileWrite
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
+async function scenarioTestDrivenRecoveryTask() {
+  return await withWorkspace("test-driven-recovery", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "reports"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "src", "totals.js"),
+      [
+        "export function summarize(items) {",
+        "  const total = items.reduce((sum, item) => sum + item.amount, 0);",
+        "  return { total };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "tests", "totals.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { summarize } from "../src/totals.js";',
+        "",
+        "const result = summarize([",
+        '  { amount: 12, type: "income" },',
+        '  { amount: 4, type: "expense" },',
+        '  { amount: 1, type: "expense" }',
+        "]);",
+        "",
+        "assert.deepEqual(result, { income: 12, expense: 5, balance: 7 });",
+        'console.log("totals ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(
+            transcript.includes("use FilePatch for multi-line edits"),
+            "FilePatch guidance was not injected"
+          );
+          return toolResponse([
+            toolCall("run-failing-test", "Bash", {
+              command: "node tests/totals.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("read-totals", "FileRead", { file_path: "src/totals.js" })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing test output was not visible");
+          assert(transcript.includes("export function summarize"), "source read was not visible");
+          return toolResponse([
+            toolCall("bad-totals-patch", "FilePatch", {
+              file_path: "src/totals.js",
+              patch: [
+                "@@",
+                " export function summarize(items) {",
+                "-  const total = items.reduce((sum, item) => sum + item.amount, 0);",
+                "-  return { total: total };",
+                '+  const income = items.filter((item) => item.type === "income").reduce((sum, item) => sum + item.amount, 0);',
+                '+  const expense = items.filter((item) => item.type === "expense").reduce((sum, item) => sum + item.amount, 0);',
+                "+  return { income, expense, balance: income - expense };",
+                " }"
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("FilePatch failed for src/totals.js"),
+            "FilePatch failure was not visible"
+          );
+          assert(transcript.includes("Recovery guidance:"), "FilePatch recovery guidance missing");
+          return toolResponse([
+            toolCall("retry-totals-patch", "FilePatch", {
+              file_path: "src/totals.js",
+              patch: [
+                "@@",
+                " export function summarize(items) {",
+                "-  const total = items.reduce((sum, item) => sum + item.amount, 0);",
+                "-  return { total };",
+                "+  const income = items",
+                '+    .filter((item) => item.type === "income")',
+                "+    .reduce((sum, item) => sum + item.amount, 0);",
+                "+  const expense = items",
+                '+    .filter((item) => item.type === "expense")',
+                "+    .reduce((sum, item) => sum + item.amount, 0);",
+                "+  return { income, expense, balance: income - expense };",
+                " }"
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 4) {
+          assert(
+            transcript.includes("Patched src/totals.js"),
+            "retry patch result was not visible"
+          );
+          return toolResponse([
+            toolCall("run-passing-test", "Bash", {
+              command: "node tests/totals.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        if (turn === 5) {
+          assert(transcript.includes("totals ok"), "passing test output was not visible");
+          return toolResponse([
+            toolCall("write-repair-report", "FileWrite", {
+              file_path: "reports/totals-fix.md",
+              content:
+                "# Totals Repair\n\n- Reproduced failing test.\n- Recovered from failed FilePatch using current context.\n- Verified with node tests/totals.test.mjs.\n"
+            })
+          ]);
+        }
+        assert(transcript.includes("Wrote reports/totals-fix.md"), "repair report write missing");
+        return messageText("Totals bug fixed with patch recovery and focused verification.");
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Fix the failing totals test.",
+            "Run the focused test first, repair src/totals.js with FilePatch, recover if the patch fails,",
+            "rerun the focused test, then write a concise repair report."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "test-driven recovery task"
+      });
+      assert(output.includes("session.completed"), "test-driven recovery task did not complete");
+      const source = readFileSync(path.join(workDir, "src", "totals.js"), "utf8");
+      const report = readFileSync(path.join(workDir, "reports", "totals-fix.md"), "utf8");
+      assert(source.includes("balance: income - expense"), "balance computation missing");
+      assert(report.includes("Recovered from failed FilePatch"), "repair report missed recovery");
+      assert(
+        report.includes("Verified with node tests/totals.test.mjs"),
+        "repair report missed verification"
+      );
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "test-driven task should run failing and passing checks");
+      assert(
+        toolCounts.FilePatch === 2,
+        "test-driven task should use failed and recovered patches"
+      );
+      assert(toolCounts.FileWrite === 1, "test-driven task should write one report");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing test ran before edit",
+          "source read before patch",
+          "failed FilePatch recovery guidance visible",
+          "retry FilePatch fixed source",
+          "focused passing test ran after edit",
+          "repair report written",
+          "final response completed"
+        ],
+        filesVerified: ["src/totals.js", "tests/totals.test.mjs", "reports/totals-fix.md"],
+        provider: summary,
+        taskClass: "test_driven_recovery",
+        toolCounts,
+        recoverySeen: true
       };
     } catch (error) {
       printProviderLog(providerLog);
@@ -928,7 +1127,8 @@ async function main() {
     ["memory driven task", scenarioMemoryDrivenTask],
     ["tool discovery task", scenarioToolDiscoveryTask],
     ["cross-file verified edit task", scenarioCrossFileVerifiedEditTask],
-    ["patch strategy task", scenarioPatchStrategyTask]
+    ["patch strategy task", scenarioPatchStrategyTask],
+    ["test-driven recovery task", scenarioTestDrivenRecoveryTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

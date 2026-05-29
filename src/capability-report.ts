@@ -180,17 +180,19 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const patchStrategyFilePatchCalls = readNumber(patchStrategyToolCounts.FilePatch);
   const patchStrategyFileEditCalls = readNumber(patchStrategyToolCounts.FileEdit);
   const patchStrategyFileWriteCalls = readNumber(patchStrategyToolCounts.FileWrite);
+  const testDrivenRecoveryTaskSeen = taskClasses.has("test_driven_recovery");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 5) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 5) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 6) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 6) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
-  if (assertions < 19) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 14) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
+  if (assertions < 26) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 10) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 21) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 5) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -217,6 +219,7 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       patchStrategyFilePatchCalls,
       patchStrategyFileEditCalls,
       patchStrategyFileWriteCalls,
+      testDrivenRecoveryTaskSeen,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
