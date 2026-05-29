@@ -2133,6 +2133,51 @@ describe("agent query loop", () => {
     }
   });
 
+  it("injects latest session plan context into QueryEngine context", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "plan context", cwd: workspace });
+      const { recordPlanReview } = await import("../src/plan-state.js");
+      const original = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId,
+        plan: "1. Skip inspection\n2. Edit immediately",
+        status: "needs_revision",
+        response: "No, revise"
+      });
+      const approved = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId,
+        plan: "1. Inspect first\n2. Apply focused edit\n3. Verify",
+        status: "approved",
+        response: "Yes, proceed",
+        revisesPlanId: original.id
+      });
+
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-plan-context",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "continue plan"
+      });
+
+      expect(seen.at(-1)).toContain("<session_plan_context>");
+      expect(seen.at(-1)).toContain(`Plan id: ${approved.id}`);
+      expect(seen.at(-1)).toContain(`Revises plan: ${original.id}`);
+      expect(seen.at(-1)).toContain("1. Inspect first");
+      expect(seen.at(-1)).not.toContain("Skip inspection");
+    } finally {
+      store.close();
+    }
+  });
+
   it("injects graph-backed wiki memory into QueryEngine context for a user workflow question", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });

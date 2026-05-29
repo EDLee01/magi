@@ -52,6 +52,7 @@ try {
     blockedGoalSuppressed: false,
     writeDeniedInPlanMode: false,
     planSubmittedToModel: false,
+    inheritedPlanContextSeen: false,
     blockedGoalPersisted: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
@@ -238,11 +239,29 @@ try {
       planRevision.revisionPlanId,
       planRevision.approvedPlanId
     );
+    const inheritedPlanContext = await runCli(
+      [
+        "--session-id",
+        sessionId,
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "Verify inherited plan context is injected."
+      ],
+      "inherited plan context"
+    );
+    assert(
+      inheritedPlanContext.includes("Inherited plan context is present"),
+      "inherited plan context prompt failed"
+    );
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
     assert(state.writeDeniedInPlanMode, "provider did not observe plan-mode write denial");
     assert(state.planSubmittedToModel, "provider did not observe submitted plan feedback");
+    assert(state.inheritedPlanContextSeen, "provider did not see inherited plan context");
 
     const report = harnessReport.buildHarnessReport({
       name: "goal-plan-eval",
@@ -269,6 +288,7 @@ try {
             planApprovalPersisted,
             planRevisionChainLinked,
             planRevisionChainViewListed,
+            inheritedPlanContextSeen: state.inheritedPlanContextSeen,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -353,6 +373,20 @@ function createRouter(state) {
       );
       state.blockedGoalSuppressed = true;
       return messageText("Blocked goal is no longer injected.");
+    }
+
+    if (latestUser.includes("Verify inherited plan context is injected")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "plan context was not injected");
+      assert(
+        systemPrompt.includes(approvedPlanText),
+        "approved plan text was not injected into plan context"
+      );
+      assert(
+        !systemPrompt.includes(revisionPlanText),
+        "superseded plan text leaked into latest plan context"
+      );
+      state.inheritedPlanContextSeen = true;
+      return messageText("Inherited plan context is present.");
     }
 
     return messageText("OK");

@@ -511,6 +511,78 @@ describe("CLI entrypoint", () => {
     expect(requests[0].messages[0].content).toContain("Objective: finish the migration");
   });
 
+  it("injects latest session plan context into resumed model context", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "PLAN CONTEXT OK" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const sessionId = "33333333-3333-4333-8333-333333333337";
+    await runCli(["--session-id", sessionId, "-p", "seed plan context session"], temp.env);
+    const { recordPlanReview } = await import("../src/plan-state.js");
+    const original = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId,
+      plan: "1. Edit without inspecting",
+      status: "needs_revision",
+      response: "No, revise"
+    });
+    const revised = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId,
+      plan: "1. Inspect first\n2. Verify focused change",
+      status: "approved",
+      response: "Yes, proceed",
+      revisesPlanId: original.id
+    });
+
+    const result = await runCli(
+      ["--session-id", sessionId, "--model", "main", "-p", "continue with inherited plan"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(requests.at(-1)?.messages[0].role).toBe("system");
+    expect(requests.at(-1)?.messages[0].content).toContain("<session_plan_context>");
+    expect(requests.at(-1)?.messages[0].content).toContain(`Plan id: ${revised.id}`);
+    expect(requests.at(-1)?.messages[0].content).toContain(`Revises plan: ${original.id}`);
+    expect(requests.at(-1)?.messages[0].content).toContain("1. Inspect first");
+    expect(requests.at(-1)?.messages[0].content).not.toContain("Edit without inspecting");
+  });
+
   it("honors headless permission mode for mutating tools", async () => {
     temp = makeTempRoot();
     const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];

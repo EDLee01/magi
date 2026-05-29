@@ -24,6 +24,7 @@ import { decideMemoryWrite } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
+import { formatPlanContext, getLatestPlanReview } from "../plan-state.js";
 import { findSkill, listSkills, SkillRecord } from "../skills/loader.js";
 import { formatSessionRecallContext, searchSessions } from "../session-search.js";
 import { maybeProposePostTaskLearningDraft } from "../learning-draft.js";
@@ -568,6 +569,11 @@ export class QueryEngine {
       memoryContext: await this.buildMemoryContext(prompt, jobId),
       goalContext: this.input.memoryOptions?.paths
         ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id))
+        : undefined,
+      planContext: this.input.memoryOptions?.paths
+        ? formatPlanContext(
+            getLatestPlanReview(this.input.memoryOptions.paths.stateRoot, session.id)
+          )
         : undefined,
       cwd: this.input.cwd,
       paths: this.input.memoryOptions?.paths,
@@ -1267,6 +1273,7 @@ function buildSessionMessages(input: {
   recentMessages: number;
   memoryContext?: string;
   goalContext?: string;
+  planContext?: string;
   cwd?: string;
   paths?: import("../paths.js").MagiPaths;
   systemInstructions?: string;
@@ -1290,7 +1297,8 @@ function buildSessionMessages(input: {
         toolCount: getBuiltinToolDefinitions().length
       }),
     memoryContext:
-      [input.goalContext, input.memoryContext].filter(Boolean).join("\n\n") || undefined,
+      [input.goalContext, input.planContext, input.memoryContext].filter(Boolean).join("\n\n") ||
+      undefined,
     hotMemorySink: input.hotMemoryNodeSink,
     includeGit: true,
     includeDate: true,

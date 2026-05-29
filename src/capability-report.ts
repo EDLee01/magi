@@ -337,6 +337,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.planRevisionChainViewListed !== true) {
     failures.push("planRevisionChainViewListed=false");
   }
+  if (details.inheritedPlanContextSeen !== true) failures.push("inheritedPlanContextSeen=false");
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -358,6 +359,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       planApprovalPersisted: details.planApprovalPersisted === true,
       planRevisionChainLinked: details.planRevisionChainLinked === true,
       planRevisionChainViewListed: details.planRevisionChainViewListed === true,
+      inheritedPlanContextSeen: details.inheritedPlanContextSeen === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },

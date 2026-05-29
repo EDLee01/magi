@@ -185,6 +185,25 @@ export function formatPlanReviewChain(records: PlanReviewRecord[]): string {
   ].join("\n");
 }
 
+export function formatPlanContext(record: PlanReviewRecord | undefined): string | undefined {
+  if (!record) return undefined;
+  return [
+    "<session_plan_context>",
+    "Latest submitted plan for this session. Treat it as historical implementation guidance; current user instructions can override it.",
+    `Plan id: ${record.id}`,
+    `Status: ${record.status}`,
+    record.revisesPlanId ? `Revises plan: ${record.revisesPlanId}` : undefined,
+    record.revisedByPlanId ? `Revised by plan: ${record.revisedByPlanId}` : undefined,
+    record.rootPlanId ? `Root plan: ${record.rootPlanId}` : undefined,
+    record.response ? `Last user response: ${record.response}` : undefined,
+    "Implementation plan:",
+    record.plan,
+    "</session_plan_context>"
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
+}
+
 export function formatPlanReviewList(records: PlanReviewRecord[]): string {
   if (records.length === 0) return "No submitted plans.";
   return [
