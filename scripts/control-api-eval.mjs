@@ -47,7 +47,14 @@ try {
     sessionCreatedForResume: false,
     panelPayloadAccepted: false,
     resumedSessionContextSeen: false,
-    resumedSessionMessagesPersisted: false
+    resumedSessionMessagesPersisted: false,
+    panelHtmlServed: false,
+    panelClientContractValid: false,
+    panelUiApprovalControlsSeen: false,
+    panelUiCancelControlSeen: false,
+    panelClientCreateSessionUnwrapped: false,
+    panelClientStartJobAccepted: false,
+    panelSseJobStreamSeen: false
   };
   const controlPort = randomControlPort();
   const providerLog = path.join(root, "provider-log.json");
@@ -75,6 +82,7 @@ try {
     await exerciseBackgroundCancelFlow({ serve, headers, state });
     await exerciseApprovalCancelFlow({ serve, headers, workDir, state });
     await exercisePanelResumeFlow({ serve, headers, state });
+    await exerciseWebPanelContract({ serve, headers, state });
 
     assertAllState(state);
     const report = harnessReport.buildHarnessReport({
@@ -342,6 +350,78 @@ async function exercisePanelResumeFlow({ serve, headers, state }) {
   assert(actions.includes("agent.query.completed"), "resume session events missed completion");
 }
 
+async function exerciseWebPanelContract({ serve, headers, state }) {
+  const panelResponse = await fetch(`${serve.url}/panel`);
+  assert(panelResponse.status === 200, "web panel was not served");
+  const panelHtml = await panelResponse.text();
+  assert(panelHtml.includes("Magi Next"), "web panel missed app title");
+  assert(
+    panelHtml.includes('import { createMagiPanelClient } from "/panel-client.js"'),
+    "web panel did not load the panel client"
+  );
+  assert(
+    panelHtml.includes("client.createSession") &&
+      panelHtml.includes("client.startJob") &&
+      panelHtml.includes("/events?jobId="),
+    "web panel did not use the session, job, and SSE control flow"
+  );
+  assert(
+    panelHtml.includes("addApprovalCard") &&
+      panelHtml.includes("resolveApprovalCard") &&
+      panelHtml.includes("client.resolveApproval"),
+    "web panel did not expose approval controls"
+  );
+  assert(
+    panelHtml.includes("cancelActiveJob") && panelHtml.includes("client.cancelJob"),
+    "web panel did not expose job cancellation"
+  );
+  state.panelHtmlServed = true;
+  state.panelUiApprovalControlsSeen = true;
+  state.panelUiCancelControlSeen = true;
+
+  const clientResponse = await fetch(`${serve.url}/panel-client.js`);
+  assert(clientResponse.status === 200, "panel client script was not served");
+  const clientSource = await clientResponse.text();
+  assert(clientSource.includes("createMagiPanelClient"), "panel client export is missing");
+  assert(clientSource.includes("resolveApproval"), "panel client lacks approval resolution");
+  assert(clientSource.includes("answerQuestion"), "panel client lacks question resolution");
+  assert(clientSource.includes("cancelJob"), "panel client lacks job cancellation");
+  state.panelClientContractValid = true;
+
+  const client = await importPanelClient(clientSource);
+  const api = client(serve.url, headers);
+  const created = await api.createSession({
+    title: "panel contract eval",
+    cwd: "/",
+    metadata: { source: "panel-contract-eval" }
+  });
+  assert(created.id, "panel client did not unwrap createSession response");
+  state.panelClientCreateSessionUnwrapped = true;
+
+  const started = await api.startJob({
+    content: "Panel browser contract: keep token basil-42.",
+    modelAlias: "main",
+    sessionId: created.id,
+    background: true
+  });
+  assert(started.jobId && started.sessionId === created.id, "panel client startJob failed");
+  state.panelClientStartJobAccepted = true;
+
+  const sse = await readSseUntil(
+    `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}&limit=20`,
+    headers,
+    (text) =>
+      text.includes("agent.query.completed") &&
+      text.includes("CONTROL ") &&
+      text.includes("PANEL ") &&
+      text.includes("CONTRACT")
+  );
+  state.panelSseJobStreamSeen =
+    sse.includes("event: ready") &&
+    sse.includes("agent.text.delta") &&
+    sse.includes("agent.query.completed");
+}
+
 function createRouter(state) {
   return ({ body, transcript }) => {
     const latestUser = latestUserFromBody(body);
@@ -368,6 +448,10 @@ function createRouter(state) {
 
     if (latestUser.includes("Panel resume seed")) {
       return messageText("CONTROL RESUME SEED");
+    }
+
+    if (latestUser.includes("Panel browser contract")) {
+      return completedStreamTextResponse(["CONTROL ", "PANEL ", "CONTRACT"]);
     }
 
     if (latestUser.includes("Write then cancel approval through mobile control")) {
@@ -444,6 +528,10 @@ async function startProvider({ logPath, routeRequest }) {
           response.write(
             `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`
           );
+        }
+        if (result.end === true) {
+          response.write(`data: [DONE]\n\n`);
+          response.end();
         }
         return;
       }
@@ -629,6 +717,35 @@ function authHeaders(pairing) {
   };
 }
 
+async function importPanelClient(source) {
+  const moduleDir = mkdtempSync(path.join(os.tmpdir(), "magi-panel-client-eval-"));
+  const modulePath = path.join(moduleDir, "panel-client.mjs");
+  const patchedSource = source.replaceAll("window.localStorage", "__magiLocalStorage");
+  writeFileSync(
+    modulePath,
+    [
+      "let __magiDeviceId = null;",
+      "let __magiDeviceToken = null;",
+      "const __magiLocalStorage = {",
+      "  getItem(key) {",
+      "    if (key === 'MAGI_DEVICE_ID') return __magiDeviceId;",
+      "    if (key === 'MAGI_DEVICE_TOKEN') return __magiDeviceToken;",
+      "    return null;",
+      "  }",
+      "};",
+      patchedSource,
+      "export function createAuthenticatedMagiPanelClient(baseUrl, headers) {",
+      "  __magiDeviceId = headers['x-magi-device-id'];",
+      "  __magiDeviceToken = String(headers.authorization || '').replace(/^Bearer\\s+/i, '');",
+      "  return createMagiPanelClient(baseUrl);",
+      "}"
+    ].join("\n"),
+    "utf8"
+  );
+  const imported = await import(`${pathToFileUrl(modulePath)}?t=${Date.now()}`);
+  return (baseUrl, headers) => imported.createAuthenticatedMagiPanelClient(baseUrl, headers);
+}
+
 async function readSseUntil(url, headers, predicate, onChunk, timeoutMs = 10_000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -692,6 +809,14 @@ function randomControlPort() {
   return 30_000 + Math.floor(Math.random() * 20_000);
 }
 
+function pathToFileUrl(file) {
+  let resolved = path.resolve(file).replace(/\\/g, "/");
+  if (!resolved.startsWith("/")) {
+    resolved = `/${resolved}`;
+  }
+  return `file://${resolved.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 function messageText(text, model = "mock-main") {
   return {
     id: `msg_${Math.random().toString(36).slice(2)}`,
@@ -739,6 +864,10 @@ function toolCall(id, name, input) {
 
 function streamTextResponse(chunks) {
   return { stream: true, chunks };
+}
+
+function completedStreamTextResponse(chunks) {
+  return { stream: true, chunks, end: true };
 }
 
 function fail(status, message) {

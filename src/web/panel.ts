@@ -76,12 +76,33 @@ export function renderPanelClient(): string {
   return {
     sessions: () => get("/sessions"),
     session: (id) => get("/sessions/" + encodeURIComponent(id)),
-    createSession: (body) => post("/sessions", body),
+    createSession: async (body) => {
+      const result = await post("/sessions", body);
+      return result.session || result;
+    },
     sendMessage: (id, body) => post("/sessions/" + encodeURIComponent(id) + "/messages", body),
+    startJob: (body) => post("/jobs", body),
     jobs: () => get("/jobs"),
     job: (id) => get("/jobs/" + encodeURIComponent(id)),
     cancelJob: (id, reason) => post("/jobs/" + encodeURIComponent(id) + "/cancel", { reason }),
     jobInteractions: (id) => get("/jobs/" + encodeURIComponent(id) + "/interactions"),
+    resolveApproval: (jobId, toolUseId, decision, body = {}) =>
+      post("/jobs/" + encodeURIComponent(jobId) + "/approvals/" + encodeURIComponent(toolUseId), {
+        ...body,
+        decision
+      }),
+    cancelApproval: (jobId, toolUseId, reason) =>
+      post(
+        "/jobs/" + encodeURIComponent(jobId) + "/approvals/" + encodeURIComponent(toolUseId) + "/cancel",
+        { reason }
+      ),
+    answerQuestion: (jobId, toolUseId, body) =>
+      post("/jobs/" + encodeURIComponent(jobId) + "/questions/" + encodeURIComponent(toolUseId), body),
+    cancelQuestion: (jobId, toolUseId, reason) =>
+      post(
+        "/jobs/" + encodeURIComponent(jobId) + "/questions/" + encodeURIComponent(toolUseId) + "/cancel",
+        { reason }
+      ),
     events: () => get("/events.json"),
     sessionEvents: (id) => get("/sessions/" + encodeURIComponent(id) + "/events"),
     jobEvents: (id) => get("/jobs/" + encodeURIComponent(id) + "/events"),

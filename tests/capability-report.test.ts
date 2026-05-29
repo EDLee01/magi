@@ -183,7 +183,11 @@ describe("capability report", () => {
         approvalSseSeen: false,
         jobCancelled: false,
         cancelledApprovalDidNotWrite: false,
-        resumedSessionContextSeen: false
+        resumedSessionContextSeen: false,
+        panelClientContractValid: false,
+        panelUiApprovalControlsSeen: false,
+        panelUiCancelControlSeen: false,
+        panelSseJobStreamSeen: false
       })
     });
 
@@ -194,7 +198,11 @@ describe("capability report", () => {
         "approvalSseSeen=false",
         "jobCancelled=false",
         "cancelledApprovalDidNotWrite=false",
-        "resumedSessionContextSeen=false"
+        "resumedSessionContextSeen=false",
+        "panelClientContractValid=false",
+        "panelUiApprovalControlsSeen=false",
+        "panelUiCancelControlSeen=false",
+        "panelSseJobStreamSeen=false"
       ])
     );
   });
@@ -381,6 +389,13 @@ function controlApiReport(
     panelPayloadAccepted: boolean;
     resumedSessionContextSeen: boolean;
     resumedSessionMessagesPersisted: boolean;
+    panelHtmlServed: boolean;
+    panelClientContractValid: boolean;
+    panelUiApprovalControlsSeen: boolean;
+    panelUiCancelControlSeen: boolean;
+    panelClientCreateSessionUnwrapped: boolean;
+    panelClientStartJobAccepted: boolean;
+    panelSseJobStreamSeen: boolean;
   }> = {}
 ): Record<string, unknown> {
   return {
@@ -412,6 +427,13 @@ function controlApiReport(
           panelPayloadAccepted: true,
           resumedSessionContextSeen: true,
           resumedSessionMessagesPersisted: true,
+          panelHtmlServed: true,
+          panelClientContractValid: true,
+          panelUiApprovalControlsSeen: true,
+          panelUiCancelControlSeen: true,
+          panelClientCreateSessionUnwrapped: true,
+          panelClientStartJobAccepted: true,
+          panelSseJobStreamSeen: true,
           ...overrides
         }
       }

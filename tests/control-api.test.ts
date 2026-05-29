@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import http, { IncomingMessage } from "node:http";
 import { readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "../src/config.js";
 import { runDueCronJobs, startControlServer } from "../src/control/server.js";
@@ -15,6 +17,11 @@ let temp: TempRoot | undefined;
 let handle: Awaited<ReturnType<typeof startControlServer>> | undefined;
 let store: SessionStore | undefined;
 let modelServer: http.Server | undefined;
+
+interface PanelClient {
+  createSession(body: Record<string, unknown>): Promise<unknown>;
+  startJob(body: Record<string, unknown>): Promise<unknown>;
+}
 
 afterEach(async () => {
   if (handle) {
@@ -949,6 +956,76 @@ describe("Control API", () => {
     expect(skills.skills[0].name).toBe("panel-skill");
   });
 
+  it("serves a panel client that matches the Control API session and job contract", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    modelServer = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as Record<string, unknown>;
+      calls.push(body);
+      response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+      response.write(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: "PANEL " } }] })}\n\n`
+      );
+      response.write(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: "STREAM" } }] })}\n\n`
+      );
+      response.write("data: [DONE]\n\n");
+      response.end();
+    });
+    const baseUrl = await listen(modelServer);
+    await startTestServer({
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      configLines: providerControlConfig(baseUrl)
+    });
+
+    const panel = await fetch(`${handle!.url}/panel`);
+    const panelHtml = await panel.text();
+    expect(panelHtml).toContain('import { createMagiPanelClient } from "/panel-client.js"');
+    expect(panelHtml).toContain("client.startJob");
+    expect(panelHtml).toContain("/events?jobId=");
+    expect(panelHtml).toContain("addApprovalCard");
+    expect(panelHtml).toContain("client.resolveApproval");
+    expect(panelHtml).toContain("cancelActiveJob");
+    expect(panelHtml).toContain("client.cancelJob");
+
+    const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {
+      deviceId: string;
+      token: string;
+    };
+    const headers = authHeaders(pairing);
+    const client = await loadPanelClient(`${handle!.url}/panel-client.js`, headers);
+    const created = (await client.createSession({
+      title: "panel contract",
+      cwd: temp!.path,
+      metadata: { source: "panel" }
+    })) as { id: string; title: string };
+    expect(created).toMatchObject({ title: "panel contract" });
+    expect(created.id).toBeTruthy();
+
+    const started = (await client.startJob({
+      content: "panel streaming contract",
+      modelAlias: "main",
+      sessionId: created.id,
+      background: true
+    })) as { sessionId: string; jobId: string; status: string };
+    expect(started).toMatchObject({ sessionId: created.id, status: "running" });
+
+    const streamText = await readSseUntil(
+      `${handle!.url}/events?jobId=${encodeURIComponent(started.jobId)}&limit=20`,
+      headers,
+      (text) =>
+        text.includes("agent.query.completed") && text.includes("PANEL ") && text.includes("STREAM")
+    );
+    expect(streamText).toContain("agent.text.delta");
+    expect(streamText).toContain("agent.query.completed");
+    expect(calls).toHaveLength(1);
+  }, 10_000);
+
   it("runs due cron jobs through the headless control path", async () => {
     const calls: Array<Record<string, unknown>> = [];
     modelServer = http.createServer(async (request, response) => {
@@ -1175,6 +1252,36 @@ async function readSseUntil(
     controller.abort();
     reader.releaseLock();
   }
+}
+
+async function loadPanelClient(
+  clientUrl: string,
+  auth: Record<string, string>
+): Promise<PanelClient> {
+  const response = await fetch(clientUrl);
+  expect(response.status).toBe(200);
+  const source = await response.text();
+  const moduleDir = mkdtempSync(path.join(os.tmpdir(), "magi-panel-client-"));
+  const modulePath = path.join(moduleDir, "panel-client.mjs");
+  const patchedSource = source.replaceAll("window.localStorage", "__magiLocalStorage");
+  writeFileSync(
+    modulePath,
+    [
+      "const __magiLocalStorage = {",
+      "  getItem(key) {",
+      `    if (key === "MAGI_DEVICE_ID") return ${JSON.stringify(auth["x-magi-device-id"])};`,
+      `    if (key === "MAGI_DEVICE_TOKEN") return ${JSON.stringify(auth.authorization.replace(/^Bearer\s+/i, ""))};`,
+      "    return null;",
+      "  }",
+      "};",
+      patchedSource
+    ].join("\n"),
+    "utf8"
+  );
+  const imported = (await import(`${pathToFileURL(modulePath).href}?t=${Date.now()}`)) as {
+    createMagiPanelClient: (baseUrl: string) => PanelClient;
+  };
+  return imported.createMagiPanelClient(handle!.url);
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

@@ -135,6 +135,28 @@ export function renderWebPanel(): string {
       color: var(--text-dim);
     }
     .tool-call .name { color: var(--accent); font-weight: 600; }
+    .interaction-card {
+      background: var(--panel);
+      border: 1px solid var(--accent-dim);
+      border-radius: 8px;
+      padding: 10px 12px;
+      align-self: stretch;
+      font-size: 13px;
+    }
+    .interaction-card .title { font-weight: 600; margin-bottom: 4px; }
+    .interaction-card .detail { color: var(--text-dim); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+    .interaction-card .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .interaction-card button {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .interaction-card button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    .interaction-card button.danger { border-color: rgba(239, 68, 68, 0.7); color: #fecaca; }
+    .interaction-card.resolved { border-color: var(--border); opacity: 0.75; }
     footer {
       flex-shrink: 0;
       background: var(--panel);
@@ -316,6 +338,7 @@ export function renderWebPanel(): string {
     let currentSessionId = null;
     let currentJobEventSource = null;
     let isStreaming = false;
+    let activeJobId = null;
 
     // Restore settings
     els.modelSelect.value = localStorage.getItem("MAGI_MODEL") || "auto";
@@ -337,7 +360,10 @@ export function renderWebPanel(): string {
         send();
       }
     });
-    els.sendBtn.addEventListener("click", send);
+    els.sendBtn.addEventListener("click", () => {
+      if (isStreaming) cancelActiveJob();
+      else send();
+    });
     els.newBtn.addEventListener("click", newSession);
     els.menuBtn.addEventListener("click", openDrawer);
     els.closeDrawer.addEventListener("click", closeDrawer);
@@ -382,8 +408,63 @@ export function renderWebPanel(): string {
       return div;
     }
 
+    function addApprovalCard(jobId, evt) {
+      const empty = els.messages.querySelector(".empty");
+      if (empty) empty.remove();
+      const toolUseId = evt.metadata && evt.metadata.toolUseId;
+      const card = document.createElement("div");
+      card.className = "interaction-card";
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = "Approval needed: " + (evt.target || "tool");
+      const detail = document.createElement("div");
+      detail.className = "detail";
+      detail.textContent = (evt.metadata && (evt.metadata.reason || evt.metadata.diff)) || evt.message || "";
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const approve = document.createElement("button");
+      approve.className = "primary";
+      approve.textContent = "Approve";
+      const deny = document.createElement("button");
+      deny.className = "danger";
+      deny.textContent = "Deny";
+      approve.addEventListener("click", () => resolveApprovalCard(card, jobId, toolUseId, "approve"));
+      deny.addEventListener("click", () => resolveApprovalCard(card, jobId, toolUseId, "deny"));
+      actions.append(approve, deny);
+      card.append(title, detail, actions);
+      els.messages.appendChild(card);
+      els.main.scrollTop = els.main.scrollHeight;
+    }
+
+    async function resolveApprovalCard(card, jobId, toolUseId, decision) {
+      if (!toolUseId) return;
+      const buttons = card.querySelectorAll("button");
+      buttons.forEach((button) => button.disabled = true);
+      try {
+        await client.resolveApproval(jobId, toolUseId, decision, { responder: "panel" });
+        card.classList.add("resolved");
+        card.querySelector(".detail").textContent = decision === "approve" ? "Approved from panel." : "Denied from panel.";
+      } catch (error) {
+        buttons.forEach((button) => button.disabled = false);
+        addMessage("error", "Approval failed: " + (error.message || error));
+      }
+    }
+
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"})[c] || c);
+    }
+
+    async function cancelActiveJob() {
+      if (!activeJobId) return;
+      els.sendBtn.disabled = true;
+      try {
+        await client.cancelJob(activeJobId, "cancelled from panel");
+        addMessage("system", "Cancelling…");
+      } catch (error) {
+        addMessage("error", "Cancel failed: " + (error.message || error));
+      } finally {
+        els.sendBtn.disabled = false;
+      }
     }
 
     async function send() {
@@ -393,7 +474,8 @@ export function renderWebPanel(): string {
       els.input.value = "";
       els.input.style.height = "auto";
       els.input.disabled = true;
-      els.sendBtn.disabled = true;
+      els.sendBtn.disabled = false;
+      els.sendBtn.textContent = "Stop";
       isStreaming = true;
       addMessage("user", text);
 
@@ -404,21 +486,33 @@ export function renderWebPanel(): string {
           els.title.textContent = text.slice(0, 60);
         }
         const modelAlias = els.modelSelect.value;
-        const result = await client.sendMessage(currentSessionId, { content: text, modelAlias });
+        const result = await client.startJob({
+          content: text,
+          modelAlias,
+          sessionId: currentSessionId,
+          background: true,
+          metadata: { source: "panel" }
+        });
+        if (result.sessionId) {
+          currentSessionId = result.sessionId;
+        }
+        activeJobId = result.jobId;
         const assistantDiv = addMessage("assistant", "");
         await streamJobEvents(result.jobId, assistantDiv);
       } catch (error) {
         addMessage("error", "Error: " + (error.message || error));
       } finally {
+        activeJobId = null;
         els.input.disabled = false;
         els.sendBtn.disabled = false;
+        els.sendBtn.textContent = "Send";
         isStreaming = false;
         els.input.focus();
       }
     }
 
     async function streamJobEvents(jobId, assistantDiv) {
-      // Use the SSE endpoint for streaming
+      if (!jobId) throw new Error("No job id returned from Control API");
       const headers = {};
       const deviceId = localStorage.getItem("MAGI_DEVICE_ID");
       const token = localStorage.getItem("MAGI_DEVICE_TOKEN");
@@ -426,12 +520,14 @@ export function renderWebPanel(): string {
         headers["x-magi-device-id"] = deviceId;
         headers.authorization = "Bearer " + token;
       }
-      const response = await fetch("/jobs/" + encodeURIComponent(jobId) + "/events", { headers });
+      const response = await fetch("/events?jobId=" + encodeURIComponent(jobId) + "&limit=50", { headers });
       if (!response.ok) throw new Error("Stream failed: " + response.status);
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
       let assistantText = "";
+      let status = "running";
+      const seenInteractions = new Set();
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -444,18 +540,37 @@ export function renderWebPanel(): string {
             if (!line.startsWith("data:")) continue;
             try {
               const evt = JSON.parse(line.slice(5).trim());
-              if (evt.type === "text_delta" && evt.text) {
-                assistantText += evt.text;
+              if (evt.action === "agent.text.delta" && evt.metadata && evt.metadata.preview) {
+                assistantText += evt.metadata.preview;
                 assistantDiv.textContent = assistantText;
                 els.main.scrollTop = els.main.scrollHeight;
-              } else if (evt.type === "tool_use_start" && evt.toolName) {
-                addToolCall(evt.toolName);
-              } else if (evt.type === "done" && !assistantText && evt.text) {
-                assistantDiv.textContent = evt.text;
-              } else if (evt.type === "error" && evt.error) {
-                addMessage("error", "Error: " + evt.error);
+              } else if (evt.action === "agent.tool.use" && evt.target) {
+                addToolCall(evt.target);
+              } else if (evt.action === "agent.approval.pending") {
+                const key = evt.metadata?.toolUseId || evt.id;
+                if (!seenInteractions.has(key)) {
+                  seenInteractions.add(key);
+                  addApprovalCard(jobId, evt);
+                }
+              } else if (evt.action === "agent.user_question.pending") {
+                addMessage("system", "Question pending: " + (evt.message || evt.target || "user input"));
+              } else if (evt.action === "agent.query.completed") {
+                status = "completed";
+                if (!assistantText && evt.message) assistantDiv.textContent = evt.message;
+              } else if (evt.action === "agent.query.failed") {
+                status = "failed";
+                addMessage("error", "Error: " + (evt.metadata?.error || evt.message || "query failed"));
+              } else if (evt.action === "agent.query.cancelled") {
+                status = "cancelled";
+                addMessage("system", "Cancelled");
+              } else if (evt.action === "agent.query.done") {
+                if (!assistantText && evt.message) assistantDiv.textContent = evt.message;
               }
             } catch {}
+          }
+          if (status === "completed" || status === "failed" || status === "cancelled") {
+            try { await reader.cancel(); } catch {}
+            return;
           }
           sep = buffer.indexOf("\\n\\n");
         }

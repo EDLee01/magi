@@ -331,7 +331,14 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "sessionCreatedForResume",
     "panelPayloadAccepted",
     "resumedSessionContextSeen",
-    "resumedSessionMessagesPersisted"
+    "resumedSessionMessagesPersisted",
+    "panelHtmlServed",
+    "panelClientContractValid",
+    "panelUiApprovalControlsSeen",
+    "panelUiCancelControlSeen",
+    "panelClientCreateSessionUnwrapped",
+    "panelClientStartJobAccepted",
+    "panelSseJobStreamSeen"
   ];
   for (const key of required) {
     if (details[key] !== true) {
@@ -361,7 +368,14 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       sessionCreatedForResume: details.sessionCreatedForResume === true,
       panelPayloadAccepted: details.panelPayloadAccepted === true,
       resumedSessionContextSeen: details.resumedSessionContextSeen === true,
-      resumedSessionMessagesPersisted: details.resumedSessionMessagesPersisted === true
+      resumedSessionMessagesPersisted: details.resumedSessionMessagesPersisted === true,
+      panelHtmlServed: details.panelHtmlServed === true,
+      panelClientContractValid: details.panelClientContractValid === true,
+      panelUiApprovalControlsSeen: details.panelUiApprovalControlsSeen === true,
+      panelUiCancelControlSeen: details.panelUiCancelControlSeen === true,
+      panelClientCreateSessionUnwrapped: details.panelClientCreateSessionUnwrapped === true,
+      panelClientStartJobAccepted: details.panelClientStartJobAccepted === true,
+      panelSseJobStreamSeen: details.panelSseJobStreamSeen === true
     },
     failures
   };
