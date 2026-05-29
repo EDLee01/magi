@@ -9,6 +9,7 @@ import {
   listPlanReviews,
   mergePlanReviews,
   recordPlanReview,
+  resolvePlanReviewConflicts,
   updatePlanReviewStatus
 } from "../src/plan-state.js";
 import { getMagiPaths } from "../src/paths.js";
@@ -303,6 +304,62 @@ describe("plan review state", () => {
       expect(formatPlanReviewList(listPlanReviews(paths.stateRoot, "conflict-session"))).toContain(
         "merge-conflicts:1"
       );
+    } finally {
+      temp.cleanup();
+    }
+  });
+
+  it("resolves merge conflicts into an approved revision", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const alpha = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "alpha-session",
+        plan: "1. Read shared config\n2. Patch src/config.ts to use alpha endpoint",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      const beta = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "beta-session",
+        plan: "1. Read shared config\n2. Patch src/config.ts to use beta endpoint",
+        status: "approved",
+        response: "Yes, proceed"
+      });
+      const conflicted = mergePlanReviews({
+        stateRoot: paths.stateRoot,
+        sourcePlanIds: [alpha.id, beta.id],
+        targetSessionId: "conflict-session"
+      });
+
+      const resolved = resolvePlanReviewConflicts({
+        stateRoot: paths.stateRoot,
+        conflictedPlanId: conflicted.id,
+        choicePlanId: beta.id
+      });
+
+      expect(resolved).toMatchObject({
+        sessionId: "conflict-session",
+        status: "approved",
+        revisesPlanId: conflicted.id,
+        rootPlanId: conflicted.id,
+        resolvedFromPlanId: conflicted.id,
+        resolvedChoicePlanId: beta.id,
+        resolvedConflictTargets: ["src/config.ts"]
+      });
+      expect(resolved.plan).toContain(`Resolved merged implementation plan from ${conflicted.id}.`);
+      expect(resolved.plan).toContain("Patch src/config.ts to use beta endpoint");
+      expect(resolved.plan).not.toContain("Patch src/config.ts to use alpha endpoint");
+      expect(formatPlanReview(resolved)).toContain(`Resolved from plan: ${conflicted.id}`);
+      expect(formatPlanReview(resolved)).toContain(`Resolved with choice plan: ${beta.id}`);
+      expect(formatPlanReviewList(listPlanReviews(paths.stateRoot, "conflict-session"))).toContain(
+        `resolved-from:${conflicted.id}`
+      );
+      expect(getPlanReviewChain(paths.stateRoot, resolved.id).map((plan) => plan.id)).toEqual([
+        conflicted.id,
+        resolved.id
+      ]);
     } finally {
       temp.cleanup();
     }

@@ -310,6 +310,8 @@ describe("capability report", () => {
         mergedPlanContextSeen: false,
         conflictedMergeNeedsRevision: false,
         conflictedMergeContextSeen: false,
+        conflictedMergeResolved: false,
+        resolvedMergeContextSeen: false,
         assertions: 3,
         filesVerified: 1,
         toolCallCount: 2,
@@ -353,7 +355,9 @@ describe("capability report", () => {
         "mergedPlanCreated=false",
         "mergedPlanContextSeen=false",
         "conflictedMergeNeedsRevision=false",
-        "conflictedMergeContextSeen=false"
+        "conflictedMergeContextSeen=false",
+        "conflictedMergeResolved=false",
+        "resolvedMergeContextSeen=false"
       ])
     );
   });
@@ -1057,6 +1061,8 @@ function goalPlanReport(
     mergedPlanContextSeen: boolean;
     conflictedMergeNeedsRevision: boolean;
     conflictedMergeContextSeen: boolean;
+    conflictedMergeResolved: boolean;
+    resolvedMergeContextSeen: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
     assertions: number;
@@ -1070,7 +1076,7 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 34,
+      assertions: overrides.assertions ?? 36,
       filesVerified: overrides.filesVerified ?? 4,
       toolCallCount: overrides.toolCallCount ?? 10,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1085,7 +1091,7 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 34 },
+            { length: overrides.assertions ?? 36 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1128,6 +1134,8 @@ function goalPlanReport(
           mergedPlanContextSeen: true,
           conflictedMergeNeedsRevision: true,
           conflictedMergeContextSeen: true,
+          conflictedMergeResolved: true,
+          resolvedMergeContextSeen: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

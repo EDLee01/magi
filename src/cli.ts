@@ -45,7 +45,8 @@ import {
   getPlanReview,
   getPlanReviewChain,
   listPlanReviews,
-  mergePlanReviews
+  mergePlanReviews,
+  resolvePlanReviewConflicts
 } from "./plan-state.js";
 import {
   proposeMemoryDraft,
@@ -622,6 +623,41 @@ async function runCliUnsafeWithParsed(
             `Plan merged: ${merged.id}`,
             `Session: ${merged.sessionId}`,
             `Merged from plans: ${merged.mergedFromPlanIds?.join(", ") ?? ""}`,
+            ""
+          ].join("\n"),
+          stderr: ""
+        };
+      }
+      if (sub === "resolve") {
+        const planId = parsed.rest[1];
+        const choicePlanId = readNamedArg(parsed.rest.slice(2), "--choose");
+        const session = resolvePlanSessionForCommand({
+          store,
+          sessionId: parsed.sessionId ?? parsed.resumeSessionId,
+          cwd,
+          optional: true
+        });
+        if (!planId || !choicePlanId) {
+          return {
+            exitCode: 2,
+            stdout: "",
+            stderr:
+              "Usage: magi plan resolve <plan-id> --choose <source-plan-id> [--session-id <target-session>]\n"
+          };
+        }
+        const resolved = resolvePlanReviewConflicts({
+          stateRoot: paths.stateRoot,
+          conflictedPlanId: planId,
+          choicePlanId,
+          targetSessionId: session?.id
+        });
+        return {
+          exitCode: 0,
+          stdout: [
+            `Plan resolved: ${resolved.id}`,
+            `Status: ${resolved.status}`,
+            `Resolved from plan: ${resolved.resolvedFromPlanId}`,
+            `Resolved with choice plan: ${resolved.resolvedChoicePlanId}`,
             ""
           ].join("\n"),
           stderr: ""
@@ -1959,7 +1995,7 @@ function helpText(): string {
     "  magi sessions",
     "  magi resume <session-id>",
     "  magi goal [objective] [--session-id <id>]",
-    "  magi plan [list|all|show <id>|chain <id>|adopt <id>|merge <id> <id>] [--session-id <id>]",
+    "  magi plan [list|all|show <id>|chain <id>|adopt <id>|merge <id> <id>|resolve <id>] [--session-id <id>]",
     "  magi context [session-id]",
     "  magi compact [session-id]",
     "  magi rules",
@@ -2523,6 +2559,13 @@ function readPositiveInteger(value: string | undefined, label: string): number {
     throw new MagiUsageError(`${label} must be a positive integer`);
   }
   return parsed;
+}
+
+function readNamedArg(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  return value && !value.startsWith("--") ? value : undefined;
 }
 
 function readAgentRole(value: string | undefined): AgentRole {

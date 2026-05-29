@@ -662,6 +662,63 @@ describe("CLI entrypoint", () => {
     expect(show.stdout).toContain("Patch src/config.ts to use beta endpoint");
   });
 
+  it("resolves merge conflicts from the CLI", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const alphaSessionId = "33333333-3333-4333-8333-333333333348";
+    const betaSessionId = "33333333-3333-4333-8333-333333333349";
+    const targetSessionId = "33333333-3333-4333-8333-333333333350";
+    await runCli(["--session-id", alphaSessionId, "-p", "prepare alpha resolve session"], temp.env);
+    await runCli(["--session-id", betaSessionId, "-p", "prepare beta resolve session"], temp.env);
+    await runCli(["--session-id", targetSessionId, "-p", "prepare resolve target"], temp.env);
+    const { mergePlanReviews, recordPlanReview } = await import("../src/plan-state.js");
+    const alpha = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: alphaSessionId,
+      plan: "1. Read src/config.ts\n2. Patch src/config.ts to use alpha endpoint",
+      status: "approved",
+      response: "Yes, proceed"
+    });
+    const beta = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId: betaSessionId,
+      plan: "1. Read src/config.ts\n2. Patch src/config.ts to use beta endpoint",
+      status: "approved",
+      response: "Yes, proceed"
+    });
+    const conflicted = mergePlanReviews({
+      stateRoot: paths.stateRoot,
+      sourcePlanIds: [alpha.id, beta.id],
+      targetSessionId
+    });
+
+    const resolved = await runCli(
+      ["plan", "resolve", conflicted.id, "--choose", beta.id, "--session-id", targetSessionId],
+      temp.env
+    );
+    expect(resolved.exitCode).toBe(0);
+    expect(resolved.stdout).toContain("Plan resolved:");
+    expect(resolved.stdout).toContain("Status: approved");
+    expect(resolved.stdout).toContain(`Resolved from plan: ${conflicted.id}`);
+    expect(resolved.stdout).toContain(`Resolved with choice plan: ${beta.id}`);
+
+    const show = await runCli(["plan", "--session-id", targetSessionId], temp.env);
+    expect(show.exitCode).toBe(0);
+    expect(show.stdout).toContain("Status: approved");
+    expect(show.stdout).toContain(`Resolved from plan: ${conflicted.id}`);
+    expect(show.stdout).toContain(`Resolved with choice plan: ${beta.id}`);
+    expect(show.stdout).toContain("Patch src/config.ts to use beta endpoint");
+    expect(show.stdout).not.toContain("Patch src/config.ts to use alpha endpoint");
+
+    const chain = await runCli(
+      ["plan", "chain", show.stdout.match(/Plan: ([^\n]+)/)?.[1] ?? ""],
+      temp.env
+    );
+    expect(chain.exitCode).toBe(0);
+    expect(chain.stdout).toContain(`1. needs_revision ${conflicted.id}`);
+    expect(chain.stdout).toContain("2. approved");
+  });
+
   it("keeps CLI goals isolated by explicit session id", async () => {
     temp = makeTempRoot();
     const firstId = "11111111-1111-4111-8111-111111111111";

@@ -108,7 +108,8 @@ try {
     parallelPlanConflictRejected: false,
     parallelPlanAdoptedExplicitly: false,
     mergedPlanContextSeen: false,
-    conflictedMergeContextSeen: false
+    conflictedMergeContextSeen: false,
+    resolvedMergeContextSeen: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -377,6 +378,7 @@ try {
     assert(state.parallelPlanIsolationSeen, "provider did not see isolated parallel plan contexts");
     assert(state.mergedPlanContextSeen, "provider did not see merged plan context");
     assert(state.conflictedMergeContextSeen, "provider did not see conflicted merge context");
+    assert(state.resolvedMergeContextSeen, "provider did not see resolved merge context");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
     const toolCounts = mergeToolCounts(provider.metrics().toolCounts, planRevision.toolCounts);
@@ -414,7 +416,9 @@ try {
       "approved plans merged into an explicit target session",
       "merged plan context included all source metadata",
       "conflicting plan merge persisted as needs_revision",
-      "conflicting merge context included conflict target and source steps"
+      "conflicting merge context included conflict target and source steps",
+      "conflicting merge resolved with explicit user choice",
+      "resolved merge context included chosen conflict step only"
     ];
     const filesVerified = [
       "state/goals.json",
@@ -469,6 +473,8 @@ try {
             mergedPlanContextSeen: state.mergedPlanContextSeen,
             conflictedMergeNeedsRevision: conflictedMerge.needsRevision,
             conflictedMergeContextSeen: state.conflictedMergeContextSeen,
+            conflictedMergeResolved: conflictedMerge.resolved,
+            resolvedMergeContextSeen: state.resolvedMergeContextSeen,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -770,6 +776,27 @@ function createRouter(state) {
       );
       state.conflictedMergeContextSeen = true;
       return messageText("Conflicted merged plan context is present.");
+    }
+
+    if (latestUser.includes("Verify resolved merge plan context")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "resolved merge context missing");
+      assert(systemPrompt.includes("Status: approved"), "resolved merge status missing");
+      assert(systemPrompt.includes("Resolved from plan:"), "resolved merge source missing");
+      assert(systemPrompt.includes("Resolved with choice plan:"), "resolved merge choice missing");
+      assert(
+        systemPrompt.includes("Resolved conflict targets: src/config.ts"),
+        "resolved merge target missing"
+      );
+      assert(
+        systemPrompt.includes("Patch src/config.ts to use beta endpoint"),
+        "resolved merge missed chosen beta step"
+      );
+      assert(
+        !systemPrompt.includes("Patch src/config.ts to use alpha endpoint"),
+        "resolved merge leaked rejected alpha step"
+      );
+      state.resolvedMergeContextSeen = true;
+      return messageText("Resolved merge plan context is present.");
     }
 
     return messageText("OK");
@@ -1387,6 +1414,7 @@ async function runConflictedMergeFlow(executeRegisteredTool) {
     "merge conflicting approved plans"
   );
   assert(merged.includes("Plan merged:"), "conflicted plan merge did not confirm");
+  const mergePlanId = parseMergedPlanId(merged);
 
   const status = await runCli(
     ["plan", "--session-id", conflictMergeSessionId],
@@ -1422,7 +1450,59 @@ async function runConflictedMergeFlow(executeRegisteredTool) {
     "conflicted merge context failed"
   );
 
-  return { needsRevision: true };
+  const resolved = await runCli(
+    ["plan", "resolve", mergePlanId, "--choose", beta.planId, "--session-id", conflictMergeSessionId],
+    "resolve conflicting merge"
+  );
+  assert(resolved.includes("Plan resolved:"), "conflicted merge resolve did not confirm");
+  assert(resolved.includes("Status: approved"), "resolved merge should be approved");
+  assert(resolved.includes(`Resolved from plan: ${mergePlanId}`), "resolved merge missed source");
+  assert(
+    resolved.includes(`Resolved with choice plan: ${beta.planId}`),
+    "resolved merge missed choice plan"
+  );
+
+  const resolvedStatus = await runCli(
+    ["plan", "--session-id", conflictMergeSessionId],
+    "resolved merge status"
+  );
+  assert(resolvedStatus.includes("Status: approved"), "resolved merge status should be approved");
+  assert(
+    resolvedStatus.includes(`Resolved from plan: ${mergePlanId}`),
+    "resolved merge status missed source"
+  );
+  assert(
+    resolvedStatus.includes("Patch src/config.ts to use beta endpoint"),
+    "resolved merge missed selected beta step"
+  );
+  assert(
+    !resolvedStatus.includes("Patch src/config.ts to use alpha endpoint"),
+    "resolved merge kept rejected alpha step"
+  );
+  const resolvedPlanId = parseShownPlanId(resolvedStatus);
+  const chain = await runCli(["plan", "chain", resolvedPlanId], "resolved merge chain");
+  assert(chain.includes(`1. needs_revision ${mergePlanId}`), "resolved chain missed conflicted plan");
+  assert(chain.includes(`2. approved ${resolvedPlanId}`), "resolved chain missed approved plan");
+
+  const resolvedContext = await runCli(
+    [
+      "--session-id",
+      conflictMergeSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify resolved merge plan context."
+    ],
+    "resolved merge context"
+  );
+  assert(
+    resolvedContext.includes("Resolved merge plan context is present"),
+    "resolved merge context failed"
+  );
+
+  return { needsRevision: true, resolved: true };
 }
 
 async function approvePlanWithTool(input) {
@@ -1463,6 +1543,18 @@ function assertPlanRecord(input) {
 function parsePlanId(output) {
   const match = output.match(/Plan id:\s*([0-9a-f-]+)/i);
   assert(match, `could not parse plan id from output:\n${output}`);
+  return match[1];
+}
+
+function parseMergedPlanId(output) {
+  const match = output.match(/Plan merged:\s*([0-9a-f-]+)/i);
+  assert(match, `could not parse merged plan id from output:\n${output}`);
+  return match[1];
+}
+
+function parseShownPlanId(output) {
+  const match = output.match(/^Plan:\s*([0-9a-f-]+)/im);
+  assert(match, `could not parse shown plan id from output:\n${output}`);
   return match[1];
 }
 

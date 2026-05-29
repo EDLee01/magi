@@ -606,7 +606,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 34) failures.push(`assertions=${assertions}`);
+  if (assertions < 36) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 10) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -668,6 +668,10 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.conflictedMergeContextSeen !== true) {
     failures.push("conflictedMergeContextSeen=false");
   }
+  if (details.conflictedMergeResolved !== true) failures.push("conflictedMergeResolved=false");
+  if (details.resolvedMergeContextSeen !== true) {
+    failures.push("resolvedMergeContextSeen=false");
+  }
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -710,6 +714,8 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       mergedPlanContextSeen: details.mergedPlanContextSeen === true,
       conflictedMergeNeedsRevision: details.conflictedMergeNeedsRevision === true,
       conflictedMergeContextSeen: details.conflictedMergeContextSeen === true,
+      conflictedMergeResolved: details.conflictedMergeResolved === true,
+      resolvedMergeContextSeen: details.resolvedMergeContextSeen === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },

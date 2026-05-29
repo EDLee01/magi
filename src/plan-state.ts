@@ -24,6 +24,9 @@ export interface PlanReviewRecord {
   mergedFromPlanIds?: string[];
   mergedFromSessionIds?: string[];
   mergeConflicts?: PlanMergeConflict[];
+  resolvedFromPlanId?: string;
+  resolvedChoicePlanId?: string;
+  resolvedConflictTargets?: string[];
 }
 
 export interface PlanMergeConflict {
@@ -60,6 +63,9 @@ export function recordPlanReview(input: {
   mergedFromPlanIds?: string[];
   mergedFromSessionIds?: string[];
   mergeConflicts?: PlanMergeConflict[];
+  resolvedFromPlanId?: string;
+  resolvedChoicePlanId?: string;
+  resolvedConflictTargets?: string[];
 }): PlanReviewRecord {
   const plan = input.plan.trim();
   if (!plan) {
@@ -93,7 +99,10 @@ export function recordPlanReview(input: {
     adoptedFromSessionId: input.adoptedFromSessionId,
     mergedFromPlanIds: cleanStringList(input.mergedFromPlanIds),
     mergedFromSessionIds: cleanStringList(input.mergedFromSessionIds),
-    mergeConflicts: normalizeMergeConflicts(input.mergeConflicts)
+    mergeConflicts: normalizeMergeConflicts(input.mergeConflicts),
+    resolvedFromPlanId: input.resolvedFromPlanId,
+    resolvedChoicePlanId: input.resolvedChoicePlanId,
+    resolvedConflictTargets: cleanStringList(input.resolvedConflictTargets)
   };
   if (predecessor) {
     predecessor.revisedByPlanId = record.id;
@@ -166,6 +175,48 @@ export function mergePlanReviews(input: {
     mergedFromPlanIds: sourcePlanIds,
     mergedFromSessionIds: uniqueStringList(sources.map((source) => source.sessionId)),
     mergeConflicts: conflicts
+  });
+}
+
+export function resolvePlanReviewConflicts(input: {
+  stateRoot: string;
+  conflictedPlanId: string;
+  choicePlanId: string;
+  targetSessionId?: string;
+  response?: string;
+}): PlanReviewRecord {
+  const conflicted = getPlanReview(input.stateRoot, input.conflictedPlanId);
+  if (!conflicted) {
+    throw new Error(`Cannot resolve unknown plan: ${input.conflictedPlanId}`);
+  }
+  if (conflicted.status !== "needs_revision" || !conflicted.mergeConflicts?.length) {
+    throw new Error(`Plan has no merge conflicts to resolve: ${input.conflictedPlanId}`);
+  }
+  const choice = getPlanReview(input.stateRoot, input.choicePlanId);
+  if (!choice) {
+    throw new Error(`Cannot resolve with unknown plan: ${input.choicePlanId}`);
+  }
+  const chosenConflictSteps = conflicted.mergeConflicts.map((conflict) => {
+    const step = conflict.steps.find((candidate) => candidate.planId === choice.id);
+    if (!step) {
+      throw new Error(`Choice plan does not resolve conflict target: ${conflict.target}`);
+    }
+    return { target: conflict.target, step };
+  });
+  const resolvedPlan = formatResolvedPlanText(conflicted, choice, chosenConflictSteps);
+  return recordPlanReview({
+    stateRoot: input.stateRoot,
+    sessionId: input.targetSessionId ?? conflicted.sessionId,
+    plan: resolvedPlan,
+    status: "approved",
+    response:
+      input.response ?? `Resolved merge conflicts from plan ${conflicted.id} using ${choice.id}`,
+    revisesPlanId: conflicted.id,
+    mergedFromPlanIds: conflicted.mergedFromPlanIds,
+    mergedFromSessionIds: conflicted.mergedFromSessionIds,
+    resolvedFromPlanId: conflicted.id,
+    resolvedChoicePlanId: choice.id,
+    resolvedConflictTargets: conflicted.mergeConflicts.map((conflict) => conflict.target)
   });
 }
 
@@ -269,6 +320,13 @@ export function formatPlanReview(record: PlanReviewRecord | undefined): string {
       : undefined,
     record.mergeConflicts?.length ? `Merge conflicts: ${record.mergeConflicts.length}` : undefined,
     ...formatMergeConflictLines(record.mergeConflicts),
+    record.resolvedFromPlanId ? `Resolved from plan: ${record.resolvedFromPlanId}` : undefined,
+    record.resolvedChoicePlanId
+      ? `Resolved with choice plan: ${record.resolvedChoicePlanId}`
+      : undefined,
+    record.resolvedConflictTargets?.length
+      ? `Resolved conflict targets: ${record.resolvedConflictTargets.join(", ")}`
+      : undefined,
     `Updated: ${record.updatedAt}`,
     record.response ? `Response: ${record.response}` : undefined,
     "",
@@ -320,6 +378,13 @@ export function formatPlanContext(record: PlanReviewRecord | undefined): string 
       : undefined,
     record.mergeConflicts?.length ? `Merge conflicts: ${record.mergeConflicts.length}` : undefined,
     ...formatMergeConflictLines(record.mergeConflicts),
+    record.resolvedFromPlanId ? `Resolved from plan: ${record.resolvedFromPlanId}` : undefined,
+    record.resolvedChoicePlanId
+      ? `Resolved with choice plan: ${record.resolvedChoicePlanId}`
+      : undefined,
+    record.resolvedConflictTargets?.length
+      ? `Resolved conflict targets: ${record.resolvedConflictTargets.join(", ")}`
+      : undefined,
     record.response ? `Last user response: ${record.response}` : undefined,
     "Implementation plan:",
     record.plan,
@@ -397,7 +462,12 @@ function normalizePlanReview(value: unknown): PlanReviewRecord | undefined {
       typeof record.adoptedFromSessionId === "string" ? record.adoptedFromSessionId : undefined,
     mergedFromPlanIds: normalizeStringList(record.mergedFromPlanIds),
     mergedFromSessionIds: normalizeStringList(record.mergedFromSessionIds),
-    mergeConflicts: normalizeMergeConflicts(record.mergeConflicts)
+    mergeConflicts: normalizeMergeConflicts(record.mergeConflicts),
+    resolvedFromPlanId:
+      typeof record.resolvedFromPlanId === "string" ? record.resolvedFromPlanId : undefined,
+    resolvedChoicePlanId:
+      typeof record.resolvedChoicePlanId === "string" ? record.resolvedChoicePlanId : undefined,
+    resolvedConflictTargets: normalizeStringList(record.resolvedConflictTargets)
   };
 }
 
@@ -425,7 +495,8 @@ function formatPlanReviewLinks(record: PlanReviewRecord): string {
     record.mergedFromPlanIds?.length
       ? `merged-from:${record.mergedFromPlanIds.join(",")}`
       : undefined,
-    record.mergeConflicts?.length ? `merge-conflicts:${record.mergeConflicts.length}` : undefined
+    record.mergeConflicts?.length ? `merge-conflicts:${record.mergeConflicts.length}` : undefined,
+    record.resolvedFromPlanId ? `resolved-from:${record.resolvedFromPlanId}` : undefined
   ].filter((link): link is string => Boolean(link));
   return links.length > 0 ? ` ${links.join(" ")}` : "";
 }
@@ -486,6 +557,48 @@ function formatMergedPlanText(
   ]
     .join("\n")
     .trim();
+}
+
+function formatResolvedPlanText(
+  conflicted: PlanReviewRecord,
+  choice: PlanReviewRecord,
+  chosenConflictSteps: Array<{ target: string; step: PlanMergeConflictStep }>
+): string {
+  const conflictedSteps = new Set(
+    (conflicted.mergeConflicts ?? []).flatMap((conflict) =>
+      conflict.steps.map((step) => normalizePlanStepText(step.step))
+    )
+  );
+  const compatibleSteps = extractMergedCompatibleSteps(conflicted.plan).filter(
+    (step) => !conflictedSteps.has(normalizePlanStepText(step))
+  );
+  return [
+    `Resolved merged implementation plan from ${conflicted.id}.`,
+    `Conflict choice plan: ${choice.id} (${choice.sessionId})`,
+    "",
+    "Compatible steps:",
+    ...(compatibleSteps.length > 0
+      ? compatibleSteps.map((step, index) => `${index + 1}. ${step}`)
+      : ["- No compatible steps detected."]),
+    "",
+    "Resolved conflict steps:",
+    ...chosenConflictSteps.map((item, index) => `${index + 1}. ${item.target}: ${item.step.step}`)
+  ].join("\n");
+}
+
+function extractMergedCompatibleSteps(plan: string): string[] {
+  const lines = plan.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === "Compatible steps:");
+  if (start < 0) return extractPlanSteps(plan);
+  const result: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed === "Merge conflicts requiring revision:") break;
+    if (trimmed.startsWith("- No compatible steps")) continue;
+    result.push(trimmed.replace(/^\s*(?:[-*]|\d+[.)])\s*/, "").trim());
+  }
+  return result.filter(Boolean);
 }
 
 function detectPlanMergeConflicts(records: PlanReviewRecord[]): PlanMergeConflict[] {
