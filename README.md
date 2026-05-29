@@ -142,6 +142,15 @@ That eval runs a real headless CLI session against a mock provider and verifies
 FilePatch ranking, failed-patch recovery, successful retry, exact FileEdit use,
 and that FileWrite is not used for existing-file edits.
 
+After the eval scripts run, aggregate the current capability evidence with:
+
+```sh
+npm run report:capability
+```
+
+`npm run verify` runs the aggregate report last and fails if blackbox, Memory,
+or Patch Engine gates miss their required thresholds.
+
 ## Configuration
 
 `~/.magi-next/config.yaml`:
@@ -245,6 +254,7 @@ npm run build
 npm test
 npm run test:memory-eval
 npm run test:patch-eval
+npm run report:capability
 ```
 
 Requires Node ≥ 20.
