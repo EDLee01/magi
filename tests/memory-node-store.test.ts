@@ -207,6 +207,45 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("lists disputed nodes superseded by active replacements as cleanup candidates", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const stale = store.upsertNode({
+        type: "preference",
+        title: "Old verification preference",
+        summary: "Old verification preference.",
+        body: "User prefers verbose logs after verification.",
+        source: "explicit",
+        weight: 0.95
+      });
+
+      const corrected = store.correctNode({
+        nodeId: stale.id,
+        reason: "User corrected the stale preference.",
+        replacement: {
+          title: "Current verification preference",
+          summary: "Current verification preference.",
+          body: "User prefers concise verification summaries.",
+          source: "explicit"
+        }
+      });
+
+      const candidates = store.listCleanupCandidates({
+        now: new Date("2026-05-29T00:00:00Z"),
+        olderThanDays: 90,
+        maxWeight: 0.35
+      });
+      expect(candidates.map((item) => item.node.id)).toContain(stale.id);
+      expect(candidates.find((item) => item.node.id === stale.id)).toMatchObject({
+        node: expect.objectContaining({ status: "disputed" }),
+        reason: expect.stringContaining(`superseded by active node ${corrected.replacement!.id}`)
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("archives and keeps reviewed graph cleanup nodes", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

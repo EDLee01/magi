@@ -904,7 +904,7 @@ export class MemoryNodeStore {
     const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
     const now = input.now ?? new Date();
     const cutoff = new Date(now.getTime() - olderThanDays * 24 * 60 * 60 * 1000);
-    const rows = this.db
+    const activeRows = this.db
       .prepare(
         `
       select * from memory_nodes
@@ -916,18 +916,47 @@ export class MemoryNodeStore {
     `
       )
       .all(maxWeight, cutoff.toISOString(), limit) as DbMemoryNode[];
-    return rows.map(toMemoryNode).map((node) => {
-      const lastSignal = node.lastUsedAt ?? node.createdAt;
-      const ageDays = Math.max(
-        0,
-        Math.floor((now.getTime() - Date.parse(lastSignal)) / 86_400_000)
-      );
-      return {
-        node,
-        ageDays,
-        reason: `${node.title} is low-weight (${node.weight.toFixed(2)}) and unused for ${ageDays}d.`
-      };
-    });
+    const supersededRows = this.db
+      .prepare(
+        `
+      select to_node.*
+      from memory_nodes to_node
+      join memory_edges e on e.to_node_id = to_node.id
+      join memory_nodes from_node on from_node.id = e.from_node_id
+      where e.relation = 'supersedes'
+        and to_node.status = 'disputed'
+        and from_node.status = 'active'
+      order by e.weight desc, to_node.weight asc, coalesce(to_node.last_used_at, to_node.updated_at, to_node.created_at) asc
+      limit ?
+    `
+      )
+      .all(limit) as DbMemoryNode[];
+    const nodesById = new Map<string, MemoryNode>();
+    for (const row of supersededRows) {
+      nodesById.set(row.id, toMemoryNode(row));
+    }
+    for (const row of activeRows) {
+      if (!nodesById.has(row.id)) {
+        nodesById.set(row.id, toMemoryNode(row));
+      }
+    }
+    return Array.from(nodesById.values())
+      .slice(0, limit)
+      .map((node) => {
+        const lastSignal = node.lastUsedAt ?? node.createdAt;
+        const ageDays = Math.max(
+          0,
+          Math.floor((now.getTime() - Date.parse(lastSignal)) / 86_400_000)
+        );
+        const supersededBy = this.getSupersedingActiveNode(node.id);
+        return {
+          node,
+          ageDays,
+          reason: supersededBy
+            ? `${node.title} is disputed and superseded by active node ${supersededBy.id} (${supersededBy.title}).`
+            : `${node.title} is low-weight (${node.weight.toFixed(2)}) and unused for ${ageDays}d.`
+        };
+      });
   }
 
   archiveNodes(input: ArchiveMemoryNodesInput): MemoryNode[] {
@@ -1188,6 +1217,24 @@ export class MemoryNodeStore {
       )
       .all() as DbMemoryEdge[];
     return rows.map(toMemoryEdge);
+  }
+
+  private getSupersedingActiveNode(nodeId: string): MemoryNode | undefined {
+    const row = this.db
+      .prepare(
+        `
+      select from_node.*
+      from memory_edges e
+      join memory_nodes from_node on from_node.id = e.from_node_id
+      where e.to_node_id = ?
+        and e.relation = 'supersedes'
+        and from_node.status = 'active'
+      order by e.weight desc, from_node.weight desc, e.created_at desc
+      limit 1
+    `
+      )
+      .get(nodeId) as DbMemoryNode | undefined;
+    return row ? toMemoryNode(row) : undefined;
   }
 
   private findDuplicate(type: MemoryNodeType, body: string): MemoryNode | undefined {

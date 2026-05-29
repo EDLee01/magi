@@ -877,6 +877,7 @@ async function scenarioMemoryCorrection() {
     });
     assert(corrected.includes("Corrected Memory node:"), "memory correction did not dispute a node");
     assert(corrected.includes("replacement:"), "memory correction did not create a replacement");
+    const correctedNodeId = parseCorrectedNodeId(corrected);
 
     const after = await runCli({
       args: ["memory", "search", "verbose terminal dumps verification"],
@@ -895,7 +896,6 @@ async function scenarioMemoryCorrection() {
     assert(conflicts.includes("Memory graph conflicts:"), "memory conflicts did not list graph conflicts");
     assert(conflicts.includes("recommendation: prefer_from"), "memory conflicts did not recommend active replacement");
     assert(conflicts.includes("edge reason:"), "memory conflicts did not include correction edge reason");
-    const staleGraphNodeId = await createStaleGraphNodeForDream(configDir, workDir);
     const dream = await runCli({
       args: ["memory", "dream"],
       cwd: workDir,
@@ -912,14 +912,7 @@ async function scenarioMemoryCorrection() {
       label: "memory dream apply graph cleanup",
     });
     assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream apply did not archive graph node");
-    const archivedSearch = await runCli({
-      args: ["memory", "search", "Dormant graph cleanup workflow"],
-      cwd: workDir,
-      configDir,
-      label: "memory dream archive search",
-    });
-    assert(!archivedSearch.includes("Dormant graph cleanup workflow should be reviewed for archive"), "archived graph node was still recalled");
-    assertGraphNodeStatus(configDir, staleGraphNodeId, "archived");
+    assertGraphNodeStatus(configDir, correctedNodeId, "archived");
     const maintenanceConfig = await runCli({
       args: [
         "memory",
@@ -972,8 +965,8 @@ async function scenarioMemoryCorrection() {
         "replacement memory recalled through graph search",
         "disputed stale memory excluded from search results",
         "memory conflict audit view recommends active replacement",
-        "memory dream suggests stale graph cleanup",
-        "memory dream apply archives stale graph node",
+        "memory dream suggests corrected stale graph cleanup",
+        "memory dream apply archives corrected disputed graph node",
         "memory maintenance policy persisted and reused",
         "memory maintenance decayed stale node weights",
         "memory correction and maintenance audit persisted"
@@ -982,31 +975,10 @@ async function scenarioMemoryCorrection() {
   });
 }
 
-async function createStaleGraphNodeForDream(configDir, cwd) {
-  const script = [
-    "import Database from 'better-sqlite3';",
-    "import crypto from 'node:crypto';",
-    "const [dbFile] = process.argv.slice(1);",
-    "const db = new Database(dbFile);",
-    "const id = crypto.randomUUID();",
-    "db.prepare(`insert into memory_nodes (id, type, title, summary, body, weight, status, source, source_session_id, created_at, updated_at, last_used_at, use_count, metadata_json) values (?, 'workflow', 'Dormant graph cleanup workflow', 'Dormant graph cleanup workflow.', 'Dormant graph cleanup workflow should be reviewed for archive.', 0.25, 'active', 'explicit', null, ?, ?, null, 0, '{}')`).run(id, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');",
-    "console.log(id);",
-    "db.close();",
-  ].join("\n");
-  const result = await runCommand({
-    command: nodeBin,
-    args: ["--input-type=module", "-e", script, path.join(configDir, "state", "sessions.sqlite")],
-    cwd: repoRoot,
-    configDir,
-    label: "memory dream stale graph seed",
-    timeoutMs: 10_000,
-  });
-  if (result.code !== 0) {
-    throw new Error(`memory dream stale graph fixture failed\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
-  }
-  const id = result.stdout.trim();
-  assert(id, "memory dream stale graph fixture did not print node id");
-  return id;
+function parseCorrectedNodeId(output) {
+  const match = output.match(/Corrected Memory node:\s*([a-z0-9-]+)/i);
+  assert(match, `could not parse corrected node id from output:\n${output}`);
+  return match[1];
 }
 
 function assertGraphNodeStatus(configDir, nodeId, expectedStatus) {

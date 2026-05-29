@@ -178,6 +178,54 @@ describe("AGENTS rules and memory", () => {
     expect(manifest.graphNodeIds).toContain(stale.id);
   });
 
+  it("adds corrected disputed graph nodes to memory dream cleanup candidates", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const stale = nodeStore.upsertNode({
+      type: "preference",
+      title: "Outdated verification preference",
+      summary: "Outdated verification preference.",
+      body: "User prefers verbose logs after verification.",
+      source: "explicit",
+      weight: 0.95
+    });
+    nodeStore.correctNode({
+      nodeId: stale.id,
+      reason: "User corrected the stale preference.",
+      replacement: {
+        title: "Current verification preference",
+        summary: "Current verification preference.",
+        body: "User prefers concise verification summaries.",
+        source: "explicit"
+      }
+    });
+    nodeStore.close();
+
+    const dream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(dream.exitCode).toBe(0);
+    expect(dream.stdout).toContain("archive_candidate");
+
+    const dreams = listDreams({ appRoot: paths.root });
+    const manifest = showDream({ appRoot: paths.root, id: dreams[0].id });
+    expect(manifest.operations).toContainEqual(
+      expect.objectContaining({
+        type: "archive_candidate",
+        reason: expect.stringContaining("superseded by active node"),
+        relatedFiles: [`graph:${stale.id}`],
+        graphNodeIds: [stale.id]
+      })
+    );
+
+    const applied = await runCli(["memory", "dream", "apply", dreams[0].id], temp.env, workspace);
+    expect(applied.exitCode).toBe(0);
+    expect(applied.stdout).toContain("Archived graph nodes: 1");
+    const afterApply = MemoryNodeStore.open(paths);
+    expect(afterApply.getNode(stale.id)?.status).toBe("archived");
+    afterApply.close();
+  });
+
   it("applies or rejects Dream graph cleanup through reviewable CLI actions", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
