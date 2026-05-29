@@ -396,6 +396,61 @@ describe("AGENTS rules and memory", () => {
     expect(audit).toContain(wrong.id);
   });
 
+  it("previews and applies memory maintenance decay through the CLI", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const stale = nodeStore.upsertNode({
+      type: "preference",
+      title: "Old output preference",
+      summary: "Old output preference.",
+      body: "User previously preferred long verification logs.",
+      source: "explicit",
+      weight: 0.9
+    });
+    nodeStore.close();
+
+    const preview = await runCli(
+      ["memory", "maintain", "--older-than-days", "0", "--decay", "0.2", "--min-weight", "0.4"],
+      temp.env,
+      workspace
+    );
+    expect(preview.exitCode).toBe(0);
+    expect(preview.stdout).toContain("Memory maintenance preview");
+    expect(preview.stdout).toContain("Old output preference");
+
+    const afterPreview = MemoryNodeStore.open(paths);
+    expect(afterPreview.getNode(stale.id)?.weight).toBe(0.9);
+    afterPreview.close();
+
+    const applied = await runCli(
+      [
+        "memory",
+        "maintain",
+        "--apply",
+        "--older-than-days",
+        "0",
+        "--decay",
+        "0.2",
+        "--min-weight",
+        "0.4"
+      ],
+      temp.env,
+      workspace
+    );
+    expect(applied.exitCode).toBe(0);
+    expect(applied.stdout).toContain("Memory maintenance applied");
+    expect(applied.stdout).toContain("0.900 -> 0.720");
+
+    const afterApply = MemoryNodeStore.open(paths);
+    expect(afterApply.getNode(stale.id)?.weight).toBeCloseTo(0.72);
+    afterApply.close();
+    const audit = readFileSync(path.join(paths.root, "memory", "logs", "audit.jsonl"), "utf8");
+    expect(audit).toContain("memory.maintenance.previewed");
+    expect(audit).toContain("memory.maintenance.applied");
+  });
+
   it("searches layered memory with session and project relevance", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));

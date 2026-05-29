@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
+import Database from "better-sqlite3";
 
 import { classifyMemoryNodeType, MemoryNodeStore } from "../src/memory-node-store.js";
 import { MagiPaths } from "../src/paths.js";
@@ -99,6 +100,67 @@ describe("memory-node-store", () => {
       expect(second.id).toBe(first.id);
       expect(updated?.useCount).toBe(1);
       expect(updated?.weight).toBeCloseTo(0.95);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("decays active memory nodes that have not been used recently", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const stale = store.upsertNode({
+        type: "preference",
+        title: "Stale preference",
+        summary: "Old preference.",
+        body: "User preferred a stale behavior long ago.",
+        source: "explicit",
+        weight: 0.9
+      });
+      const fresh = store.upsertNode({
+        type: "preference",
+        title: "Fresh preference",
+        summary: "Fresh preference.",
+        body: "User prefers the current behavior.",
+        source: "explicit",
+        weight: 0.9
+      });
+      store.markUsed([fresh.id], 0);
+      const db = new Database(paths.sessionDbFile);
+      db.prepare("update memory_nodes set updated_at = ?, last_used_at = null where id = ?").run(
+        "2026-01-01T00:00:00.000Z",
+        stale.id
+      );
+      db.close();
+
+      const preview = store.decayUnusedNodes({
+        now: new Date("2026-05-29T00:00:00Z"),
+        olderThanDays: 1,
+        decay: 0.2,
+        minWeight: 0.4,
+        apply: false
+      });
+      expect(preview.applied).toBe(false);
+      expect(preview.changed.map((item) => item.node.id)).toContain(stale.id);
+      expect(store.getNode(stale.id)?.weight).toBe(0.9);
+
+      const applied = store.decayUnusedNodes({
+        now: new Date("2026-05-29T00:00:00Z"),
+        olderThanDays: 1,
+        decay: 0.2,
+        minWeight: 0.4,
+        apply: true
+      });
+      expect(applied.changed.find((item) => item.node.id === stale.id)).toMatchObject({
+        previousWeight: 0.9,
+        nextWeight: 0.72
+      });
+      expect(store.getNode(stale.id)?.weight).toBeCloseTo(0.72);
+      expect(store.getNode(stale.id)?.metadata.decay).toMatchObject({
+        previousWeight: 0.9,
+        nextWeight: 0.72,
+        olderThanDays: 1
+      });
     } finally {
       store.close();
     }

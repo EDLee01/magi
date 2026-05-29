@@ -860,9 +860,46 @@ async function scenarioMemoryCorrection() {
     });
     assert(after.includes("concise verification summaries"), "replacement memory was not recalled");
     assert(!after.includes("prefers verbose terminal dumps"), "disputed stale memory was still recalled");
+    const maintenancePreview = await runCli({
+      args: [
+        "memory",
+        "maintain",
+        "--older-than-days",
+        "0",
+        "--decay",
+        "0.1",
+        "--min-weight",
+        "0.4"
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory maintenance preview",
+    });
+    assert(maintenancePreview.includes("Memory maintenance preview"), "memory maintenance preview did not run");
+    assert(maintenancePreview.includes("changed:"), "memory maintenance preview did not report changed count");
+    const maintenanceApply = await runCli({
+      args: [
+        "memory",
+        "maintain",
+        "--apply",
+        "--older-than-days",
+        "0",
+        "--decay",
+        "0.1",
+        "--min-weight",
+        "0.4"
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory maintenance apply",
+    });
+    assert(maintenanceApply.includes("Memory maintenance applied"), "memory maintenance apply did not run");
+    assert(maintenanceApply.includes("->"), "memory maintenance did not report weight decay");
     const auditPath = path.join(configDir, "memory", "logs", "audit.jsonl");
     assert(existsSync(auditPath), "memory correction audit log was not written");
-    assert(readFileSync(auditPath, "utf8").includes("memory.corrected"), "memory correction audit event missing");
+    const audit = readFileSync(auditPath, "utf8");
+    assert(audit.includes("memory.corrected"), "memory correction audit event missing");
+    assert(audit.includes("memory.maintenance.applied"), "memory maintenance audit event missing");
     return {
       score: 1,
       assertions: [
@@ -870,7 +907,8 @@ async function scenarioMemoryCorrection() {
         "memory correct disputed old node",
         "replacement memory recalled through graph search",
         "disputed stale memory excluded from search results",
-        "memory correction audit persisted"
+        "memory maintenance decayed stale node weights",
+        "memory correction and maintenance audit persisted"
       ]
     };
   });

@@ -83,6 +83,30 @@ export interface CorrectMemoryNodeResult {
   edges: MemoryEdge[];
 }
 
+export interface DecayUnusedMemoryInput {
+  olderThanDays?: number;
+  decay?: number;
+  minWeight?: number;
+  now?: Date;
+  apply?: boolean;
+  limit?: number;
+}
+
+export interface DecayedMemoryNode {
+  node: MemoryNode;
+  previousWeight: number;
+  nextWeight: number;
+  ageDays: number;
+}
+
+export interface DecayUnusedMemoryResult {
+  applied: boolean;
+  olderThanDays: number;
+  decay: number;
+  minWeight: number;
+  changed: DecayedMemoryNode[];
+}
+
 export interface MemoryEdge {
   id: number;
   fromNodeId: string;
@@ -870,6 +894,77 @@ export class MemoryNodeStore {
     txn(unique);
   }
 
+  decayUnusedNodes(input: DecayUnusedMemoryInput = {}): DecayUnusedMemoryResult {
+    const olderThanDays = clampNumber(input.olderThanDays ?? 45, 0, 3650);
+    const decay = clampNumber(input.decay ?? 0.08, 0, 1);
+    const minWeight = clampNumber(input.minWeight ?? 0.2, 0, 1);
+    const limit = Math.max(1, Math.min(input.limit ?? 100, 1000));
+    const now = input.now ?? new Date();
+    const cutoff = new Date(now.getTime() - olderThanDays * 24 * 60 * 60 * 1000);
+    const rows = this.db
+      .prepare(
+        `
+      select * from memory_nodes
+      where status = 'active'
+        and weight > ?
+        and coalesce(last_used_at, updated_at) < ?
+      order by coalesce(last_used_at, updated_at) asc, weight desc
+      limit ?
+    `
+      )
+      .all(minWeight, cutoff.toISOString(), limit) as DbMemoryNode[];
+    const changed = rows
+      .map(toMemoryNode)
+      .map((node) => {
+        const lastSignal = node.lastUsedAt ?? node.updatedAt;
+        return {
+          node,
+          previousWeight: node.weight,
+          nextWeight: Math.max(minWeight, Number((node.weight * (1 - decay)).toFixed(6))),
+          ageDays: Math.max(0, Math.floor((now.getTime() - Date.parse(lastSignal)) / 86_400_000))
+        };
+      })
+      .filter((item) => item.nextWeight < item.previousWeight);
+
+    if (input.apply === true && changed.length > 0) {
+      const stamp = now.toISOString();
+      const update = this.db.prepare(`
+        update memory_nodes
+        set weight = ?,
+            updated_at = ?,
+            metadata_json = ?
+        where id = ? and status = 'active'
+      `);
+      this.db.transaction((items: DecayedMemoryNode[]) => {
+        for (const item of items) {
+          update.run(
+            item.nextWeight,
+            stamp,
+            encodeJson({
+              ...item.node.metadata,
+              decay: {
+                previousWeight: item.previousWeight,
+                nextWeight: item.nextWeight,
+                olderThanDays,
+                decay,
+                decayedAt: stamp
+              }
+            }),
+            item.node.id
+          );
+        }
+      })(changed);
+    }
+
+    return {
+      applied: input.apply === true,
+      olderThanDays,
+      decay,
+      minWeight,
+      changed
+    };
+  }
+
   addEdge(input: {
     fromNodeId: string;
     toNodeId: string;
@@ -1260,6 +1355,13 @@ function defaultWeight(source: string): number {
 
 function normalizeWhitespace(text: string): string {
   return text.trim().replace(/\s+/g, " ");
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    throw new Error("Memory decay value must be a finite number");
+  }
+  return Math.max(min, Math.min(max, value));
 }
 
 function normalizeClassifierText(text: string): string {

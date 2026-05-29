@@ -230,7 +230,7 @@
           <tr>
             <td>Memory Graph</td>
             <td>记忆节点、wiki chunk、edge、权重、冲突和替代关系共同决定召回。</td>
-            <td><span class="tag done">进行中</span> edge-aware retrieval、standalone node search、CLI graph link 和 MemoryCorrect 纠错闭环已实现。</td>
+            <td><span class="tag done">进行中</span> edge-aware retrieval、standalone node search、CLI graph link、MemoryCorrect 纠错闭环和长期未用节点降权维护已实现。</td>
             <td><code>tests/memory-node-store.test.ts</code>、<code>tests/rules-memory.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code></td>
           </tr>
           <tr>
@@ -272,8 +272,8 @@
       <div class="panel">
         <h3>v0.1.0-alpha.3</h3>
         <ul>
-          <li>继续完成 Memory Graph v2：节点使用反馈衰减、冲突审计可视化、长期未用节点降权。</li>
-          <li>扩展真实 memory 业务测试：写入、重启、召回、显式 link、用户纠错和权重变化。</li>
+          <li>继续完成 Memory Graph v2：冲突审计可视化、记忆维护策略配置、长期节点清理建议。</li>
+          <li>扩展真实 memory 业务测试：写入、重启、召回、显式 link、用户纠错、维护降权和权重变化。</li>
           <li>推进 Patch Engine v1：FilePatch 进入核心工具，黑盒 E2E 覆盖 hunk 编辑。</li>
         </ul>
       </div>

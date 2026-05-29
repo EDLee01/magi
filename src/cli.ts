@@ -14,6 +14,7 @@ import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
 import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
+import { formatMemoryMaintenanceResult, maintainMemory } from "./memory-maintenance.js";
 import {
   formatPlanReview,
   formatPlanReviewList,
@@ -629,6 +630,20 @@ async function runCliUnsafeWithParsed(
         replacementType: options.replacementType
       });
       return { exitCode: 0, stdout: `${formatMemoryCorrectionResult(result)}\n`, stderr: "" };
+    }
+    if (subcommand === "maintain") {
+      const options = parseMemoryMaintainArgs(parsed.rest.slice(1));
+      const result = maintainMemory({
+        ...rootInput,
+        paths,
+        sessionId: parsed.resumeSessionId ?? parsed.sessionId,
+        apply: options.apply,
+        olderThanDays: options.olderThanDays,
+        decay: options.decay,
+        minWeight: options.minWeight,
+        limit: options.limit
+      });
+      return { exitCode: 0, stdout: `${formatMemoryMaintenanceResult(result)}\n`, stderr: "" };
     }
     if (subcommand === "drafts") {
       const drafts = listDrafts(rootInput);
@@ -1712,6 +1727,7 @@ function helpText(): string {
     "  magi memory search <query> [--session-id <id>]",
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
+    "  magi memory maintain [--apply] [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
     "  magi learning list",
     "  magi learning draft <show|apply|reject> <id>",
@@ -1868,6 +1884,64 @@ function parseMemoryCorrectArgs(args: string[]): {
     );
   }
   return { target, reason, replacement, replacementTitle, replacementSummary, replacementType };
+}
+
+function parseMemoryMaintainArgs(args: string[]): {
+  apply?: boolean;
+  olderThanDays?: number;
+  decay?: number;
+  minWeight?: number;
+  limit?: number;
+} {
+  let apply = false;
+  let olderThanDays: number | undefined;
+  let decay: number | undefined;
+  let minWeight: number | undefined;
+  let limit: number | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--apply") {
+      apply = true;
+      continue;
+    }
+    if (arg === "--older-than-days") {
+      olderThanDays = readPositiveNumberArg(
+        args[++index],
+        "magi memory maintain --older-than-days"
+      );
+      continue;
+    }
+    if (arg === "--decay") {
+      decay = readUnitNumberArg(args[++index], "magi memory maintain --decay");
+      continue;
+    }
+    if (arg === "--min-weight") {
+      minWeight = readUnitNumberArg(args[++index], "magi memory maintain --min-weight");
+      continue;
+    }
+    if (arg === "--limit") {
+      limit = readPositiveNumberArg(args[++index], "magi memory maintain --limit");
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory maintain option: ${arg}`);
+  }
+  return { apply, olderThanDays, decay, minWeight, limit };
+}
+
+function readPositiveNumberArg(value: string | undefined, label: string): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new MagiUsageError(`${label} must be a non-negative number`);
+  }
+  return number;
+}
+
+function readUnitNumberArg(value: string | undefined, label: string): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 1) {
+    throw new MagiUsageError(`${label} must be a number between 0 and 1`);
+  }
+  return number;
 }
 
 function isMemoryNodeType(value: string): value is import("./memory-node-store.js").MemoryNodeType {
