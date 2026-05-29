@@ -317,6 +317,11 @@ describe("capability report", () => {
         crossTaskRecoveryGuidanceSeen: false,
         crossTaskIntentScopedRankingSeen: false,
         crossTaskUnrelatedIntentIsolated: false,
+        longCycleWorkspaceNoiseInjected: false,
+        longCycleRepeatedWorkspaceStable: false,
+        longCycleRepeatedBrowserStable: false,
+        longCycleRepeatedFileEditStable: false,
+        longCycleStrategyDriftStable: false,
         crossTaskProviderCalls: 0,
         longCycleProviderCalls: 0,
         assertions: 5,
@@ -350,6 +355,11 @@ describe("capability report", () => {
         "crossTaskRecoveryGuidanceSeen=false",
         "crossTaskIntentScopedRankingSeen=false",
         "crossTaskUnrelatedIntentIsolated=false",
+        "longCycleWorkspaceNoiseInjected=false",
+        "longCycleRepeatedWorkspaceStable=false",
+        "longCycleRepeatedBrowserStable=false",
+        "longCycleRepeatedFileEditStable=false",
+        "longCycleStrategyDriftStable=false",
         "crossTaskProviderCalls=0",
         "longCycleProviderCalls=0",
         "grepFailures < 4",
@@ -830,6 +840,11 @@ function toolDiscoveryReport(
     crossTaskRecoveryGuidanceSeen: boolean;
     crossTaskIntentScopedRankingSeen: boolean;
     crossTaskUnrelatedIntentIsolated: boolean;
+    longCycleWorkspaceNoiseInjected: boolean;
+    longCycleRepeatedWorkspaceStable: boolean;
+    longCycleRepeatedBrowserStable: boolean;
+    longCycleRepeatedFileEditStable: boolean;
+    longCycleStrategyDriftStable: boolean;
     crossTaskProviderCalls: number;
     longCycleProviderCalls: number;
     initialToolCount: number;
@@ -893,6 +908,11 @@ function toolDiscoveryReport(
           crossTaskRecoveryGuidanceSeen: true,
           crossTaskIntentScopedRankingSeen: true,
           crossTaskUnrelatedIntentIsolated: true,
+          longCycleWorkspaceNoiseInjected: true,
+          longCycleRepeatedWorkspaceStable: true,
+          longCycleRepeatedBrowserStable: true,
+          longCycleRepeatedFileEditStable: true,
+          longCycleStrategyDriftStable: true,
           crossTaskProviderCalls: 2,
           longCycleProviderCalls: 2,
           initialToolCount: 21,

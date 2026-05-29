@@ -531,6 +531,21 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.crossTaskUnrelatedIntentIsolated !== true) {
     failures.push("crossTaskUnrelatedIntentIsolated=false");
   }
+  if (details.longCycleWorkspaceNoiseInjected !== true) {
+    failures.push("longCycleWorkspaceNoiseInjected=false");
+  }
+  if (details.longCycleRepeatedWorkspaceStable !== true) {
+    failures.push("longCycleRepeatedWorkspaceStable=false");
+  }
+  if (details.longCycleRepeatedBrowserStable !== true) {
+    failures.push("longCycleRepeatedBrowserStable=false");
+  }
+  if (details.longCycleRepeatedFileEditStable !== true) {
+    failures.push("longCycleRepeatedFileEditStable=false");
+  }
+  if (details.longCycleStrategyDriftStable !== true) {
+    failures.push("longCycleStrategyDriftStable=false");
+  }
   if (readNumber(details.crossTaskProviderCalls) <= 0) failures.push("crossTaskProviderCalls=0");
   if (readNumber(details.longCycleProviderCalls) <= 0) failures.push("longCycleProviderCalls=0");
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
@@ -569,6 +584,11 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       crossTaskRecoveryGuidanceSeen: details.crossTaskRecoveryGuidanceSeen === true,
       crossTaskIntentScopedRankingSeen: details.crossTaskIntentScopedRankingSeen === true,
       crossTaskUnrelatedIntentIsolated: details.crossTaskUnrelatedIntentIsolated === true,
+      longCycleWorkspaceNoiseInjected: details.longCycleWorkspaceNoiseInjected === true,
+      longCycleRepeatedWorkspaceStable: details.longCycleRepeatedWorkspaceStable === true,
+      longCycleRepeatedBrowserStable: details.longCycleRepeatedBrowserStable === true,
+      longCycleRepeatedFileEditStable: details.longCycleRepeatedFileEditStable === true,
+      longCycleStrategyDriftStable: details.longCycleStrategyDriftStable === true,
       crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
       longCycleProviderCalls: readNumber(details.longCycleProviderCalls),
       initialToolCount: readNumber(details.initialToolCount),

@@ -44,6 +44,11 @@ try {
     crossTaskRecoveryGuidanceSeen: false,
     crossTaskIntentScopedRankingSeen: false,
     crossTaskUnrelatedIntentIsolated: false,
+    longCycleWorkspaceNoiseInjected: false,
+    longCycleRepeatedWorkspaceStable: false,
+    longCycleRepeatedBrowserStable: false,
+    longCycleRepeatedFileEditStable: false,
+    longCycleStrategyDriftStable: false,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -124,7 +129,11 @@ try {
       "ToolSearch ranking used usage feedback",
       "ToolSearch ranking exposed failure recovery guidance",
       "cross-task ToolSearch reused recovery feedback",
-      "long-cycle strategy isolated unrelated browser intent"
+      "long-cycle strategy isolated unrelated browser intent",
+      "long-cycle workspace ranking stayed stable after noisy feedback",
+      "long-cycle browser ranking stayed stable after noisy feedback",
+      "long-cycle file-edit ranking stayed stable after noisy feedback",
+      "long-cycle strategy drift remained bounded"
     ];
     const filesVerified = ["state/tool-usage-stats.json"];
 
@@ -158,6 +167,11 @@ try {
             crossTaskProviderCalls: crossTask.providerCalls,
             crossTaskIntentScopedRankingSeen: longCycle.intentScopedRankingSeen,
             crossTaskUnrelatedIntentIsolated: longCycle.unrelatedIntentIsolated,
+            longCycleWorkspaceNoiseInjected: longCycle.workspaceNoiseInjected,
+            longCycleRepeatedWorkspaceStable: longCycle.repeatedWorkspaceStable,
+            longCycleRepeatedBrowserStable: longCycle.repeatedBrowserStable,
+            longCycleRepeatedFileEditStable: longCycle.repeatedFileEditStable,
+            longCycleStrategyDriftStable: longCycle.strategyDriftStable,
             longCycleProviderCalls: longCycle.providerCalls,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
@@ -195,6 +209,10 @@ function createRouter(state) {
       longCycleTurn += 1;
       if (longCycleTurn === 1) {
         return toolResponse([
+          toolCall("long-cycle-file-edit-initial", "ToolSearch", {
+            query: "apply a multi-line patch to a file",
+            max_results: 5
+          }),
           toolCall("long-cycle-workspace-search", "ToolSearch", {
             query: "search workspace files",
             max_results: 5
@@ -205,26 +223,48 @@ function createRouter(state) {
           })
         ]);
       }
+      if (longCycleTurn === 2) {
+        assertLongCycleRankings(transcript, { minimumOccurrences: 1 });
+        return toolResponse([
+          toolCall("long-cycle-grep-noise-1", "Grep", { pattern: "needle", path: "../outside" }),
+          toolCall("long-cycle-grep-noise-2", "Grep", { pattern: "needle", path: "../outside" }),
+          toolCall("long-cycle-glob-noise-1", "Glob", { pattern: "**/*.md" }),
+          toolCall("long-cycle-glob-noise-2", "Glob", { pattern: "**/*.md" })
+        ]);
+      }
+      if (longCycleTurn === 3) {
+        assert(
+          transcript.includes("Search path is outside allowed directories"),
+          "long-cycle Grep noise failure was not visible"
+        );
+        assert(transcript.includes("No matches"), "long-cycle Glob noise success was not visible");
+        state.longCycleWorkspaceNoiseInjected = true;
+        return toolResponse([
+          toolCall("long-cycle-file-edit-repeat", "ToolSearch", {
+            query: "apply a multi-line patch to a file",
+            max_results: 5
+          }),
+          toolCall("long-cycle-workspace-repeat", "ToolSearch", {
+            query: "search workspace files",
+            max_results: 5
+          }),
+          toolCall("long-cycle-browser-repeat", "ToolSearch", {
+            query: "automate browser click and screenshot",
+            max_results: 5
+          })
+        ]);
+      }
+      assertLongCycleRankings(transcript, { minimumOccurrences: 2 });
       assert(
-        transcript.includes('ToolSearch results for "search workspace files"'),
-        "long-cycle workspace ToolSearch result was not visible"
-      );
-      assert(
-        transcript.includes('ToolSearch results for "automate browser click and screenshot"'),
-        "long-cycle browser ToolSearch result was not visible"
-      );
-      assert(transcript.includes("1. Glob"), "long-cycle workspace search did not rank Glob first");
-      assert(
-        transcript.includes("intent:workspace-search"),
-        "long-cycle workspace intent feedback missing"
-      );
-      assert(transcript.includes("failure:path"), "long-cycle workspace failure feedback missing");
-      assert(
-        transcript.includes("1. Browser"),
-        "unrelated browser intent was polluted by search history"
+        state.longCycleWorkspaceNoiseInjected,
+        "long-cycle workspace noise was not injected before repeated ranking"
       );
       state.crossTaskIntentScopedRankingSeen = true;
       state.crossTaskUnrelatedIntentIsolated = true;
+      state.longCycleRepeatedWorkspaceStable = true;
+      state.longCycleRepeatedBrowserStable = true;
+      state.longCycleRepeatedFileEditStable = true;
+      state.longCycleStrategyDriftStable = true;
       return messageText("Long-cycle Tool Discovery strategy verified.");
     }
 
@@ -412,15 +452,86 @@ async function runLongCycleStrategyEval(provider, state) {
     state.crossTaskUnrelatedIntentIsolated,
     "long-cycle unrelated intent isolation was not verified"
   );
+  assert(
+    state.longCycleWorkspaceNoiseInjected,
+    "long-cycle workspace noise injection was not verified"
+  );
+  assert(
+    state.longCycleRepeatedWorkspaceStable,
+    "long-cycle repeated workspace ranking was not verified"
+  );
+  assert(
+    state.longCycleRepeatedBrowserStable,
+    "long-cycle repeated browser ranking was not verified"
+  );
+  assert(
+    state.longCycleRepeatedFileEditStable,
+    "long-cycle repeated file-edit ranking was not verified"
+  );
+  assert(state.longCycleStrategyDriftStable, "long-cycle strategy drift was not verified");
   return {
     intentScopedRankingSeen: state.crossTaskIntentScopedRankingSeen,
     unrelatedIntentIsolated: state.crossTaskUnrelatedIntentIsolated,
+    workspaceNoiseInjected: state.longCycleWorkspaceNoiseInjected,
+    repeatedWorkspaceStable: state.longCycleRepeatedWorkspaceStable,
+    repeatedBrowserStable: state.longCycleRepeatedBrowserStable,
+    repeatedFileEditStable: state.longCycleRepeatedFileEditStable,
+    strategyDriftStable: state.longCycleStrategyDriftStable,
     providerCalls: matchingCalls.length
   };
 
   function providerCallsForPrompt(prompt) {
     return provider.calls.filter((call) => call.transcript.includes(prompt));
   }
+}
+
+function assertLongCycleRankings(transcript, { minimumOccurrences }) {
+  assert(
+    countOccurrences(transcript, 'ToolSearch results for "apply a multi-line patch to a file"') >=
+      minimumOccurrences,
+    "long-cycle file-edit ToolSearch result was not visible"
+  );
+  assert(
+    countOccurrences(transcript, 'ToolSearch results for "search workspace files"') >=
+      minimumOccurrences,
+    "long-cycle workspace ToolSearch result was not visible"
+  );
+  assert(
+    countOccurrences(transcript, 'ToolSearch results for "automate browser click and screenshot"') >=
+      minimumOccurrences,
+    "long-cycle browser ToolSearch result was not visible"
+  );
+  assert(
+    countOccurrences(transcript, "1. FilePatch") >= minimumOccurrences,
+    "long-cycle file-edit search did not rank FilePatch first"
+  );
+  assert(
+    countOccurrences(transcript, "1. Glob") >= minimumOccurrences,
+    "long-cycle workspace search did not rank Glob first"
+  );
+  assert(
+    countOccurrences(transcript, "1. Browser") >= minimumOccurrences,
+    "unrelated browser intent was polluted by search history"
+  );
+  assert(
+    transcript.includes("intent:workspace-search"),
+    "long-cycle workspace intent feedback missing"
+  );
+  assert(transcript.includes("failure:path"), "long-cycle workspace failure feedback missing");
+}
+
+function countOccurrences(value, pattern) {
+  let count = 0;
+  let index = 0;
+  while (index < value.length) {
+    const next = value.indexOf(pattern, index);
+    if (next === -1) {
+      return count;
+    }
+    count += 1;
+    index = next + pattern.length;
+  }
+  return count;
 }
 
 async function startProvider({ routeRequest }) {
