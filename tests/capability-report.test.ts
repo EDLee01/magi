@@ -481,6 +481,10 @@ describe("capability report", () => {
         mobileBrowserViewportSeen: false,
         mobileBrowserStreamRendered: false,
         mobileBrowserCancelRendered: false,
+        lanSmokeBoundAllInterfaces: false,
+        lanSmokeHealthSeen: false,
+        lanSmokePanelLoaded: false,
+        lanSmokeAuthenticatedApiSeen: false,
         peerCredentialsSaved: false,
         peerSavedListed: false,
         peerAgentToolSearched: false,
@@ -524,6 +528,10 @@ describe("capability report", () => {
         "mobileBrowserViewportSeen=false",
         "mobileBrowserStreamRendered=false",
         "mobileBrowserCancelRendered=false",
+        "lanSmokeBoundAllInterfaces=false",
+        "lanSmokeHealthSeen=false",
+        "lanSmokePanelLoaded=false",
+        "lanSmokeAuthenticatedApiSeen=false",
         "peerCredentialsSaved=false",
         "peerSavedListed=false",
         "peerAgentToolSearched=false",
@@ -1297,6 +1305,10 @@ function controlApiReport(
     mobileBrowserStreamRendered: boolean;
     mobileBrowserCancelRequested: boolean;
     mobileBrowserCancelRendered: boolean;
+    lanSmokeBoundAllInterfaces: boolean;
+    lanSmokeHealthSeen: boolean;
+    lanSmokePanelLoaded: boolean;
+    lanSmokeAuthenticatedApiSeen: boolean;
     peerCredentialsSaved: boolean;
     peerSavedListed: boolean;
     peerAgentToolSearched: boolean;
@@ -1322,7 +1334,7 @@ function controlApiReport(
       name: "control-api-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 38,
+      assertions: overrides.assertions ?? 42,
       filesVerified: overrides.filesVerified ?? 7,
       toolCallCount: overrides.toolCallCount ?? 4,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1337,7 +1349,7 @@ function controlApiReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 38 },
+            { length: overrides.assertions ?? 42 },
             (_, index) => `control-api assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1384,6 +1396,10 @@ function controlApiReport(
           mobileBrowserStreamRendered: true,
           mobileBrowserCancelRequested: true,
           mobileBrowserCancelRendered: true,
+          lanSmokeBoundAllInterfaces: true,
+          lanSmokeHealthSeen: true,
+          lanSmokePanelLoaded: true,
+          lanSmokeAuthenticatedApiSeen: true,
           peerCredentialsSaved: true,
           peerSavedListed: true,
           peerAgentToolSearched: true,

@@ -66,6 +66,10 @@ try {
     mobileBrowserStreamRendered: false,
     mobileBrowserCancelRequested: false,
     mobileBrowserCancelRendered: false,
+    lanSmokeBoundAllInterfaces: false,
+    lanSmokeHealthSeen: false,
+    lanSmokePanelLoaded: false,
+    lanSmokeAuthenticatedApiSeen: false,
     peerCredentialsSaved: false,
     peerSavedListed: false,
     peerAgentToolSearched: false,
@@ -92,8 +96,9 @@ try {
       renderConfig({ port: provider.port }),
       "utf8"
     );
-    serve = await startServe({ configDir, workDir, controlPort });
+    serve = await startServe({ configDir, workDir, controlPort, controlBind: "0.0.0.0" });
     state.controlServeStarted = true;
+    state.lanSmokeBoundAllInterfaces = serve.bind === "0.0.0.0";
 
     const health = await getJson(`${serve.url}/health`);
     assert(health.ok === true, "control health check failed");
@@ -118,6 +123,7 @@ try {
     await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
     await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
+    const lanSmoke = await exerciseLanDeviceSmoke({ controlPort, pairing, state });
     await exercisePeerDispatchFlow({ provider, state });
 
     assertAllState(state);
@@ -152,6 +158,10 @@ try {
       "mobile browser rendered assistant stream",
       "mobile browser requested cancellation",
       "mobile browser rendered cancellation",
+      "control server bound all interfaces for LAN smoke",
+      "LAN device smoke reached health endpoint",
+      "LAN device smoke loaded tokenized panel",
+      "LAN device smoke authenticated API request",
       "peer credentials saved locally",
       "saved peer listed by CLI",
       "Agent deferred tool revealed through ToolSearch",
@@ -189,6 +199,7 @@ try {
             assertions,
             filesVerified,
             control: { port: controlPort },
+            lanSmoke,
             provider: provider.summary()
           }
         }
@@ -595,6 +606,43 @@ async function exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state }) {
   }
 }
 
+async function exerciseLanDeviceSmoke({ controlPort, pairing, state }) {
+  const candidates = lanAddressCandidates();
+  let lastError;
+  for (const host of candidates) {
+    const baseUrl = `http://${host}:${controlPort}`;
+    const pairingUrl = buildPairingUrl(baseUrl, pairing);
+    try {
+      const result = await runLanDeviceSmoke({
+        baseUrl,
+        pairingUrl,
+        deviceId: pairing.deviceId,
+        token: pairing.token
+      });
+      state.lanSmokeHealthSeen = result.healthOk === true;
+      state.lanSmokePanelLoaded = result.panelOk === true;
+      state.lanSmokeAuthenticatedApiSeen = result.authOk === true;
+      assert(state.lanSmokeHealthSeen, `LAN smoke health failed through ${host}`);
+      assert(state.lanSmokePanelLoaded, `LAN smoke panel failed through ${host}`);
+      assert(state.lanSmokeAuthenticatedApiSeen, `LAN smoke auth failed through ${host}`);
+      return {
+        host,
+        usedLoopbackFallback: host === "127.0.0.1",
+        healthOk: result.healthOk,
+        panelOk: result.panelOk,
+        authOk: result.authOk
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(
+    `LAN device smoke failed for ${candidates.join(", ")}\n${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`
+  );
+}
+
 async function exercisePeerDispatchFlow({ provider, state }) {
   const peerConfigDir = path.join(root, "peer-config");
   const peerWorkDir = path.join(root, "peer-work");
@@ -927,11 +975,12 @@ function renderConfig({ port }) {
   ].join("\n");
 }
 
-async function startServe({ configDir, workDir, controlPort }) {
+async function startServe({ configDir, workDir, controlPort, controlBind = "127.0.0.1" }) {
   const child = spawn(nodeBin, [cliPath, "--no-color", "serve"], {
     cwd: workDir,
     env: {
       ...process.env,
+      MAGI_CONTROL_BIND: controlBind,
       MAGI_CONFIG_DIR: configDir,
       MAGI_CONTROL_PORT: String(controlPort),
       MAGI_DISABLE_MDNS: "1",
@@ -1000,10 +1049,85 @@ async function startServe({ configDir, workDir, controlPort }) {
 
   return {
     url: `http://127.0.0.1:${controlPort}`,
+    bind: controlBind,
     stdout: () => stdout,
     stderr: () => stderr,
     close
   };
+}
+
+function runLanDeviceSmoke({ baseUrl, pairingUrl, deviceId, token }) {
+  const script = `
+const input = JSON.parse(process.argv[1]);
+const headers = {
+  authorization: \`Bearer \${input.token}\`,
+  "x-magi-device-id": input.deviceId
+};
+const timeoutSignal = AbortSignal.timeout(5000);
+const health = await fetch(new URL("/health", input.baseUrl), { signal: timeoutSignal });
+const panel = await fetch(input.pairingUrl, { signal: timeoutSignal });
+const panelHtml = await panel.text();
+const sessions = await fetch(new URL("/sessions", input.baseUrl), {
+  headers,
+  signal: timeoutSignal
+});
+process.stdout.write(JSON.stringify({
+  healthOk: health.ok && (await health.json()).ok === true,
+  panelOk: panel.ok && panelHtml.includes("panel-client.js") && panelHtml.includes("Magi"),
+  authOk: sessions.ok && Array.isArray((await sessions.json()).sessions)
+}));
+`;
+  return new Promise((resolve, reject) => {
+    const child = spawn(nodeBin, ["--input-type=module", "-e", script, JSON.stringify({
+      baseUrl,
+      pairingUrl,
+      deviceId,
+      token
+    })], {
+      cwd: workDir,
+      env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+    }, 8_000);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(
+          new Error(
+            `LAN smoke process failed with exit ${code ?? signal}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
+          )
+        );
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error) {
+        reject(
+          new Error(
+            `LAN smoke process returned invalid JSON\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+        );
+      }
+    });
+  });
 }
 
 function runCli(args, timeoutMs = 45_000) {
@@ -1199,6 +1323,19 @@ function sleep(ms) {
 
 function randomControlPort() {
   return 30_000 + Math.floor(Math.random() * 20_000);
+}
+
+function lanAddressCandidates() {
+  const hosts = [];
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    for (const entry of interfaces ?? []) {
+      if (entry.family === "IPv4" && !entry.internal && entry.address) {
+        hosts.push(entry.address);
+      }
+    }
+  }
+  hosts.push("127.0.0.1");
+  return [...new Set(hosts)];
 }
 
 function pathToFileUrl(file) {

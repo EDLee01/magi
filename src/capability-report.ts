@@ -885,7 +885,7 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 35) failures.push(`assertions=${assertions}`);
+  if (assertions < 39) failures.push(`assertions=${assertions}`);
   if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 4) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -925,6 +925,10 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "mobileBrowserStreamRendered",
     "mobileBrowserCancelRequested",
     "mobileBrowserCancelRendered",
+    "lanSmokeBoundAllInterfaces",
+    "lanSmokeHealthSeen",
+    "lanSmokePanelLoaded",
+    "lanSmokeAuthenticatedApiSeen",
     "peerCredentialsSaved",
     "peerSavedListed",
     "peerAgentToolSearched",
@@ -990,6 +994,10 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       mobileBrowserStreamRendered: details.mobileBrowserStreamRendered === true,
       mobileBrowserCancelRequested: details.mobileBrowserCancelRequested === true,
       mobileBrowserCancelRendered: details.mobileBrowserCancelRendered === true,
+      lanSmokeBoundAllInterfaces: details.lanSmokeBoundAllInterfaces === true,
+      lanSmokeHealthSeen: details.lanSmokeHealthSeen === true,
+      lanSmokePanelLoaded: details.lanSmokePanelLoaded === true,
+      lanSmokeAuthenticatedApiSeen: details.lanSmokeAuthenticatedApiSeen === true,
       peerCredentialsSaved: details.peerCredentialsSaved === true,
       peerSavedListed: details.peerSavedListed === true,
       peerAgentToolSearched: details.peerAgentToolSearched === true,
