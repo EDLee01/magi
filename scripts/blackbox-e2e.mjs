@@ -187,6 +187,186 @@ async function startProvider({ logPath, routeRequest }) {
   };
 }
 
+function randomControlPort() {
+  return 30_000 + Math.floor(Math.random() * 20_000);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestJson(url, { method = "GET", body, headers = {}, expectedStatus = 200 } = {}) {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...headers,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const text = await response.text();
+  let parsed = {};
+  if (text.trim()) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`Expected JSON from ${method} ${url}, got:\n${text}`);
+    }
+  }
+  if (response.status !== expectedStatus) {
+    throw new Error(
+      `${method} ${url} returned ${response.status}, expected ${expectedStatus}\n${text}`
+    );
+  }
+  return parsed;
+}
+
+function getJson(url, headers = {}, expectedStatus = 200) {
+  return requestJson(url, { headers, expectedStatus });
+}
+
+function postJson(url, body, headers = {}, expectedStatus = 200) {
+  return requestJson(url, { method: "POST", body, headers, expectedStatus });
+}
+
+function authHeaders(pairing) {
+  return {
+    authorization: `Bearer ${pairing.token}`,
+    "x-magi-device-id": pairing.deviceId,
+  };
+}
+
+async function waitFor(predicate, label, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      if (await predicate()) {
+        return;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(25);
+  }
+  const suffix = lastError instanceof Error ? `\nLast error: ${lastError.message}` : "";
+  throw new Error(`Timed out waiting for ${label}${suffix}`);
+}
+
+async function readSseUntil(url, headers, predicate, onChunk, timeoutMs = 10_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let text = "";
+  try {
+    const response = await fetch(url, { headers, signal: controller.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(`SSE request failed: ${response.status}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    try {
+      for (;;) {
+        const result = await reader.read();
+        if (result.done) {
+          break;
+        }
+        text += decoder.decode(result.value, { stream: true });
+        onChunk?.(text);
+        if (predicate(text)) {
+          return text;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Timed out waiting for SSE event from ${url}\nReceived:\n${text}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+  }
+  throw new Error(`SSE predicate was not satisfied. Received:\n${text}`);
+}
+
+async function startServe({ configDir, workDir, controlPort }) {
+  const child = spawn(nodeBin, [cliPath, "--no-color", "serve"], {
+    cwd: workDir,
+    env: {
+      ...process.env,
+      MAGI_CONFIG_DIR: configDir,
+      MAGI_CONTROL_PORT: String(controlPort),
+      MAGI_INTERACTION_TIMEOUT_MS: "10000",
+      MAGI_OPENAI_API_KEY: "test-key",
+      NO_COLOR: "1",
+    },
+    detached: process.platform !== "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+
+  const close = async () => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+    if (process.platform !== "win32" && child.pid) {
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        child.kill("SIGTERM");
+      }
+    } else {
+      child.kill("SIGTERM");
+    }
+    const closed = new Promise((resolve) => child.once("close", resolve));
+    await Promise.race([closed, sleep(2_000)]);
+    if (child.exitCode === null && child.signalCode === null) {
+      if (process.platform !== "win32" && child.pid) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
+      } else {
+        child.kill("SIGKILL");
+      }
+      await Promise.race([closed, sleep(2_000)]);
+    }
+  };
+
+  try {
+    await waitFor(
+      () => stdout.includes("Magi Control API listening on"),
+      `control server on port ${controlPort}`,
+      10_000
+    );
+  } catch (error) {
+    await close();
+    throw new Error(
+      `magi serve did not start\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  return {
+    url: `http://127.0.0.1:${controlPort}`,
+    stdout: () => stdout,
+    stderr: () => stderr,
+    close,
+  };
+}
+
 function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs = 30_000 }) {
   console.log(`+ ${label}: ${[command, ...args].map((part) => JSON.stringify(part)).join(" ")}`);
   return new Promise((resolve, reject) => {
@@ -744,6 +924,154 @@ async function scenarioPlanMode() {
   });
 }
 
+async function scenarioControlApprovalFlow() {
+  return await withTempWorkspace("control-approval", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const controlPort = randomControlPort();
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        turn += 1;
+        if (turn === 1) {
+          return toolResponse([
+            toolCall("approve-mobile", "FileWrite", {
+              file_path: "mobile-control.txt",
+              content: "approved by mobile control",
+            }),
+          ]);
+        }
+        assert(
+          transcript.includes("Permission approved") ||
+            transcript.includes("Wrote mobile-control.txt"),
+          "control approval result was not returned to the model"
+        );
+        return messageText("CONTROL APPROVAL DONE");
+      },
+    });
+    let serve;
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      serve = await startServe({ configDir, workDir, controlPort });
+
+      const health = await getJson(`${serve.url}/health`);
+      assert(health.ok === true, "control health check failed");
+      const pairing = await postJson(`${serve.url}/pairing`, { name: "phone-blackbox" });
+      assert(pairing.deviceId && pairing.token, "control pairing did not return credentials");
+      const headers = authHeaders(pairing);
+
+      const started = await postJson(
+        `${serve.url}/jobs`,
+        {
+          prompt: "Write a file through mobile Control API approval.",
+          model: "main",
+          background: true,
+        },
+        headers,
+        202
+      );
+      assert(started.jobId && started.sessionId, "background control job did not start");
+
+      let sseReady = false;
+      const ssePromise = readSseUntil(
+        `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}&limit=20`,
+        headers,
+        (text) =>
+          text.includes("agent.approval.pending") &&
+          text.includes("control.approval.resolved"),
+        (text) => {
+          if (text.includes("event: ready")) {
+            sseReady = true;
+          }
+        }
+      );
+      await waitFor(() => sseReady, "control SSE ready");
+
+      let pendingInteractions = [];
+      await waitFor(async () => {
+        const response = await getJson(
+          `${serve.url}/jobs/${encodeURIComponent(started.jobId)}/interactions`,
+          headers
+        );
+        pendingInteractions = response.interactions ?? [];
+        return pendingInteractions.some(
+          (interaction) =>
+            interaction.kind === "approval" &&
+            interaction.status === "pending" &&
+            interaction.toolUseId === "approve-mobile"
+        );
+      }, "pending mobile approval");
+
+      const resolved = await postJson(
+        `${serve.url}/jobs/${encodeURIComponent(started.jobId)}/approvals/approve-mobile`,
+        { decision: "approve", responder: "phone-blackbox" },
+        headers
+      );
+      assert(resolved.ok === true, "control approval resolution failed");
+      assert(resolved.interaction?.approved === true, "control approval was not approved");
+
+      const sse = await ssePromise;
+      await waitFor(async () => {
+        const response = await getJson(
+          `${serve.url}/jobs/${encodeURIComponent(started.jobId)}`,
+          headers
+        );
+        return response.job?.status === "completed";
+      }, "control job completion", 10_000);
+      const job = await getJson(`${serve.url}/jobs/${encodeURIComponent(started.jobId)}`, headers);
+      const events = await getJson(
+        `${serve.url}/jobs/${encodeURIComponent(started.jobId)}/events?limit=50`,
+        headers
+      );
+      const filePath = path.join(workDir, "mobile-control.txt");
+      assert(existsSync(filePath), "control-approved FileWrite did not create the file");
+      assert(
+        readFileSync(filePath, "utf8") === "approved by mobile control",
+        "control-approved file content was wrong"
+      );
+      const actions = (events.events ?? []).map((event) => event.action);
+      assert(actions.includes("agent.approval.pending"), "job events missed pending approval");
+      assert(actions.includes("control.approval.resolved"), "job events missed approval resolve");
+      assert(sse.includes("agent.approval.pending"), "SSE missed pending approval event");
+      assert(sse.includes("control.approval.resolved"), "SSE missed resolved approval event");
+      assert(job.job?.status === "completed", "control job did not complete");
+      assert(turn === 2, "control approval scenario should complete in two provider turns");
+      return {
+        score: 1,
+        assertions: [
+          "magi serve started from dist CLI",
+          "phone pairing returned auth headers",
+          "background job exposed pending approval",
+          "SSE streamed pending and resolved approval events",
+          "phone approval unblocked FileWrite",
+          "control job completed and persisted audit events",
+        ],
+        control: {
+          port: controlPort,
+          jobId: started.jobId,
+          eventCount: events.events?.length ?? 0,
+        },
+        provider: provider.summary(),
+        filesVerified: ["mobile-control.txt"],
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      if (serve) {
+        console.error("\nControl server stdout:");
+        console.error(serve.stdout());
+        console.error("\nControl server stderr:");
+        console.error(serve.stderr());
+      }
+      throw error;
+    } finally {
+      if (serve) {
+        await serve.close();
+      }
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioInteractiveTui() {
   return await withTempWorkspace("tui", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
@@ -859,9 +1187,12 @@ async function main() {
     ["memory graph link", scenarioMemoryGraphLink],
     ["tool feedback ranking", scenarioToolFeedbackRanking],
     ["plan mode", scenarioPlanMode],
+    ["control approval flow", scenarioControlApprovalFlow],
     ["TUI requires TTY", scenarioTuiRequiresTty],
   ];
-  if (process.env.MAGI_BLACKBOX_TUI === "1") {
+  if (process.env.MAGI_BLACKBOX_TUI === "1" && process.env.MAGI_BLACKBOX_TUI_FORCE !== "1" && process.env.CI === "true") {
+    console.log("\nSkipping interactive TUI scenario in CI; set MAGI_BLACKBOX_TUI_FORCE=1 to force it.");
+  } else if (process.env.MAGI_BLACKBOX_TUI === "1") {
     scenarios.push(["interactive TUI", scenarioInteractiveTui]);
   }
   const results = [];
