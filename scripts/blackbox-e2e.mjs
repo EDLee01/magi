@@ -711,7 +711,18 @@ async function scenarioComplexWorkflow() {
         }],
       }, null, 2));
       const memoryEval = await runCli({
-        args: ["memory", "eval", "--case-file", evalCaseFile, "--max-results", "5", "--report", evalReportFile],
+        args: [
+          "memory",
+          "eval",
+          "--case-file",
+          evalCaseFile,
+          "--max-results",
+          "5",
+          "--min-score",
+          "1",
+          "--report",
+          evalReportFile
+        ],
         cwd: workDir,
         configDir,
         label: "complex memory recall eval",
@@ -719,9 +730,12 @@ async function scenarioComplexWorkflow() {
       assert(memoryEval.includes("Memory recall eval: complex memory recall"), "memory eval did not run named suite");
       assert(memoryEval.includes("1. PASS workflow and preference recall"), "memory eval did not pass complex recall case");
       assert(memoryEval.includes("score: 1.00"), "memory eval did not report perfect score");
+      assert(memoryEval.includes("threshold: PASS"), "memory eval did not report threshold status");
       assert(memoryEval.includes(`Report: ${evalReportFile}`), "memory eval did not report JSON output path");
       const evalReport = JSON.parse(readFileSync(evalReportFile, "utf8"));
       assert(evalReport.score === 1, "memory eval JSON report did not preserve score");
+      assert(evalReport.minScore === 1, "memory eval JSON report did not preserve score threshold");
+      assert(evalReport.thresholdPassed === true, "memory eval JSON report did not preserve threshold status");
       assert(evalReport.results?.[0]?.passed === true, "memory eval JSON report did not preserve case status");
       assert(evalReport.results?.[0]?.forbiddenFound?.length === 0, "memory eval JSON report had forbidden recall");
 

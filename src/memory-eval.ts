@@ -19,6 +19,7 @@ export interface MemoryEvalCase {
 export interface MemoryEvalSuite {
   name?: string;
   maxResults?: number;
+  minScore?: number;
   cases: MemoryEvalCase[];
 }
 
@@ -51,6 +52,8 @@ export interface MemoryEvalReport {
   passed: number;
   failed: number;
   score: number;
+  minScore?: number;
+  thresholdPassed: boolean;
   results: MemoryEvalCaseResult[];
 }
 
@@ -59,6 +62,7 @@ export interface RunMemoryEvalInput extends MemoryRootOptions {
   cwd: string;
   caseFile: string;
   maxResults?: number;
+  minScore?: number;
   sessionId?: string;
   scopes?: MemoryScope[];
 }
@@ -66,6 +70,7 @@ export interface RunMemoryEvalInput extends MemoryRootOptions {
 export function runMemoryEval(input: RunMemoryEvalInput): MemoryEvalReport {
   const suite = readMemoryEvalSuite(input.caseFile);
   const maxResults = input.maxResults ?? suite.maxResults ?? 8;
+  const minScore = input.minScore ?? suite.minScore;
   const results = suite.cases.map((item, index) => {
     const hits = retrieveRelevantMemory({
       appRoot: input.appRoot,
@@ -86,6 +91,7 @@ export function runMemoryEval(input: RunMemoryEvalInput): MemoryEvalReport {
   const passed = results.filter((item) => item.passed).length;
   const score =
     results.length === 0 ? 0 : results.reduce((sum, item) => sum + item.score, 0) / results.length;
+  const thresholdPassed = minScore === undefined || score >= minScore;
   return {
     version: 1,
     name: suite.name ?? "memory-recall",
@@ -95,6 +101,8 @@ export function runMemoryEval(input: RunMemoryEvalInput): MemoryEvalReport {
     passed,
     failed: results.length - passed,
     score,
+    minScore,
+    thresholdPassed,
     results
   };
 }
@@ -112,6 +120,10 @@ export function formatMemoryEvalReport(report: MemoryEvalReport): string {
     `failed: ${report.failed}`,
     `score: ${report.score.toFixed(2)}`
   ];
+  if (report.minScore !== undefined) {
+    lines.push(`min score: ${report.minScore.toFixed(2)}`);
+    lines.push(`threshold: ${report.thresholdPassed ? "PASS" : "FAIL"}`);
+  }
   for (const [index, result] of report.results.entries()) {
     lines.push("");
     lines.push(`${index + 1}. ${result.passed ? "PASS" : "FAIL"} ${result.name}`);
@@ -150,6 +162,7 @@ function readMemoryEvalSuite(file: string): MemoryEvalSuite {
   return {
     name: readOptionalString(parsed.name),
     maxResults: readOptionalPositiveInteger(parsed.maxResults),
+    minScore: readOptionalScore(parsed.minScore),
     cases
   };
 }
@@ -257,6 +270,14 @@ function readOptionalPositiveInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new Error("Memory eval numeric fields must be positive integers");
+  }
+  return value;
+}
+
+function readOptionalScore(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error("Memory eval minScore must be a number between 0 and 1");
   }
   return value;
 }

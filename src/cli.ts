@@ -667,6 +667,7 @@ async function runCliUnsafeWithParsed(
         cwd,
         caseFile: options.caseFile,
         maxResults: options.maxResults,
+        minScore: options.minScore,
         sessionId,
         scopes: config.memory.scopes
       });
@@ -674,7 +675,7 @@ async function runCliUnsafeWithParsed(
         writeMemoryEvalReport(options.reportFile, report);
       }
       return {
-        exitCode: report.failed === 0 ? 0 : 1,
+        exitCode: report.failed === 0 && report.thresholdPassed ? 0 : 1,
         stdout: `${formatMemoryEvalReport(report)}${options.reportFile ? `\nReport: ${options.reportFile}` : ""}\n`,
         stderr: ""
       };
@@ -1808,7 +1809,7 @@ function helpText(): string {
     "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
     "  magi memory conflicts [--limit <n>]",
     "  magi memory merges [--limit <n>]",
-    "  magi memory eval --case-file <file> [--max-results <n>] [--report <file>]",
+    "  magi memory eval --case-file <file> [--max-results <n>] [--min-score <0..1>] [--report <file>]",
     "  magi memory maintain [--apply] [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>]",
     "  magi memory maintain config [--older-than-days <n>] [--decay <0..1>] [--min-weight <0..1>] [--limit <n>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
@@ -1998,10 +1999,12 @@ function parseMemoryMergesArgs(args: string[]): { limit?: number } {
 function parseMemoryEvalArgs(args: string[]): {
   caseFile: string;
   maxResults?: number;
+  minScore?: number;
   reportFile?: string;
 } {
   let caseFile = "";
   let maxResults: number | undefined;
+  let minScore: number | undefined;
   let reportFile: string | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -2013,6 +2016,10 @@ function parseMemoryEvalArgs(args: string[]): {
       maxResults = readPositiveNumberArg(args[++index], "magi memory eval --max-results");
       continue;
     }
+    if (arg === "--min-score") {
+      minScore = readUnitNumberArg(args[++index], "magi memory eval --min-score");
+      continue;
+    }
     if (arg === "--report") {
       reportFile = args[++index] ?? "";
       continue;
@@ -2022,7 +2029,7 @@ function parseMemoryEvalArgs(args: string[]): {
   if (!caseFile) {
     throw new MagiUsageError("magi memory eval requires --case-file <file>");
   }
-  return { caseFile, maxResults, reportFile };
+  return { caseFile, maxResults, minScore, reportFile };
 }
 
 function parseMemoryMaintainArgs(args: string[]): {

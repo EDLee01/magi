@@ -660,7 +660,18 @@ describe("AGENTS rules and memory", () => {
 
     const reportFile = path.join(workspace, "memory-eval-report.json");
     const passed = await runCli(
-      ["memory", "eval", "--case-file", caseFile, "--max-results", "5", "--report", reportFile],
+      [
+        "memory",
+        "eval",
+        "--case-file",
+        caseFile,
+        "--max-results",
+        "5",
+        "--min-score",
+        "1",
+        "--report",
+        reportFile
+      ],
       temp.env,
       workspace
     );
@@ -676,6 +687,8 @@ describe("AGENTS rules and memory", () => {
       passed: 1,
       failed: 0,
       score: 1,
+      minScore: 1,
+      thresholdPassed: true,
       results: [
         expect.objectContaining({
           name: "linked workflow recall",
@@ -706,6 +719,32 @@ describe("AGENTS rules and memory", () => {
     expect(failed.exitCode).toBe(1);
     expect(failed.stdout).toContain("1. FAIL missing memory");
     expect(failed.stdout).toContain("expected missing: nonexistent recall marker");
+
+    writeFileSync(
+      caseFile,
+      JSON.stringify(
+        {
+          cases: [
+            {
+              name: "empty exploratory recall threshold",
+              query: "qzxv-unmatched-recall-token"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    const thresholdFailed = await runCli(
+      ["memory", "eval", "--case-file", caseFile, "--min-score", "0.75"],
+      temp.env,
+      workspace
+    );
+    expect(thresholdFailed.exitCode).toBe(1);
+    expect(thresholdFailed.stdout).toContain("1. PASS empty exploratory recall threshold");
+    expect(thresholdFailed.stdout).toContain("score: 0.00");
+    expect(thresholdFailed.stdout).toContain("min score: 0.75");
+    expect(thresholdFailed.stdout).toContain("threshold: FAIL");
   });
 
   it("links graph memory nodes through the CLI and retrieves the linked neighbor", async () => {
