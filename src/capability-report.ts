@@ -793,9 +793,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 36) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 10) failures.push(`toolCallCount=${toolCallCount}`);
+  if (assertions < 39) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 19) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.activeGoalContextSeen !== true) failures.push("activeGoalContextSeen=false");
   if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
@@ -849,6 +849,15 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   }
   if (details.mergedPlanCreated !== true) failures.push("mergedPlanCreated=false");
   if (details.mergedPlanContextSeen !== true) failures.push("mergedPlanContextSeen=false");
+  if (details.multiBranchConvergenceCreated !== true) {
+    failures.push("multiBranchConvergenceCreated=false");
+  }
+  if (details.multiBranchConvergenceContextSeen !== true) {
+    failures.push("multiBranchConvergenceContextSeen=false");
+  }
+  if (details.multiBranchConvergenceExecuted !== true) {
+    failures.push("multiBranchConvergenceExecuted=false");
+  }
   if (details.conflictedMergeNeedsRevision !== true) {
     failures.push("conflictedMergeNeedsRevision=false");
   }
@@ -899,6 +908,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       parallelPlanAdoptedExplicitly: details.parallelPlanAdoptedExplicitly === true,
       mergedPlanCreated: details.mergedPlanCreated === true,
       mergedPlanContextSeen: details.mergedPlanContextSeen === true,
+      multiBranchConvergenceCreated: details.multiBranchConvergenceCreated === true,
+      multiBranchConvergenceContextSeen: details.multiBranchConvergenceContextSeen === true,
+      multiBranchConvergenceExecuted: details.multiBranchConvergenceExecuted === true,
       conflictedMergeNeedsRevision: details.conflictedMergeNeedsRevision === true,
       conflictedMergeContextSeen: details.conflictedMergeContextSeen === true,
       conflictedMergeResolved: details.conflictedMergeResolved === true,

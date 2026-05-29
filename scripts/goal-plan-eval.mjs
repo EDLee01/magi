@@ -26,6 +26,10 @@ const parallelAlphaSessionId = "goal-plan-eval-parallel-alpha";
 const parallelBetaSessionId = "goal-plan-eval-parallel-beta";
 const parallelAdoptSessionId = "goal-plan-eval-parallel-adopt";
 const mergedPlanSessionId = "goal-plan-eval-merged-plan";
+const convergenceDocsSessionId = "goal-plan-eval-convergence-docs";
+const convergenceApiSessionId = "goal-plan-eval-convergence-api";
+const convergenceTestsSessionId = "goal-plan-eval-convergence-tests";
+const convergenceSessionId = "goal-plan-eval-convergence";
 const conflictAlphaSessionId = "goal-plan-eval-conflict-alpha";
 const conflictBetaSessionId = "goal-plan-eval-conflict-beta";
 const conflictMergeSessionId = "goal-plan-eval-conflict-merge";
@@ -61,6 +65,21 @@ const parallelBetaPlanText = [
   "2. Patch beta-target.txt",
   "3. Verify beta result"
 ].join("\n");
+const convergenceDocsPlanText = [
+  "1. Read docs/session-notes.md",
+  "2. Patch docs/session-notes.md with merged session note",
+  "3. Verify docs/session-notes.md includes convergence branch evidence"
+].join("\n");
+const convergenceApiPlanText = [
+  "1. Read src/routes.ts",
+  "2. Patch src/routes.ts to set stable route mode",
+  "3. Verify src/routes.ts exports the converged route alias"
+].join("\n");
+const convergenceTestsPlanText = [
+  "1. Read tests/routes.test.ts",
+  "2. Patch tests/routes.test.ts to assert stable route mode",
+  "3. Verify tests/routes.test.ts covers the converged route alias"
+].join("\n");
 const conflictAlphaPlanText = [
   "1. Read src/config.ts",
   "2. Patch src/config.ts to use alpha endpoint"
@@ -78,6 +97,21 @@ const migrationTargetPath = "migration-target.txt";
 const migrationSourceContent = "migration source: move legacy policy to migrated policy\n";
 const migrationTargetBefore = "status: legacy\nsource: old-policy\n";
 const migrationTargetAfter = "status: migrated\nsource: migration-source\n";
+const convergenceDocsPath = "docs/session-notes.md";
+const convergenceApiPath = "src/routes.ts";
+const convergenceTestsPath = "tests/routes.test.ts";
+const convergenceDocsBefore = "# Session Notes\n\n- status: draft\n";
+const convergenceDocsAfter =
+  "# Session Notes\n\n- status: draft\n- convergence: docs branch merged\n";
+const convergenceApiBefore = 'export const routeMode = "legacy";\n';
+const convergenceApiAfter =
+  'export const routeMode = "stable";\nexport const routeAlias = "converged";\n';
+const convergenceTestsBefore =
+  'import { routeMode } from "../src/routes";\n\n' +
+  'test("route mode", () => {\n  expect(routeMode).toBe("legacy");\n});\n';
+const convergenceTestsAfter =
+  'import { routeAlias, routeMode } from "../src/routes";\n\n' +
+  'test("route mode", () => {\n  expect(routeMode).toBe("stable");\n  expect(routeAlias).toBe("converged");\n});\n';
 
 let harnessReport;
 
@@ -108,6 +142,8 @@ try {
     parallelPlanConflictRejected: false,
     parallelPlanAdoptedExplicitly: false,
     mergedPlanContextSeen: false,
+    multiBranchConvergenceContextSeen: false,
+    multiBranchConvergenceExecuted: false,
     conflictedMergeContextSeen: false,
     resolvedMergeContextSeen: false
   };
@@ -121,6 +157,12 @@ try {
     writeFileSync(path.join(workDir, inheritedPlanSourcePath), inheritedPlanSourceContent, "utf8");
     writeFileSync(path.join(workDir, migrationSourcePath), migrationSourceContent, "utf8");
     writeFileSync(path.join(workDir, migrationTargetPath), migrationTargetBefore, "utf8");
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(path.join(workDir, convergenceDocsPath), convergenceDocsBefore, "utf8");
+    writeFileSync(path.join(workDir, convergenceApiPath), convergenceApiBefore, "utf8");
+    writeFileSync(path.join(workDir, convergenceTestsPath), convergenceTestsBefore, "utf8");
 
     await runCli(
       ["--session-id", sessionId, "--model", "main", "-p", "Prepare Goal/Plan eval session."],
@@ -295,6 +337,9 @@ try {
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
     const parallelPlans = await runParallelPlanConflictFlow(tools.executeRegisteredTool);
     const mergedPlans = await runMergedPlanFlow(parallelPlans.alphaPlanId, parallelPlans.betaPlanId);
+    const multiBranchConvergence = await runMultiBranchConvergenceFlow(
+      tools.executeRegisteredTool
+    );
     const conflictedMerge = await runConflictedMergeFlow(tools.executeRegisteredTool);
     const planRevisionChainLinked = assertPlanRevisionChainLinked(
       planRevision.revisionPlanId,
@@ -377,11 +422,25 @@ try {
     assert(state.inheritedPlanDeviationCorrected, "provider did not correct plan deviation");
     assert(state.parallelPlanIsolationSeen, "provider did not see isolated parallel plan contexts");
     assert(state.mergedPlanContextSeen, "provider did not see merged plan context");
+    assert(
+      state.multiBranchConvergenceContextSeen,
+      "provider did not see multi-branch convergence context"
+    );
+    assert(
+      state.multiBranchConvergenceExecuted,
+      "provider did not execute multi-branch convergence plan"
+    );
     assert(state.conflictedMergeContextSeen, "provider did not see conflicted merge context");
     assert(state.resolvedMergeContextSeen, "provider did not see resolved merge context");
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
-    const toolCounts = mergeToolCounts(provider.metrics().toolCounts, planRevision.toolCounts);
+    const toolCounts = mergeToolCounts(
+      provider.metrics().toolCounts,
+      planRevision.toolCounts,
+      parallelPlans.toolCounts,
+      multiBranchConvergence.toolCounts,
+      conflictedMerge.toolCounts
+    );
     const assertions = [
       "active goal status visible in CLI",
       "active goal injected into model context",
@@ -415,6 +474,9 @@ try {
       "parallel approved plan adopted only when requested",
       "approved plans merged into an explicit target session",
       "merged plan context included all source metadata",
+      "three approved branch plans converged into one target session",
+      "multi-branch convergence context included all source metadata",
+      "multi-branch converged plan executed across docs, source, and tests",
       "conflicting plan merge persisted as needs_revision",
       "conflicting merge context included conflict target and source steps",
       "conflicting merge resolved with explicit user choice",
@@ -425,7 +487,10 @@ try {
       "state/plans.json",
       migrationSourcePath,
       migrationTargetPath,
-      inheritedPlanOutputPath
+      inheritedPlanOutputPath,
+      convergenceDocsPath,
+      convergenceApiPath,
+      convergenceTestsPath
     ];
 
     const report = harnessReport.buildHarnessReport({
@@ -471,6 +536,9 @@ try {
             parallelPlanAdoptedExplicitly: parallelPlans.adoptedExplicitly,
             mergedPlanCreated: mergedPlans.mergedPlanCreated,
             mergedPlanContextSeen: state.mergedPlanContextSeen,
+            multiBranchConvergenceCreated: multiBranchConvergence.created,
+            multiBranchConvergenceContextSeen: state.multiBranchConvergenceContextSeen,
+            multiBranchConvergenceExecuted: state.multiBranchConvergenceExecuted,
             conflictedMergeNeedsRevision: conflictedMerge.needsRevision,
             conflictedMergeContextSeen: state.conflictedMergeContextSeen,
             conflictedMergeResolved: conflictedMerge.resolved,
@@ -497,6 +565,7 @@ try {
 function createRouter(state) {
   let planTurns = 0;
   let inheritedPlanExecutionTurns = 0;
+  let convergenceExecutionTurns = 0;
   let deviationBlockCount = 0;
   return ({ latestUser, systemPrompt, transcript, toolNames }) => {
     if (latestUser.includes("Prepare Goal/Plan eval session")) {
@@ -759,6 +828,149 @@ function createRouter(state) {
       );
       state.mergedPlanContextSeen = true;
       return messageText("Merged parallel plan context is present.");
+    }
+
+    if (latestUser.includes("Verify multi-branch convergence plan context")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "convergence plan context missing");
+      assert(
+        systemPrompt.includes("Merged implementation plan from 3 approved plans."),
+        "convergence plan header missing"
+      );
+      assert(
+        systemPrompt.includes("Read docs/session-notes.md"),
+        "convergence context missed docs read step"
+      );
+      assert(
+        systemPrompt.includes("Patch docs/session-notes.md with merged session note"),
+        "convergence context missed docs patch step"
+      );
+      assert(
+        systemPrompt.includes("Read src/routes.ts"),
+        "convergence context missed source read step"
+      );
+      assert(
+        systemPrompt.includes("Patch src/routes.ts to set stable route mode"),
+        "convergence context missed source patch step"
+      );
+      assert(
+        systemPrompt.includes("Read tests/routes.test.ts"),
+        "convergence context missed test read step"
+      );
+      assert(
+        systemPrompt.includes("Patch tests/routes.test.ts to assert stable route mode"),
+        "convergence context missed test patch step"
+      );
+      assert(
+        systemPrompt.includes(
+          `Merged from sessions: ${convergenceDocsSessionId}, ${convergenceApiSessionId}, ${convergenceTestsSessionId}`
+        ),
+        "convergence context missed all source sessions"
+      );
+      state.multiBranchConvergenceContextSeen = true;
+      return messageText("Multi-branch convergence plan context is present.");
+    }
+
+    if (latestUser.includes("Execute multi-branch converged plan")) {
+      convergenceExecutionTurns += 1;
+      assert(systemPrompt.includes("<session_plan_context>"), "convergence execution missed plan context");
+      assert(
+        systemPrompt.includes("Merged implementation plan from 3 approved plans."),
+        "convergence execution missed merged plan"
+      );
+      assert(toolNames.includes("FileRead"), "FileRead was not available for convergence execution");
+      assert(toolNames.includes("FilePatch"), "FilePatch was not available for convergence execution");
+      if (convergenceExecutionTurns === 1) {
+        return toolResponse([
+          toolCall("convergence-docs-read", "FileRead", { file_path: convergenceDocsPath })
+        ]);
+      }
+      if (convergenceExecutionTurns === 2) {
+        assert(
+          transcript.includes("- status: draft"),
+          "convergence docs read result was not visible"
+        );
+        return toolResponse([
+          toolCall("convergence-docs-patch", "FilePatch", {
+            file_path: convergenceDocsPath,
+            patch: [
+              "@@",
+              "-# Session Notes",
+              "-",
+              "-- status: draft",
+              "+# Session Notes",
+              "+",
+              "+- status: draft",
+              "+- convergence: docs branch merged"
+            ].join("\n")
+          })
+        ]);
+      }
+      if (convergenceExecutionTurns === 3) {
+        assert(
+          readFileSync(path.join(workDir, convergenceDocsPath), "utf8") === convergenceDocsAfter,
+          "convergence docs branch patch did not land"
+        );
+        return toolResponse([
+          toolCall("convergence-api-read", "FileRead", { file_path: convergenceApiPath })
+        ]);
+      }
+      if (convergenceExecutionTurns === 4) {
+        assert(
+          transcript.includes('export const routeMode = "legacy";'),
+          "convergence api read result was not visible"
+        );
+        return toolResponse([
+          toolCall("convergence-api-patch", "FilePatch", {
+            file_path: convergenceApiPath,
+            patch: [
+              "@@",
+              "-export const routeMode = \"legacy\";",
+              "+export const routeMode = \"stable\";",
+              "+export const routeAlias = \"converged\";"
+            ].join("\n")
+          })
+        ]);
+      }
+      if (convergenceExecutionTurns === 5) {
+        assert(
+          readFileSync(path.join(workDir, convergenceApiPath), "utf8") === convergenceApiAfter,
+          "convergence api branch patch did not land"
+        );
+        return toolResponse([
+          toolCall("convergence-tests-read", "FileRead", { file_path: convergenceTestsPath })
+        ]);
+      }
+      if (convergenceExecutionTurns === 6) {
+        assert(
+          transcript.includes('expect(routeMode).toBe("legacy");'),
+          "convergence tests read result was not visible"
+        );
+        return toolResponse([
+          toolCall("convergence-tests-patch", "FilePatch", {
+            file_path: convergenceTestsPath,
+            patch: [
+              "@@",
+              "-import { routeMode } from \"../src/routes\";",
+              "+import { routeAlias, routeMode } from \"../src/routes\";",
+              "@@",
+              "-test(\"route mode\", () => {",
+              "-  expect(routeMode).toBe(\"legacy\");",
+              "-});",
+              "+test(\"route mode\", () => {",
+              "+  expect(routeMode).toBe(\"stable\");",
+              "+  expect(routeAlias).toBe(\"converged\");",
+              "+});"
+            ].join("\n")
+          })
+        ]);
+      }
+      assert(
+        readFileSync(path.join(workDir, convergenceTestsPath), "utf8") ===
+          convergenceTestsAfter,
+        "convergence tests branch patch did not land"
+      );
+      state.multiBranchConvergenceExecuted = true;
+      return messageText("Multi-branch convergence execution complete.");
     }
 
     if (latestUser.includes("Verify conflicted merged plan context")) {
@@ -1330,7 +1542,8 @@ async function runParallelPlanConflictFlow(executeRegisteredTool) {
     conflictRejected,
     adoptedExplicitly: true,
     alphaPlanId: alpha.planId,
-    betaPlanId: beta.planId
+    betaPlanId: beta.planId,
+    toolCounts: { ExitPlanMode: 2 }
   };
 }
 
@@ -1380,6 +1593,154 @@ async function runMergedPlanFlow(alphaPlanId, betaPlanId) {
   assert(context.includes("Merged parallel plan context is present"), "merged plan context failed");
 
   return { mergedPlanCreated: true };
+}
+
+async function runMultiBranchConvergenceFlow(executeRegisteredTool) {
+  await runCli(
+    [
+      "--session-id",
+      convergenceDocsSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare docs convergence branch session."
+    ],
+    "seed docs convergence session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      convergenceApiSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare api convergence branch session."
+    ],
+    "seed api convergence session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      convergenceTestsSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare tests convergence branch session."
+    ],
+    "seed tests convergence session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      convergenceSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare multi-branch convergence target session."
+    ],
+    "seed convergence target session"
+  );
+
+  const docs = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: convergenceDocsSessionId,
+    toolUseId: "approve-convergence-docs-plan",
+    plan: convergenceDocsPlanText
+  });
+  const api = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: convergenceApiSessionId,
+    toolUseId: "approve-convergence-api-plan",
+    plan: convergenceApiPlanText
+  });
+  const tests = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: convergenceTestsSessionId,
+    toolUseId: "approve-convergence-tests-plan",
+    plan: convergenceTestsPlanText
+  });
+
+  const sourcePlanIds = [docs.planId, api.planId, tests.planId];
+  const merged = await runCli(
+    ["plan", "merge", ...sourcePlanIds, "--session-id", convergenceSessionId],
+    "merge three convergence branch plans"
+  );
+  assert(merged.includes("Plan merged:"), "multi-branch plan merge did not confirm");
+  assert(
+    merged.includes(`Merged from plans: ${sourcePlanIds.join(", ")}`),
+    "multi-branch plan merge missed all sources"
+  );
+
+  const status = await runCli(
+    ["plan", "--session-id", convergenceSessionId],
+    "multi-branch convergence plan status"
+  );
+  assert(status.includes("Status: approved"), "multi-branch convergence plan should be approved");
+  assert(
+    status.includes(`Merged from plans: ${sourcePlanIds.join(", ")}`),
+    "multi-branch status missed source plans"
+  );
+  assert(
+    status.includes(
+      `Merged from sessions: ${convergenceDocsSessionId}, ${convergenceApiSessionId}, ${convergenceTestsSessionId}`
+    ),
+    "multi-branch status missed source sessions"
+  );
+  assert(status.includes("Read docs/session-notes.md"), "multi-branch status missed docs step");
+  assert(status.includes("Read src/routes.ts"), "multi-branch status missed source step");
+  assert(status.includes("Read tests/routes.test.ts"), "multi-branch status missed test step");
+
+  const context = await runCli(
+    [
+      "--session-id",
+      convergenceSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify multi-branch convergence plan context."
+    ],
+    "multi-branch convergence context"
+  );
+  assert(
+    context.includes("Multi-branch convergence plan context is present"),
+    "multi-branch convergence context failed"
+  );
+
+  const execution = await runCli(
+    [
+      "--session-id",
+      convergenceSessionId,
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Execute multi-branch converged plan."
+    ],
+    "multi-branch convergence execution"
+  );
+  assert(
+    execution.includes("Multi-branch convergence execution complete"),
+    "multi-branch convergence execution failed"
+  );
+  assert(
+    readFileSync(path.join(workDir, convergenceDocsPath), "utf8") === convergenceDocsAfter,
+    "multi-branch convergence docs file was not updated"
+  );
+  assert(
+    readFileSync(path.join(workDir, convergenceApiPath), "utf8") === convergenceApiAfter,
+    "multi-branch convergence source file was not updated"
+  );
+  assert(
+    readFileSync(path.join(workDir, convergenceTestsPath), "utf8") === convergenceTestsAfter,
+    "multi-branch convergence test file was not updated"
+  );
+
+  return { created: true, toolCounts: { ExitPlanMode: 3 } };
 }
 
 async function runConflictedMergeFlow(executeRegisteredTool) {
@@ -1502,7 +1863,7 @@ async function runConflictedMergeFlow(executeRegisteredTool) {
     "resolved merge context failed"
   );
 
-  return { needsRevision: true, resolved: true };
+  return { needsRevision: true, resolved: true, toolCounts: { ExitPlanMode: 2 } };
 }
 
 async function approvePlanWithTool(input) {

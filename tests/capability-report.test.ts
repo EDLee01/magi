@@ -338,6 +338,9 @@ describe("capability report", () => {
         parallelPlanAdoptedExplicitly: false,
         mergedPlanCreated: false,
         mergedPlanContextSeen: false,
+        multiBranchConvergenceCreated: false,
+        multiBranchConvergenceContextSeen: false,
+        multiBranchConvergenceExecuted: false,
         conflictedMergeNeedsRevision: false,
         conflictedMergeContextSeen: false,
         conflictedMergeResolved: false,
@@ -384,6 +387,9 @@ describe("capability report", () => {
         "parallelPlanAdoptedExplicitly=false",
         "mergedPlanCreated=false",
         "mergedPlanContextSeen=false",
+        "multiBranchConvergenceCreated=false",
+        "multiBranchConvergenceContextSeen=false",
+        "multiBranchConvergenceExecuted=false",
         "conflictedMergeNeedsRevision=false",
         "conflictedMergeContextSeen=false",
         "conflictedMergeResolved=false",
@@ -1299,6 +1305,9 @@ function goalPlanReport(
     parallelPlanAdoptedExplicitly: boolean;
     mergedPlanCreated: boolean;
     mergedPlanContextSeen: boolean;
+    multiBranchConvergenceCreated: boolean;
+    multiBranchConvergenceContextSeen: boolean;
+    multiBranchConvergenceExecuted: boolean;
     conflictedMergeNeedsRevision: boolean;
     conflictedMergeContextSeen: boolean;
     conflictedMergeResolved: boolean;
@@ -1316,9 +1325,9 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 36,
-      filesVerified: overrides.filesVerified ?? 4,
-      toolCallCount: overrides.toolCallCount ?? 10,
+      assertions: overrides.assertions ?? 39,
+      filesVerified: overrides.filesVerified ?? 7,
+      toolCallCount: overrides.toolCallCount ?? 19,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
     }),
     scenarios: [
@@ -1331,18 +1340,18 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 36 },
+            { length: overrides.assertions ?? 39 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
-            { length: overrides.filesVerified ?? 4 },
+            { length: overrides.filesVerified ?? 7 },
             (_, index) => `goal-plan-file-${index + 1}.json`
           ),
           toolCounts: {
             FileWrite: 3,
             ExitPlanMode: 4,
-            FileRead: 2,
-            FilePatch: 1
+            FileRead: 5,
+            FilePatch: 4
           },
           activeGoalContextSeen: true,
           completedGoalSuppressed: true,
@@ -1372,6 +1381,9 @@ function goalPlanReport(
           parallelPlanAdoptedExplicitly: true,
           mergedPlanCreated: true,
           mergedPlanContextSeen: true,
+          multiBranchConvergenceCreated: true,
+          multiBranchConvergenceContextSeen: true,
+          multiBranchConvergenceExecuted: true,
           conflictedMergeNeedsRevision: true,
           conflictedMergeContextSeen: true,
           conflictedMergeResolved: true,
