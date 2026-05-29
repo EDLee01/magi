@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 runner/target/
+.magi-reports/
 *.log
 .DS_Store
 .claude/

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
@@ -10,7 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(repoRoot, "dist", "cli.js");
+const harnessReportPath = path.join(repoRoot, "dist", "harness-report.js");
 const nodeBin = process.execPath;
+const startedAt = new Date();
+const reportPath = process.env.MAGI_BLACKBOX_REPORT || path.join(repoRoot, ".magi-reports", "blackbox-e2e.json");
+let harnessReport;
 
 function assert(condition, message) {
   if (!condition) {
@@ -163,6 +167,22 @@ async function startProvider({ logPath, routeRequest }) {
   return {
     calls,
     port: address.port,
+    summary() {
+      const exposedTools = new Set();
+      const models = new Set();
+      for (const call of calls) {
+        if (call.model) models.add(call.model);
+        for (const toolName of call.toolNames ?? []) {
+          exposedTools.add(toolName);
+        }
+      }
+      return {
+        callCount: calls.length,
+        models: Array.from(models).sort(),
+        exposedToolCount: exposedTools.size,
+        exposedTools: Array.from(exposedTools).sort()
+      };
+    },
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
@@ -384,7 +404,7 @@ function createComplexRouter() {
 }
 
 async function scenarioComplexWorkflow() {
-  await withTempWorkspace("complex", async ({ root, configDir, workDir }) => {
+  return await withTempWorkspace("complex", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
     const provider = await startProvider({ logPath: providerLog, routeRequest: createComplexRouter() });
     try {
@@ -435,6 +455,20 @@ async function scenarioComplexWorkflow() {
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
       assert(goalStatus.includes("No active goal"), "goal was not completed");
       assert(provider.calls.length >= 5, "provider was not exercised enough for a complex flow");
+      return {
+        score: 1,
+        assertions: [
+          "goal context loaded",
+          "hot and relevant memory loaded",
+          "deferred tool revealed",
+          "report file written and patched",
+          "todo state persisted",
+          "memory search found learned workflow",
+          "learning draft listed"
+        ],
+        filesVerified: ["reports/e2e-result.md", "state/todos.json"],
+        provider: provider.summary()
+      };
     } catch (error) {
       printProviderLog(providerLog);
       throw error;
@@ -445,7 +479,7 @@ async function scenarioComplexWorkflow() {
 }
 
 async function scenarioDefaultPermissionDenied() {
-  await withTempWorkspace("permission", async ({ root, configDir, workDir }) => {
+  return await withTempWorkspace("permission", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
     let turn = 0;
     const provider = await startProvider({
@@ -471,6 +505,11 @@ async function scenarioDefaultPermissionDenied() {
       assert(output.includes("Default permission denial observed"), "model did not observe permission denial");
       assert(!existsSync(path.join(workDir, "denied.txt")), "denied write unexpectedly created a file");
       assert(turn === 2, "permission denial scenario should complete in two provider turns");
+      return {
+        score: 1,
+        assertions: ["approval request emitted", "permission denial returned to model", "denied write did not mutate workspace"],
+        provider: provider.summary()
+      };
     } catch (error) {
       printProviderLog(providerLog);
       throw error;
@@ -481,7 +520,7 @@ async function scenarioDefaultPermissionDenied() {
 }
 
 async function scenarioRetryAndFallback() {
-  await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
+  return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
     let primaryCalls = 0;
     let backupCalls = 0;
@@ -515,6 +554,12 @@ async function scenarioRetryAndFallback() {
       assert(output.includes("fallback recovered"), "fallback route did not provide the final answer");
       assert(primaryCalls === 3, `expected three fast attempts before fallback, got ${primaryCalls} primary calls`);
       assert(backupCalls === 1, `expected one backup call, got ${backupCalls}`);
+      return {
+        score: 1,
+        assertions: ["retry attempts exhausted on primary", "fallback event emitted", "backup model recovered"],
+        provider: provider.summary(),
+        retry: { primaryCalls, backupCalls }
+      };
     } catch (error) {
       printProviderLog(providerLog);
       throw error;
@@ -525,7 +570,7 @@ async function scenarioRetryAndFallback() {
 }
 
 async function scenarioMemoryGraphLink() {
-  await withTempWorkspace("memory-graph-link", async ({ configDir, workDir }) => {
+  return await withTempWorkspace("memory-graph-link", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory graph init" });
     const draftId = parseDraftId(await runCli({
@@ -574,11 +619,15 @@ async function scenarioMemoryGraphLink() {
     });
     assert(search.includes("Graph CLI anchor"), "memory graph search missed direct anchor");
     assert(search.includes("Linked workflow neighbor"), "memory graph search missed linked neighbor");
+    return {
+      score: 1,
+      assertions: ["memory draft applied", "graph edge created", "linked neighbor retrieved through graph search"]
+    };
   });
 }
 
 async function scenarioToolFeedbackRanking() {
-  await withTempWorkspace("tool-feedback", async ({ root, configDir, workDir }) => {
+  return await withTempWorkspace("tool-feedback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
     let turn = 0;
     const provider = await startProvider({
@@ -626,6 +675,15 @@ async function scenarioToolFeedbackRanking() {
       const stats = JSON.parse(readFileSync(statsPath, "utf8"));
       assert(stats.tools?.Grep?.failures === 4, "Grep failures were not recorded");
       assert(stats.tools?.Glob?.successes === 4, "Glob successes were not recorded");
+      return {
+        score: 1,
+        assertions: ["tool failures persisted", "tool successes persisted", "ToolSearch ranking used feedback"],
+        provider: provider.summary(),
+        toolFeedback: {
+          grepFailures: stats.tools.Grep.failures,
+          globSuccesses: stats.tools.Glob.successes
+        }
+      };
     } catch (error) {
       printProviderLog(providerLog);
       throw error;
@@ -636,7 +694,7 @@ async function scenarioToolFeedbackRanking() {
 }
 
 async function scenarioPlanMode() {
-  await withTempWorkspace("plan", async ({ root, configDir, workDir }) => {
+  return await withTempWorkspace("plan", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
     let turn = 0;
     const plan = "1. Inspect the requested files\n2. Show this plan before implementation\n3. Wait for approval";
@@ -672,6 +730,11 @@ async function scenarioPlanMode() {
       const planStatus = await runCli({ args: ["plan"], cwd: workDir, configDir, label: "plan status" });
       assert(planStatus.includes("Status: submitted"), "submitted plan was not persisted");
       assert(planStatus.includes("Show this plan before implementation"), "persisted plan did not include plan content");
+      return {
+        score: 1,
+        assertions: ["write denied in plan mode", "ExitPlanMode surfaced plan", "plan review persisted"],
+        provider: provider.summary()
+      };
     } catch (error) {
       printProviderLog(providerLog);
       throw error;
@@ -682,7 +745,7 @@ async function scenarioPlanMode() {
 }
 
 async function scenarioInteractiveTui() {
-  await withTempWorkspace("tui", async ({ configDir, workDir }) => {
+  return await withTempWorkspace("tui", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     const inputFile = path.join(workDir, "tui-input.txt");
     writeFileSync(inputFile, "/exit\r");
@@ -709,11 +772,15 @@ async function scenarioInteractiveTui() {
     assert(combined.includes("Magi v"), "TUI banner did not render");
     assert(combined.includes("/help for commands"), "TUI help hint did not render");
     assert(!combined.includes("Interactive terminal requires a TTY"), "TUI did not receive a pseudo-TTY");
+    return {
+      score: 1,
+      assertions: ["TUI banner rendered", "help hint rendered", "pseudo-TTY accepted"]
+    };
   });
 }
 
 async function scenarioTuiRequiresTty() {
-  await withTempWorkspace("tui-no-tty", async ({ configDir, workDir }) => {
+  return await withTempWorkspace("tui-no-tty", async ({ configDir, workDir }) => {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     const result = await runCommand({
       command: nodeBin,
@@ -726,6 +793,10 @@ async function scenarioTuiRequiresTty() {
 
     assert(result.code === 2, `non-TTY TUI exited ${result.code ?? result.signal}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);
     assert(result.stdout.includes("Interactive terminal requires a TTY"), "non-TTY TUI did not explain the TTY requirement");
+    return {
+      score: 1,
+      assertions: ["non-TTY TUI exits clearly", "TTY requirement message emitted"]
+    };
   });
 }
 
@@ -743,12 +814,44 @@ function printProviderLog(providerLog) {
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
-  await fn();
-  console.log(`✓ ${name} (${Date.now() - startedAt}ms)`);
+  try {
+    const details = await fn();
+    const durationMs = Date.now() - startedAt;
+    console.log(`✓ ${name} (${durationMs}ms)`);
+    return {
+      name,
+      status: "passed",
+      durationMs,
+      score: typeof details?.score === "number" ? details.score : 1,
+      failureKind: null,
+      details: details ?? {}
+    };
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    const failureKind = harnessReport.classifyHarnessFailure(error);
+    console.error(`✗ ${name} (${durationMs}ms) [${failureKind}]`);
+    return {
+      name,
+      status: "failed",
+      durationMs,
+      score: 0,
+      failureKind,
+      error: harnessReport.summarizeHarnessError(error),
+      details: {}
+    };
+  }
+}
+
+function writeReport(report) {
+  mkdirSync(path.dirname(reportPath), { recursive: true });
+  writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`Black-box report: ${reportPath}`);
 }
 
 async function main() {
   assert(existsSync(cliPath), "dist/cli.js not found; run npm run build first");
+  assert(existsSync(harnessReportPath), "dist/harness-report.js not found; run npm run build first");
+  harnessReport = await import("../dist/harness-report.js");
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
@@ -761,10 +864,21 @@ async function main() {
   if (process.env.MAGI_BLACKBOX_TUI === "1") {
     scenarios.push(["interactive TUI", scenarioInteractiveTui]);
   }
+  const results = [];
   for (const [name, fn] of scenarios) {
-    await runScenario(name, fn);
+    results.push(await runScenario(name, fn));
   }
-  console.log(`\nBlack-box E2E matrix passed (${scenarios.length} scenarios).`);
+  const report = harnessReport.buildHarnessReport({
+    name: "blackbox-e2e",
+    startedAt,
+    scenarios: results,
+  });
+  writeReport(report);
+  if (report.status !== "passed") {
+    console.error(`\nBlack-box E2E matrix failed (${report.summary.failed}/${report.summary.total} scenarios).`);
+    process.exit(1);
+  }
+  console.log(`\nBlack-box E2E matrix passed (${report.summary.passed} scenarios, score=${report.summary.score.toFixed(2)}).`);
 }
 
 main().catch((error) => {
