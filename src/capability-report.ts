@@ -313,7 +313,11 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "queryCancelledAuditPersisted",
     "approvalCancelResolved",
     "cancelledApprovalDidNotWrite",
-    "approvalCancelledAuditPersisted"
+    "approvalCancelledAuditPersisted",
+    "sessionCreatedForResume",
+    "panelPayloadAccepted",
+    "resumedSessionContextSeen",
+    "resumedSessionMessagesPersisted"
   ];
   for (const key of required) {
     if (details[key] !== true) {
@@ -339,7 +343,11 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       queryCancelledAuditPersisted: details.queryCancelledAuditPersisted === true,
       approvalCancelResolved: details.approvalCancelResolved === true,
       cancelledApprovalDidNotWrite: details.cancelledApprovalDidNotWrite === true,
-      approvalCancelledAuditPersisted: details.approvalCancelledAuditPersisted === true
+      approvalCancelledAuditPersisted: details.approvalCancelledAuditPersisted === true,
+      sessionCreatedForResume: details.sessionCreatedForResume === true,
+      panelPayloadAccepted: details.panelPayloadAccepted === true,
+      resumedSessionContextSeen: details.resumedSessionContextSeen === true,
+      resumedSessionMessagesPersisted: details.resumedSessionMessagesPersisted === true
     },
     failures
   };

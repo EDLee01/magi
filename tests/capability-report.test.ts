@@ -163,7 +163,8 @@ describe("capability report", () => {
       controlApi: controlApiReport({
         approvalSseSeen: false,
         jobCancelled: false,
-        cancelledApprovalDidNotWrite: false
+        cancelledApprovalDidNotWrite: false,
+        resumedSessionContextSeen: false
       })
     });
 
@@ -173,7 +174,8 @@ describe("capability report", () => {
       expect.arrayContaining([
         "approvalSseSeen=false",
         "jobCancelled=false",
-        "cancelledApprovalDidNotWrite=false"
+        "cancelledApprovalDidNotWrite=false",
+        "resumedSessionContextSeen=false"
       ])
     );
   });
@@ -344,6 +346,10 @@ function controlApiReport(
     approvalCancelResolved: boolean;
     cancelledApprovalDidNotWrite: boolean;
     approvalCancelledAuditPersisted: boolean;
+    sessionCreatedForResume: boolean;
+    panelPayloadAccepted: boolean;
+    resumedSessionContextSeen: boolean;
+    resumedSessionMessagesPersisted: boolean;
   }> = {}
 ): Record<string, unknown> {
   return {
@@ -371,6 +377,10 @@ function controlApiReport(
           approvalCancelResolved: true,
           cancelledApprovalDidNotWrite: true,
           approvalCancelledAuditPersisted: true,
+          sessionCreatedForResume: true,
+          panelPayloadAccepted: true,
+          resumedSessionContextSeen: true,
+          resumedSessionMessagesPersisted: true,
           ...overrides
         }
       }

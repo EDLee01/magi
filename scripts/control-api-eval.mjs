@@ -43,11 +43,15 @@ try {
     queryCancelledAuditPersisted: false,
     approvalCancelResolved: false,
     cancelledApprovalDidNotWrite: false,
-    approvalCancelledAuditPersisted: false
+    approvalCancelledAuditPersisted: false,
+    sessionCreatedForResume: false,
+    panelPayloadAccepted: false,
+    resumedSessionContextSeen: false,
+    resumedSessionMessagesPersisted: false
   };
   const controlPort = randomControlPort();
   const providerLog = path.join(root, "provider-log.json");
-  const provider = await startProvider({ logPath: providerLog, routeRequest: createRouter() });
+  const provider = await startProvider({ logPath: providerLog, routeRequest: createRouter(state) });
   let serve;
 
   try {
@@ -70,6 +74,7 @@ try {
     await exerciseBackgroundApprovalFlow({ serve, headers, workDir, state });
     await exerciseBackgroundCancelFlow({ serve, headers, state });
     await exerciseApprovalCancelFlow({ serve, headers, workDir, state });
+    await exercisePanelResumeFlow({ serve, headers, state });
 
     assertAllState(state);
     const report = harnessReport.buildHarnessReport({
@@ -92,7 +97,9 @@ try {
     });
     mkdirSync(path.dirname(reportPath), { recursive: true });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-    console.log("Control API eval passed (pairing, approval, SSE, job cancel, approval cancel).");
+    console.log(
+      "Control API eval passed (pairing, approval, SSE, job cancel, approval cancel, session resume)."
+    );
     console.log(`Control API report: ${reportPath}`);
   } catch (error) {
     printProviderLog(providerLog);
@@ -288,7 +295,54 @@ async function exerciseApprovalCancelFlow({ serve, headers, workDir, state }) {
     actions.includes("control.approval.cancelled") && actions.includes("agent.approval.cancelled");
 }
 
-function createRouter() {
+async function exercisePanelResumeFlow({ serve, headers, state }) {
+  const created = await postJson(
+    `${serve.url}/sessions`,
+    {
+      title: "panel resume eval",
+      cwd: "/",
+      metadata: { source: "panel-eval" }
+    },
+    headers
+  );
+  const sessionId = created.session?.id;
+  assert(sessionId, "control session creation did not return an id");
+  state.sessionCreatedForResume = true;
+
+  const first = await postJson(
+    `${serve.url}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    { content: "Panel resume seed: keep token orchid-17.", modelAlias: "main" },
+    headers
+  );
+  assert(first.sessionId === sessionId, "first panel message did not stay in session");
+  assert(first.message === "CONTROL RESUME SEED", "first panel message returned wrong content");
+  state.panelPayloadAccepted = true;
+
+  const second = await postJson(
+    `${serve.url}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    { content: "Panel resume follow-up: what token should remain visible?", modelAlias: "main" },
+    headers
+  );
+  assert(second.sessionId === sessionId, "resumed panel message did not stay in session");
+  assert(second.message === "CONTROL RESUME DONE", "resumed panel message returned wrong content");
+
+  const session = await getJson(`${serve.url}/sessions/${encodeURIComponent(sessionId)}`, headers);
+  const messages = session.session?.messages ?? [];
+  state.resumedSessionMessagesPersisted =
+    messages.filter((message) => message.role === "user").length === 2 &&
+    messages.some(
+      (message) => message.role === "assistant" && message.content === "CONTROL RESUME DONE"
+    );
+
+  const events = await getJson(
+    `${serve.url}/sessions/${encodeURIComponent(sessionId)}/events?limit=50`,
+    headers
+  );
+  const actions = (events.events ?? []).map((event) => event.action);
+  assert(actions.includes("agent.query.completed"), "resume session events missed completion");
+}
+
+function createRouter(state) {
   return ({ body, transcript }) => {
     const latestUser = latestUserFromBody(body);
     if (latestUser.includes("Stream and cancel via mobile control")) {
@@ -301,6 +355,19 @@ function createRouter() {
         return messageText("CONTROL APPROVAL DONE");
       }
       return messageText("CONTROL CANCEL DONE");
+    }
+
+    if (latestUser.includes("Panel resume follow-up")) {
+      assert(
+        transcript.includes("Panel resume seed: keep token orchid-17."),
+        "resumed session context did not include the first panel message"
+      );
+      state.resumedSessionContextSeen = true;
+      return messageText("CONTROL RESUME DONE");
+    }
+
+    if (latestUser.includes("Panel resume seed")) {
+      return messageText("CONTROL RESUME SEED");
     }
 
     if (latestUser.includes("Write then cancel approval through mobile control")) {

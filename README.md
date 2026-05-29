@@ -170,7 +170,8 @@ npm run test:control-api-eval
 
 That eval starts `magi serve` from the built CLI, pairs a device, verifies SSE
 events, resolves a mobile approval for FileWrite, cancels a streaming background
-job, cancels an active approval, and checks durable audit evidence.
+job, cancels an active approval, resumes a panel session, and checks durable
+audit evidence.
 
 After the eval scripts run, aggregate the current capability evidence with:
 

@@ -133,6 +133,72 @@ describe("Control API", () => {
     });
   });
 
+  it("accepts mobile panel content/modelAlias payloads when resuming sessions", async () => {
+    const calls: Array<{ model: string; body: Record<string, unknown> }> = [];
+    modelServer = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as { model: string };
+      calls.push({ model: body.model, body: body as Record<string, unknown> });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: `PANEL ${calls.length}` } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(modelServer);
+    await startTestServer({
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
+      configLines: providerControlConfig(baseUrl)
+    });
+    const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {
+      deviceId: string;
+      token: string;
+    };
+    const headers = authHeaders(pairing);
+    const created = (await postJson(
+      `${handle!.url}/sessions`,
+      { title: "panel resume", cwd: temp!.path, metadata: { source: "panel" } },
+      headers
+    )) as { session: { id: string } };
+
+    const first = (await postJson(
+      `${handle!.url}/sessions/${encodeURIComponent(created.session.id)}/messages`,
+      { content: "panel seed", modelAlias: "main" },
+      headers
+    )) as { sessionId: string; message: string };
+    const second = (await postJson(
+      `${handle!.url}/sessions/${encodeURIComponent(created.session.id)}/messages`,
+      { content: "panel follow-up", modelAlias: "main" },
+      headers
+    )) as { sessionId: string; message: string };
+
+    expect(first).toMatchObject({ sessionId: created.session.id, message: "PANEL 1" });
+    expect(second).toMatchObject({ sessionId: created.session.id, message: "PANEL 2" });
+    expect(calls.map((call) => call.model)).toEqual(["gpt-main", "gpt-main"]);
+    expect(JSON.stringify(calls[1].body)).toContain("panel seed");
+
+    const fetched = (await getJson(
+      `${handle!.url}/sessions/${encodeURIComponent(created.session.id)}`,
+      headers
+    )) as {
+      session: { messages: Array<{ role: string; content: string }> };
+    };
+    expect(fetched.session.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "user", content: "panel seed" }),
+        expect.objectContaining({ role: "user", content: "panel follow-up" }),
+        expect.objectContaining({ role: "assistant", content: "PANEL 2" })
+      ])
+    );
+  });
+
   it("passes job model and session options through the Control API provider loop", async () => {
     const calls: Array<{ model: string; body: Record<string, unknown> }> = [];
     modelServer = http.createServer(async (request, response) => {

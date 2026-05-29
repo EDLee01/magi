@@ -374,10 +374,11 @@ async function handleRequest(input: {
       }
       if (input.request.method === "POST" && isMessagesRoute) {
         const body = await readJson(input.request);
-        if (typeof body.prompt !== "string" || !body.prompt.trim()) {
+        const jobInput = normalizeControlJobInput(body);
+        if (!jobInput) {
           return sendJson(input.response, 400, { error: "prompt is required" });
         }
-        const result = await runControlJob(input, body, { sessionId, cwd: session.cwd });
+        const result = await runControlJob(input, jobInput, { sessionId, cwd: session.cwd });
         return sendJson(input.response, 200, result);
       }
     }
@@ -770,22 +771,23 @@ async function handleRequest(input: {
 
     if (input.request.method === "POST" && url.pathname === "/jobs") {
       const body = await readJson(input.request);
-      if (typeof body.prompt !== "string" || !body.prompt.trim()) {
+      const jobInput = normalizeControlJobInput(body);
+      if (!jobInput) {
         return sendJson(input.response, 400, { error: "prompt is required" });
       }
-      const sessionId = readOptionalString(body.sessionId);
+      const sessionId = readOptionalString(jobInput.sessionId);
       const existingSession = sessionId ? input.store.getSession(sessionId) : undefined;
       if (sessionId && !existingSession) {
         return sendJson(input.response, 404, { error: "session not found" });
       }
-      if (body.background === true || body.async === true) {
-        const result = startBackgroundControlJob(input, body, {
+      if (jobInput.background === true || jobInput.async === true) {
+        const result = startBackgroundControlJob(input, jobInput, {
           sessionId,
           cwd: existingSession?.cwd
         });
         return sendJson(input.response, 202, result);
       }
-      const result = await runControlJob(input, body, {
+      const result = await runControlJob(input, jobInput, {
         sessionId,
         cwd: existingSession?.cwd
       });
@@ -1038,6 +1040,20 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : {};
+}
+
+function normalizeControlJobInput(
+  body: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  const prompt = readOptionalString(body.prompt) ?? readOptionalString(body.content);
+  if (!prompt) {
+    return undefined;
+  }
+  return {
+    ...body,
+    prompt,
+    model: readOptionalString(body.model) ?? readOptionalString(body.modelAlias)
+  };
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
