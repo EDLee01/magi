@@ -48,6 +48,10 @@ try {
     longCycleRepeatedWorkspaceStable: false,
     longCycleRepeatedBrowserStable: false,
     longCycleRepeatedFileEditStable: false,
+    longCycleRepeatedMemoryCorrectStable: false,
+    longCycleRepeatedMemoryRecallStable: false,
+    longCycleRepeatedSkillStable: false,
+    longCycleRepeatedAgentStable: false,
     longCycleStrategyDriftStable: false,
     initialToolCount: 0,
     revealedToolCount: 0
@@ -133,6 +137,10 @@ try {
       "long-cycle workspace ranking stayed stable after noisy feedback",
       "long-cycle browser ranking stayed stable after noisy feedback",
       "long-cycle file-edit ranking stayed stable after noisy feedback",
+      "long-cycle memory correction ranking stayed stable after noisy feedback",
+      "long-cycle memory recall ranking stayed stable after noisy feedback",
+      "long-cycle skill ranking stayed stable after noisy feedback",
+      "long-cycle agent ranking stayed stable after noisy feedback",
       "long-cycle strategy drift remained bounded"
     ];
     const filesVerified = ["state/tool-usage-stats.json"];
@@ -171,6 +179,10 @@ try {
             longCycleRepeatedWorkspaceStable: longCycle.repeatedWorkspaceStable,
             longCycleRepeatedBrowserStable: longCycle.repeatedBrowserStable,
             longCycleRepeatedFileEditStable: longCycle.repeatedFileEditStable,
+            longCycleRepeatedMemoryCorrectStable: longCycle.repeatedMemoryCorrectStable,
+            longCycleRepeatedMemoryRecallStable: longCycle.repeatedMemoryRecallStable,
+            longCycleRepeatedSkillStable: longCycle.repeatedSkillStable,
+            longCycleRepeatedAgentStable: longCycle.repeatedAgentStable,
             longCycleStrategyDriftStable: longCycle.strategyDriftStable,
             longCycleProviderCalls: longCycle.providerCalls,
             initialToolCount: state.initialToolCount,
@@ -220,6 +232,22 @@ function createRouter(state) {
           toolCall("long-cycle-browser-search", "ToolSearch", {
             query: "automate browser click and screenshot",
             max_results: 5
+          }),
+          toolCall("long-cycle-memory-correct-search", "ToolSearch", {
+            query: "correct a wrong outdated memory",
+            max_results: 5
+          }),
+          toolCall("long-cycle-memory-recall-search", "ToolSearch", {
+            query: "search previous session memory history",
+            max_results: 5
+          }),
+          toolCall("long-cycle-skill-search", "ToolSearch", {
+            query: "load a reusable skill workflow",
+            max_results: 5
+          }),
+          toolCall("long-cycle-agent-search", "ToolSearch", {
+            query: "dispatch parallel agent to peer machine",
+            max_results: 5
           })
         ]);
       }
@@ -251,6 +279,22 @@ function createRouter(state) {
           toolCall("long-cycle-browser-repeat", "ToolSearch", {
             query: "automate browser click and screenshot",
             max_results: 5
+          }),
+          toolCall("long-cycle-memory-correct-repeat", "ToolSearch", {
+            query: "correct a wrong outdated memory",
+            max_results: 5
+          }),
+          toolCall("long-cycle-memory-recall-repeat", "ToolSearch", {
+            query: "search previous session memory history",
+            max_results: 5
+          }),
+          toolCall("long-cycle-skill-repeat", "ToolSearch", {
+            query: "load a reusable skill workflow",
+            max_results: 5
+          }),
+          toolCall("long-cycle-agent-repeat", "ToolSearch", {
+            query: "dispatch parallel agent to peer machine",
+            max_results: 5
           })
         ]);
       }
@@ -264,6 +308,10 @@ function createRouter(state) {
       state.longCycleRepeatedWorkspaceStable = true;
       state.longCycleRepeatedBrowserStable = true;
       state.longCycleRepeatedFileEditStable = true;
+      state.longCycleRepeatedMemoryCorrectStable = true;
+      state.longCycleRepeatedMemoryRecallStable = true;
+      state.longCycleRepeatedSkillStable = true;
+      state.longCycleRepeatedAgentStable = true;
       state.longCycleStrategyDriftStable = true;
       return messageText("Long-cycle Tool Discovery strategy verified.");
     }
@@ -468,6 +516,16 @@ async function runLongCycleStrategyEval(provider, state) {
     state.longCycleRepeatedFileEditStable,
     "long-cycle repeated file-edit ranking was not verified"
   );
+  assert(
+    state.longCycleRepeatedMemoryCorrectStable,
+    "long-cycle repeated memory-correction ranking was not verified"
+  );
+  assert(
+    state.longCycleRepeatedMemoryRecallStable,
+    "long-cycle repeated memory-recall ranking was not verified"
+  );
+  assert(state.longCycleRepeatedSkillStable, "long-cycle repeated skill ranking was not verified");
+  assert(state.longCycleRepeatedAgentStable, "long-cycle repeated agent ranking was not verified");
   assert(state.longCycleStrategyDriftStable, "long-cycle strategy drift was not verified");
   return {
     intentScopedRankingSeen: state.crossTaskIntentScopedRankingSeen,
@@ -476,6 +534,10 @@ async function runLongCycleStrategyEval(provider, state) {
     repeatedWorkspaceStable: state.longCycleRepeatedWorkspaceStable,
     repeatedBrowserStable: state.longCycleRepeatedBrowserStable,
     repeatedFileEditStable: state.longCycleRepeatedFileEditStable,
+    repeatedMemoryCorrectStable: state.longCycleRepeatedMemoryCorrectStable,
+    repeatedMemoryRecallStable: state.longCycleRepeatedMemoryRecallStable,
+    repeatedSkillStable: state.longCycleRepeatedSkillStable,
+    repeatedAgentStable: state.longCycleRepeatedAgentStable,
     strategyDriftStable: state.longCycleStrategyDriftStable,
     providerCalls: matchingCalls.length
   };
@@ -502,6 +564,26 @@ function assertLongCycleRankings(transcript, { minimumOccurrences }) {
     "long-cycle browser ToolSearch result was not visible"
   );
   assert(
+    countOccurrences(transcript, 'ToolSearch results for "correct a wrong outdated memory"') >=
+      minimumOccurrences,
+    "long-cycle memory-correction ToolSearch result was not visible"
+  );
+  assert(
+    countOccurrences(transcript, 'ToolSearch results for "search previous session memory history"') >=
+      minimumOccurrences,
+    "long-cycle memory-recall ToolSearch result was not visible"
+  );
+  assert(
+    countOccurrences(transcript, 'ToolSearch results for "load a reusable skill workflow"') >=
+      minimumOccurrences,
+    "long-cycle skill ToolSearch result was not visible"
+  );
+  assert(
+    countOccurrences(transcript, 'ToolSearch results for "dispatch parallel agent to peer machine"') >=
+      minimumOccurrences,
+    "long-cycle agent ToolSearch result was not visible"
+  );
+  assert(
     countOccurrences(transcript, "1. FilePatch") >= minimumOccurrences,
     "long-cycle file-edit search did not rank FilePatch first"
   );
@@ -512,6 +594,22 @@ function assertLongCycleRankings(transcript, { minimumOccurrences }) {
   assert(
     countOccurrences(transcript, "1. Browser") >= minimumOccurrences,
     "unrelated browser intent was polluted by search history"
+  );
+  assert(
+    countOccurrences(transcript, "1. MemoryCorrect") >= minimumOccurrences,
+    "long-cycle memory-correction search did not rank MemoryCorrect first"
+  );
+  assert(
+    countOccurrences(transcript, "1. SessionSearch") >= minimumOccurrences,
+    "long-cycle memory-recall search did not rank SessionSearch first"
+  );
+  assert(
+    countOccurrences(transcript, "1. Skill") >= minimumOccurrences,
+    "long-cycle skill search did not rank Skill first"
+  );
+  assert(
+    countOccurrences(transcript, "1. Agent") >= minimumOccurrences,
+    "long-cycle agent search did not rank Agent first"
   );
   assert(
     transcript.includes("intent:workspace-search"),

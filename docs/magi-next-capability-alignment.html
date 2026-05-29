@@ -254,8 +254,8 @@
           <tr>
             <td>Tool Discovery</td>
             <td>核心工具常驻，边缘工具可语义搜索、按任务和历史成功率排序。</td>
-            <td><span class="tag next">进行中</span> ToolSearch 已加入任务意图 ranking、匹配原因、deferred reveal 回放，以及按任务意图分组的工具成功/失败反馈加权；独立 tool discovery eval 已覆盖核心/延迟曝光、语义排序、schema reveal、usage feedback 排名、intent-scoped usage 记录、失败分类反馈、恢复建议、独立后续任务中复用历史反馈的跨任务恢复排名，以及长周期多任务下同类任务复用反馈但无关 intent 不被污染；长周期策略漂移门禁会在 workspace search 噪声反馈后重复检查 file-edit、workspace-search、browser-automation 三类 intent 的首位工具保持稳定。报告会输出业务断言、工具使用分布和持久化 stats 文件验证，并由 capability report 门禁检查证据厚度。</td>
-            <td><code>tests/tool-registry.test.ts</code>、<code>scripts/tool-discovery-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run report:capability</code>；下一步把策略漂移场景扩展到更多长尾工具族。</td>
+            <td><span class="tag next">进行中</span> ToolSearch 已加入任务意图 ranking、匹配原因、deferred reveal 回放，以及按任务意图分组的工具成功/失败反馈加权；独立 tool discovery eval 已覆盖核心/延迟曝光、语义排序、schema reveal、usage feedback 排名、intent-scoped usage 记录、失败分类反馈、恢复建议、独立后续任务中复用历史反馈的跨任务恢复排名，以及长周期多任务下同类任务复用反馈但无关 intent 不被污染；长周期策略漂移门禁会在 workspace search 噪声反馈后重复检查 file-edit、workspace-search、browser-automation、memory-correction、memory-recall、skill-learning 和 parallel-agent 等核心/长尾工具族的首位工具保持稳定。报告会输出业务断言、工具使用分布和持久化 stats 文件验证，并由 capability report 门禁检查证据厚度。</td>
+            <td><code>tests/tool-registry.test.ts</code>、<code>scripts/tool-discovery-eval.mjs</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run report:capability</code>；下一步扩大到更多真实任务混合多个 intent 的动态工具选择。</td>
           </tr>
           <tr>
             <td>TUI / Mobile Control</td>

@@ -762,6 +762,18 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.longCycleRepeatedFileEditStable !== true) {
     failures.push("longCycleRepeatedFileEditStable=false");
   }
+  if (details.longCycleRepeatedMemoryCorrectStable !== true) {
+    failures.push("longCycleRepeatedMemoryCorrectStable=false");
+  }
+  if (details.longCycleRepeatedMemoryRecallStable !== true) {
+    failures.push("longCycleRepeatedMemoryRecallStable=false");
+  }
+  if (details.longCycleRepeatedSkillStable !== true) {
+    failures.push("longCycleRepeatedSkillStable=false");
+  }
+  if (details.longCycleRepeatedAgentStable !== true) {
+    failures.push("longCycleRepeatedAgentStable=false");
+  }
   if (details.longCycleStrategyDriftStable !== true) {
     failures.push("longCycleStrategyDriftStable=false");
   }
@@ -807,6 +819,10 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       longCycleRepeatedWorkspaceStable: details.longCycleRepeatedWorkspaceStable === true,
       longCycleRepeatedBrowserStable: details.longCycleRepeatedBrowserStable === true,
       longCycleRepeatedFileEditStable: details.longCycleRepeatedFileEditStable === true,
+      longCycleRepeatedMemoryCorrectStable: details.longCycleRepeatedMemoryCorrectStable === true,
+      longCycleRepeatedMemoryRecallStable: details.longCycleRepeatedMemoryRecallStable === true,
+      longCycleRepeatedSkillStable: details.longCycleRepeatedSkillStable === true,
+      longCycleRepeatedAgentStable: details.longCycleRepeatedAgentStable === true,
       longCycleStrategyDriftStable: details.longCycleStrategyDriftStable === true,
       crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
       longCycleProviderCalls: readNumber(details.longCycleProviderCalls),

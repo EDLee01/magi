@@ -374,6 +374,10 @@ describe("capability report", () => {
         longCycleRepeatedWorkspaceStable: false,
         longCycleRepeatedBrowserStable: false,
         longCycleRepeatedFileEditStable: false,
+        longCycleRepeatedMemoryCorrectStable: false,
+        longCycleRepeatedMemoryRecallStable: false,
+        longCycleRepeatedSkillStable: false,
+        longCycleRepeatedAgentStable: false,
         longCycleStrategyDriftStable: false,
         crossTaskProviderCalls: 0,
         longCycleProviderCalls: 0,
@@ -412,6 +416,10 @@ describe("capability report", () => {
         "longCycleRepeatedWorkspaceStable=false",
         "longCycleRepeatedBrowserStable=false",
         "longCycleRepeatedFileEditStable=false",
+        "longCycleRepeatedMemoryCorrectStable=false",
+        "longCycleRepeatedMemoryRecallStable=false",
+        "longCycleRepeatedSkillStable=false",
+        "longCycleRepeatedAgentStable=false",
         "longCycleStrategyDriftStable=false",
         "crossTaskProviderCalls=0",
         "longCycleProviderCalls=0",
@@ -1122,6 +1130,10 @@ function toolDiscoveryReport(
     longCycleRepeatedWorkspaceStable: boolean;
     longCycleRepeatedBrowserStable: boolean;
     longCycleRepeatedFileEditStable: boolean;
+    longCycleRepeatedMemoryCorrectStable: boolean;
+    longCycleRepeatedMemoryRecallStable: boolean;
+    longCycleRepeatedSkillStable: boolean;
+    longCycleRepeatedAgentStable: boolean;
     longCycleStrategyDriftStable: boolean;
     crossTaskProviderCalls: number;
     longCycleProviderCalls: number;
@@ -1190,6 +1202,10 @@ function toolDiscoveryReport(
           longCycleRepeatedWorkspaceStable: true,
           longCycleRepeatedBrowserStable: true,
           longCycleRepeatedFileEditStable: true,
+          longCycleRepeatedMemoryCorrectStable: true,
+          longCycleRepeatedMemoryRecallStable: true,
+          longCycleRepeatedSkillStable: true,
+          longCycleRepeatedAgentStable: true,
           longCycleStrategyDriftStable: true,
           crossTaskProviderCalls: 2,
           longCycleProviderCalls: 2,
