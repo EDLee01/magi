@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
 
-import { clearGoal, createGoal, formatGoal, formatGoalBadge, formatGoalContext, getGoal, isGoalCreationArgs, listGoals, updateGoalStatus } from "../src/goal.js";
+import { clearGoal, createGoal, formatGoal, formatGoalBadge, formatGoalContext, getGoal, goalStorePath, isGoalCreationArgs, listGoals, updateGoalStatus } from "../src/goal.js";
 import { getMagiPaths } from "../src/paths.js";
 import { makeTempRoot } from "./helpers.js";
 
@@ -57,5 +58,31 @@ describe("goal state", () => {
     expect(isGoalCreationArgs(["done"])).toBe(false);
     expect(isGoalCreationArgs(["stop"])).toBe(false);
     expect(isGoalCreationArgs([])).toBe(false);
+  });
+
+  it("normalizes legacy completed status when reading stored goals", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      mkdirSync(paths.stateRoot, { recursive: true });
+      writeFileSync(goalStorePath(paths), `${JSON.stringify({
+        version: 1,
+        goals: [{
+          id: "goal-1",
+          sessionId: "session-1",
+          objective: "finish legacy goal",
+          status: "complete",
+          createdAt: "2026-05-28T00:00:00.000Z",
+          updatedAt: "2026-05-28T00:00:00.000Z"
+        }]
+      })}\n`, "utf8");
+
+      const stored = listGoals(paths, "session-1")[0];
+      expect(stored.status).toBe("completed");
+      expect(formatGoal(stored)).toContain("Status: completed");
+      expect(formatGoalContext(stored)).toBeUndefined();
+    } finally {
+      temp.cleanup();
+    }
   });
 });

@@ -14,9 +14,12 @@ import { ProviderAdapter, textMessage } from "../src/providers/ir.js";
 import { ProviderError } from "../src/providers/errors.js";
 import { SessionStore } from "../src/session-store.js";
 import { appendMemory, readMemory } from "../src/memory.js";
+import { appendMemoryFile } from "../src/memory-files.js";
 import { MemoryNodeStore } from "../src/memory-node-store.js";
+import { writeMemdirEntry } from "../src/memdir.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
+import { createGoal, updateGoalStatus } from "../src/goal.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -66,7 +69,8 @@ describe("agent query loop", () => {
       model: "explicit-test-model",
       messages: [textMessage("user", "create loop.txt")],
       cwd: workspace,
-      maxTurns: 4
+      maxTurns: 4,
+      permissionMode: "acceptEdits"
     })) {
       events.push(event);
     }
@@ -75,6 +79,45 @@ describe("agent query loop", () => {
     expect(events.map((event) => event.type)).toContain("tool_result");
     expect(events.at(-1)).toMatchObject({ type: "done", text: "done after tool" });
     await expect(readFile(path.join(workspace, "loop.txt"), "utf8")).resolves.toBe("created by query loop");
+  });
+
+  it("defaults write tools to approval-required instead of acceptEdits", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const adapter: ProviderAdapter = {
+      name: "test-provider",
+      complete: async (request) => request.messages.some((message) => message.role === "tool")
+        ? { text: "default write was not applied" }
+        : {
+          text: "",
+          toolUses: [{
+            type: "tool-use",
+            id: "default-write",
+            name: "FileWrite",
+            input: { file_path: "default-denied.txt", content: "no" }
+          }]
+        }
+    };
+
+    const result = await collectResult(runAgentQuery({
+      adapter,
+      model: "explicit-test-model",
+      messages: [textMessage("user", "try default write")],
+      cwd: workspace
+    }));
+
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "approval_request",
+      reason: "FileWrite requires approval"
+    }));
+    expect(result.events).toContainEqual(expect.objectContaining({
+      type: "tool_result",
+      toolCallId: "default-write",
+      toolName: "FileWrite",
+      isError: true,
+      content: expect.stringContaining("Permission ask: FileWrite requires approval")
+    }));
+    expect(result.final.text).toBe("default write was not applied");
+    await expect(readFile(path.join(workspace, "default-denied.txt"), "utf8")).rejects.toThrow();
   });
 
   it("denies write tools in plan permission mode and returns the denial to the model", async () => {
@@ -1136,6 +1179,7 @@ describe("agent query loop", () => {
         sessionId,
         jobId: "job-engine",
         cwd: workspace,
+        permissionMode: "acceptEdits",
         routes: [{ providerName: "engine", model: "explicit", adapter }]
       });
 
@@ -1700,6 +1744,308 @@ describe("agent query loop", () => {
     }
   });
 
+  it("injects only active session goals into QueryEngine context", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "active goal context", cwd: workspace });
+      createGoal(paths, { sessionId, objective: "finish the release audit" });
+
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-active-goal-context",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "continue"
+      });
+      expect(seen.at(-1)).toContain("<active_thread_goal>");
+      expect(seen.at(-1)).toContain("Objective: finish the release audit");
+
+      updateGoalStatus(paths, { sessionId, status: "completed", note: "verified" });
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-completed-goal-context",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "continue again"
+      });
+      expect(seen.at(-1)).not.toContain("<active_thread_goal>");
+      expect(seen.at(-1)).not.toContain("finish the release audit");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("injects graph-backed wiki memory into QueryEngine context for a user workflow question", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "wiki memory context", cwd: workspace });
+      appendMemoryFile({
+        appRoot: paths.root,
+        filePath: "workflows/release.md",
+        content: [
+          "## Release verification",
+          "Run focused tests, typecheck, and build before broad checks.",
+          "Summarize only key results and next action."
+        ].join("\n")
+      });
+      const adapter: ProviderAdapter = {
+        name: "wiki-memory-provider",
+        complete: async (request) => {
+          seen.push(request.messages.map((message) => `${message.role}:${message.content.map((part) => {
+            if (part.type === "text") return part.text;
+            if (part.type === "tool-result") return part.content;
+            if (part.type === "tool-use") return `${part.name}:${JSON.stringify(part.input)}`;
+            return "";
+          }).join("")}`).join("\n"));
+          return { text: "use release verification workflow" };
+        }
+      };
+      const engine = new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-wiki-memory-context",
+        cwd: workspace,
+        routes: [{ providerName: "memory", model: "explicit", adapter }],
+        memoryOptions: {
+          paths,
+          enabled: true,
+          autoWrite: "explicit",
+          maxResults: 4,
+          scopes: ["user", "project", "session"]
+        }
+      });
+
+      await engine.submitMessage("How should I do release verification?");
+
+      expect(seen[0]).toContain("[Relevant Memory]");
+      expect(seen[0]).toContain("## Release verification");
+      expect(seen[0]).toContain("source: workflows/release.md#Release verification");
+      expect(seen[0]).toContain("node:");
+      expect(seen[0]).toContain("Run focused tests, typecheck, and build before broad checks.");
+
+      const audit = store.listJobAuditEvents("job-wiki-memory-context", 20).find((event) => event.action === "agent.memory.retrieved");
+      expect(audit).toMatchObject({
+        metadata: expect.objectContaining({
+          method: "wiki-search",
+          sources: ["graph"],
+          graphResultCount: 1,
+          files: expect.arrayContaining(["workflows/release.md#Release verification"])
+        })
+      });
+      const nodeId = /node: ([^\n]+)/.exec(seen[0])?.[1];
+      expect(nodeId).toBeDefined();
+      const nodeStore = MemoryNodeStore.open(paths);
+      try {
+        expect(nodeStore.getNode(nodeId!)?.useCount).toBe(1);
+      } finally {
+        nodeStore.close();
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("uses updated wiki graph memory and does not inject stale workflow text", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "wiki memory update", cwd: workspace });
+      appendMemoryFile({
+        appRoot: paths.root,
+        filePath: "workflows/release.md",
+        content: [
+          "## Release verification",
+          "Old workflow: run only broad checks."
+        ].join("\n")
+      });
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-wiki-memory-old",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "How should I do release verification?"
+      });
+
+      writeFileSync(path.join(paths.root, "memory", "workflows", "release.md"), [
+        "# Release",
+        "",
+        "## Release verification",
+        "Updated workflow: run focused tests and typecheck before broad checks."
+      ].join("\n"), "utf8");
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-wiki-memory-updated",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "How should I do release verification now?"
+      });
+
+      const latest = seen.at(-1)!;
+      expect(latest).toContain("Updated workflow: run focused tests and typecheck before broad checks.");
+      expect(latest).not.toContain("Old workflow: run only broad checks.");
+      const nodeStore = MemoryNodeStore.open(paths);
+      try {
+        const source = nodeStore.getSourceByUri("memory/workflows/release.md");
+        expect(source).toBeDefined();
+        const chunks = nodeStore.listChunksForSource(source!.id);
+        expect(chunks).toHaveLength(1);
+        expect(chunks[0].body).toContain("Updated workflow");
+        expect(chunks[0].body).not.toContain("Old workflow");
+        expect(nodeStore.searchGraph({ query: "old only", limit: 5 })).toHaveLength(0);
+      } finally {
+        nodeStore.close();
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("does not inject graph memory after the backing wiki file is deleted", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "wiki memory delete", cwd: workspace });
+      appendMemoryFile({
+        appRoot: paths.root,
+        filePath: "workflows/release.md",
+        content: [
+          "## Release verification",
+          "Deleted workflow should not appear after file removal."
+        ].join("\n")
+      });
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-wiki-memory-before-delete",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "How should I do release verification?"
+      });
+      rmSync(path.join(paths.root, "memory", "workflows", "release.md"));
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-wiki-memory-after-delete",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "How should I do release verification?"
+      });
+
+      const latest = seen.at(-1)!;
+      expect(latest).not.toContain("Deleted workflow should not appear after file removal.");
+      const audit = store.listJobAuditEvents("job-wiki-memory-after-delete", 20).find((event) => event.action === "agent.memory.retrieved");
+      expect(audit?.metadata).toMatchObject({
+        sources: [],
+        graphResultCount: 0,
+        resultCount: 0
+      });
+      const nodeStore = MemoryNodeStore.open(paths);
+      try {
+        expect(nodeStore.getSourceByUri("memory/workflows/release.md")?.status).toBe("archived");
+      } finally {
+        nodeStore.close();
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("injects graph-backed memdir memory for legacy reference questions", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "memdir graph memory", cwd: workspace });
+      writeMemdirEntry({
+        paths,
+        type: "reference",
+        name: "Release dashboard",
+        description: "Dashboard for release verification",
+        body: "Open the release dashboard before publishing."
+      });
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-memdir-memory-context",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "Where is the release dashboard?"
+      });
+
+      const transcript = seen[0];
+      expect(transcript).toContain("[Relevant Memory]");
+      expect(transcript).toContain("## Release dashboard");
+      expect(transcript).toContain("source: memdir/reference_release_dashboard.md");
+      expect(transcript).toContain("Open the release dashboard before publishing.");
+      const audit = store.listJobAuditEvents("job-memdir-memory-context", 20).find((event) => event.action === "agent.memory.retrieved");
+      expect(audit?.metadata).toMatchObject({
+        sources: ["graph"],
+        sourceKinds: ["memdir"],
+        graphResultCount: 1
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("does not inject default template memory for generic workflow questions", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "template noise", cwd: workspace });
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-template-noise",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "How should I work?"
+      });
+
+      expect(seen[0]).not.toContain("[Relevant Memory]");
+      expect(seen[0]).not.toContain("Permissions Policy");
+      expect(seen[0]).not.toContain("Skill-specific memory");
+      const audit = store.listJobAuditEvents("job-template-noise", 20).find((event) => event.action === "agent.memory.retrieved");
+      expect(audit?.metadata).toMatchObject({
+        resultCount: 0,
+        graphResultCount: 0
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("writes explicit memory prompts directly to weighted memory nodes without inferring ordinary chat", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
@@ -2182,6 +2528,44 @@ async function collectResult(generator: ReturnType<typeof runAgentQuery>) {
     next = await generator.next();
   }
   return { events, final: next.value };
+}
+
+async function submitWithCapturedContext(input: {
+  store: SessionStore;
+  sessionId: string;
+  jobId: string;
+  cwd: string;
+  paths: ReturnType<typeof getMagiPaths>;
+  seen: string[];
+  prompt: string;
+}): Promise<void> {
+  const adapter: ProviderAdapter = {
+    name: `${input.jobId}-provider`,
+    complete: async (request) => {
+      input.seen.push(request.messages.map((message) => `${message.role}:${message.content.map((part) => {
+        if (part.type === "text") return part.text;
+        if (part.type === "tool-result") return part.content;
+        if (part.type === "tool-use") return `${part.name}:${JSON.stringify(part.input)}`;
+        return "";
+      }).join("")}`).join("\n"));
+      return { text: "context captured" };
+    }
+  };
+  const engine = new QueryEngine({
+    store: input.store,
+    sessionId: input.sessionId,
+    jobId: input.jobId,
+    cwd: input.cwd,
+    routes: [{ providerName: "memory", model: "explicit", adapter }],
+    memoryOptions: {
+      paths: input.paths,
+      enabled: true,
+      autoWrite: "explicit",
+      maxResults: 4,
+      scopes: ["user", "project", "session"]
+    }
+  });
+  await engine.submitMessage(input.prompt);
 }
 
 async function listen(server: http.Server): Promise<string> {

@@ -19,6 +19,7 @@ import {
   formatTuiTranscriptStatus,
   formatTuiLiveEvent,
   MAGI_TEXT_HAT,
+  startInteractiveGoalCommand,
   startTuiLiveEventWriter
 } from "../src/tui.js";
 import { ActiveInteractionRegistry } from "../src/interactions.js";
@@ -26,6 +27,7 @@ import { getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
 import { MagiConfig } from "../src/config.js";
 import { addPermissionRule, clearPermissionRules, isToolAlwaysAllowed } from "../src/permissions.js";
+import { getGoal } from "../src/goal.js";
 
 function stripAnsi(str: string | undefined): string | undefined {
   if (str === undefined) return undefined;
@@ -198,6 +200,40 @@ describe("TUI, slash commands, and session resume", () => {
         description: "skip approval prompts",
         detail: "current"
       }));
+    } finally {
+      store.close();
+    }
+  });
+
+  it("starts an interactive goal and returns the objective as the next prompt", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const store = SessionStore.open(paths);
+    try {
+      const first = startInteractiveGoalCommand({
+        paths,
+        store,
+        sessionId: undefined,
+        cwd: "/repo",
+        args: ["finish", "goal", "business", "tests"]
+      });
+
+      expect(first.message).toBe("Goal started: finish goal business tests");
+      expect(first.prompt).toBe("finish goal business tests");
+      expect(first.sessionId).toBeTruthy();
+      expect(getGoal(paths, first.sessionId!)?.objective).toBe("finish goal business tests");
+
+      const second = startInteractiveGoalCommand({
+        paths,
+        store,
+        sessionId: first.sessionId,
+        cwd: "/repo",
+        args: ["finish", "the", "next", "goal"]
+      });
+
+      expect(second.sessionId).toBe(first.sessionId);
+      expect(second.prompt).toBe("finish the next goal");
+      expect(getGoal(paths, first.sessionId!)?.objective).toBe("finish the next goal");
     } finally {
       store.close();
     }

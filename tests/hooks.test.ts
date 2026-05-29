@@ -149,6 +149,7 @@ describe("hooks", () => {
       model: "explicit",
       messages: [textMessage("user", "write")],
       cwd: workspace,
+      permissionMode: "acceptEdits",
       hooks: [{
         event: "post_tool_use",
         type: "command",

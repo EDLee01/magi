@@ -45,6 +45,8 @@ import { triggerHooks } from "./hooks/events.js";
 import { buildProviderRegistry } from "./providers/registry.js";
 import { resolveModelAlias } from "./routing/model-alias.js";
 import { createGoal, clearGoal, formatGoal, formatGoalStatus, getGoal, isGoalCreationArgs, listGoals, updateGoalStatus } from "./goal.js";
+import { parsePermissionMode } from "./commands/permissions.js";
+import { ToolPermissionMode } from "./tools/registry.js";
 
 export interface CliResult {
   exitCode: number;
@@ -192,7 +194,8 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
         sessionId: parsed.sessionId ?? resumeSession?.id,
         sessionName: parsed.sessionName,
         persistSession: parsed.persistSession,
-        collectEvents: parsed.outputFormat === "stream-json"
+        collectEvents: parsed.outputFormat === "stream-json",
+        permissionMode: parsed.permissionMode
       });
       if (parsed.outputFormat === "stream-json") {
         return {
@@ -355,17 +358,29 @@ async function runCliUnsafeWithParsed(parsed: ParsedArgs, env: NodeJS.ProcessEnv
     const store = SessionStore.open(paths);
     try {
       const sub = parsed.rest[0]?.toLowerCase();
+      const isStatusCommand = !sub || sub === "status" || sub === "show";
+      const isListCommand = sub === "list";
       const session = resolveGoalSessionForCommand({
         store,
         sessionId: parsed.sessionId ?? parsed.resumeSessionId,
         cwd,
         create: isGoalCreationArgs(parsed.rest),
-        title: parsed.rest.join(" ").slice(0, 80) || "goal"
+        title: parsed.rest.join(" ").slice(0, 80) || "goal",
+        optional: isStatusCommand || isListCommand
       });
-      if (!sub || sub === "status" || sub === "show") {
+      if (!session) {
+        if (isStatusCommand) {
+          return { exitCode: 0, stdout: `${formatGoal(undefined)}\n`, stderr: "" };
+        }
+        if (isListCommand) {
+          return { exitCode: 0, stdout: "No goals for this session.\n", stderr: "" };
+        }
+        throw new MagiUsageError("No sessions found");
+      }
+      if (isStatusCommand) {
         return { exitCode: 0, stdout: `${formatGoal(getGoal(paths, session.id))}\n`, stderr: "" };
       }
-      if (sub === "list") {
+      if (isListCommand) {
         const goals = listGoals(paths, session.id);
         return {
           exitCode: 0,
@@ -1393,6 +1408,7 @@ function helpText(): string {
     "  magi doctor",
     "  magi config",
     "  magi --model <alias-or-model> -p <prompt>",
+    "  magi --permission-mode <default|acceptEdits|bypassPermissions|plan> -p <prompt>",
     "  magi --output-format json -p <prompt>",
     "  magi -c -p <prompt>",
     "  magi -p <prompt>",
@@ -1450,6 +1466,7 @@ interface ParsedArgs {
   writeFiles: string[];
   runnerTimeoutMs?: number;
   approve: boolean;
+  permissionMode?: ToolPermissionMode;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -1466,6 +1483,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const writeFiles: string[] = [];
   let runnerTimeoutMs: number | undefined;
   let approve = false;
+  let permissionMode: ToolPermissionMode | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -1526,6 +1544,15 @@ function parseArgs(argv: string[]): ParsedArgs {
       approve = true;
       continue;
     }
+    if (arg === "--permission-mode") {
+      const value = argv[++index];
+      const parsedMode = parsePermissionMode(value);
+      if (!parsedMode) {
+        throw new MagiUsageError("--permission-mode must be default, acceptEdits, bypassPermissions, or plan");
+      }
+      permissionMode = parsedMode;
+      continue;
+    }
     if (!command) {
       command = arg;
     } else {
@@ -1546,7 +1573,8 @@ function parseArgs(argv: string[]): ParsedArgs {
     persistSession,
     writeFiles,
     runnerTimeoutMs,
-    approve
+    approve,
+    permissionMode
   };
 }
 
@@ -1596,6 +1624,7 @@ function resolveGoalSessionForCommand(input: {
   cwd: string;
   create: boolean;
   title: string;
+  optional?: boolean;
 }) {
   if (input.sessionId) {
     const session = input.store.getSession(input.sessionId);
@@ -1614,6 +1643,9 @@ function resolveGoalSessionForCommand(input: {
     });
     const created = input.store.getSession(id);
     if (created) return created;
+  }
+  if (input.optional) {
+    return undefined;
   }
   throw new MagiUsageError("No sessions found");
 }

@@ -672,6 +672,10 @@ export class QueryEngine {
           resultCount: memoryHits.length,
           method: "wiki-search",
           sources: Array.from(new Set(memoryHits.map((hit) => hit.source))),
+          sourceKinds: Array.from(new Set(memoryHits.map((hit) => hit.sourceKind).filter(Boolean))),
+          graphResultCount: memoryHits.filter((hit) => hit.source === "graph").length,
+          nodeIds: memoryHits.map((hit) => hit.nodeId).filter(Boolean),
+          chunkIds: memoryHits.map((hit) => hit.chunkId).filter(Boolean),
           files: memoryHits.map((hit) => hit.file)
         }
       });

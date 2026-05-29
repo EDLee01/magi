@@ -4,14 +4,20 @@ import { listMemdirEntries } from "./memdir.js";
 import { searchMemory, MemoryScope } from "./memory.js";
 import { listMemoryFiles, memoryRoot, MemoryRootOptions } from "./memory-files.js";
 import { recordMemoryAudit } from "./memory-audit.js";
+import { MemoryGraphSearchHit, MemoryNodeStore } from "./memory-node-store.js";
+import { syncMemoryGraph } from "./memory-wiki-indexer.js";
 import { MagiPaths } from "./paths.js";
 
 export interface MemorySearchHit {
-  source: "memory" | "memdir" | "legacy";
+  source: "graph" | "memory" | "memdir" | "legacy";
   file: string;
   title: string;
   snippet: string;
   score: number;
+  nodeId?: string;
+  sourceId?: string;
+  chunkId?: string;
+  sourceKind?: string;
 }
 
 export function retrieveRelevantMemory(input: MemoryRootOptions & {
@@ -31,32 +37,42 @@ export function retrieveRelevantMemory(input: MemoryRootOptions & {
   const terms = tokenize(input.query);
   if (terms.length === 0) return [];
   const hits: MemorySearchHit[] = [];
-  for (const file of listMemoryFiles(input)) {
-    if (file.path.startsWith("drafts/") || file.path.startsWith("dreams/") || file.path.startsWith("logs/")) {
-      continue;
-    }
-    const text = readFileSync(file.absolutePath, "utf8");
-    const score = scoreText(`${file.path}\n${text}`, terms) + pathScore(file.path, terms);
-    if (score <= 0) continue;
-    hits.push({
-      source: "memory",
-      file: file.path,
-      title: firstHeading(text) ?? file.path,
-      snippet: makeSnippet(text, terms),
-      score
-    });
-  }
-  if (input.includeMemdir !== false) {
-    for (const entry of listMemdirEntries({ root: input.appRoot })) {
-      const score = scoreText(`${entry.name}\n${entry.description}\n${entry.body}`, terms);
+  const graphHits = retrieveGraphMemory(input, terms);
+  hits.push(...graphHits);
+  if (graphHits.length === 0) {
+    for (const file of listMemoryFiles(input)) {
+      if (
+        file.path === "INDEX.md" ||
+        file.path.startsWith("drafts/") ||
+        file.path.startsWith("dreams/") ||
+        file.path.startsWith("logs/") ||
+        file.path.startsWith("archive/")
+      ) {
+        continue;
+      }
+      const text = readFileSync(file.absolutePath, "utf8");
+      const score = scoreText(`${file.path}\n${text}`, terms) + pathScore(file.path, terms);
       if (score <= 0) continue;
       hits.push({
-        source: "memdir",
-        file: `memdir/${entry.filename}`,
-        title: entry.name,
-        snippet: `${entry.description}\n${entry.body}`.trim().slice(0, 700),
+        source: "memory",
+        file: file.path,
+        title: firstHeading(text) ?? file.path,
+        snippet: makeSnippet(text, terms),
         score
       });
+    }
+    if (input.includeMemdir !== false) {
+      for (const entry of listMemdirEntries({ root: input.appRoot })) {
+        const score = scoreText(`${entry.name}\n${entry.description}\n${entry.body}`, terms);
+        if (score <= 0) continue;
+        hits.push({
+          source: "memdir",
+          file: `memdir/${entry.filename}`,
+          title: entry.name,
+          snippet: `${entry.description}\n${entry.body}`.trim().slice(0, 700),
+          score
+        });
+      }
     }
   }
   if (input.includeLegacy !== false && input.legacy) {
@@ -85,6 +101,7 @@ export function retrieveRelevantMemory(input: MemoryRootOptions & {
       metadata: {
         query: input.query,
         resultCount: result.length,
+        graphResultCount: result.filter((hit) => hit.source === "graph").length,
         files: result.map((hit) => hit.file)
       }
     });
@@ -102,9 +119,71 @@ export function formatMemoryContext(hits: MemorySearchHit[]): string {
     lines.push("");
     lines.push(`## ${hit.title}`);
     lines.push(`source: ${hit.file}`);
+    if (hit.nodeId) {
+      lines.push(`node: ${hit.nodeId}`);
+    }
     lines.push(hit.snippet.length > 900 ? `${hit.snippet.slice(0, 900)}...` : hit.snippet);
   }
   return lines.join("\n").trim();
+}
+
+function retrieveGraphMemory(input: MemoryRootOptions & {
+  query: string;
+  maxResults?: number;
+  includeMemdir?: boolean;
+  legacy?: {
+    paths: MagiPaths;
+    cwd: string;
+    sessionId?: string;
+    scopes?: MemoryScope[];
+  };
+}, terms: string[]): MemorySearchHit[] {
+  const paths = input.legacy?.paths;
+  if (!paths) {
+    return [];
+  }
+  try {
+    syncMemoryGraph({
+      appRoot: input.appRoot,
+      root: input.root,
+      paths,
+      includeMemdir: input.includeMemdir
+    });
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const hits = store.searchGraph({
+        query: input.query,
+        limit: input.maxResults ?? 8
+      });
+      store.markUsed(hits.map((hit) => hit.node.id), 0.03);
+      return hits.map((hit) => graphHitToMemorySearchHit(hit, terms));
+    } finally {
+      store.close();
+    }
+  } catch {
+    return [];
+  }
+}
+
+function graphHitToMemorySearchHit(hit: MemoryGraphSearchHit, terms: string[]): MemorySearchHit {
+  return {
+    source: "graph",
+    file: graphHitFile(hit.source.uri, hit.chunk.heading),
+    title: hit.chunk.heading || hit.source.title,
+    snippet: makeSnippet(hit.chunk.body, terms),
+    score: hit.score,
+    nodeId: hit.node.id,
+    sourceId: hit.source.id,
+    chunkId: hit.chunk.id,
+    sourceKind: hit.source.kind
+  };
+}
+
+function graphHitFile(uri: string, heading: string): string {
+  if (uri.startsWith("memory/")) {
+    return `${uri.slice("memory/".length)}#${heading}`;
+  }
+  return uri;
 }
 
 function tokenize(text: string): string[] {
@@ -157,6 +236,14 @@ function makeSnippet(text: string, terms: string[]): string {
 }
 
 function isSearchTerm(term: string): boolean {
+  if (SEARCH_STOPWORDS.has(term)) return false;
   if (term.length >= 3) return true;
   return /[\u4e00-\u9fff]/.test(term) && term.length >= 2;
 }
+
+const SEARCH_STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "for", "from",
+  "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "our", "should",
+  "the", "this", "to", "use", "what", "when", "where", "who", "why", "with",
+  "you", "your"
+]);

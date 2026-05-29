@@ -16,6 +16,7 @@ import {
 } from "../src/memory.js";
 import { appendMemoryFile } from "../src/memory-files.js";
 import { retrieveRelevantMemory } from "../src/memory-search.js";
+import { MemoryNodeStore } from "../src/memory-node-store.js";
 import { writeMemdirEntry } from "../src/memdir.js";
 import { getMagiPaths } from "../src/paths.js";
 import { loadAgentInstructions } from "../src/rules/agents-loader.js";
@@ -158,8 +159,58 @@ describe("AGENTS rules and memory", () => {
       audit: false
     });
 
-    expect(hits.map((hit) => hit.source)).toEqual(expect.arrayContaining(["memory", "legacy", "memdir"]));
-    expect(hits.map((hit) => hit.file)).toEqual(expect.arrayContaining(["projects/default.md", "legacy/session"]));
+    expect(hits.map((hit) => hit.source)).toEqual(expect.arrayContaining(["graph", "legacy"]));
+    expect(hits.map((hit) => hit.sourceKind)).toEqual(expect.arrayContaining(["wiki", "memdir"]));
+    expect(hits.map((hit) => hit.file)).toEqual(expect.arrayContaining(["projects/default.md#Project: Default", "legacy/session"]));
+  });
+
+  it("retrieves wiki-backed graph memory and reinforces matched nodes", () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+
+    appendMemoryFile({
+      appRoot: paths.root,
+      filePath: "workflows/release.md",
+      content: [
+        "## Verify release",
+        "Run focused tests before broad checks.",
+        "",
+        "## Publish release",
+        "Publish after build passes."
+      ].join("\n")
+    });
+
+    const hits = retrieveRelevantMemory({
+      appRoot: paths.root,
+      query: "focused broad checks",
+      maxResults: 4,
+      legacy: {
+        paths,
+        cwd: workspace,
+        sessionId: "s-1",
+        scopes: ["session"]
+      },
+      audit: false
+    });
+
+    const graphHit = hits.find((hit) => hit.source === "graph" && hit.title === "Verify release");
+    expect(graphHit).toBeDefined();
+    expect(graphHit?.file).toBe("workflows/release.md#Verify release");
+    expect(graphHit?.nodeId).toBeDefined();
+
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const node = store.getNode(graphHit!.nodeId!);
+      expect(node?.useCount).toBe(1);
+      expect(node?.metadata).toMatchObject({
+        sourceKind: "wiki",
+        filePath: "workflows/release.md",
+        heading: "Verify release"
+      });
+    } finally {
+      store.close();
+    }
   });
 
   it("searches layered memory with session and project relevance", () => {

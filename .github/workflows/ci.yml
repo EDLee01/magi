@@ -38,6 +38,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Run black-box CLI matrix
+        run: npm run test:blackbox
+
       - name: Smoke test (Unix)
         if: runner.os != 'Windows'
         run: bash scripts/smoke.sh

@@ -159,6 +159,17 @@ describe("CLI entrypoint", () => {
     expect(body.message).toContain("No provider is configured");
   });
 
+  it("shows empty goal status before any session exists", async () => {
+    temp = makeTempRoot();
+    const status = await runCli(["goal"], temp.env, process.cwd());
+    const list = await runCli(["goal", "list"], temp.env, process.cwd());
+
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain("No active goal.");
+    expect(list.exitCode).toBe(0);
+    expect(list.stdout).toBe("No goals for this session.\n");
+  });
+
   it("manages active goals from the CLI", async () => {
     temp = makeTempRoot();
     const create = await runCli(["goal", "ship", "goal", "support"], temp.env, process.cwd());
@@ -177,6 +188,62 @@ describe("CLI entrypoint", () => {
     const afterReplacement = await runCli(["goal"], temp.env, process.cwd());
     expect(afterReplacement.exitCode).toBe(0);
     expect(afterReplacement.stdout).toContain("Goal: ship replacement");
+
+    const list = await runCli(["goal", "list"], temp.env, process.cwd());
+    expect(list.exitCode).toBe(0);
+    expect(list.stdout).toContain("Goals for this session:");
+    expect(list.stdout).toContain("active");
+    expect(list.stdout).toContain("ship replacement");
+    expect(list.stdout).toContain("cancelled");
+    expect(list.stdout).toContain("ship goal support");
+
+    const blocked = await runCli(["goal", "blocked", "waiting", "on", "review"], temp.env, process.cwd());
+    expect(blocked.exitCode).toBe(0);
+    expect(blocked.stdout).toContain("Goal blocked: ship replacement");
+
+    const afterBlocked = await runCli(["goal"], temp.env, process.cwd());
+    expect(afterBlocked.exitCode).toBe(0);
+    expect(afterBlocked.stdout).toContain("No active goal.");
+
+    const next = await runCli(["goal", "close", "the", "remaining", "work"], temp.env, process.cwd());
+    expect(next.exitCode).toBe(0);
+    expect(next.stdout).toContain("Goal started: close the remaining work");
+
+    const completed = await runCli(["goal", "done", "verified"], temp.env, process.cwd());
+    expect(completed.exitCode).toBe(0);
+    expect(completed.stdout).toContain("Goal completed: close the remaining work");
+
+    const afterDone = await runCli(["goal"], temp.env, process.cwd());
+    expect(afterDone.exitCode).toBe(0);
+    expect(afterDone.stdout).toContain("No active goal.");
+  });
+
+  it("keeps CLI goals isolated by explicit session id", async () => {
+    temp = makeTempRoot();
+    const firstId = "11111111-1111-4111-8111-111111111111";
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    await runCli(["--session-id", firstId, "-p", "prepare alpha session"], temp.env, process.cwd());
+    await runCli(["--session-id", secondId, "-p", "prepare beta session"], temp.env, process.cwd());
+
+    const firstGoal = await runCli(["goal", "finish", "alpha", "--session-id", firstId], temp.env, process.cwd());
+    const secondGoal = await runCli(["goal", "finish", "beta", "--session-id", secondId], temp.env, process.cwd());
+    expect(firstGoal.exitCode).toBe(0);
+    expect(secondGoal.exitCode).toBe(0);
+
+    const firstStatus = await runCli(["goal", "--session-id", firstId], temp.env, process.cwd());
+    const secondStatus = await runCli(["goal", "--session-id", secondId], temp.env, process.cwd());
+    expect(firstStatus.stdout).toContain("Goal: finish alpha");
+    expect(firstStatus.stdout).not.toContain("finish beta");
+    expect(secondStatus.stdout).toContain("Goal: finish beta");
+    expect(secondStatus.stdout).not.toContain("finish alpha");
+
+    const doneFirst = await runCli(["goal", "done", "verified", "--session-id", firstId], temp.env, process.cwd());
+    expect(doneFirst.exitCode).toBe(0);
+
+    const firstAfterDone = await runCli(["goal", "--session-id", firstId], temp.env, process.cwd());
+    const secondAfterDone = await runCli(["goal", "--session-id", secondId], temp.env, process.cwd());
+    expect(firstAfterDone.stdout).toContain("No active goal.");
+    expect(secondAfterDone.stdout).toContain("Goal: finish beta");
   });
 
   it("exposes LearningDraft review commands from the CLI", async () => {
@@ -224,6 +291,120 @@ describe("CLI entrypoint", () => {
     expect(requests[0].messages[0].role).toBe("system");
     expect(requests[0].messages[0].content).toContain("<active_thread_goal>");
     expect(requests[0].messages[0].content).toContain("Objective: finish the migration");
+  });
+
+  it("honors headless permission mode for mutating tools", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as { messages: Array<{ role: string; content: string }>; tools?: Array<{ function: { name: string } }> };
+      requests.push(body);
+      const hasToolResult = body.messages.some((message) => message.role === "tool");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        choices: [{
+          message: hasToolResult
+            ? { content: "WRITE DONE" }
+            : {
+              content: "",
+              tool_calls: [{
+                id: "write-cli-permission",
+                type: "function",
+                function: {
+                  name: "FileWrite",
+                  arguments: JSON.stringify({ file_path: "permission-mode.txt", content: "allowed" })
+                }
+              }]
+            }
+        }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      }));
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(paths.configFile, [
+      "version: 0.1",
+      "providers:",
+      "  main:",
+      "    type: openai",
+      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+      `    baseUrl: ${baseUrl}/v1`,
+      "models:",
+      "  aliases:",
+      "    main: main:gpt-main",
+      "  fallbacks: {}",
+      ""
+    ].join("\n"), "utf8");
+
+    const result = await runCli(
+      ["--permission-mode", "acceptEdits", "--model", "main", "-p", "write a file"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      temp.path
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("WRITE DONE");
+    expect(readFileSync(path.join(temp.path, "permission-mode.txt"), "utf8")).toBe("allowed");
+    expect(JSON.stringify(requests.at(-1))).toContain("Wrote permission-mode.txt");
+  });
+
+  it("does not inject completed or blocked goals into resumed model context", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : Buffer.from(chunk).toString("utf8");
+      }
+      requests.push(JSON.parse(raw) as { messages: Array<{ role: string; content: string }> });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        choices: [{ message: { content: "GOAL CONTEXT OK" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      }));
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(paths.configFile, [
+      "version: 0.1",
+      "providers:",
+      "  main:",
+      "    type: openai",
+      "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+      `    baseUrl: ${baseUrl}/v1`,
+      "models:",
+      "  aliases:",
+      "    main: main:gpt-main",
+      "  fallbacks: {}",
+      ""
+    ].join("\n"), "utf8");
+
+    await runCli(["goal", "finish", "inactive", "migration"], temp.env, process.cwd());
+    await runCli(["goal", "blocked", "waiting", "on", "review"], temp.env, process.cwd());
+    const blockedResume = await runCli(["-c", "-p", "continue"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    expect(blockedResume.exitCode).toBe(0);
+    expect(requests[0].messages[0].role).toBe("system");
+    expect(requests[0].messages[0].content).not.toContain("<active_thread_goal>");
+    expect(requests[0].messages[0].content).not.toContain("finish inactive migration");
+
+    await runCli(["goal", "finish", "replacement", "migration"], temp.env, process.cwd());
+    await runCli(["goal", "done", "verified"], temp.env, process.cwd());
+    const completedResume = await runCli(["-c", "-p", "continue again"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    expect(completedResume.exitCode).toBe(0);
+    expect(requests[1].messages[0].role).toBe("system");
+    expect(requests[1].messages[0].content).not.toContain("<active_thread_goal>");
+    expect(requests[1].messages[0].content).not.toContain("finish replacement migration");
+
+    await runCli(["goal", "finish", "active", "migration"], temp.env, process.cwd());
+    const activeResume = await runCli(["-c", "-p", "continue active"], { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" }, process.cwd());
+    expect(activeResume.exitCode).toBe(0);
+    expect(requests[2].messages[0].role).toBe("system");
+    expect(requests[2].messages[0].content).toContain("<active_thread_goal>");
+    expect(requests[2].messages[0].content).toContain("Objective: finish active migration");
   });
 
   it("injects relevant prior sessions into model context before a task", async () => {

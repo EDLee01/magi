@@ -401,13 +401,7 @@ export async function runInteractiveTerminal(inputConfig: {
           }
         }
         const isGoalStartCommand = parsed.name === "goal" && isGoalCreationArgs(parsed.args);
-        if (isGoalStartCommand && !currentSessionId) {
-          currentSessionId = inputConfig.store.createSession({
-            title: parsed.args.join(" ").slice(0, 80) || "goal",
-            cwd: inputConfig.cwd,
-            metadata: { mode: "interactive", command: "goal" }
-          });
-        }
+        let interactiveGoalStart: InteractiveGoalStartResult | undefined;
         if (parsed.name === "clear") {
           currentSessionId = inputConfig.store.createSession({
             title: "",
@@ -416,9 +410,19 @@ export async function runInteractiveTerminal(inputConfig: {
           });
         }
 
-        const result = isGoalStartCommand
-          ? startInteractiveGoal(inputConfig.paths, currentSessionId, parsed.args)
-          : await registry.dispatch(parsed.name, parsed.args, {
+        let result: string | Promise<string> | undefined;
+        if (isGoalStartCommand) {
+          interactiveGoalStart = startInteractiveGoalCommand({
+            paths: inputConfig.paths,
+            store: inputConfig.store,
+            sessionId: currentSessionId,
+            cwd: inputConfig.cwd,
+            args: parsed.args
+          });
+          currentSessionId = interactiveGoalStart.sessionId;
+          result = interactiveGoalStart.message;
+        } else {
+          result = await registry.dispatch(parsed.name, parsed.args, {
             cwd: inputConfig.cwd,
             config: inputConfig.config,
             store: inputConfig.store,
@@ -427,13 +431,14 @@ export async function runInteractiveTerminal(inputConfig: {
             currentModel,
             permissionMode: currentPermissionMode
           });
+        }
         if (result !== undefined) {
           output.write(`${result}\n`);
           if (parsed.name === "goal") {
             writeGoalBadge(output, inputConfig.paths, currentSessionId);
           }
           if (isGoalStartCommand) {
-            trimmed = parsed.args.join(" ");
+            trimmed = interactiveGoalStart?.prompt ?? parsed.args.join(" ");
             // Continue into the normal prompt flow so /goal <objective>
             // both starts the goal and immediately asks the agent to work it.
           } else {
@@ -798,6 +803,32 @@ function writeGoalBadge(
   if (badge) {
     terminalOutput.write(`\x1b[90m${badge}\x1b[39m\n`);
   }
+}
+
+export interface InteractiveGoalStartResult {
+  sessionId: string;
+  message: string;
+  prompt: string;
+}
+
+export function startInteractiveGoalCommand(input: {
+  paths: MagiPaths | undefined;
+  store: SessionStore;
+  sessionId: string | undefined;
+  cwd: string;
+  args: string[];
+}): InteractiveGoalStartResult {
+  const prompt = input.args.join(" ");
+  const sessionId = input.sessionId ?? input.store.createSession({
+    title: prompt.slice(0, 80) || "goal",
+    cwd: input.cwd,
+    metadata: { mode: "interactive", command: "goal" }
+  });
+  return {
+    sessionId,
+    message: startInteractiveGoal(input.paths, sessionId, input.args),
+    prompt
+  };
 }
 
 function startInteractiveGoal(paths: MagiPaths | undefined, sessionId: string | undefined, args: string[]): string {

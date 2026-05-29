@@ -99,4 +99,54 @@ describe("memory-node-store", () => {
       store.close();
     }
   });
+
+  it("stores graph sources, chunks, and archives missing source chunks", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "wiki",
+        uri: "memory/workflows/release.md",
+        title: "Release workflow",
+        contentHash: "hash-1"
+      });
+      const chunk = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/workflows/release.md#verify",
+        type: "workflow",
+        heading: "Verify release",
+        body: "Run focused tests before broad checks.",
+        summary: "Run focused tests before broad checks.",
+        contentHash: "chunk-1",
+        weight: 0.7
+      });
+      const found = store.searchGraph({ query: "focused checks", limit: 5 });
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({
+        source: expect.objectContaining({ uri: "memory/workflows/release.md" }),
+        chunk: expect.objectContaining({ id: chunk.id, heading: "Verify release" }),
+        node: expect.objectContaining({ type: "workflow", source: "wiki" })
+      });
+
+      const updated = store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/workflows/release.md#verify",
+        type: "workflow",
+        heading: "Verify release",
+        body: "Run typecheck, focused tests, and build before broad checks.",
+        summary: "Updated release verification.",
+        contentHash: "chunk-2",
+        weight: 0.75
+      });
+      expect(updated.id).toBe(chunk.id);
+      expect(store.listChunksForSource(source.id)).toHaveLength(1);
+      expect(store.getNode(chunk.nodeId)?.body).toContain("typecheck");
+
+      store.archiveChunksForSourceExcept(source.id, []);
+      expect(store.searchGraph({ query: "typecheck", limit: 5 })).toHaveLength(0);
+      expect(store.getNode(chunk.nodeId)?.status).toBe("archived");
+    } finally {
+      store.close();
+    }
+  });
 });
