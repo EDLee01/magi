@@ -577,6 +577,64 @@ async function scenarioMemoryGraphLink() {
   });
 }
 
+async function scenarioToolFeedbackRanking() {
+  await withTempWorkspace("tool-feedback", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        turn += 1;
+        if (turn === 1) {
+          return toolResponse([
+            toolCall("grep-bad-path-1", "Grep", { pattern: "needle", path: "../outside" }),
+            toolCall("grep-bad-path-2", "Grep", { pattern: "needle", path: "../outside" }),
+            toolCall("grep-bad-path-3", "Grep", { pattern: "needle", path: "../outside" }),
+            toolCall("grep-bad-path-4", "Grep", { pattern: "needle", path: "../outside" }),
+            toolCall("glob-ok-1", "Glob", { pattern: "**/*.md" }),
+            toolCall("glob-ok-2", "Glob", { pattern: "**/*.md" }),
+            toolCall("glob-ok-3", "Glob", { pattern: "**/*.md" }),
+            toolCall("glob-ok-4", "Glob", { pattern: "**/*.md" }),
+          ]);
+        }
+        assert(transcript.includes("Search path is outside allowed directories"), "Grep failure was not visible to the model");
+        assert(transcript.includes("No matches"), "Glob success was not visible to the model");
+        return toolResponse([
+          toolCall("tool-search-after-feedback", "ToolSearch", { query: "search workspace files", max_results: 5 }),
+        ]);
+      },
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const output = await runCli({
+        args: [
+          "--permission-mode", "acceptEdits",
+          "--model", "main",
+          "--output-format", "stream-json",
+          "-p",
+          "Exercise tool feedback ranking by trying search tools, then ask ToolSearch for workspace file search.",
+        ],
+        cwd: workDir,
+        configDir,
+        label: "tool feedback ranking",
+      });
+      assert(output.includes("1. Glob"), "ToolSearch did not rank successful Glob ahead after feedback");
+      assert(output.includes("usage:+"), "ToolSearch did not report positive usage feedback");
+      assert(output.includes("usage:-"), "ToolSearch did not report negative usage feedback");
+      const statsPath = path.join(configDir, "state", "tool-usage-stats.json");
+      assert(existsSync(statsPath), "tool feedback stats were not persisted");
+      const stats = JSON.parse(readFileSync(statsPath, "utf8"));
+      assert(stats.tools?.Grep?.failures === 4, "Grep failures were not recorded");
+      assert(stats.tools?.Glob?.successes === 4, "Glob successes were not recorded");
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioPlanMode() {
   await withTempWorkspace("plan", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -696,6 +754,7 @@ async function main() {
     ["default permission denied", scenarioDefaultPermissionDenied],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
+    ["tool feedback ranking", scenarioToolFeedbackRanking],
     ["plan mode", scenarioPlanMode],
     ["TUI requires TTY", scenarioTuiRequiresTty],
   ];

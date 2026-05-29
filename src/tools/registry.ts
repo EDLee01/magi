@@ -228,6 +228,7 @@ import {
   TodoWriteInputSchema
 } from "./todo.js";
 import { executeToolSearch, parseToolSearchInput, ToolSearchInputSchema } from "./tool-search.js";
+import { loadToolUsageStats, recordToolUsage } from "../tool-usage-stats.js";
 import {
   executeTaskCreate,
   executeTaskGet,
@@ -548,7 +549,7 @@ export async function executeRegisteredTool(input: {
       return errorResult(input.toolUse, `Permission ${permission.decision}: ${permission.reason}`);
     }
     const raw = await tool.call(input.toolUse.input, context);
-    return {
+    const result = {
       toolCallId: input.toolUse.id,
       toolName: input.toolUse.name,
       content: formatToolResult({
@@ -559,11 +560,18 @@ export async function executeRegisteredTool(input: {
       }),
       permission: approvalPermission
     };
+    recordToolUsage({ stateRoot: input.stateRoot, toolName: input.toolUse.name, success: true });
+    return result;
   } catch (error) {
     if (shouldRethrowToolExecutionError(error)) {
       throw error;
     }
-    return errorResult(input.toolUse, error instanceof Error ? error.message : String(error));
+    const result = errorResult(
+      input.toolUse,
+      error instanceof Error ? error.message : String(error)
+    );
+    recordToolUsage({ stateRoot: input.stateRoot, toolName: input.toolUse.name, success: false });
+    return result;
   }
 }
 
@@ -1527,7 +1535,10 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     category: "tools",
     tags: ["tool", "search", "schema", "docs"],
     inputSchema: ToolSearchInputSchema,
-    call: (input) => executeToolSearch(parseToolSearchInput(input), BUILTIN_TOOLS),
+    call: (input, context) =>
+      executeToolSearch(parseToolSearchInput(input), BUILTIN_TOOLS, {
+        usageStats: loadToolUsageStats(context.stateRoot)
+      }),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true

@@ -22,6 +22,7 @@ import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
 import { MemoryNodeStore } from "../src/memory-node-store.js";
+import { loadToolUsageStats, toolUsageStatsPath } from "../src/tool-usage-stats.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -1554,6 +1555,65 @@ describe("tool registry", () => {
         expect(result.content).toContain(toolName);
       }
     }
+  });
+
+  it("uses persisted tool feedback to refine ToolSearch ranking", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const stateRoot = path.join(workspace, ".magi-next", "state");
+
+    for (let index = 0; index < 4; index += 1) {
+      const failedGrep = await executeRegisteredTool({
+        cwd: workspace,
+        stateRoot,
+        toolUse: {
+          type: "tool-use",
+          id: `grep-failure-${index}`,
+          name: "Grep",
+          input: { pattern: "needle", path: "../outside" }
+        }
+      });
+      expect(failedGrep.isError).toBe(true);
+
+      const globSuccess = await executeRegisteredTool({
+        cwd: workspace,
+        stateRoot,
+        toolUse: {
+          type: "tool-use",
+          id: `glob-success-${index}`,
+          name: "Glob",
+          input: { pattern: "**/*.ts" }
+        }
+      });
+      expect(globSuccess.isError).toBeUndefined();
+    }
+
+    const stats = loadToolUsageStats(stateRoot);
+    expect(stats.tools.Grep).toMatchObject({
+      attempts: 4,
+      failures: 4,
+      consecutiveFailures: 4
+    });
+    expect(stats.tools.Glob).toMatchObject({
+      attempts: 4,
+      successes: 4,
+      consecutiveFailures: 0
+    });
+    expect(existsSync(toolUsageStatsPath(stateRoot))).toBe(true);
+
+    const search = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot,
+      toolUse: {
+        type: "tool-use",
+        id: "tool-search-feedback",
+        name: "ToolSearch",
+        input: { query: "search workspace files", max_results: 5 }
+      }
+    });
+    expect(search.isError).toBeUndefined();
+    expect(firstToolSearchResult(search.content)).toBe("Glob");
+    expect(search.content).toContain("usage:+");
+    expect(search.content).toContain("usage:-");
   });
 
   it("diagnoses workspace manifests, scripts, languages, commands, and git state without executing commands", async () => {

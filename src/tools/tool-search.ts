@@ -1,3 +1,5 @@
+import { formatToolUsageReason, ToolUsageStats, toolUsageScore } from "../tool-usage-stats.js";
+
 export interface ToolSearchableRecord {
   name: string;
   description?: string;
@@ -12,6 +14,10 @@ export interface ToolSearchableRecord {
 export interface ToolSearchInput {
   query: string;
   maxResults: number;
+}
+
+export interface ToolSearchOptions {
+  usageStats?: ToolUsageStats;
 }
 
 export const ToolSearchInputSchema = {
@@ -31,7 +37,11 @@ export function parseToolSearchInput(input: Record<string, unknown>): ToolSearch
   return { query, maxResults };
 }
 
-export function executeToolSearch(input: ToolSearchInput, tools: ToolSearchableRecord[]): string {
+export function executeToolSearch(
+  input: ToolSearchInput,
+  tools: ToolSearchableRecord[],
+  options: ToolSearchOptions = {}
+): string {
   const select = /^select:(.+)$/i.exec(input.query.trim());
   if (select) {
     const requested = select[1].trim();
@@ -43,7 +53,7 @@ export function executeToolSearch(input: ToolSearchInput, tools: ToolSearchableR
   }
 
   const analysis = analyzeToolSearchQuery(input.query);
-  const matches = searchTools(input.query, tools, analysis).slice(0, input.maxResults);
+  const matches = searchTools(input.query, tools, analysis, options).slice(0, input.maxResults);
   if (matches.length === 0) {
     return `No tools match ${JSON.stringify(input.query)}`;
   }
@@ -55,7 +65,7 @@ export function executeToolSearch(input: ToolSearchInput, tools: ToolSearchableR
         `${index + 1}. ${tool.name} [${tool.category ?? "uncategorized"}] score=${score}`,
         `   ${tool.description ?? "No description"}`,
         `   tags: ${(tool.tags ?? []).join(", ") || "none"}`,
-        `   matched: ${reasons.slice(0, 4).join("; ") || "lexical"}`,
+        `   matched: ${formatMatchReasons(reasons)}`,
         `   schema: ${schemaSummary(tool.inputSchema)}`
       ].join("\n")
     ),
@@ -91,10 +101,11 @@ interface ToolIntentProfile {
 function searchTools(
   query: string,
   tools: ToolSearchableRecord[],
-  analysis = analyzeToolSearchQuery(query)
+  analysis = analyzeToolSearchQuery(query),
+  options: ToolSearchOptions = {}
 ): ToolSearchMatch[] {
   return tools
-    .map((tool) => ({ tool, ...scoreTool(tool, analysis) }))
+    .map((tool) => ({ tool, ...scoreTool(tool, analysis, options) }))
     .filter((item) => item.score > 0)
     .sort(
       (left, right) => right.score - left.score || left.tool.name.localeCompare(right.tool.name)
@@ -103,7 +114,8 @@ function searchTools(
 
 function scoreTool(
   tool: ToolSearchableRecord,
-  analysis: ToolSearchAnalysis
+  analysis: ToolSearchAnalysis,
+  options: ToolSearchOptions
 ): { score: number; reasons: string[] } {
   const name = tool.name.toLowerCase();
   const nameTerms = tokenizeToolText(tool.name);
@@ -159,6 +171,15 @@ function scoreTool(
     if (matchedTags.length > 0) {
       score += matchedTags.length * 18;
       addReason(reasons, `intent tag:${matchedTags.slice(0, 2).join(",")}`);
+    }
+  }
+  const usage = options.usageStats?.tools[tool.name];
+  const usageScore = toolUsageScore(usage);
+  if (usageScore !== 0) {
+    score += usageScore;
+    const usageReason = formatToolUsageReason(usage);
+    if (usageReason) {
+      addReason(reasons, usageReason);
     }
   }
   return { score, reasons };
@@ -224,6 +245,18 @@ function addReason(reasons: string[], reason: string): void {
   if (!reasons.includes(reason)) {
     reasons.push(reason);
   }
+}
+
+function formatMatchReasons(reasons: string[]): string {
+  if (reasons.length === 0) {
+    return "lexical";
+  }
+  const visible = reasons.slice(0, 4);
+  const usage = reasons.find((reason) => reason.startsWith("usage:"));
+  if (usage && !visible.includes(usage)) {
+    visible[visible.length - 1] = usage;
+  }
+  return visible.join("; ");
 }
 
 function formatSelectedTool(tool: ToolSearchableRecord): string {
