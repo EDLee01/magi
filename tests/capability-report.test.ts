@@ -98,7 +98,8 @@ describe("capability report", () => {
         regressions: 1,
         learningDraftApplySeen: false,
         skillLearningApplySeen: false,
-        skillPatchLearningSeen: false
+        skillPatchLearningSeen: false,
+        skillCorrectionSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -127,6 +128,7 @@ describe("capability report", () => {
         "learningDraftApplySeen=false",
         "skillLearningApplySeen=false",
         "skillPatchLearningSeen=false",
+        "skillCorrectionSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -618,6 +620,7 @@ function harnessReport(input: {
   learningDraftApplySeen?: boolean;
   skillLearningApplySeen?: boolean;
   skillPatchLearningSeen?: boolean;
+  skillCorrectionSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -635,7 +638,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 45,
+      assertions: input.assertions ?? 48,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -688,6 +691,7 @@ function harnessReport(input: {
 function skillLearningAssertions(input: {
   skillLearningApplySeen?: boolean;
   skillPatchLearningSeen?: boolean;
+  skillCorrectionSeen?: boolean;
 }): string[] {
   return [
     ...(input.skillLearningApplySeen === false
@@ -703,6 +707,13 @@ function skillLearningAssertions(input: {
           "skill patch learning draft reviewed",
           "skill patch learning draft applied",
           "patched skill recalled in model context"
+        ]),
+    ...(input.skillCorrectionSeen === false
+      ? []
+      : [
+          "stale skill correction draft reviewed",
+          "stale skill correction applied replacement",
+          "corrected skill recalled without stale guidance"
         ])
   ];
 }

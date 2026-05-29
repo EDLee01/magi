@@ -498,6 +498,21 @@ function parseDreamId(output) {
   return match[1];
 }
 
+function parseStreamSessionId(output) {
+  for (const line of output.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+      if (event.type === "session.completed" && typeof event.sessionId === "string") {
+        return event.sessionId;
+      }
+    } catch {
+      // Ignore non-JSON noise around stream-json output.
+    }
+  }
+  throw new Error(`could not parse stream session id from output:\n${output}`);
+}
+
 async function seedMemoryAndGoal({ workDir, configDir }) {
   await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory init" });
   const userDraft = parseDraftId(
@@ -565,6 +580,28 @@ function createComplexRouter() {
       );
       return messageText(
         "Use patched blackbox-verify: confirm the patched skill update before broad suites."
+      );
+    }
+
+    if (transcript.includes("Use the corrected blackbox verify skill after stale guidance was fixed.")) {
+      assert(
+        transcript.includes("[Relevant Skills]"),
+        "corrected skill recall request missed skills context"
+      );
+      assert(
+        transcript.includes("## blackbox-verify"),
+        "corrected skill recall missed learned skill name"
+      );
+      assert(
+        transcript.includes("Use isolated provider validation before broad suites."),
+        "corrected skill recall missed replacement guidance"
+      );
+      assert(
+        !transcript.includes("Run isolated provider validation before broad checks."),
+        "corrected skill recall still included stale guidance"
+      );
+      return messageText(
+        "Use corrected blackbox-verify: isolated provider validation comes before broad suites."
       );
     }
 
@@ -792,6 +829,7 @@ async function scenarioComplexWorkflow() {
           complexOutput.includes("Complex black-box E2E completed"),
         "complex headless prompt did not complete"
       );
+      const complexSessionId = parseStreamSessionId(complexOutput);
 
       const reportPath = path.join(workDir, "reports", "e2e-result.md");
       assert(existsSync(reportPath), "complex task did not create report file");
@@ -1038,6 +1076,91 @@ async function scenarioComplexWorkflow() {
         patchedSkillRecall.includes("patched blackbox-verify"),
         "patched skill recall answer missed patched skill name"
       );
+      const staleSkillPatchDraft = await runCli({
+        args: [
+          "learning",
+          "propose",
+          "--kind",
+          "skill_patch",
+          "--target",
+          "skills/blackbox-verify/SKILL.md",
+          "--reason",
+          "Correct stale skill guidance that skipped provider validation.",
+          "--evidence",
+          "User reported the learned skill was wrong",
+          "--confidence",
+          "0.93",
+          [
+            "old_string:",
+            "```",
+            "Run isolated provider validation before broad checks.",
+            "```",
+            "new_string:",
+            "```",
+            "Use isolated provider validation before broad suites.",
+            "```"
+          ].join("\n")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "learning stale skill correction draft propose"
+      });
+      assert(
+        staleSkillPatchDraft.includes("Created LearningDraft:"),
+        "stale skill correction LearningDraft was not proposed"
+      );
+      const staleSkillPatchDraftId = /learn_[a-z0-9_]+/i.exec(staleSkillPatchDraft)?.[0];
+      assert(staleSkillPatchDraftId, "stale skill correction LearningDraft id was not returned");
+      const staleSkillPatchReview = await runCli({
+        args: ["learning", "draft", "show", staleSkillPatchDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning stale skill correction draft show"
+      });
+      assert(
+        staleSkillPatchReview.includes("Correct stale skill guidance"),
+        "stale skill correction review missed reason"
+      );
+      assert(
+        staleSkillPatchReview.includes("User reported the learned skill was wrong"),
+        "stale skill correction review missed evidence"
+      );
+      const staleSkillPatchApply = await runCli({
+        args: ["learning", "draft", "apply", staleSkillPatchDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning stale skill correction draft apply"
+      });
+      assert(
+        staleSkillPatchApply.includes("Applied LearningDraft:"),
+        "stale skill correction LearningDraft apply did not run"
+      );
+      const correctedSkill = readFileSync(skillFile, "utf8");
+      assert(
+        correctedSkill.includes("Use isolated provider validation before broad suites."),
+        "corrected skill file missed replacement guidance"
+      );
+      assert(
+        !correctedSkill.includes("Run isolated provider validation before broad checks."),
+        "corrected skill file retained stale guidance"
+      );
+      const correctedSkillRecall = await runCli({
+        args: [
+          "--session-id",
+          "blackbox-corrected-skill-session",
+          "--model",
+          "main",
+          "-p",
+          "Use the corrected blackbox verify skill after stale guidance was fixed."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "corrected skill recall"
+      });
+      assert(
+        correctedSkillRecall.includes("corrected blackbox-verify"),
+        "corrected skill recall answer missed corrected skill name"
+      );
 
       const memorySearch = await runCli({
         args: ["memory", "search", "CLI E2E workflow"],
@@ -1184,13 +1307,13 @@ async function scenarioComplexWorkflow() {
       );
 
       await runCli({
-        args: ["goal", "done", "verified"],
+        args: ["goal", "done", "verified", "--session-id", complexSessionId],
         cwd: workDir,
         configDir,
         label: "goal done"
       });
       const goalStatus = await runCli({
-        args: ["goal"],
+        args: ["goal", "--session-id", complexSessionId],
         cwd: workDir,
         configDir,
         label: "goal status"
@@ -1220,7 +1343,10 @@ async function scenarioComplexWorkflow() {
           "learned skill recalled in model context",
           "skill patch learning draft reviewed",
           "skill patch learning draft applied",
-          "patched skill recalled in model context"
+          "patched skill recalled in model context",
+          "stale skill correction draft reviewed",
+          "stale skill correction applied replacement",
+          "corrected skill recalled without stale guidance"
         ],
         filesVerified: [
           "reports/e2e-result.md",

@@ -275,6 +275,55 @@ describe("tool registry", () => {
     expect(
       readFileSync(path.join(paths.skillsRoot, "learned-debug", "SKILL.md"), "utf8")
     ).toContain("Run focused tests before full suites.");
+
+    const skillPatchDraft = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      sessionId: "session-1",
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "learning-skill-patch-propose",
+        name: "LearningDraft",
+        input: {
+          action: "propose",
+          kind: "skill_patch",
+          target: "skills/learned-debug/SKILL.md",
+          content: [
+            "old_string:",
+            "```",
+            "Run focused tests before full suites.",
+            "```",
+            "new_string:",
+            "```",
+            "Run isolated provider checks before full suites.",
+            "```"
+          ].join("\n"),
+          reason: "Correct stale learned skill guidance"
+        }
+      }
+    });
+    const skillPatchDraftId = /Created LearningDraft: ([^ ]+)/.exec(skillPatchDraft.content)?.[1];
+    expect(skillPatchDraftId).toBeTruthy();
+
+    const skillPatchApplied = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "learning-skill-patch-apply",
+        name: "LearningDraft",
+        input: { action: "apply", id: skillPatchDraftId }
+      }
+    });
+    expect(skillPatchApplied.isError).toBeUndefined();
+    const skillContent = readFileSync(
+      path.join(paths.skillsRoot, "learned-debug", "SKILL.md"),
+      "utf8"
+    );
+    expect(skillContent).toContain("Run isolated provider checks before full suites.");
+    expect(skillContent).not.toContain("Run focused tests before full suites.");
   });
 
   it("writes Memorize tool calls directly to the memory graph", async () => {

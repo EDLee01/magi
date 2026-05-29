@@ -278,6 +278,19 @@ function applyLearningDraftContent(input: LearningDraftRootOptions, draft: Learn
       throw new Error(`Skill not found: ${skillName}`);
     }
     const before = readFileSync(skillFile, "utf8");
+    const replacement = parseSkillPatchReplacement(draft.content);
+    if (replacement) {
+      const occurrences = countOccurrences(before, replacement.oldString);
+      if (occurrences === 0) {
+        throw new Error(`Skill patch old_string was not found: ${skillName}`);
+      }
+      if (occurrences > 1) {
+        throw new Error(`Skill patch old_string is not unique: ${skillName}`);
+      }
+      const after = before.replace(replacement.oldString, replacement.newString);
+      atomicWrite(skillFile, after);
+      return;
+    }
     const addition = [
       before.endsWith("\n") ? "" : "\n",
       "",
@@ -397,6 +410,40 @@ function resolveSkillRoot(input: LearningDraftRootOptions, name: string): string
 
 function normalizeMarkdown(content: string): string {
   return content.endsWith("\n") ? content : `${content}\n`;
+}
+
+function parseSkillPatchReplacement(
+  content: string
+): { oldString: string; newString: string } | undefined {
+  const oldString = extractFencedBlock(content, "old_string");
+  const newString = extractFencedBlock(content, "new_string");
+  if (oldString === undefined && newString === undefined) {
+    return undefined;
+  }
+  if (oldString === undefined || newString === undefined || !oldString) {
+    throw new Error("Skill patch replacement requires old_string and new_string fenced blocks");
+  }
+  return { oldString, newString };
+}
+
+function extractFencedBlock(content: string, label: string): string | undefined {
+  const pattern = new RegExp(
+    `(?:^|\\n)${label}:\\s*\\n\`\`\`(?:[^\\n]*)\\n([\\s\\S]*?)\\n\`\`\``,
+    "i"
+  );
+  return pattern.exec(content)?.[1];
+}
+
+function countOccurrences(value: string, search: string): number {
+  if (!search) return 0;
+  let count = 0;
+  let offset = 0;
+  while (true) {
+    const index = value.indexOf(search, offset);
+    if (index === -1) return count;
+    count += 1;
+    offset = index + search.length;
+  }
 }
 
 function summarizePrompt(prompt: string): string {
