@@ -128,6 +128,10 @@ magi memory eval --case-file tests/fixtures/memory-recall-business.json --min-sc
 npm run test:memory-eval
 ```
 
+`npm run test:memory-eval` seeds an isolated Memory root through the public CLI,
+then checks recall after restart, graph links, correction replacement, Dream
+reject/apply behavior, and maintenance weight decay.
+
 ## Configuration
 
 `~/.magi-next/config.yaml`:

@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:f
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(repoRoot, "dist", "cli.js");
@@ -22,22 +23,10 @@ try {
   mkdirSync(workDir, { recursive: true });
   runCli(["memory", "init"], "memory init");
   seedBusinessMemory();
-  const evalOutput = runCli(
-    [
-      "memory",
-      "eval",
-      "--case-file",
-      options.caseFile,
-      "--report",
-      reportFile,
-      ...(options.minScore === undefined ? [] : ["--min-score", String(options.minScore)])
-    ],
-    "memory recall eval"
-  );
-  const report = JSON.parse(readFileSync(reportFile, "utf8"));
-  assert(report.failed === 0, `memory recall eval had failed cases:\n${evalOutput}`);
-  assert(report.thresholdPassed === true, `memory recall eval missed threshold:\n${evalOutput}`);
-  assert(report.score >= (report.minScore ?? 1), `memory recall score below threshold:\n${evalOutput}`);
+  const evalOutput = runMemoryEval("memory recall eval");
+  assertRestartRecall();
+  assertDreamReviewLifecycle();
+  assertMaintenanceLifecycle();
   process.stdout.write(`${evalOutput.trim()}\nBusiness memory recall eval passed.\n`);
 } finally {
   if (!options.keepRoot && !process.env.MAGI_KEEP_MEMORY_EVAL_TMP) {
@@ -134,6 +123,114 @@ function seedBusinessMemory() {
   );
 }
 
+function runMemoryEval(label) {
+  const evalOutput = runCli(
+    [
+      "memory",
+      "eval",
+      "--case-file",
+      options.caseFile,
+      "--report",
+      reportFile,
+      ...(options.minScore === undefined ? [] : ["--min-score", String(options.minScore)])
+    ],
+    label
+  );
+  const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  assert(report.failed === 0, `memory recall eval had failed cases:\n${evalOutput}`);
+  assert(report.thresholdPassed === true, `memory recall eval missed threshold:\n${evalOutput}`);
+  assert(
+    report.score >= (report.minScore ?? 1),
+    `memory recall score below threshold:\n${evalOutput}`
+  );
+  return evalOutput;
+}
+
+function assertRestartRecall() {
+  const search = runCli(["memory", "search", "Edward creator Magi Next"], "restart recall search");
+  assert(search.includes("Edward creator identity"), "restart recall missed durable user identity");
+  assert(
+    search.includes("Edward is the creator of Magi Next"),
+    "restart recall missed identity body"
+  );
+}
+
+function assertDreamReviewLifecycle() {
+  const staleNodeId = nodeByTitle("Stale verification preference").id;
+  const firstDream = runCli(["memory", "dream"], "memory dream cleanup preview");
+  assert(firstDream.includes("archive_candidate"), "memory dream did not propose cleanup");
+  const firstDreamId = dreamId(firstDream);
+  const rejectedDream = runCli(
+    ["memory", "dream", "reject", firstDreamId],
+    "memory dream reject cleanup"
+  );
+  assert(rejectedDream.includes("Rejected Dream:"), "memory dream reject did not run");
+  assert(
+    rejectedDream.includes("Kept graph nodes:"),
+    "memory dream reject did not report kept nodes"
+  );
+  assert(
+    nodeById(staleNodeId).status !== "archived",
+    "rejected Dream should not archive disputed node"
+  );
+
+  const secondDream = runCli(["memory", "dream"], "memory dream cleanup apply preview");
+  assert(secondDream.includes("archive_candidate"), "memory dream did not re-propose cleanup");
+  const secondDreamId = dreamId(secondDream);
+  const appliedDream = runCli(
+    ["memory", "dream", "apply", secondDreamId],
+    "memory dream apply cleanup"
+  );
+  assert(appliedDream.includes("Applied Dream:"), "memory dream apply did not run");
+  assert(
+    appliedDream.includes("Archived graph nodes: 1"),
+    "memory dream apply did not archive node"
+  );
+  assert(nodeById(staleNodeId).status === "archived", "applied Dream should archive stale node");
+
+  const postDreamEval = runMemoryEval("memory recall eval after Dream apply");
+  assert(postDreamEval.includes("threshold: PASS"), "memory eval failed after Dream apply");
+}
+
+function assertMaintenanceLifecycle() {
+  const target = nodeByTitle("Magi release verification");
+  const configured = runCli(
+    [
+      "memory",
+      "maintain",
+      "config",
+      "--older-than-days",
+      "0",
+      "--decay",
+      "0.2",
+      "--min-weight",
+      "0.4",
+      "--limit",
+      "10"
+    ],
+    "memory maintenance config"
+  );
+  assert(configured.includes("Memory maintenance policy"), "maintenance config did not run");
+  assert(configured.includes("decay: 0.200"), "maintenance config did not persist decay");
+
+  const preview = runCli(["memory", "maintain"], "memory maintenance preview");
+  assert(preview.includes("Memory maintenance preview"), "maintenance preview did not run");
+  assert(preview.includes("changed:"), "maintenance preview did not report changed count");
+  assert(
+    nodeById(target.id).weight === target.weight,
+    "maintenance preview should not change node weight"
+  );
+
+  const applied = runCli(["memory", "maintain", "--apply"], "memory maintenance apply");
+  assert(applied.includes("Memory maintenance applied"), "maintenance apply did not run");
+  assert(applied.includes("->"), "maintenance apply did not report weight change");
+  const decayed = nodeById(target.id);
+  assert(decayed.weight < target.weight, "maintenance apply should decay active node weight");
+
+  const postMaintenanceEval = runMemoryEval("memory recall eval after maintenance");
+  assert(postMaintenanceEval.includes("threshold: PASS"), "memory eval failed after maintenance");
+}
+
 function runCli(args, label) {
   if (!existsSync(cliPath)) {
     throw new Error("dist/cli.js does not exist. Run npm run build first.");
@@ -160,6 +257,44 @@ function draftId(output) {
   const match = /Created Memory Draft:\s+([a-z0-9_]+)/i.exec(output);
   assert(match, `could not parse memory draft id from output:\n${output}`);
   return match[1];
+}
+
+function dreamId(output) {
+  const match = /Experimental Dream created:\s+([a-z0-9_]+)/i.exec(output);
+  assert(match, `could not parse Dream id from output:\n${output}`);
+  return match[1];
+}
+
+function nodeByTitle(title) {
+  const db = openDb();
+  try {
+    const row = db
+      .prepare(
+        "select id, title, status, weight from memory_nodes where title = ? order by updated_at desc limit 1"
+      )
+      .get(title);
+    assert(row, `memory node not found by title: ${title}`);
+    return row;
+  } finally {
+    db.close();
+  }
+}
+
+function nodeById(id) {
+  const db = openDb();
+  try {
+    const row = db
+      .prepare("select id, title, status, weight from memory_nodes where id = ?")
+      .get(id);
+    assert(row, `memory node not found by id: ${id}`);
+    return row;
+  } finally {
+    db.close();
+  }
+}
+
+function openDb() {
+  return new Database(path.join(configDir, "state", "sessions.sqlite"), { readonly: true });
 }
 
 function parseArgs(args) {
