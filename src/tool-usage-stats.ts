@@ -12,6 +12,18 @@ export interface ToolUsageRecord {
   lastUsedAt?: string;
   lastSucceededAt?: string;
   lastFailedAt?: string;
+  intents: Record<string, ToolUsageIntentRecord>;
+}
+
+export interface ToolUsageIntentRecord {
+  intent: string;
+  attempts: number;
+  successes: number;
+  failures: number;
+  consecutiveFailures: number;
+  lastUsedAt?: string;
+  lastSucceededAt?: string;
+  lastFailedAt?: string;
 }
 
 export interface ToolUsageStats {
@@ -19,8 +31,24 @@ export interface ToolUsageStats {
   tools: Record<string, ToolUsageRecord>;
 }
 
+export interface ToolSearchContext {
+  query: string;
+  intents: string[];
+  toolNames: string[];
+  createdAt: string;
+}
+
+export interface ToolUsageContextStore {
+  version: 1;
+  contexts: ToolSearchContext[];
+}
+
 export function toolUsageStatsPath(stateRoot: string): string {
   return path.join(stateRoot, "tool-usage-stats.json");
+}
+
+export function toolUsageContextPath(stateRoot: string): string {
+  return path.join(stateRoot, "tool-usage-context.json");
 }
 
 export function loadToolUsageStats(stateRoot?: string): ToolUsageStats {
@@ -39,6 +67,7 @@ export function recordToolUsage(input: {
   stateRoot?: string;
   toolName: string;
   success: boolean;
+  intents?: string[];
   now?: Date;
 }): ToolUsageRecord | undefined {
   if (!input.stateRoot) {
@@ -51,24 +80,74 @@ export function recordToolUsage(input: {
     attempts: 0,
     successes: 0,
     failures: 0,
-    consecutiveFailures: 0
+    consecutiveFailures: 0,
+    intents: {}
   };
-  const next: ToolUsageRecord = {
-    ...current,
-    attempts: current.attempts + 1,
-    successes: current.successes + (input.success ? 1 : 0),
-    failures: current.failures + (input.success ? 0 : 1),
-    consecutiveFailures: input.success ? 0 : current.consecutiveFailures + 1,
-    lastUsedAt: now,
-    lastSucceededAt: input.success ? now : current.lastSucceededAt,
-    lastFailedAt: input.success ? current.lastFailedAt : now
-  };
+  const next = updateUsageRecord(current, input.success, now);
+  for (const intent of uniqueIntents(input.intents ?? [])) {
+    const currentIntent = next.intents[intent] ?? {
+      intent,
+      attempts: 0,
+      successes: 0,
+      failures: 0,
+      consecutiveFailures: 0
+    };
+    next.intents[intent] = updateIntentRecord(currentIntent, input.success, now);
+  }
   stats.tools[input.toolName] = next;
   writeToolUsageStats(input.stateRoot, stats);
   return next;
 }
 
-export function toolUsageScore(record: ToolUsageRecord | undefined): number {
+export function recordToolSearchContext(input: {
+  stateRoot?: string;
+  query: string;
+  intents: string[];
+  toolNames: string[];
+  now?: Date;
+}): void {
+  if (!input.stateRoot || input.intents.length === 0 || input.toolNames.length === 0) {
+    return;
+  }
+  const store = loadToolUsageContext(input.stateRoot);
+  const context: ToolSearchContext = {
+    query: input.query,
+    intents: uniqueIntents(input.intents),
+    toolNames: Array.from(new Set(input.toolNames.filter((name) => name.trim()))),
+    createdAt: (input.now ?? new Date()).toISOString()
+  };
+  store.contexts = [context, ...store.contexts].slice(0, 20);
+  writeToolUsageContext(input.stateRoot, store);
+}
+
+export function toolUsageIntentsForTool(input: {
+  stateRoot?: string;
+  toolName: string;
+  now?: Date;
+  maxAgeMs?: number;
+}): string[] {
+  if (!input.stateRoot) {
+    return [];
+  }
+  const nowMs = (input.now ?? new Date()).getTime();
+  const maxAgeMs = input.maxAgeMs ?? 10 * 60 * 1000;
+  const intents: string[] = [];
+  for (const context of loadToolUsageContext(input.stateRoot).contexts) {
+    const createdMs = Date.parse(context.createdAt);
+    if (!Number.isFinite(createdMs) || nowMs - createdMs > maxAgeMs) {
+      continue;
+    }
+    if (!context.toolNames.includes(input.toolName)) {
+      continue;
+    }
+    intents.push(...context.intents);
+  }
+  return uniqueIntents(intents);
+}
+
+export function toolUsageScore(
+  record: ToolUsageRecord | ToolUsageIntentRecord | undefined
+): number {
   if (!record || record.attempts <= 0) {
     return 0;
   }
@@ -80,14 +159,18 @@ export function toolUsageScore(record: ToolUsageRecord | undefined): number {
   return Math.max(-90, Math.min(55, successBoost - reliabilityPenalty - streakPenalty));
 }
 
-export function formatToolUsageReason(record: ToolUsageRecord | undefined): string | undefined {
+export function formatToolUsageReason(
+  record: ToolUsageRecord | ToolUsageIntentRecord | undefined,
+  intent?: string
+): string | undefined {
   const score = toolUsageScore(record);
   if (!record || score === 0) {
     return undefined;
   }
   const rate = Math.round((record.successes / Math.max(1, record.attempts)) * 100);
   const sign = score > 0 ? "+" : "";
-  return `usage:${sign}${score} (${record.successes}/${record.attempts} success, ${rate}%)`;
+  const scope = intent ? ` intent:${intent}` : "";
+  return `usage:${sign}${score}${scope} (${record.successes}/${record.attempts} success, ${rate}%)`;
 }
 
 export function writeToolUsageStats(stateRoot: string, stats: ToolUsageStats): void {
@@ -97,6 +180,10 @@ export function writeToolUsageStats(stateRoot: string, stats: ToolUsageStats): v
 
 function emptyStats(): ToolUsageStats {
   return { version: 1, tools: {} };
+}
+
+function emptyContextStore(): ToolUsageContextStore {
+  return { version: 1, contexts: [] };
 }
 
 function normalizeStats(value: unknown): ToolUsageStats {
@@ -123,6 +210,15 @@ function normalizeRecord(name: string, value: unknown): ToolUsageRecord | undefi
   if (!toolName) {
     return undefined;
   }
+  const intents: Record<string, ToolUsageIntentRecord> = {};
+  if (isRecord(value.intents)) {
+    for (const [intent, raw] of Object.entries(value.intents)) {
+      const record = normalizeIntentRecord(intent, raw);
+      if (record) {
+        intents[record.intent] = record;
+      }
+    }
+  }
   return {
     toolName,
     attempts: readCount(value.attempts),
@@ -131,8 +227,117 @@ function normalizeRecord(name: string, value: unknown): ToolUsageRecord | undefi
     consecutiveFailures: readCount(value.consecutiveFailures),
     lastUsedAt: readOptionalString(value.lastUsedAt),
     lastSucceededAt: readOptionalString(value.lastSucceededAt),
+    lastFailedAt: readOptionalString(value.lastFailedAt),
+    intents
+  };
+}
+
+function normalizeIntentRecord(
+  fallbackIntent: string,
+  value: unknown
+): ToolUsageIntentRecord | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const intent =
+    typeof value.intent === "string" && value.intent.trim() ? value.intent : fallbackIntent;
+  if (!intent) {
+    return undefined;
+  }
+  return {
+    intent,
+    attempts: readCount(value.attempts),
+    successes: readCount(value.successes),
+    failures: readCount(value.failures),
+    consecutiveFailures: readCount(value.consecutiveFailures),
+    lastUsedAt: readOptionalString(value.lastUsedAt),
+    lastSucceededAt: readOptionalString(value.lastSucceededAt),
     lastFailedAt: readOptionalString(value.lastFailedAt)
   };
+}
+
+function loadToolUsageContext(stateRoot: string): ToolUsageContextStore {
+  const file = toolUsageContextPath(stateRoot);
+  if (!existsSync(file)) {
+    return emptyContextStore();
+  }
+  const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+  return normalizeContextStore(parsed);
+}
+
+function writeToolUsageContext(stateRoot: string, store: ToolUsageContextStore): void {
+  mkdirSync(stateRoot, { recursive: true });
+  atomicWrite(
+    toolUsageContextPath(stateRoot),
+    `${JSON.stringify(normalizeContextStore(store), null, 2)}\n`
+  );
+}
+
+function normalizeContextStore(value: unknown): ToolUsageContextStore {
+  if (!isRecord(value) || !Array.isArray(value.contexts)) {
+    return emptyContextStore();
+  }
+  return {
+    version: 1,
+    contexts: value.contexts.flatMap((raw): ToolSearchContext[] => {
+      if (!isRecord(raw)) {
+        return [];
+      }
+      const query = readOptionalString(raw.query);
+      const createdAt = readOptionalString(raw.createdAt);
+      const intents = readStringList(raw.intents);
+      const toolNames = readStringList(raw.toolNames);
+      if (!query || !createdAt || intents.length === 0 || toolNames.length === 0) {
+        return [];
+      }
+      return [{ query, intents: uniqueIntents(intents), toolNames, createdAt }];
+    })
+  };
+}
+
+function updateUsageRecord(
+  current: ToolUsageRecord,
+  success: boolean,
+  now: string
+): ToolUsageRecord {
+  return {
+    ...current,
+    intents: { ...current.intents },
+    attempts: current.attempts + 1,
+    successes: current.successes + (success ? 1 : 0),
+    failures: current.failures + (success ? 0 : 1),
+    consecutiveFailures: success ? 0 : current.consecutiveFailures + 1,
+    lastUsedAt: now,
+    lastSucceededAt: success ? now : current.lastSucceededAt,
+    lastFailedAt: success ? current.lastFailedAt : now
+  };
+}
+
+function updateIntentRecord(
+  current: ToolUsageIntentRecord,
+  success: boolean,
+  now: string
+): ToolUsageIntentRecord {
+  return {
+    ...current,
+    attempts: current.attempts + 1,
+    successes: current.successes + (success ? 1 : 0),
+    failures: current.failures + (success ? 0 : 1),
+    consecutiveFailures: success ? 0 : current.consecutiveFailures + 1,
+    lastUsedAt: now,
+    lastSucceededAt: success ? now : current.lastSucceededAt,
+    lastFailedAt: success ? current.lastFailedAt : now
+  };
+}
+
+function uniqueIntents(intents: string[]): string[] {
+  return Array.from(new Set(intents.map((intent) => intent.trim()).filter(Boolean)));
+}
+
+function readStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+    : [];
 }
 
 function readCount(value: unknown): number {

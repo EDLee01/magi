@@ -22,7 +22,11 @@ import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
 import { MemoryNodeStore } from "../src/memory-node-store.js";
-import { loadToolUsageStats, toolUsageStatsPath } from "../src/tool-usage-stats.js";
+import {
+  loadToolUsageStats,
+  recordToolUsage,
+  toolUsageStatsPath
+} from "../src/tool-usage-stats.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -1586,7 +1590,7 @@ describe("tool registry", () => {
       {
         query: "remember this workflow for future sessions",
         top: "Memorize",
-        contains: ["Memorize", "SessionSearch"]
+        contains: ["Memorize", "LearningDraft"]
       },
       {
         query: "automate browser click and screenshot",
@@ -1676,6 +1680,66 @@ describe("tool registry", () => {
     expect(firstToolSearchResult(search.content)).toBe("Glob");
     expect(search.content).toContain("usage:+");
     expect(search.content).toContain("usage:-");
+  });
+
+  it("uses task-intent tool feedback without letting unrelated usage dominate ranking", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const stateRoot = path.join(workspace, ".magi-next", "state");
+
+    for (let index = 0; index < 8; index += 1) {
+      recordToolUsage({
+        stateRoot,
+        toolName: "Grep",
+        success: true,
+        intents: ["web-research"]
+      });
+      recordToolUsage({
+        stateRoot,
+        toolName: "Glob",
+        success: false,
+        intents: ["web-research"]
+      });
+    }
+    for (let index = 0; index < 4; index += 1) {
+      recordToolUsage({
+        stateRoot,
+        toolName: "Grep",
+        success: false,
+        intents: ["workspace-search"]
+      });
+      recordToolUsage({
+        stateRoot,
+        toolName: "Glob",
+        success: true,
+        intents: ["workspace-search"]
+      });
+    }
+
+    const stats = loadToolUsageStats(stateRoot);
+    expect(stats.tools.Grep.intents["workspace-search"]).toMatchObject({
+      failures: 4,
+      consecutiveFailures: 4
+    });
+    expect(stats.tools.Grep.intents["web-research"]).toMatchObject({
+      successes: 8,
+      consecutiveFailures: 0
+    });
+
+    const search = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot,
+      toolUse: {
+        type: "tool-use",
+        id: "tool-search-intent-feedback",
+        name: "ToolSearch",
+        input: { query: "search workspace files", max_results: 5 }
+      }
+    });
+
+    expect(search.isError).toBeUndefined();
+    expect(firstToolSearchResult(search.content)).toBe("Glob");
+    expect(search.content).toContain("usage:+");
+    expect(search.content).toContain("intent:workspace-search");
   });
 
   it("diagnoses workspace manifests, scripts, languages, commands, and git state without executing commands", async () => {

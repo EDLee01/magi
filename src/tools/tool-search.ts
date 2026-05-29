@@ -1,4 +1,9 @@
-import { formatToolUsageReason, ToolUsageStats, toolUsageScore } from "../tool-usage-stats.js";
+import {
+  formatToolUsageReason,
+  recordToolSearchContext,
+  ToolUsageStats,
+  toolUsageScore
+} from "../tool-usage-stats.js";
 
 export interface ToolSearchableRecord {
   name: string;
@@ -18,6 +23,7 @@ export interface ToolSearchInput {
 
 export interface ToolSearchOptions {
   usageStats?: ToolUsageStats;
+  stateRoot?: string;
 }
 
 export const ToolSearchInputSchema = {
@@ -57,6 +63,12 @@ export function executeToolSearch(
   if (matches.length === 0) {
     return `No tools match ${JSON.stringify(input.query)}`;
   }
+  recordToolSearchContext({
+    stateRoot: options.stateRoot,
+    query: input.query,
+    intents: analysis.intents,
+    toolNames: matches.map((match) => match.tool.name)
+  });
   return [
     `ToolSearch results for ${JSON.stringify(input.query)} (${matches.length})`,
     analysis.intents.length > 0 ? `intent: ${analysis.intents.join(", ")}` : undefined,
@@ -174,13 +186,40 @@ function scoreTool(
     }
   }
   const usage = options.usageStats?.tools[tool.name];
-  const usageScore = toolUsageScore(usage);
-  if (usageScore !== 0) {
-    score += usageScore;
-    const usageReason = formatToolUsageReason(usage);
-    if (usageReason) {
-      addReason(reasons, usageReason);
+  const usageSignals = scoreUsageSignals(usage, analysis.intents);
+  if (usageSignals.score !== 0) {
+    score += usageSignals.score;
+    for (const reason of usageSignals.reasons) {
+      addReason(reasons, reason);
     }
+  }
+  return { score, reasons };
+}
+
+function scoreUsageSignals(
+  usage: ToolUsageStats["tools"][string] | undefined,
+  intents: string[]
+): { score: number; reasons: string[] } {
+  if (!usage) {
+    return { score: 0, reasons: [] };
+  }
+  let score = toolUsageScore(usage);
+  const reasons: string[] = [];
+  for (const intent of intents) {
+    const record = usage.intents[intent];
+    const intentScore = toolUsageScore(record);
+    if (intentScore === 0) {
+      continue;
+    }
+    score += intentScore;
+    const reason = formatToolUsageReason(record, intent);
+    if (reason) {
+      reasons.push(reason);
+    }
+  }
+  const globalReason = formatToolUsageReason(usage);
+  if (globalReason && toolUsageScore(usage) !== 0) {
+    reasons.push(globalReason);
   }
   return { score, reasons };
 }
@@ -190,7 +229,7 @@ function analyzeToolSearchQuery(query: string): ToolSearchAnalysis {
   const terms = tokenizeToolText(query);
   const expandedTerms = expandTerms(terms);
   const intents = INTENT_PROFILES.filter((profile) =>
-    matchesIntent(profile, normalizedQuery, expandedTerms)
+    matchesIntent(profile, normalizedQuery, terms)
   ).map((profile) => profile.name);
   return { terms, expandedTerms, normalizedQuery, intents };
 }
@@ -198,9 +237,9 @@ function analyzeToolSearchQuery(query: string): ToolSearchAnalysis {
 function matchesIntent(
   profile: ToolIntentProfile,
   normalizedQuery: string,
-  expandedTerms: string[]
+  terms: string[]
 ): boolean {
-  const termSet = new Set(expandedTerms);
+  const termSet = new Set(terms);
   if (profile.triggers.some((trigger) => termSet.has(trigger))) return true;
   return (profile.phrases ?? []).some((phrase) => normalizedQuery.includes(phrase));
 }

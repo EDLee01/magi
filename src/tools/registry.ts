@@ -230,7 +230,11 @@ import {
   TodoWriteInputSchema
 } from "./todo.js";
 import { executeToolSearch, parseToolSearchInput, ToolSearchInputSchema } from "./tool-search.js";
-import { loadToolUsageStats, recordToolUsage } from "../tool-usage-stats.js";
+import {
+  loadToolUsageStats,
+  recordToolUsage,
+  toolUsageIntentsForTool
+} from "../tool-usage-stats.js";
 import {
   executeTaskCreate,
   executeTaskGet,
@@ -562,7 +566,15 @@ export async function executeRegisteredTool(input: {
       }),
       permission: approvalPermission
     };
-    recordToolUsage({ stateRoot: input.stateRoot, toolName: input.toolUse.name, success: true });
+    recordToolUsage({
+      stateRoot: input.stateRoot,
+      toolName: input.toolUse.name,
+      success: true,
+      intents: toolUsageIntentsForTool({
+        stateRoot: input.stateRoot,
+        toolName: input.toolUse.name
+      })
+    });
     return result;
   } catch (error) {
     if (shouldRethrowToolExecutionError(error)) {
@@ -575,7 +587,11 @@ export async function executeRegisteredTool(input: {
         recordToolUsage({
           stateRoot: input.stateRoot,
           toolName: input.toolUse.name,
-          success: false
+          success: false,
+          intents: toolUsageIntentsForTool({
+            stateRoot: input.stateRoot,
+            toolName: input.toolUse.name
+          })
         });
         return result;
       }
@@ -584,7 +600,15 @@ export async function executeRegisteredTool(input: {
       input.toolUse,
       error instanceof Error ? error.message : String(error)
     );
-    recordToolUsage({ stateRoot: input.stateRoot, toolName: input.toolUse.name, success: false });
+    recordToolUsage({
+      stateRoot: input.stateRoot,
+      toolName: input.toolUse.name,
+      success: false,
+      intents: toolUsageIntentsForTool({
+        stateRoot: input.stateRoot,
+        toolName: input.toolUse.name
+      })
+    });
     return result;
   }
 }
@@ -1553,7 +1577,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: ToolSearchInputSchema,
     call: (input, context) =>
       executeToolSearch(parseToolSearchInput(input), BUILTIN_TOOLS, {
-        usageStats: loadToolUsageStats(context.stateRoot)
+        usageStats: loadToolUsageStats(context.stateRoot),
+        stateRoot: context.stateRoot
       }),
     isReadOnly: () => true,
     isDestructive: () => false,

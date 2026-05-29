@@ -128,8 +128,10 @@ describe("capability report", () => {
       toolDiscovery: toolDiscoveryReport({
         learningDraftRevealed: false,
         feedbackRankingUsedUsage: false,
+        intentScopedUsageRecorded: false,
         revealedToolCount: 21,
-        grepFailures: 2
+        grepFailures: 2,
+        grepIntentFailures: 2
       }),
       controlApi: controlApiReport()
     });
@@ -140,7 +142,9 @@ describe("capability report", () => {
       expect.arrayContaining([
         "learningDraftRevealed=false",
         "feedbackRankingUsedUsage=false",
+        "intentScopedUsageRecorded=false",
         "grepFailures < 4",
+        "grepIntentFailures < 4",
         "revealedToolCount did not increase"
       ])
     );
@@ -295,10 +299,13 @@ function toolDiscoveryReport(
     learningDraftRevealed: boolean;
     feedbackResultsReturned: boolean;
     feedbackRankingUsedUsage: boolean;
+    intentScopedUsageRecorded: boolean;
     initialToolCount: number;
     revealedToolCount: number;
     grepFailures: number;
     globSuccesses: number;
+    grepIntentFailures: number;
+    globIntentSuccesses: number;
   }> = {}
 ): Record<string, unknown> {
   return {
@@ -319,10 +326,13 @@ function toolDiscoveryReport(
           learningDraftRevealed: true,
           feedbackResultsReturned: true,
           feedbackRankingUsedUsage: true,
+          intentScopedUsageRecorded: true,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,
           globSuccesses: 4,
+          grepIntentFailures: 4,
+          globIntentSuccesses: 4,
           ...overrides
         }
       }

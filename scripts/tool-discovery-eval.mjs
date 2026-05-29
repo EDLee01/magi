@@ -36,13 +36,18 @@ try {
     learningDraftRevealed: false,
     feedbackResultsReturned: false,
     feedbackRankingUsedUsage: false,
+    intentScopedUsageRecorded: false,
     initialToolCount: 0,
     revealedToolCount: 0
   };
 
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
-    writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }), "utf8");
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig({ port: provider.port }),
+      "utf8"
+    );
     const output = await runCli([
       "--permission-mode",
       "acceptEdits",
@@ -65,8 +70,16 @@ try {
     const stats = JSON.parse(readFileSync(statsPath, "utf8"));
     const grepFailures = readNumber(stats.tools?.Grep?.failures);
     const globSuccesses = readNumber(stats.tools?.Glob?.successes);
+    const grepIntentFailures = readNumber(
+      stats.tools?.Grep?.intents?.["workspace-search"]?.failures
+    );
+    const globIntentSuccesses = readNumber(
+      stats.tools?.Glob?.intents?.["workspace-search"]?.successes
+    );
     assert(grepFailures >= 4, "Grep failures were not recorded");
     assert(globSuccesses >= 4, "Glob successes were not recorded");
+    assert(grepIntentFailures >= 4, "Grep workspace-search intent failures were not recorded");
+    assert(globIntentSuccesses >= 4, "Glob workspace-search intent successes were not recorded");
 
     assert(state.coreToolsExposed, "core tool exposure was not verified");
     assert(state.deferredToolsHidden, "deferred tool hiding was not verified");
@@ -75,6 +88,7 @@ try {
     assert(state.learningDraftRevealed, "LearningDraft reveal was not verified");
     assert(state.feedbackResultsReturned, "tool feedback results were not returned to the model");
     assert(state.feedbackRankingUsedUsage, "ToolSearch usage feedback ranking was not verified");
+    state.intentScopedUsageRecorded = grepIntentFailures >= 4 && globIntentSuccesses >= 4;
 
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
@@ -95,10 +109,13 @@ try {
             learningDraftRevealed: state.learningDraftRevealed,
             feedbackResultsReturned: state.feedbackResultsReturned,
             feedbackRankingUsedUsage: state.feedbackRankingUsedUsage,
+            intentScopedUsageRecorded: state.intentScopedUsageRecorded,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
-            globSuccesses
+            globSuccesses,
+            grepIntentFailures,
+            globIntentSuccesses
           }
         }
       ]
@@ -165,6 +182,19 @@ function createRouter(state) {
       state.browserAutomationRankedBrowser = true;
       state.learningDraftRevealed = true;
       return toolResponse([
+        toolCall("tool-search-before-feedback", "ToolSearch", {
+          query: "search workspace files",
+          max_results: 5
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(
+        transcript.includes('ToolSearch results for "search workspace files"'),
+        "workspace ToolSearch result was not visible before feedback"
+      );
+      return toolResponse([
         toolCall("grep-bad-path-1", "Grep", { pattern: "needle", path: "../outside" }),
         toolCall("grep-bad-path-2", "Grep", { pattern: "needle", path: "../outside" }),
         toolCall("grep-bad-path-3", "Grep", { pattern: "needle", path: "../outside" }),
@@ -176,7 +206,7 @@ function createRouter(state) {
       ]);
     }
 
-    if (turn === 3) {
+    if (turn === 4) {
       assert(
         transcript.includes("Search path is outside allowed directories"),
         "Grep failure feedback was not visible"
