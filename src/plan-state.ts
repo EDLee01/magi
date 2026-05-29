@@ -16,6 +16,9 @@ export interface PlanReviewRecord {
   createdAt: string;
   updatedAt: string;
   response?: string;
+  revisesPlanId?: string;
+  revisedByPlanId?: string;
+  rootPlanId?: string;
 }
 
 interface PlanStoreData {
@@ -35,6 +38,7 @@ export function recordPlanReview(input: {
   plan: string;
   status?: PlanReviewStatus;
   response?: string;
+  revisesPlanId?: string;
 }): PlanReviewRecord {
   const plan = input.plan.trim();
   if (!plan) {
@@ -42,6 +46,16 @@ export function recordPlanReview(input: {
   }
   const data = readPlanStore(input.stateRoot);
   const now = new Date().toISOString();
+  const revisesPlanId = input.revisesPlanId?.trim() || undefined;
+  const predecessor = revisesPlanId
+    ? data.plans.find((candidate) => candidate.id === revisesPlanId)
+    : undefined;
+  if (revisesPlanId && !predecessor) {
+    throw new Error(`Cannot revise unknown plan: ${revisesPlanId}`);
+  }
+  if (predecessor?.revisedByPlanId) {
+    throw new Error(`Plan already revised by ${predecessor.revisedByPlanId}`);
+  }
   const record: PlanReviewRecord = {
     id: randomUUID(),
     sessionId: input.sessionId,
@@ -51,8 +65,13 @@ export function recordPlanReview(input: {
     status: input.status ?? "submitted",
     createdAt: now,
     updatedAt: now,
-    response: input.response?.trim() || undefined
+    response: input.response?.trim() || undefined,
+    revisesPlanId,
+    rootPlanId: predecessor ? (predecessor.rootPlanId ?? predecessor.id) : undefined
   };
+  if (predecessor) {
+    predecessor.revisedByPlanId = record.id;
+  }
   data.plans.push(record);
   writePlanStore(input.stateRoot, data);
   return record;
@@ -75,9 +94,11 @@ export function updatePlanReviewStatus(
 
 export function listPlanReviews(stateRoot: string, sessionId?: string): PlanReviewRecord[] {
   const plans = readPlanStore(stateRoot).plans;
-  return (sessionId ? plans.filter((plan) => plan.sessionId === sessionId) : plans)
-    .slice()
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return plans
+    .map((plan, index) => ({ plan, index }))
+    .filter(({ plan }) => !sessionId || plan.sessionId === sessionId)
+    .sort((a, b) => b.plan.updatedAt.localeCompare(a.plan.updatedAt) || b.index - a.index)
+    .map(({ plan }) => plan);
 }
 
 export function getLatestPlanReview(
@@ -85,6 +106,15 @@ export function getLatestPlanReview(
   sessionId?: string
 ): PlanReviewRecord | undefined {
   return listPlanReviews(stateRoot, sessionId)[0];
+}
+
+export function getLatestPlanReviewNeedingRevision(
+  stateRoot: string,
+  sessionId: string
+): PlanReviewRecord | undefined {
+  return listPlanReviews(stateRoot, sessionId).find(
+    (plan) => plan.status === "needs_revision" && !plan.revisedByPlanId
+  );
 }
 
 export function formatPlanReview(record: PlanReviewRecord | undefined): string {
@@ -95,6 +125,9 @@ export function formatPlanReview(record: PlanReviewRecord | undefined): string {
     `Session: ${record.sessionId}`,
     record.jobId ? `Job: ${record.jobId}` : undefined,
     record.toolUseId ? `Tool use: ${record.toolUseId}` : undefined,
+    record.revisesPlanId ? `Revises plan: ${record.revisesPlanId}` : undefined,
+    record.revisedByPlanId ? `Revised by plan: ${record.revisedByPlanId}` : undefined,
+    record.rootPlanId ? `Root plan: ${record.rootPlanId}` : undefined,
     `Updated: ${record.updatedAt}`,
     record.response ? `Response: ${record.response}` : undefined,
     "",
@@ -111,7 +144,7 @@ export function formatPlanReviewList(records: PlanReviewRecord[]): string {
     "Submitted plans:",
     ...records.map(
       (record) =>
-        `- ${record.status.padEnd(14)} ${record.id} ${record.updatedAt} ${firstLine(record.plan)}`
+        `- ${record.status.padEnd(14)} ${record.id} ${record.updatedAt}${formatPlanReviewLinks(record)} ${firstLine(record.plan)}`
     )
   ].join("\n");
 }
@@ -162,7 +195,11 @@ function normalizePlanReview(value: unknown): PlanReviewRecord | undefined {
     status,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-    response: typeof record.response === "string" ? record.response : undefined
+    response: typeof record.response === "string" ? record.response : undefined,
+    revisesPlanId: typeof record.revisesPlanId === "string" ? record.revisesPlanId : undefined,
+    revisedByPlanId:
+      typeof record.revisedByPlanId === "string" ? record.revisedByPlanId : undefined,
+    rootPlanId: typeof record.rootPlanId === "string" ? record.rootPlanId : undefined
   };
 }
 
@@ -180,4 +217,12 @@ function firstLine(text: string): string {
       .find((item) => item.trim())
       ?.trim() ?? "";
   return line.length > 80 ? `${line.slice(0, 77)}...` : line;
+}
+
+function formatPlanReviewLinks(record: PlanReviewRecord): string {
+  const links = [
+    record.revisesPlanId ? `revises:${record.revisesPlanId}` : undefined,
+    record.revisedByPlanId ? `revised-by:${record.revisedByPlanId}` : undefined
+  ].filter((link): link is string => Boolean(link));
+  return links.length > 0 ? ` ${links.join(" ")}` : "";
 }

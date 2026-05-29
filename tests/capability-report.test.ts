@@ -207,7 +207,8 @@ describe("capability report", () => {
         planRevisionFeedbackSeen: false,
         planRevisionPersisted: false,
         planApprovalSeen: false,
-        planApprovalPersisted: false
+        planApprovalPersisted: false,
+        planRevisionChainLinked: false
       }),
       toolDiscovery: toolDiscoveryReport(),
       controlApi: controlApiReport()
@@ -224,7 +225,8 @@ describe("capability report", () => {
         "planRevisionFeedbackSeen=false",
         "planRevisionPersisted=false",
         "planApprovalSeen=false",
-        "planApprovalPersisted=false"
+        "planApprovalPersisted=false",
+        "planRevisionChainLinked=false"
       ])
     );
   });
@@ -532,6 +534,7 @@ function goalPlanReport(
     planRevisionPersisted: boolean;
     planApprovalSeen: boolean;
     planApprovalPersisted: boolean;
+    planRevisionChainLinked: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
   }> = {}
@@ -558,6 +561,7 @@ function goalPlanReport(
           planRevisionPersisted: true,
           planApprovalSeen: true,
           planApprovalPersisted: true,
+          planRevisionChainLinked: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

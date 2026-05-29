@@ -46,4 +46,47 @@ describe("plan review state", () => {
       temp.cleanup();
     }
   });
+
+  it("tracks plan revision chains and formats their links", () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const original = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "session-chain",
+        toolUseId: "exit-plan-original",
+        plan: "1. Edit first\n2. Verify later",
+        status: "needs_revision",
+        response: "No, revise"
+      });
+      const revised = recordPlanReview({
+        stateRoot: paths.stateRoot,
+        sessionId: "session-chain",
+        toolUseId: "exit-plan-revised",
+        plan: "1. Inspect first\n2. Edit\n3. Verify",
+        status: "approved",
+        response: "Yes, proceed",
+        revisesPlanId: original.id
+      });
+
+      const plans = listPlanReviews(paths.stateRoot, "session-chain");
+      expect(plans).toEqual([
+        expect.objectContaining({
+          id: revised.id,
+          revisesPlanId: original.id,
+          rootPlanId: original.id
+        }),
+        expect.objectContaining({
+          id: original.id,
+          revisedByPlanId: revised.id
+        })
+      ]);
+      expect(formatPlanReview(plans[0])).toContain(`Revises plan: ${original.id}`);
+      expect(formatPlanReview(plans[0])).toContain(`Root plan: ${original.id}`);
+      expect(formatPlanReviewList(plans)).toContain(`revises:${original.id}`);
+      expect(formatPlanReviewList(plans)).toContain(`revised-by:${revised.id}`);
+    } finally {
+      temp.cleanup();
+    }
+  });
 });

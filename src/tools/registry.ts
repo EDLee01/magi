@@ -265,7 +265,11 @@ import {
   parseEnterPlanModeInput,
   parseExitPlanModeInput
 } from "./plan-mode.js";
-import { recordPlanReview, updatePlanReviewStatus } from "../plan-state.js";
+import {
+  getLatestPlanReviewNeedingRevision,
+  recordPlanReview,
+  updatePlanReviewStatus
+} from "../plan-state.js";
 import {
   EnterWorktreeInputSchema,
   ExitWorktreeInputSchema,
@@ -1988,6 +1992,10 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     inputSchema: ExitPlanModeInputSchema,
     call: async (input, context) => {
       const parsed = parseExitPlanModeInput(input);
+      const previousPlan =
+        context.stateRoot && context.sessionId
+          ? getLatestPlanReviewNeedingRevision(context.stateRoot, context.sessionId)
+          : undefined;
       const planRecord =
         context.stateRoot && context.sessionId
           ? recordPlanReview({
@@ -1995,7 +2003,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
               sessionId: context.sessionId,
               toolUseId: context.toolUse?.id,
               plan: parsed.plan,
-              status: "submitted"
+              status: "submitted",
+              revisesPlanId: previousPlan?.id
             })
           : undefined;
       // Ask the user to approve or reject the plan

@@ -230,6 +230,10 @@ try {
     const planRevision = await runPlanRevisionApprovalFlow(tools.executeRegisteredTool);
     const planRevisionPersisted = assertPlanStoreRevisionPersisted(planRevision.revisionPlanId);
     const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
+    const planRevisionChainLinked = assertPlanRevisionChainLinked(
+      planRevision.revisionPlanId,
+      planRevision.approvedPlanId
+    );
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
@@ -259,6 +263,7 @@ try {
             planRevisionPersisted,
             planApprovalSeen: planRevision.approvalSeen,
             planApprovalPersisted,
+            planRevisionChainLinked,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -553,6 +558,21 @@ function assertPlanStoreApprovalPersisted(planId) {
   assert(plan.toolUseId === "approve-goal-plan", "approved plan missed tool id");
   assert(plan.response === "Yes, proceed", "approved plan missed approval response");
   assert(plan.plan === approvedPlanText, "approved plan text was not persisted");
+  return true;
+}
+
+function assertPlanRevisionChainLinked(revisionPlanId, approvedPlanId) {
+  const plans = JSON.parse(readFileSync(path.join(configDir, "state", "plans.json"), "utf8")).plans;
+  const revision = plans.find((candidate) => candidate.id === revisionPlanId);
+  const approved = plans.find((candidate) => candidate.id === approvedPlanId);
+  assert(revision, "revision chain missed original revision plan");
+  assert(approved, "revision chain missed approved plan");
+  assert(
+    revision.revisedByPlanId === approvedPlanId,
+    "revision plan was not linked to approved replacement"
+  );
+  assert(approved.revisesPlanId === revisionPlanId, "approved plan did not revise prior plan");
+  assert(approved.rootPlanId === revisionPlanId, "approved plan missed root plan id");
   return true;
 }
 

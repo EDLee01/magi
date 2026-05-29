@@ -324,6 +324,44 @@ describe("CLI entrypoint", () => {
     expect(list.stdout).toContain(plan.id);
   });
 
+  it("shows plan revision links from the CLI", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const sessionId = "33333333-3333-4333-8333-333333333336";
+    await runCli(
+      ["--session-id", sessionId, "-p", "prepare plan chain session"],
+      temp.env,
+      process.cwd()
+    );
+    const { recordPlanReview } = await import("../src/plan-state.js");
+    const original = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId,
+      plan: "1. Edit immediately",
+      status: "needs_revision",
+      response: "No, revise"
+    });
+    const revised = recordPlanReview({
+      stateRoot: paths.stateRoot,
+      sessionId,
+      plan: "1. Inspect first\n2. Verify before editing",
+      status: "approved",
+      response: "Yes, proceed",
+      revisesPlanId: original.id
+    });
+
+    const show = await runCli(["plan", "--session-id", sessionId], temp.env, process.cwd());
+    expect(show.exitCode).toBe(0);
+    expect(show.stdout).toContain(`Plan: ${revised.id}`);
+    expect(show.stdout).toContain(`Revises plan: ${original.id}`);
+    expect(show.stdout).toContain(`Root plan: ${original.id}`);
+
+    const list = await runCli(["plan", "list", "--session-id", sessionId], temp.env);
+    expect(list.exitCode).toBe(0);
+    expect(list.stdout).toContain(`revises:${original.id}`);
+    expect(list.stdout).toContain(`revised-by:${revised.id}`);
+  });
+
   it("lists submitted plans across sessions from the CLI", async () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);

@@ -1317,15 +1317,22 @@ describe("tool registry", () => {
         status: "approved",
         toolUseId: "exit-plan-approved",
         plan: revisedPlan,
-        response: "Yes, proceed"
+        response: "Yes, proceed",
+        revisesPlanId: expect.any(String),
+        rootPlanId: expect.any(String)
       }),
       expect.objectContaining({
         status: "needs_revision",
         toolUseId: "exit-plan-revise",
         plan: firstPlan,
-        response: "No, revise"
+        response: "No, revise",
+        revisedByPlanId: expect.any(String)
       })
     ]);
+    const [approvedRecord, revisionRecord] = listPlanReviews(stateRoot, "session-plan-revision");
+    expect(approvedRecord.revisesPlanId).toBe(revisionRecord.id);
+    expect(approvedRecord.rootPlanId).toBe(revisionRecord.id);
+    expect(revisionRecord.revisedByPlanId).toBe(approvedRecord.id);
   });
 
   it("rejects invalid AskUserQuestion shapes and answers", async () => {
