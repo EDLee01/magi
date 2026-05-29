@@ -202,7 +202,11 @@ describe("capability report", () => {
       goalPlan: goalPlanReport({
         completedGoalSuppressed: false,
         blockedGoalPersisted: false,
-        planReviewPersisted: false
+        planReviewPersisted: false,
+        planRevisionFeedbackSeen: false,
+        planRevisionPersisted: false,
+        planApprovalSeen: false,
+        planApprovalPersisted: false
       }),
       toolDiscovery: toolDiscoveryReport(),
       controlApi: controlApiReport()
@@ -214,7 +218,11 @@ describe("capability report", () => {
       expect.arrayContaining([
         "completedGoalSuppressed=false",
         "blockedGoalPersisted=false",
-        "planReviewPersisted=false"
+        "planReviewPersisted=false",
+        "planRevisionFeedbackSeen=false",
+        "planRevisionPersisted=false",
+        "planApprovalSeen=false",
+        "planApprovalPersisted=false"
       ])
     );
   });
@@ -478,6 +486,10 @@ function goalPlanReport(
     writeDeniedInPlanMode: boolean;
     planSubmittedToModel: boolean;
     planReviewPersisted: boolean;
+    planRevisionFeedbackSeen: boolean;
+    planRevisionPersisted: boolean;
+    planApprovalSeen: boolean;
+    planApprovalPersisted: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
   }> = {}
@@ -499,6 +511,10 @@ function goalPlanReport(
           writeDeniedInPlanMode: true,
           planSubmittedToModel: true,
           planReviewPersisted: true,
+          planRevisionFeedbackSeen: true,
+          planRevisionPersisted: true,
+          planApprovalSeen: true,
+          planApprovalPersisted: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

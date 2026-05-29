@@ -1257,6 +1257,77 @@ describe("tool registry", () => {
     ]);
   });
 
+  it("persists ExitPlanMode revision feedback and a later approved revised plan", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-plan-revision-"));
+    const stateRoot = path.join(workspace, ".magi-next", "state");
+    const firstPlan = "1. Edit immediately\n2. Verify later";
+    const revisedPlan = "1. Inspect first\n2. Apply the minimal edit\n3. Verify before final";
+
+    const revision = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot,
+      sessionId: "session-plan-revision",
+      toolUse: {
+        type: "tool-use",
+        id: "exit-plan-revise",
+        name: "ExitPlanMode",
+        input: { plan: firstPlan }
+      },
+      userQuestionResolver: ({ question }) => ({
+        answers: [
+          {
+            question: question.questions[0].question,
+            selectedLabels: ["No, revise"],
+            selectedOptions: [question.questions[0].options[1]]
+          }
+        ]
+      })
+    });
+    expect(revision.isError).toBeUndefined();
+    expect(revision.content).toContain("Plan not approved.");
+    expect(revision.content).toContain("Stay in plan mode.");
+
+    const approved = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot,
+      sessionId: "session-plan-revision",
+      toolUse: {
+        type: "tool-use",
+        id: "exit-plan-approved",
+        name: "ExitPlanMode",
+        input: { plan: revisedPlan }
+      },
+      userQuestionResolver: ({ question }) => ({
+        answers: [
+          {
+            question: question.questions[0].question,
+            selectedLabels: ["Yes, proceed"],
+            selectedOptions: [question.questions[0].options[0]]
+          }
+        ]
+      })
+    });
+    expect(approved.isError).toBeUndefined();
+    expect(approved.content).toContain("Plan approved. Proceeding with implementation.");
+    expect(approved.content).toContain(revisedPlan);
+
+    const { listPlanReviews } = await import("../src/plan-state.js");
+    expect(listPlanReviews(stateRoot, "session-plan-revision")).toEqual([
+      expect.objectContaining({
+        status: "approved",
+        toolUseId: "exit-plan-approved",
+        plan: revisedPlan,
+        response: "Yes, proceed"
+      }),
+      expect.objectContaining({
+        status: "needs_revision",
+        toolUseId: "exit-plan-revise",
+        plan: firstPlan,
+        response: "No, revise"
+      })
+    ]);
+  });
+
   it("rejects invalid AskUserQuestion shapes and answers", async () => {
     const invalidQuestion = await executeRegisteredTool({
       cwd: process.cwd(),

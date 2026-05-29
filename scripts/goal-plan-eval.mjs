@@ -29,12 +29,19 @@ const planText = [
   "2. Verify mutation denial before implementation",
   "3. Persist the plan review before editing"
 ].join("\n");
+const revisionPlanText = ["1. Edit immediately", "2. Verify later"].join("\n");
+const approvedPlanText = [
+  "1. Inspect the plan feedback",
+  "2. Revise the implementation order",
+  "3. Proceed only after approval"
+].join("\n");
 
 let harnessReport;
 
 try {
   assert(existsSync(cliPath), "dist/cli.js does not exist. Run npm run build first.");
   harnessReport = await import("../dist/harness-report.js");
+  const tools = await import("../dist/tools/registry.js");
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workDir, { recursive: true });
 
@@ -189,6 +196,9 @@ try {
     const blockedGoalPersisted = assertGoalStoreBlocked();
     state.blockedGoalPersisted = blockedGoalPersisted;
     const planReviewPersisted = assertPlanStoreSubmitted();
+    const planRevision = await runPlanRevisionApprovalFlow(tools.executeRegisteredTool);
+    const planRevisionPersisted = assertPlanStoreRevisionPersisted(planRevision.revisionPlanId);
+    const planApprovalPersisted = assertPlanStoreApprovalPersisted(planRevision.approvedPlanId);
     assert(state.activeGoalContextSeen, "provider did not see active goal context");
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
@@ -213,6 +223,10 @@ try {
             writeDeniedInPlanMode: state.writeDeniedInPlanMode,
             planSubmittedToModel: state.planSubmittedToModel,
             planReviewPersisted,
+            planRevisionFeedbackSeen: planRevision.revisionFeedbackSeen,
+            planRevisionPersisted,
+            planApprovalSeen: planRevision.approvalSeen,
+            planApprovalPersisted,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -425,6 +439,95 @@ function assertPlanStoreSubmitted() {
   assert(plan.status === "submitted", "headless plan review should remain submitted");
   assert(plan.toolUseId === "submit-goal-plan", "plan review missed the ExitPlanMode tool id");
   return true;
+}
+
+async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
+  const revision = await executeRegisteredTool({
+    cwd: workDir,
+    stateRoot: path.join(configDir, "state"),
+    sessionId,
+    toolUse: {
+      type: "tool-use",
+      id: "revise-goal-plan",
+      name: "ExitPlanMode",
+      input: { plan: revisionPlanText }
+    },
+    userQuestionResolver: ({ question }) => ({
+      answers: [
+        {
+          question: question.questions[0].question,
+          selectedLabels: ["No, revise"],
+          selectedOptions: [question.questions[0].options[1]]
+        }
+      ]
+    })
+  });
+  assert(!revision.isError, `revision plan tool errored: ${revision.content}`);
+  assert(revision.content.includes("Plan not approved."), "revision feedback was not visible");
+  assert(revision.content.includes("Stay in plan mode."), "revision guidance was not visible");
+  const revisionPlanId = parsePlanId(revision.content);
+
+  const approved = await executeRegisteredTool({
+    cwd: workDir,
+    stateRoot: path.join(configDir, "state"),
+    sessionId,
+    toolUse: {
+      type: "tool-use",
+      id: "approve-goal-plan",
+      name: "ExitPlanMode",
+      input: { plan: approvedPlanText }
+    },
+    userQuestionResolver: ({ question }) => ({
+      answers: [
+        {
+          question: question.questions[0].question,
+          selectedLabels: ["Yes, proceed"],
+          selectedOptions: [question.questions[0].options[0]]
+        }
+      ]
+    })
+  });
+  assert(!approved.isError, `approved plan tool errored: ${approved.content}`);
+  assert(approved.content.includes("Plan approved."), "approval feedback was not visible");
+  assert(approved.content.includes(approvedPlanText), "approved plan text was not visible");
+  const approvedPlanId = parsePlanId(approved.content);
+
+  return {
+    revisionFeedbackSeen: true,
+    approvalSeen: true,
+    revisionPlanId,
+    approvedPlanId
+  };
+}
+
+function assertPlanStoreRevisionPersisted(planId) {
+  const plans = JSON.parse(readFileSync(path.join(configDir, "state", "plans.json"), "utf8")).plans;
+  const plan = plans.find((candidate) => candidate.id === planId);
+  assert(plan, "revision plan record was not persisted");
+  assert(plan.sessionId === sessionId, "revision plan used the wrong session");
+  assert(plan.status === "needs_revision", "revision plan should need revision");
+  assert(plan.toolUseId === "revise-goal-plan", "revision plan missed tool id");
+  assert(plan.response === "No, revise", "revision plan missed user feedback");
+  assert(plan.plan === revisionPlanText, "revision plan text was not persisted");
+  return true;
+}
+
+function assertPlanStoreApprovalPersisted(planId) {
+  const plans = JSON.parse(readFileSync(path.join(configDir, "state", "plans.json"), "utf8")).plans;
+  const plan = plans.find((candidate) => candidate.id === planId);
+  assert(plan, "approved plan record was not persisted");
+  assert(plan.sessionId === sessionId, "approved plan used the wrong session");
+  assert(plan.status === "approved", "approved plan should be approved");
+  assert(plan.toolUseId === "approve-goal-plan", "approved plan missed tool id");
+  assert(plan.response === "Yes, proceed", "approved plan missed approval response");
+  assert(plan.plan === approvedPlanText, "approved plan text was not persisted");
+  return true;
+}
+
+function parsePlanId(output) {
+  const match = output.match(/Plan id:\s*([0-9a-f-]+)/i);
+  assert(match, `could not parse plan id from output:\n${output}`);
+  return match[1];
 }
 
 function renderConfig({ port }) {
