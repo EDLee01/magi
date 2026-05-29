@@ -2,6 +2,7 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import qrcodeTerminal from "qrcode-terminal";
 
 import { MagiConfigError, MagiUsageError } from "./errors.js";
 import { ProviderError } from "./providers/errors.js";
@@ -1561,6 +1562,16 @@ async function runCliUnsafeWithParsed(
       }
     }
     const port = status.port ?? 8765;
+    const localPairingUrl = buildPanelPairingUrl("127.0.0.1", port, token.deviceId, token.token);
+    const isLanReachableBind = status.bind === "0.0.0.0" || status.bind === "::";
+    const lanPairingUrls = isLanReachableBind
+      ? lanIps.map((ip) => buildPanelPairingUrl(ip, port, token.deviceId, token.token))
+      : [];
+    const primaryPairingUrl = lanPairingUrls[0] ?? localPairingUrl;
+    let qrCode = "";
+    qrcodeTerminal.generate(primaryPairingUrl, { small: true }, (rendered) => {
+      qrCode = rendered;
+    });
     const lines = [
       `Pairing token created for "${deviceName}".`,
       "",
@@ -1568,23 +1579,22 @@ async function runCliUnsafeWithParsed(
       `Token:      ${token.token}`,
       `Expires:    ${token.expiresAt}`,
       "",
+      "Scan this QR code or open the pairing URL to connect the panel automatically:",
+      qrCode.trimEnd(),
+      "",
+      `Pairing URL: ${primaryPairingUrl}`,
+      "",
       "Use these on the client side. Set headers on every request:",
       "  X-Magi-Device-Id: <device-id>",
       "  Authorization: Bearer <token>",
       ""
     ];
-    if (status.bind === "0.0.0.0" || status.bind === "::" || lanIps.length > 0) {
+    if (isLanReachableBind && lanPairingUrls.length > 0) {
       lines.push("Open the panel on your phone (paired automatically):");
-      lines.push("Device ID: " + token.deviceId);
-      lines.push("Token: " + token.token);
-      lines.push("");
-      lines.push("Paste this URL into your phone's browser (token NOT in URL for security):");
-      for (const ip of lanIps) {
-        lines.push(`  http://${ip}:${port}/panel`);
-      }
+      for (const url of lanPairingUrls) lines.push(`  ${url}`);
       lines.push("");
     }
-    lines.push(`Local:     http://127.0.0.1:${port}/panel`);
+    lines.push(`Local:     ${localPairingUrl}`);
     lines.push("");
     if (status.bind !== "0.0.0.0" && status.bind !== "::") {
       lines.push(
@@ -1758,6 +1768,13 @@ async function runCliUnsafeWithParsed(
   }
 
   throw new MagiUsageError(`Unknown magi command: ${command}`);
+}
+
+function buildPanelPairingUrl(host: string, port: number, deviceId: string, token: string): string {
+  const url = new URL(`http://${host}:${port}/panel`);
+  url.searchParams.set("device", deviceId);
+  url.searchParams.set("token", token);
+  return url.toString();
 }
 
 function formatStreamJson(result: Awaited<ReturnType<typeof runHeadlessPrompt>>): string {

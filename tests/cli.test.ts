@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli.js";
 import { getMagiPaths } from "../src/paths.js";
 import { SessionStore } from "../src/session-store.js";
+import { writeDaemonPidFile } from "../src/control/daemon.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let temp: TempRoot | undefined;
@@ -42,6 +43,41 @@ describe("CLI entrypoint", () => {
     expect(result.stdout).toContain(`configFile: ${path.join(temp.path, "config.yaml")}`);
     expect(result.stdout).toContain("providers: {}");
     expect(result.stdout).toContain("fallbacks: {}");
+  });
+
+  it("prints a scannable pairing URL and QR code for mobile panels", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    server = http.createServer(async (request, response) => {
+      expect(request.url).toBe("/pairing");
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      expect(JSON.parse(raw)).toMatchObject({ name: "phone" });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          deviceId: "device_cli_pair",
+          token: "magi_cli_pair_token",
+          expiresAt: "2026-05-30T00:00:00.000Z"
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const port = Number(new URL(baseUrl).port);
+    writeDaemonPidFile(paths, { pid: process.pid, port, bind: "0.0.0.0" });
+
+    const result = await runCli(["pair", "phone"], temp.env, process.cwd());
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Pairing URL:");
+    expect(result.stdout).toContain("/panel?device=device_cli_pair&token=magi_cli_pair_token");
+    expect(result.stdout).toContain("Scan this QR code");
+    expect(result.stdout).toMatch(/[▄▀█]/);
+    expect(result.stdout).not.toContain("token NOT in URL");
   });
 
   it("runs magi -p through the headless path", async () => {
@@ -904,8 +940,8 @@ describe("CLI entrypoint", () => {
   });
 });
 
-async function listen(server: http.Server): Promise<string> {
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+async function listen(server: http.Server, port = 0): Promise<string> {
+  await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") {
     throw new Error("HTTP test server did not bind");

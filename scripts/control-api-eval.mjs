@@ -33,6 +33,9 @@ try {
   const state = {
     controlServeStarted: false,
     pairingSucceeded: false,
+    pairingUrlGenerated: false,
+    pairingUrlTokenHandoffSeen: false,
+    mdnsPeerDiscovered: false,
     approvalSseSeen: false,
     approvalResolved: false,
     approvalFileWritten: false,
@@ -84,14 +87,23 @@ try {
     const pairing = await postJson(`${serve.url}/pairing`, { name: "phone-eval" });
     assert(pairing.deviceId && pairing.token, "control pairing did not return credentials");
     state.pairingSucceeded = true;
+    const pairingUrl = buildPairingUrl(serve.url, pairing);
+    assert(
+      pairingUrl.includes("/panel?") &&
+        pairingUrl.includes(`device=${encodeURIComponent(pairing.deviceId)}`) &&
+        pairingUrl.includes(`token=${encodeURIComponent(pairing.token)}`),
+      "pairing URL did not include panel credentials"
+    );
+    state.pairingUrlGenerated = true;
     const headers = authHeaders(pairing);
 
+    await exerciseMdnsDiscovery({ controlPort, state });
     await exerciseBackgroundApprovalFlow({ serve, headers, workDir, state });
     await exerciseBackgroundCancelFlow({ serve, headers, state });
     await exerciseApprovalCancelFlow({ serve, headers, workDir, state });
     await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
-    await exerciseMobilePanelBrowserFlow({ serve, pairing, state });
+    await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
 
     assertAllState(state);
     const report = harnessReport.buildHarnessReport({
@@ -115,7 +127,7 @@ try {
     mkdirSync(path.dirname(reportPath), { recursive: true });
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
     console.log(
-      "Control API eval passed (pairing, approval, SSE, job cancel, approval cancel, session resume, mobile browser panel)."
+      "Control API eval passed (pairing URL, mDNS discovery, approval, SSE, job cancel, approval cancel, session resume, mobile browser panel)."
     );
     console.log(`Control API report: ${reportPath}`);
   } catch (error) {
@@ -431,7 +443,41 @@ async function exerciseWebPanelContract({ serve, headers, state }) {
     sse.includes("agent.query.completed");
 }
 
-async function exerciseMobilePanelBrowserFlow({ serve, pairing, state }) {
+async function exerciseMdnsDiscovery({ controlPort, state }) {
+  const mdns = await import("../dist/control/mdns.js");
+  const instanceName = `magi-control-eval-${process.pid}`;
+  const advertised = mdns.advertiseMdns({
+    hostname: "magi-control-eval.local.",
+    instanceName,
+    port: controlPort,
+    txt: {
+      version: "eval",
+      capability: "panel-pairing"
+    }
+  });
+  const browser = mdns.browseMdns({});
+  try {
+    await waitFor(
+      () =>
+        browser
+          .peers()
+          .some(
+            (peer) =>
+              peer.instanceName === instanceName &&
+              peer.port === controlPort &&
+              peer.txt?.capability === "panel-pairing"
+          ),
+      "mDNS peer discovery",
+      5_000
+    );
+    state.mdnsPeerDiscovered = true;
+  } finally {
+    browser.stop();
+    advertised.stop();
+  }
+}
+
+async function exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state }) {
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({
@@ -441,16 +487,14 @@ async function exerciseMobilePanelBrowserFlow({ serve, pairing, state }) {
       deviceScaleFactor: 3
     });
     const page = await context.newPage();
-    await page.goto(
-      `${serve.url}/panel?device=${encodeURIComponent(pairing.deviceId)}&token=${encodeURIComponent(pairing.token)}`,
-      { waitUntil: "domcontentloaded" }
-    );
+    await page.goto(pairingUrl, { waitUntil: "domcontentloaded" });
     state.mobileBrowserViewportSeen = await page.evaluate(
       () => window.innerWidth <= 430 && window.innerHeight >= 700
     );
     state.mobileBrowserTokenStored =
       (await page.evaluate(() => window.localStorage.getItem("MAGI_DEVICE_TOKEN"))) ===
       pairing.token;
+    state.pairingUrlTokenHandoffSeen = state.mobileBrowserTokenStored;
     state.mobileBrowserTokenUrlCleaned = !page.url().includes("token=");
 
     const input = page.locator("#input");
@@ -773,6 +817,13 @@ function getJson(url, headers = {}, expectedStatus = 200) {
 
 function postJson(url, body, headers = {}, expectedStatus = 200) {
   return requestJson(url, { method: "POST", body, headers, expectedStatus });
+}
+
+function buildPairingUrl(baseUrl, pairing) {
+  const url = new URL("/panel", baseUrl);
+  url.searchParams.set("device", pairing.deviceId);
+  url.searchParams.set("token", pairing.token);
+  return url.toString();
 }
 
 function authHeaders(pairing) {

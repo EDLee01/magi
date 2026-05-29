@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-29T06:35:30.178Z",
+  "generatedAt": "2026-05-29T16:51:20.718Z",
   "packages": [
     {
       "name": "@esbuild/aix-ppc64",
@@ -547,6 +547,21 @@
       "license": "MIT"
     },
     {
+      "name": "playwright",
+      "version": "1.60.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "playwright-core",
+      "version": "1.60.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "playwright/node_modules/fsevents",
+      "version": "2.3.2",
+      "license": "MIT"
+    },
+    {
       "name": "postcss",
       "version": "8.5.14",
       "license": "MIT"
@@ -565,6 +580,11 @@
       "name": "pump",
       "version": "3.0.4",
       "license": "MIT"
+    },
+    {
+      "name": "qrcode-terminal",
+      "version": "0.12.0",
+      "license": "Apache 2.0"
     },
     {
       "name": "rc",

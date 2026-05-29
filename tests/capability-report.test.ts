@@ -196,6 +196,9 @@ describe("capability report", () => {
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
       controlApi: controlApiReport({
+        pairingUrlGenerated: false,
+        pairingUrlTokenHandoffSeen: false,
+        mdnsPeerDiscovered: false,
         approvalSseSeen: false,
         jobCancelled: false,
         cancelledApprovalDidNotWrite: false,
@@ -214,6 +217,9 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(controlApi?.failures).toEqual(
       expect.arrayContaining([
+        "pairingUrlGenerated=false",
+        "pairingUrlTokenHandoffSeen=false",
+        "mdnsPeerDiscovered=false",
         "approvalSseSeen=false",
         "jobCancelled=false",
         "cancelledApprovalDidNotWrite=false",
@@ -414,6 +420,9 @@ function controlApiReport(
   overrides: Partial<{
     controlServeStarted: boolean;
     pairingSucceeded: boolean;
+    pairingUrlGenerated: boolean;
+    pairingUrlTokenHandoffSeen: boolean;
+    mdnsPeerDiscovered: boolean;
     approvalSseSeen: boolean;
     approvalResolved: boolean;
     approvalFileWritten: boolean;
@@ -459,6 +468,9 @@ function controlApiReport(
           provider: { callCount: 5 },
           controlServeStarted: true,
           pairingSucceeded: true,
+          pairingUrlGenerated: true,
+          pairingUrlTokenHandoffSeen: true,
+          mdnsPeerDiscovered: true,
           approvalSseSeen: true,
           approvalResolved: true,
           approvalFileWritten: true,
