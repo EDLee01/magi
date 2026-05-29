@@ -236,6 +236,7 @@ describe("capability report", () => {
         "continuousPatchRecoveryTask=false",
         "apiMigrationTask=false",
         "monorepoGeneratedBoundaryTask=false",
+        "workspacePolicyMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -263,6 +264,16 @@ describe("capability report", () => {
         "oldSourcePackagePathRemoved=false",
         "generatedFileUntouched=false",
         "monorepoPackageMigrationVerified=false",
+        "workspacePolicyMigrationBashCalls != 2",
+        "workspacePolicyMigrationFileReadCalls != 8",
+        "workspacePolicyMigrationFilePatchCalls < 6",
+        "workspacePolicyConfigMigrated=false",
+        "workspacePolicyPackageScriptsMigrated=false",
+        "workspacePolicySourceMigrated=false",
+        "workspacePolicyDocsMigrated=false",
+        "workspacePolicyGeneratedFileUntouched=false",
+        "workspacePolicyVendorFileUntouched=false",
+        "workspacePolicyMigrationVerified=false",
         "regressions=1"
       ])
     );
@@ -680,6 +691,20 @@ function modelTaskReport(
       generatedFileUntouched: boolean;
       monorepoPackageMigrationVerified: boolean;
     };
+    workspacePolicyMigration: {
+      bashCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      configMigrated: boolean;
+      packageScriptsMigrated: boolean;
+      sourceMigrated: boolean;
+      docsMigrated: boolean;
+      generatedFileUntouched: boolean;
+      vendorFileUntouched: boolean;
+      workspacePolicyMigrationVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -693,7 +718,8 @@ function modelTaskReport(
     "test_driven_recovery",
     "continuous_patch_recovery",
     "api_migration",
-    "monorepo_generated_boundary"
+    "monorepo_generated_boundary",
+    "workspace_policy_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -736,14 +762,28 @@ function modelTaskReport(
     generatedFileUntouched: true,
     monorepoPackageMigrationVerified: true
   };
+  const workspacePolicyMigration = overrides.workspacePolicyMigration ?? {
+    bashCalls: 2,
+    fileReadCalls: 8,
+    filePatchCalls: 6,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    configMigrated: true,
+    packageScriptsMigrated: true,
+    sourceMigrated: true,
+    docsMigrated: true,
+    generatedFileUntouched: true,
+    vendorFileUntouched: true,
+    workspacePolicyMigrationVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 64,
-    filesVerified: overrides.filesVerified ?? 25,
-    toolCallCount: overrides.toolCallCount ?? 60,
+    assertions: overrides.assertions ?? 79,
+    filesVerified: overrides.filesVerified ?? 34,
+    toolCallCount: overrides.toolCallCount ?? 76,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -815,6 +855,25 @@ function modelTaskReport(
               generatedFileUntouched: monorepoGeneratedBoundary.generatedFileUntouched,
               monorepoPackageMigrationVerified:
                 monorepoGeneratedBoundary.monorepoPackageMigrationVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "workspace_policy_migration"
+          ? {
+              toolCounts: {
+                Bash: workspacePolicyMigration.bashCalls,
+                FileRead: workspacePolicyMigration.fileReadCalls,
+                FilePatch: workspacePolicyMigration.filePatchCalls,
+                FileWrite: workspacePolicyMigration.fileWriteCalls,
+                FileEdit: workspacePolicyMigration.fileEditCalls
+              },
+              configMigrated: workspacePolicyMigration.configMigrated,
+              packageScriptsMigrated: workspacePolicyMigration.packageScriptsMigrated,
+              sourceMigrated: workspacePolicyMigration.sourceMigrated,
+              docsMigrated: workspacePolicyMigration.docsMigrated,
+              generatedFileUntouched: workspacePolicyMigration.generatedFileUntouched,
+              vendorFileUntouched: workspacePolicyMigration.vendorFileUntouched,
+              workspacePolicyMigrationVerified:
+                workspacePolicyMigration.workspacePolicyMigrationVerified
             }
           : {})
       }

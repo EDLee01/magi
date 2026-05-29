@@ -2000,6 +2000,382 @@ async function scenarioMonorepoGeneratedBoundaryTask() {
   });
 }
 
+async function scenarioWorkspacePolicyMigrationTask() {
+  return await withWorkspace("workspace-policy-migration", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "packages", "api", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "web", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "web", "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "workspace.json"),
+      [
+        "{",
+        '  "policy": "legacy",',
+        '  "packages": ["api", "web"],',
+        '  "requiredNode": "18"',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "api", "package.json"),
+      [
+        "{",
+        '  "name": "@acme/api",',
+        '  "scripts": {',
+        '    "verify": "node ../../tests/policy.test.mjs --legacy"',
+        "  }",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "web", "package.json"),
+      [
+        "{",
+        '  "name": "@acme/web",',
+        '  "scripts": {',
+        '    "verify": "node ../../tests/policy.test.mjs --legacy"',
+        "  }",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "api", "src", "policy.js"),
+      [
+        'export const policyMode = "legacy";',
+        "",
+        "export function requestHeaders() {",
+        '  return { "x-policy-mode": policyMode };',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "web", "src", "client.js"),
+      [
+        'export const clientPolicy = "legacy";',
+        "",
+        "export function renderPolicyBadge() {",
+        "  return `Policy: ${clientPolicy}`;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "// AUTO-GENERATED API TYPES. DO NOT EDIT.",
+      'export const generatedPolicy = "legacy";',
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// third party shim",
+      'export const vendorPolicy = "legacy";',
+      ""
+    ].join("\n");
+    writeFileSync(
+      path.join(workDir, "packages", "web", "generated", "api-types.js"),
+      generatedBefore,
+      "utf8"
+    );
+    writeFileSync(path.join(workDir, "vendor", "legacy-policy.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "docs", "workspace-policy.md"),
+      [
+        "# Workspace Policy",
+        "",
+        "Current policy: legacy.",
+        "API and web package verify scripts use --legacy.",
+        "Generated web API types and vendor shims must not be edited.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "tests", "policy.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        'import { policyMode, requestHeaders } from "../packages/api/src/policy.js";',
+        'import { clientPolicy, renderPolicyBadge } from "../packages/web/src/client.js";',
+        "",
+        'const workspace = JSON.parse(readFileSync("workspace.json", "utf8"));',
+        'const apiPkg = JSON.parse(readFileSync("packages/api/package.json", "utf8"));',
+        'const webPkg = JSON.parse(readFileSync("packages/web/package.json", "utf8"));',
+        'assert.equal(workspace.policy, "strict");',
+        'assert.equal(workspace.requiredNode, "20");',
+        'assert.equal(apiPkg.scripts.verify, "node ../../tests/policy.test.mjs --strict");',
+        'assert.equal(webPkg.scripts.verify, "node ../../tests/policy.test.mjs --strict");',
+        'assert.equal(policyMode, "strict");',
+        'assert.deepEqual(requestHeaders(), { "x-policy-mode": "strict" });',
+        'assert.equal(clientPolicy, "strict");',
+        'assert.equal(renderPolicyBadge(), "Policy: strict");',
+        'const docs = readFileSync("docs/workspace-policy.md", "utf8");',
+        'assert.match(docs, /Current policy: strict/);',
+        'assert.match(docs, /--strict/);',
+        'const generated = readFileSync("packages/web/generated/api-types.js", "utf8");',
+        'assert.match(generated, /AUTO-GENERATED API TYPES\\. DO NOT EDIT/);',
+        'assert.match(generated, /generatedPolicy = "legacy"/);',
+        'const vendor = readFileSync("vendor/legacy-policy.js", "utf8");',
+        'assert.match(vendor, /vendorPolicy = "legacy"/);',
+        'console.log("workspace policy migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-policy-before", "Bash", {
+              command: "node tests/policy.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("read-workspace-config", "FileRead", { file_path: "workspace.json" }),
+            toolCall("read-api-package", "FileRead", { file_path: "packages/api/package.json" }),
+            toolCall("read-web-package", "FileRead", { file_path: "packages/web/package.json" }),
+            toolCall("read-api-policy", "FileRead", { file_path: "packages/api/src/policy.js" }),
+            toolCall("read-web-client", "FileRead", { file_path: "packages/web/src/client.js" }),
+            toolCall("read-policy-docs", "FileRead", { file_path: "docs/workspace-policy.md" }),
+            toolCall("read-generated-api-types", "FileRead", {
+              file_path: "packages/web/generated/api-types.js"
+            }),
+            toolCall("read-vendor-policy", "FileRead", { file_path: "vendor/legacy-policy.js" })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing policy test was not visible");
+          assert(transcript.includes('"policy": "legacy"'), "workspace config was not visible");
+          assert(transcript.includes("--legacy"), "package verify scripts were not visible");
+          assert(
+            transcript.includes("AUTO-GENERATED API TYPES"),
+            "generated API type boundary was not visible"
+          );
+          assert(transcript.includes("third party shim"), "vendor boundary was not visible");
+          return toolResponse([
+            toolCall("patch-workspace-config", "FilePatch", {
+              file_path: "workspace.json",
+              patch: [
+                "@@",
+                " {",
+                '-  "policy": "legacy",',
+                '+  "policy": "strict",',
+                '   "packages": ["api", "web"],',
+                '-  "requiredNode": "18"',
+                '+  "requiredNode": "20"',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-api-package-script", "FilePatch", {
+              file_path: "packages/api/package.json",
+              patch: [
+                "@@",
+                '   "scripts": {',
+                '-    "verify": "node ../../tests/policy.test.mjs --legacy"',
+                '+    "verify": "node ../../tests/policy.test.mjs --strict"',
+                "   }"
+              ].join("\n")
+            }),
+            toolCall("patch-web-package-script", "FilePatch", {
+              file_path: "packages/web/package.json",
+              patch: [
+                "@@",
+                '   "scripts": {',
+                '-    "verify": "node ../../tests/policy.test.mjs --legacy"',
+                '+    "verify": "node ../../tests/policy.test.mjs --strict"',
+                "   }"
+              ].join("\n")
+            }),
+            toolCall("patch-api-policy-source", "FilePatch", {
+              file_path: "packages/api/src/policy.js",
+              patch: [
+                "@@",
+                '-export const policyMode = "legacy";',
+                '+export const policyMode = "strict";'
+              ].join("\n")
+            }),
+            toolCall("patch-web-client-source", "FilePatch", {
+              file_path: "packages/web/src/client.js",
+              patch: [
+                "@@",
+                '-export const clientPolicy = "legacy";',
+                '+export const clientPolicy = "strict";'
+              ].join("\n")
+            }),
+            toolCall("patch-workspace-policy-docs", "FilePatch", {
+              file_path: "docs/workspace-policy.md",
+              patch: [
+                "@@",
+                " # Workspace Policy",
+                " ",
+                "-Current policy: legacy.",
+                "-API and web package verify scripts use --legacy.",
+                "+Current policy: strict.",
+                "+API and web package verify scripts use --strict.",
+                " Generated web API types and vendor shims must not be edited."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(transcript.includes("Patched workspace.json"), "workspace config patch missing");
+          assert(
+            transcript.includes("Patched packages/api/package.json"),
+            "api package patch missing"
+          );
+          assert(
+            transcript.includes("Patched packages/web/package.json"),
+            "web package patch missing"
+          );
+          assert(
+            transcript.includes("Patched packages/api/src/policy.js"),
+            "api source patch missing"
+          );
+          assert(
+            transcript.includes("Patched packages/web/src/client.js"),
+            "web source patch missing"
+          );
+          assert(transcript.includes("Patched docs/workspace-policy.md"), "docs patch missing");
+          return toolResponse([
+            toolCall("run-policy-after", "Bash", {
+              command: "node tests/policy.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("workspace policy migration ok"),
+          "passing workspace policy test was not visible"
+        );
+        return messageText(
+          "Workspace policy migration completed while preserving generated and vendor files."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Migrate this workspace policy from legacy to strict across workspace config,",
+            "api/web package verify scripts, api/web source code, and docs.",
+            "Run the focused policy test before editing, inspect generated and vendor boundaries,",
+            "do not modify packages/web/generated or vendor files, then rerun the focused policy test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "workspace policy migration task"
+      });
+      assert(output.includes("session.completed"), "workspace policy task did not complete");
+      const workspace = readFileSync(path.join(workDir, "workspace.json"), "utf8");
+      const apiPackage = readFileSync(
+        path.join(workDir, "packages", "api", "package.json"),
+        "utf8"
+      );
+      const webPackage = readFileSync(
+        path.join(workDir, "packages", "web", "package.json"),
+        "utf8"
+      );
+      const apiPolicy = readFileSync(path.join(workDir, "packages", "api", "src", "policy.js"), "utf8");
+      const webClient = readFileSync(path.join(workDir, "packages", "web", "src", "client.js"), "utf8");
+      const docs = readFileSync(path.join(workDir, "docs", "workspace-policy.md"), "utf8");
+      const generatedAfter = readFileSync(
+        path.join(workDir, "packages", "web", "generated", "api-types.js"),
+        "utf8"
+      );
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "legacy-policy.js"), "utf8");
+      assert(workspace.includes('"policy": "strict"'), "workspace policy not migrated");
+      assert(workspace.includes('"requiredNode": "20"'), "workspace node requirement not migrated");
+      assert(apiPackage.includes("--strict"), "api verify script not migrated");
+      assert(webPackage.includes("--strict"), "web verify script not migrated");
+      assert(apiPolicy.includes('policyMode = "strict"'), "api policy source not migrated");
+      assert(webClient.includes('clientPolicy = "strict"'), "web client source not migrated");
+      assert(docs.includes("Current policy: strict"), "workspace policy docs not migrated");
+      assert(generatedAfter === generatedBefore, "generated API types were modified");
+      assert(vendorAfter === vendorBefore, "vendor shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "workspace policy task should run tests before and after");
+      assert(toolCounts.FileRead === 8, "workspace policy task should inspect all boundaries");
+      assert(toolCounts.FilePatch === 6, "workspace policy task should patch six owned files");
+      assert(!toolCounts.FileWrite, "workspace policy task should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "workspace policy task should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing policy test ran first",
+          "workspace config inspected",
+          "api and web package scripts inspected",
+          "api and web source inspected",
+          "generated and vendor boundaries inspected",
+          "workspace config patched",
+          "package verify scripts patched",
+          "api and web source patched",
+          "workspace policy docs patched",
+          "focused passing policy test ran after migration",
+          "generated API types stayed unchanged",
+          "vendor shim stayed unchanged",
+          "FileWrite avoided for workspace policy migration",
+          "FileEdit avoided for workspace policy migration",
+          "final response completed"
+        ],
+        filesVerified: [
+          "workspace.json",
+          "packages/api/package.json",
+          "packages/web/package.json",
+          "packages/api/src/policy.js",
+          "packages/web/src/client.js",
+          "packages/web/generated/api-types.js",
+          "vendor/legacy-policy.js",
+          "docs/workspace-policy.md",
+          "tests/policy.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "workspace_policy_migration",
+        toolCounts,
+        configMigrated: true,
+        packageScriptsMigrated: true,
+        sourceMigrated: true,
+        docsMigrated: true,
+        generatedFileUntouched: true,
+        vendorFileUntouched: true,
+        workspacePolicyMigrationVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -2054,7 +2430,8 @@ async function main() {
     ["test-driven recovery task", scenarioTestDrivenRecoveryTask],
     ["continuous patch recovery task", scenarioContinuousPatchRecoveryTask],
     ["api migration task", scenarioApiMigrationTask],
-    ["monorepo generated boundary task", scenarioMonorepoGeneratedBoundaryTask]
+    ["monorepo generated boundary task", scenarioMonorepoGeneratedBoundaryTask],
+    ["workspace policy migration task", scenarioWorkspacePolicyMigrationTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

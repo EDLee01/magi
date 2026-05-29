@@ -235,22 +235,44 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const monorepoGeneratedBoundaryFileEditCalls = readNumber(
     monorepoGeneratedBoundaryToolCounts.FileEdit
   );
+  const workspacePolicyMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "workspace_policy_migration"
+  );
+  const workspacePolicyMigrationDetails = readRecord(
+    workspacePolicyMigration ? readRecord(workspacePolicyMigration).details : {}
+  );
+  const workspacePolicyMigrationToolCounts = readRecord(workspacePolicyMigrationDetails.toolCounts);
+  const workspacePolicyMigrationTaskSeen = taskClasses.has("workspace_policy_migration");
+  const workspacePolicyMigrationBashCalls = readNumber(workspacePolicyMigrationToolCounts.Bash);
+  const workspacePolicyMigrationFileReadCalls = readNumber(
+    workspacePolicyMigrationToolCounts.FileRead
+  );
+  const workspacePolicyMigrationFilePatchCalls = readNumber(
+    workspacePolicyMigrationToolCounts.FilePatch
+  );
+  const workspacePolicyMigrationFileWriteCalls = readNumber(
+    workspacePolicyMigrationToolCounts.FileWrite
+  );
+  const workspacePolicyMigrationFileEditCalls = readNumber(
+    workspacePolicyMigrationToolCounts.FileEdit
+  );
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 10) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 10) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 11) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 11) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
   if (!continuousPatchRecoveryTaskSeen) failures.push("continuousPatchRecoveryTask=false");
   if (!apiMigrationTaskSeen) failures.push("apiMigrationTask=false");
   if (!monorepoGeneratedBoundaryTaskSeen) failures.push("monorepoGeneratedBoundaryTask=false");
-  if (assertions < 64) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 25) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 60) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!workspacePolicyMigrationTaskSeen) failures.push("workspacePolicyMigrationTask=false");
+  if (assertions < 79) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 34) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 76) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -315,6 +337,42 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (monorepoGeneratedBoundaryDetails.monorepoPackageMigrationVerified !== true) {
     failures.push("monorepoPackageMigrationVerified=false");
   }
+  if (workspacePolicyMigrationBashCalls !== 2) {
+    failures.push("workspacePolicyMigrationBashCalls != 2");
+  }
+  if (workspacePolicyMigrationFileReadCalls !== 8) {
+    failures.push("workspacePolicyMigrationFileReadCalls != 8");
+  }
+  if (workspacePolicyMigrationFilePatchCalls < 6) {
+    failures.push("workspacePolicyMigrationFilePatchCalls < 6");
+  }
+  if (workspacePolicyMigrationFileWriteCalls !== 0) {
+    failures.push("workspacePolicyMigrationFileWrite used");
+  }
+  if (workspacePolicyMigrationFileEditCalls !== 0) {
+    failures.push("workspacePolicyMigrationFileEdit used");
+  }
+  if (workspacePolicyMigrationDetails.configMigrated !== true) {
+    failures.push("workspacePolicyConfigMigrated=false");
+  }
+  if (workspacePolicyMigrationDetails.packageScriptsMigrated !== true) {
+    failures.push("workspacePolicyPackageScriptsMigrated=false");
+  }
+  if (workspacePolicyMigrationDetails.sourceMigrated !== true) {
+    failures.push("workspacePolicySourceMigrated=false");
+  }
+  if (workspacePolicyMigrationDetails.docsMigrated !== true) {
+    failures.push("workspacePolicyDocsMigrated=false");
+  }
+  if (workspacePolicyMigrationDetails.generatedFileUntouched !== true) {
+    failures.push("workspacePolicyGeneratedFileUntouched=false");
+  }
+  if (workspacePolicyMigrationDetails.vendorFileUntouched !== true) {
+    failures.push("workspacePolicyVendorFileUntouched=false");
+  }
+  if (workspacePolicyMigrationDetails.workspacePolicyMigrationVerified !== true) {
+    failures.push("workspacePolicyMigrationVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -374,6 +432,23 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       generatedFileUntouched: monorepoGeneratedBoundaryDetails.generatedFileUntouched === true,
       monorepoPackageMigrationVerified:
         monorepoGeneratedBoundaryDetails.monorepoPackageMigrationVerified === true,
+      workspacePolicyMigrationTaskSeen,
+      workspacePolicyMigrationBashCalls,
+      workspacePolicyMigrationFileReadCalls,
+      workspacePolicyMigrationFilePatchCalls,
+      workspacePolicyMigrationFileWriteCalls,
+      workspacePolicyMigrationFileEditCalls,
+      workspacePolicyConfigMigrated: workspacePolicyMigrationDetails.configMigrated === true,
+      workspacePolicyPackageScriptsMigrated:
+        workspacePolicyMigrationDetails.packageScriptsMigrated === true,
+      workspacePolicySourceMigrated: workspacePolicyMigrationDetails.sourceMigrated === true,
+      workspacePolicyDocsMigrated: workspacePolicyMigrationDetails.docsMigrated === true,
+      workspacePolicyGeneratedFileUntouched:
+        workspacePolicyMigrationDetails.generatedFileUntouched === true,
+      workspacePolicyVendorFileUntouched:
+        workspacePolicyMigrationDetails.vendorFileUntouched === true,
+      workspacePolicyMigrationVerified:
+        workspacePolicyMigrationDetails.workspacePolicyMigrationVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
