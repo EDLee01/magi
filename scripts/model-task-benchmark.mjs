@@ -2376,6 +2376,278 @@ async function scenarioWorkspacePolicyMigrationTask() {
   });
 }
 
+async function scenarioMixedLanguageContractMigrationTask() {
+  return await withWorkspace("mixed-language-contract", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "services", "web", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "services", "worker"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "services", "web", "src", "signup.ts"),
+      [
+        'export const DEFAULT_REGION = "us";',
+        "",
+        "export function buildSignupPayload(email: string) {",
+        '  return { email, tier: "free", region: DEFAULT_REGION };',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "services", "worker", "signup.py"),
+      [
+        'DEFAULT_REGION = "us"',
+        "",
+        "def build_signup_payload(email):",
+        '    return {"email": email, "tier": "free", "region": DEFAULT_REGION}',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "// AUTO-GENERATED CLIENT. DO NOT EDIT.",
+      'export const generatedSignupTier = "free";',
+      'export const generatedSignupRegion = "us";',
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "signup-client.ts"), generatedBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "docs", "signup-contract.md"),
+      [
+        "# Signup Contract",
+        "",
+        "The web and worker signup payloads default to free tier in the us region.",
+        "Generated signup clients are produced by OpenAPI and must not be edited by hand.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "tests", "signup-contract.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        "",
+        'const web = readFileSync("services/web/src/signup.ts", "utf8");',
+        'const worker = readFileSync("services/worker/signup.py", "utf8");',
+        'const docs = readFileSync("docs/signup-contract.md", "utf8");',
+        'const generated = readFileSync("generated/signup-client.ts", "utf8");',
+        "",
+        'assert.match(web, /DEFAULT_REGION = "eu"/);',
+        'assert.match(web, /tier: "pro"/);',
+        'assert.match(worker, /DEFAULT_REGION = "eu"/);',
+        'assert.match(worker, /"tier": "pro"/);',
+        'assert.match(docs, /pro tier in the eu region/);',
+        'assert.match(docs, /Generated signup clients stay untouched/);',
+        'assert.match(generated, /AUTO-GENERATED CLIENT\\. DO NOT EDIT/);',
+        'assert.match(generated, /generatedSignupTier = "free"/);',
+        'assert.match(generated, /generatedSignupRegion = "us"/);',
+        'console.log("mixed language signup contract ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          assert(
+            transcript.includes("use FilePatch for multi-line edits"),
+            "FilePatch guidance was not injected"
+          );
+          return toolResponse([
+            toolCall("run-signup-contract-before", "Bash", {
+              command: "node tests/signup-contract.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("read-web-signup", "FileRead", {
+              file_path: "services/web/src/signup.ts"
+            }),
+            toolCall("read-worker-signup", "FileRead", {
+              file_path: "services/worker/signup.py"
+            }),
+            toolCall("read-signup-docs", "FileRead", {
+              file_path: "docs/signup-contract.md"
+            }),
+            toolCall("read-generated-signup-client", "FileRead", {
+              file_path: "generated/signup-client.ts"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing signup contract test was not visible");
+          assert(transcript.includes('tier: "free"'), "TypeScript signup contract was not visible");
+          assert(transcript.includes('"tier": "free"'), "Python signup contract was not visible");
+          assert(
+            transcript.includes("AUTO-GENERATED CLIENT"),
+            "generated signup client boundary was not visible"
+          );
+          return toolResponse([
+            toolCall("patch-web-signup-contract", "FilePatch", {
+              file_path: "services/web/src/signup.ts",
+              patch: [
+                "@@",
+                '-export const DEFAULT_REGION = "us";',
+                '+export const DEFAULT_REGION = "eu";',
+                " ",
+                " export function buildSignupPayload(email: string) {",
+                '-  return { email, tier: "free", region: DEFAULT_REGION };',
+                '+  return { email, tier: "pro", region: DEFAULT_REGION };',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-worker-signup-contract", "FilePatch", {
+              file_path: "services/worker/signup.py",
+              patch: [
+                "@@",
+                '-DEFAULT_REGION = "us"',
+                '+DEFAULT_REGION = "eu"',
+                " ",
+                " def build_signup_payload(email):",
+                '-    return {"email": email, "tier": "free", "region": DEFAULT_REGION}',
+                '+    return {"email": email, "tier": "pro", "region": DEFAULT_REGION}'
+              ].join("\n")
+            }),
+            toolCall("patch-signup-contract-docs", "FilePatch", {
+              file_path: "docs/signup-contract.md",
+              patch: [
+                "@@",
+                " # Signup Contract",
+                " ",
+                "-The web and worker signup payloads default to free tier in the us region.",
+                "-Generated signup clients are produced by OpenAPI and must not be edited by hand.",
+                "+The web and worker signup payloads default to pro tier in the eu region.",
+                "+Generated signup clients stay untouched because they are produced by OpenAPI."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched services/web/src/signup.ts"),
+            "TypeScript signup patch was not visible"
+          );
+          assert(
+            transcript.includes("Patched services/worker/signup.py"),
+            "Python signup patch was not visible"
+          );
+          assert(
+            transcript.includes("Patched docs/signup-contract.md"),
+            "signup docs patch was not visible"
+          );
+          return toolResponse([
+            toolCall("run-signup-contract-after", "Bash", {
+              command: "node tests/signup-contract.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("mixed language signup contract ok"),
+          "passing mixed language contract test was not visible"
+        );
+        return messageText(
+          "Mixed-language signup contract migration completed while preserving generated clients."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Migrate the signup contract across TypeScript web code, Python worker code, and docs.",
+            "The new default is pro tier in the eu region.",
+            "Run the focused signup contract test before editing, inspect generated client boundaries,",
+            "do not edit generated files, then rerun the focused contract test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "mixed language contract migration task"
+      });
+      assert(output.includes("session.completed"), "mixed language contract task did not complete");
+      const web = readFileSync(path.join(workDir, "services", "web", "src", "signup.ts"), "utf8");
+      const worker = readFileSync(path.join(workDir, "services", "worker", "signup.py"), "utf8");
+      const docs = readFileSync(path.join(workDir, "docs", "signup-contract.md"), "utf8");
+      const generatedAfter = readFileSync(
+        path.join(workDir, "generated", "signup-client.ts"),
+        "utf8"
+      );
+      assert(web.includes('DEFAULT_REGION = "eu"'), "TypeScript default region not migrated");
+      assert(web.includes('tier: "pro"'), "TypeScript tier not migrated");
+      assert(worker.includes('DEFAULT_REGION = "eu"'), "Python default region not migrated");
+      assert(worker.includes('"tier": "pro"'), "Python tier not migrated");
+      assert(docs.includes("pro tier in the eu region"), "signup docs contract not migrated");
+      assert(docs.includes("Generated signup clients stay untouched"), "generated boundary docs missing");
+      assert(generatedAfter === generatedBefore, "generated signup client was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "mixed language task should run tests before and after");
+      assert(toolCounts.FileRead === 4, "mixed language task should inspect code, docs, and generated boundary");
+      assert(toolCounts.FilePatch === 3, "mixed language task should patch TS, Python, and docs");
+      assert(!toolCounts.FileWrite, "mixed language task should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "mixed language task should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing mixed-language contract test ran first",
+          "TypeScript signup contract inspected",
+          "Python signup contract inspected",
+          "generated client boundary inspected",
+          "TypeScript signup contract patched",
+          "Python signup contract patched",
+          "signup docs contract patched",
+          "focused passing mixed-language contract test ran after migration",
+          "generated signup client stayed unchanged",
+          "FileWrite avoided for mixed-language migration",
+          "FileEdit avoided for mixed-language migration",
+          "final response completed"
+        ],
+        filesVerified: [
+          "services/web/src/signup.ts",
+          "services/worker/signup.py",
+          "generated/signup-client.ts",
+          "docs/signup-contract.md",
+          "tests/signup-contract.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "mixed_language_contract_migration",
+        toolCounts,
+        tsContractMigrated: true,
+        pythonContractMigrated: true,
+        docsContractMigrated: true,
+        generatedClientUntouched: true,
+        mixedLanguageContractVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -2431,7 +2703,8 @@ async function main() {
     ["continuous patch recovery task", scenarioContinuousPatchRecoveryTask],
     ["api migration task", scenarioApiMigrationTask],
     ["monorepo generated boundary task", scenarioMonorepoGeneratedBoundaryTask],
-    ["workspace policy migration task", scenarioWorkspacePolicyMigrationTask]
+    ["workspace policy migration task", scenarioWorkspacePolicyMigrationTask],
+    ["mixed language contract migration task", scenarioMixedLanguageContractMigrationTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

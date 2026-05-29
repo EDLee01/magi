@@ -285,13 +285,40 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const workspacePolicyMigrationFileEditCalls = readNumber(
     workspacePolicyMigrationToolCounts.FileEdit
   );
+  const mixedLanguageContractMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "mixed_language_contract_migration"
+  );
+  const mixedLanguageContractMigrationDetails = readRecord(
+    mixedLanguageContractMigration ? readRecord(mixedLanguageContractMigration).details : {}
+  );
+  const mixedLanguageContractMigrationToolCounts = readRecord(
+    mixedLanguageContractMigrationDetails.toolCounts
+  );
+  const mixedLanguageContractMigrationTaskSeen = taskClasses.has(
+    "mixed_language_contract_migration"
+  );
+  const mixedLanguageContractMigrationBashCalls = readNumber(
+    mixedLanguageContractMigrationToolCounts.Bash
+  );
+  const mixedLanguageContractMigrationFileReadCalls = readNumber(
+    mixedLanguageContractMigrationToolCounts.FileRead
+  );
+  const mixedLanguageContractMigrationFilePatchCalls = readNumber(
+    mixedLanguageContractMigrationToolCounts.FilePatch
+  );
+  const mixedLanguageContractMigrationFileWriteCalls = readNumber(
+    mixedLanguageContractMigrationToolCounts.FileWrite
+  );
+  const mixedLanguageContractMigrationFileEditCalls = readNumber(
+    mixedLanguageContractMigrationToolCounts.FileEdit
+  );
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 11) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 11) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 12) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 12) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -299,9 +326,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!apiMigrationTaskSeen) failures.push("apiMigrationTask=false");
   if (!monorepoGeneratedBoundaryTaskSeen) failures.push("monorepoGeneratedBoundaryTask=false");
   if (!workspacePolicyMigrationTaskSeen) failures.push("workspacePolicyMigrationTask=false");
-  if (assertions < 79) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 34) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 76) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!mixedLanguageContractMigrationTaskSeen) {
+    failures.push("mixedLanguageContractMigrationTask=false");
+  }
+  if (assertions < 91) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 39) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 85) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -402,6 +432,36 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (workspacePolicyMigrationDetails.workspacePolicyMigrationVerified !== true) {
     failures.push("workspacePolicyMigrationVerified=false");
   }
+  if (mixedLanguageContractMigrationBashCalls !== 2) {
+    failures.push("mixedLanguageContractMigrationBashCalls != 2");
+  }
+  if (mixedLanguageContractMigrationFileReadCalls !== 4) {
+    failures.push("mixedLanguageContractMigrationFileReadCalls != 4");
+  }
+  if (mixedLanguageContractMigrationFilePatchCalls < 3) {
+    failures.push("mixedLanguageContractMigrationFilePatchCalls < 3");
+  }
+  if (mixedLanguageContractMigrationFileWriteCalls !== 0) {
+    failures.push("mixedLanguageContractMigrationFileWrite used");
+  }
+  if (mixedLanguageContractMigrationFileEditCalls !== 0) {
+    failures.push("mixedLanguageContractMigrationFileEdit used");
+  }
+  if (mixedLanguageContractMigrationDetails.tsContractMigrated !== true) {
+    failures.push("mixedLanguageTsContractMigrated=false");
+  }
+  if (mixedLanguageContractMigrationDetails.pythonContractMigrated !== true) {
+    failures.push("mixedLanguagePythonContractMigrated=false");
+  }
+  if (mixedLanguageContractMigrationDetails.docsContractMigrated !== true) {
+    failures.push("mixedLanguageDocsContractMigrated=false");
+  }
+  if (mixedLanguageContractMigrationDetails.generatedClientUntouched !== true) {
+    failures.push("mixedLanguageGeneratedClientUntouched=false");
+  }
+  if (mixedLanguageContractMigrationDetails.mixedLanguageContractVerified !== true) {
+    failures.push("mixedLanguageContractVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -478,6 +538,22 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
         workspacePolicyMigrationDetails.vendorFileUntouched === true,
       workspacePolicyMigrationVerified:
         workspacePolicyMigrationDetails.workspacePolicyMigrationVerified === true,
+      mixedLanguageContractMigrationTaskSeen,
+      mixedLanguageContractMigrationBashCalls,
+      mixedLanguageContractMigrationFileReadCalls,
+      mixedLanguageContractMigrationFilePatchCalls,
+      mixedLanguageContractMigrationFileWriteCalls,
+      mixedLanguageContractMigrationFileEditCalls,
+      mixedLanguageTsContractMigrated:
+        mixedLanguageContractMigrationDetails.tsContractMigrated === true,
+      mixedLanguagePythonContractMigrated:
+        mixedLanguageContractMigrationDetails.pythonContractMigrated === true,
+      mixedLanguageDocsContractMigrated:
+        mixedLanguageContractMigrationDetails.docsContractMigrated === true,
+      mixedLanguageGeneratedClientUntouched:
+        mixedLanguageContractMigrationDetails.generatedClientUntouched === true,
+      mixedLanguageContractVerified:
+        mixedLanguageContractMigrationDetails.mixedLanguageContractVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

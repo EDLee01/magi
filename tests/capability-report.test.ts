@@ -247,6 +247,7 @@ describe("capability report", () => {
         "apiMigrationTask=false",
         "monorepoGeneratedBoundaryTask=false",
         "workspacePolicyMigrationTask=false",
+        "mixedLanguageContractMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -284,6 +285,14 @@ describe("capability report", () => {
         "workspacePolicyGeneratedFileUntouched=false",
         "workspacePolicyVendorFileUntouched=false",
         "workspacePolicyMigrationVerified=false",
+        "mixedLanguageContractMigrationBashCalls != 2",
+        "mixedLanguageContractMigrationFileReadCalls != 4",
+        "mixedLanguageContractMigrationFilePatchCalls < 3",
+        "mixedLanguageTsContractMigrated=false",
+        "mixedLanguagePythonContractMigrated=false",
+        "mixedLanguageDocsContractMigrated=false",
+        "mixedLanguageGeneratedClientUntouched=false",
+        "mixedLanguageContractVerified=false",
         "regressions=1"
       ])
     );
@@ -782,6 +791,18 @@ function modelTaskReport(
       vendorFileUntouched: boolean;
       workspacePolicyMigrationVerified: boolean;
     };
+    mixedLanguageContractMigration: {
+      bashCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      tsContractMigrated: boolean;
+      pythonContractMigrated: boolean;
+      docsContractMigrated: boolean;
+      generatedClientUntouched: boolean;
+      mixedLanguageContractVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -796,7 +817,8 @@ function modelTaskReport(
     "continuous_patch_recovery",
     "api_migration",
     "monorepo_generated_boundary",
-    "workspace_policy_migration"
+    "workspace_policy_migration",
+    "mixed_language_contract_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -853,14 +875,26 @@ function modelTaskReport(
     vendorFileUntouched: true,
     workspacePolicyMigrationVerified: true
   };
+  const mixedLanguageContractMigration = overrides.mixedLanguageContractMigration ?? {
+    bashCalls: 2,
+    fileReadCalls: 4,
+    filePatchCalls: 3,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    tsContractMigrated: true,
+    pythonContractMigrated: true,
+    docsContractMigrated: true,
+    generatedClientUntouched: true,
+    mixedLanguageContractVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 79,
-    filesVerified: overrides.filesVerified ?? 34,
-    toolCallCount: overrides.toolCallCount ?? 76,
+    assertions: overrides.assertions ?? 91,
+    filesVerified: overrides.filesVerified ?? 39,
+    toolCallCount: overrides.toolCallCount ?? 85,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -951,6 +985,23 @@ function modelTaskReport(
               vendorFileUntouched: workspacePolicyMigration.vendorFileUntouched,
               workspacePolicyMigrationVerified:
                 workspacePolicyMigration.workspacePolicyMigrationVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "mixed_language_contract_migration"
+          ? {
+              toolCounts: {
+                Bash: mixedLanguageContractMigration.bashCalls,
+                FileRead: mixedLanguageContractMigration.fileReadCalls,
+                FilePatch: mixedLanguageContractMigration.filePatchCalls,
+                FileWrite: mixedLanguageContractMigration.fileWriteCalls,
+                FileEdit: mixedLanguageContractMigration.fileEditCalls
+              },
+              tsContractMigrated: mixedLanguageContractMigration.tsContractMigrated,
+              pythonContractMigrated: mixedLanguageContractMigration.pythonContractMigrated,
+              docsContractMigrated: mixedLanguageContractMigration.docsContractMigrated,
+              generatedClientUntouched: mixedLanguageContractMigration.generatedClientUntouched,
+              mixedLanguageContractVerified:
+                mixedLanguageContractMigration.mixedLanguageContractVerified
             }
           : {})
       }
