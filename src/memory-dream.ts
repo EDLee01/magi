@@ -28,6 +28,12 @@ export interface DreamOperation {
     keepNodeId: string;
     duplicateNodeId: string;
   };
+  graphConflictGroup?: {
+    groupId: string;
+    preferredNodeId?: string;
+    nodeIds: string[];
+    conflictEdgeIds: number[];
+  };
 }
 
 export interface DreamManifest {
@@ -288,8 +294,10 @@ function analyzeMemory(input: MemoryRootOptions & { paths?: MagiPaths }): DreamO
   }
   if (input.paths) {
     syncMemoryGraph({ ...input, paths: input.paths });
-    operations.push(...analyzeGraphDuplicateCandidates(input.paths));
+    const graphDuplicateOperations = analyzeGraphDuplicateCandidates(input.paths);
+    operations.push(...graphDuplicateOperations);
     operations.push(...analyzeGraphCleanupCandidates(input.paths));
+    operations.push(...analyzeGraphConflictGroups(input.paths, graphDuplicateOperations));
   }
   return operations.slice(0, 20);
 }
@@ -330,6 +338,78 @@ function analyzeGraphCleanupCandidates(paths: MagiPaths): DreamOperation[] {
   } finally {
     store.close();
   }
+}
+
+function analyzeGraphConflictGroups(
+  paths: MagiPaths,
+  existingOperations: DreamOperation[] = []
+): DreamOperation[] {
+  const alreadyReviewed = new Set(extractGraphReviewNodeIds(existingOperations));
+  const store = MemoryNodeStore.open(paths);
+  try {
+    return store.listConflictGroups({ limit: 10 }).flatMap((group) => {
+      if (group.nodes.some((node) => alreadyReviewed.has(node.id))) {
+        return [];
+      }
+      const preferredNodeId = group.preferredNodeId;
+      if (!preferredNodeId) {
+        return [];
+      }
+      const archiveNodeIds = group.nodes
+        .map((node) => node.id)
+        .filter((id) => id !== preferredNodeId);
+      if (archiveNodeIds.length === 0) {
+        return [];
+      }
+      const preferred = group.nodes.find((node) => node.id === preferredNodeId);
+      return [
+        {
+          type: "conflict" as const,
+          targetFile: "archive/README.md",
+          reason: `Graph conflict group ${group.id}: prefer ${preferred?.title ?? preferredNodeId}; review archiving ${archiveNodeIds.length} conflicting node(s).`,
+          content: [
+            "",
+            "<!-- Dream graph conflict group -->",
+            `- Conflict group: ${group.id}`,
+            `- Preferred node: ${preferred?.title ?? preferredNodeId} (${preferredNodeId})`,
+            ...group.nodes
+              .filter((node) => node.id !== preferredNodeId)
+              .map(
+                (node) =>
+                  `- Archive candidate: ${node.title} (${node.id}, ${node.status}, weight ${node.weight.toFixed(2)})`
+              ),
+            ""
+          ].join("\n"),
+          relatedFiles: group.nodes.map((node) => `graph:${node.id}`),
+          graphNodeIds: archiveNodeIds,
+          graphConflictGroup: {
+            groupId: group.id,
+            preferredNodeId,
+            nodeIds: group.nodes.map((node) => node.id),
+            conflictEdgeIds: group.conflicts.map((conflict) => conflict.edge.id)
+          }
+        }
+      ];
+    });
+  } finally {
+    store.close();
+  }
+}
+
+function extractGraphReviewNodeIds(operations: DreamOperation[]): string[] {
+  const ids = new Set(extractGraphNodeIds(operations));
+  for (const op of operations) {
+    if (op.graphMerge) {
+      ids.add(op.graphMerge.keepNodeId);
+      ids.add(op.graphMerge.duplicateNodeId);
+    }
+    if (op.graphConflictGroup) {
+      for (const id of op.graphConflictGroup.nodeIds) {
+        ids.add(id);
+      }
+    }
+  }
+  return Array.from(ids).filter(Boolean);
 }
 
 function mergeDreamGraphDuplicates(input: {

@@ -121,7 +121,9 @@ describe("capability report", () => {
         thresholdPassed: false,
         score: 0.67,
         maintenanceRecallSeen: false,
-        workflowGraphRecallSeen: false
+        workflowGraphRecallSeen: false,
+        conflictGroupViewSeen: false,
+        dreamConflictGroupLifecycleSeen: false
       }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -143,6 +145,8 @@ describe("capability report", () => {
     expect(output).toContain("thresholdPassed=false");
     expect(output).toContain("maintenanceRecallSeen=false");
     expect(output).toContain("workflowGraphRecallSeen=false");
+    expect(output).toContain("conflictGroupViewSeen=false");
+    expect(output).toContain("dreamConflictGroupLifecycleSeen=false");
   });
 
   it("fails model task alignment when task coverage or scorer evidence is too thin", () => {
@@ -480,6 +484,8 @@ function memoryReport(input: {
   score: number;
   maintenanceRecallSeen?: boolean;
   workflowGraphRecallSeen?: boolean;
+  conflictGroupViewSeen?: boolean;
+  dreamConflictGroupLifecycleSeen?: boolean;
 }): Record<string, unknown> {
   const names = [
     "linked workflow retrieves project neighbor",
@@ -499,7 +505,11 @@ function memoryReport(input: {
     score: input.score,
     minScore: 1,
     thresholdPassed: input.thresholdPassed,
-    results
+    results,
+    details: {
+      conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
+      dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false
+    }
   };
 }
 

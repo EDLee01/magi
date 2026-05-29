@@ -444,6 +444,106 @@ describe("AGENTS rules and memory", () => {
     });
   });
 
+  it("applies or rejects Dream graph conflict groups through reviewable CLI actions", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const firstStore = MemoryNodeStore.open(paths);
+    const current = firstStore.upsertNode({
+      type: "preference",
+      title: "Current verification preference",
+      summary: "Current verification preference.",
+      body: "User prefers concise verification summaries.",
+      source: "explicit",
+      weight: 0.95,
+      metadata: { correctionFor: "old-output" }
+    });
+    const staleVerbose = firstStore.upsertNode({
+      type: "preference",
+      title: "Verbose verification preference",
+      summary: "Verbose verification preference.",
+      body: "User prefers verbose terminal dumps.",
+      source: "explicit",
+      weight: 0.35
+    });
+    const staleRawLogs = firstStore.upsertNode({
+      type: "preference",
+      title: "Raw log preference",
+      summary: "Raw log preference.",
+      body: "User prefers raw terminal logs after tests.",
+      source: "explicit",
+      weight: 0.3
+    });
+    firstStore.addEdge({
+      fromNodeId: current.id,
+      toNodeId: staleVerbose.id,
+      relation: "conflicts_with",
+      weight: 1,
+      metadata: { reason: "User corrected verbose output." }
+    });
+    firstStore.addEdge({
+      fromNodeId: staleVerbose.id,
+      toNodeId: staleRawLogs.id,
+      relation: "conflicts_with",
+      weight: 0.8,
+      metadata: { reason: "Both stale nodes describe verbose output." }
+    });
+    firstStore.close();
+
+    const dream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(dream.exitCode).toBe(0);
+    expect(dream.stdout).toContain("conflict");
+
+    const dreams = listDreams({ appRoot: paths.root });
+    const manifest = showDream({ appRoot: paths.root, id: dreams[0].id });
+    expect(manifest.operations).toContainEqual(
+      expect.objectContaining({
+        type: "conflict",
+        reason: expect.stringContaining("Graph conflict group"),
+        relatedFiles: expect.arrayContaining([
+          `graph:${current.id}`,
+          `graph:${staleVerbose.id}`,
+          `graph:${staleRawLogs.id}`
+        ]),
+        graphNodeIds: expect.arrayContaining([staleVerbose.id, staleRawLogs.id]),
+        graphConflictGroup: expect.objectContaining({
+          preferredNodeId: current.id,
+          nodeIds: expect.arrayContaining([current.id, staleVerbose.id, staleRawLogs.id])
+        })
+      })
+    );
+
+    const rejected = await runCli(["memory", "dream", "reject", dreams[0].id], temp.env, workspace);
+    expect(rejected.exitCode).toBe(0);
+    expect(rejected.stdout).toContain("Kept graph nodes: 2");
+    const afterReject = MemoryNodeStore.open(paths);
+    expect(afterReject.getNode(staleVerbose.id)?.status).toBe("active");
+    expect(afterReject.getNode(staleRawLogs.id)?.status).toBe("active");
+    afterReject.close();
+
+    const secondDream = await runCli(["memory", "dream"], temp.env, workspace);
+    expect(secondDream.exitCode).toBe(0);
+    expect(secondDream.stdout).toContain("conflict");
+    const secondDreamId = listDreams({ appRoot: paths.root }).find(
+      (item) => item.status === "pending"
+    )?.id;
+    expect(secondDreamId).toBeTruthy();
+
+    const applied = await runCli(["memory", "dream", "apply", secondDreamId!], temp.env, workspace);
+    expect(applied.exitCode).toBe(0);
+    expect(applied.stdout).toContain("Archived graph nodes: 2");
+    const afterApply = MemoryNodeStore.open(paths);
+    expect(afterApply.getNode(current.id)?.status).toBe("active");
+    expect(afterApply.getNode(staleVerbose.id)?.status).toBe("archived");
+    expect(afterApply.getNode(staleRawLogs.id)?.status).toBe("archived");
+    expect(afterApply.getNode(staleVerbose.id)?.metadata).toMatchObject({
+      archive: expect.objectContaining({
+        dreamId: secondDreamId
+      })
+    });
+    afterApply.close();
+  });
+
   it("rejects memory drafts that look like secrets", async () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
@@ -953,10 +1053,11 @@ describe("AGENTS rules and memory", () => {
     expect(applied.exitCode).toBe(0);
     expect(applied.stdout).toContain("olderThanDays: 0");
     expect(applied.stdout).toContain("decay: 0.250");
-    expect(applied.stdout).toContain("0.800 -> 0.600");
+    expect(applied.stdout).toContain("0.800 -> 0.700");
+    expect(applied.stdout).toContain("effectiveDecay=0.125");
 
     const afterApply = MemoryNodeStore.open(paths);
-    expect(afterApply.getNode(stale.id)?.weight).toBeCloseTo(0.6);
+    expect(afterApply.getNode(stale.id)?.weight).toBeCloseTo(0.7);
     afterApply.close();
     const audit = readFileSync(path.join(paths.root, "memory", "logs", "audit.jsonl"), "utf8");
     expect(audit).toContain("memory.maintenance.configured");

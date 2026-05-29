@@ -244,16 +244,21 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const failures = [];
   const score = readNumber(report.score);
   const results = Array.isArray(report.results) ? report.results.map(readRecord) : [];
+  const details = readRecord(report.details);
   const resultNames = results
     .map((result) => (typeof result.name === "string" ? result.name : ""))
     .filter(Boolean);
   const maintenanceRecallSeen = resultNames.includes("protected workflow survives maintenance");
   const workflowGraphRecallSeen = resultNames.includes("workflow graph recalls second-hop habit");
+  const conflictGroupViewSeen = details.conflictGroupViewSeen === true;
+  const dreamConflictGroupLifecycleSeen = details.dreamConflictGroupLifecycleSeen === true;
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
+  if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
+  if (!dreamConflictGroupLifecycleSeen) failures.push("dreamConflictGroupLifecycleSeen=false");
   return {
     id: "memory",
     title: "Memory graph recall and lifecycle eval",
@@ -266,7 +271,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       score,
       minScore: readNumber(report.minScore),
       maintenanceRecallSeen,
-      workflowGraphRecallSeen
+      workflowGraphRecallSeen,
+      conflictGroupViewSeen,
+      dreamConflictGroupLifecycleSeen
     },
     failures
   };

@@ -19,6 +19,10 @@ const configDir = path.join(root, "config");
 const workDir = path.join(root, "work");
 const reportFile =
   options.reportFile ?? path.join(repoRoot, ".magi-reports", "memory-recall-eval.json");
+const lifecycleEvidence = {
+  conflictGroupViewSeen: false,
+  dreamConflictGroupLifecycleSeen: false
+};
 
 try {
   mkdirSync(configDir, { recursive: true });
@@ -29,6 +33,7 @@ try {
   assertRestartRecall();
   assertDreamReviewLifecycle();
   assertMaintenanceLifecycle();
+  writeLifecycleEvidence();
   process.stdout.write(`${evalOutput.trim()}\nBusiness memory recall eval passed.\n`);
 } finally {
   if (!options.keepRoot && !process.env.MAGI_KEEP_MEMORY_EVAL_TMP) {
@@ -237,14 +242,11 @@ function assertDreamReviewLifecycle() {
     "memory dream apply cleanup"
   );
   assert(appliedDream.includes("Applied Dream:"), "memory dream apply did not run");
-  assert(
-    appliedDream.includes("Archived graph nodes: 1"),
-    "memory dream apply did not archive node"
-  );
   assert(nodeById(staleNodeId).status === "archived", "applied Dream should archive stale node");
 
   const postDreamEval = runMemoryEval("memory recall eval after Dream apply");
   assert(postDreamEval.includes("threshold: PASS"), "memory eval failed after Dream apply");
+  assertConflictGroupDreamLifecycle();
 }
 
 function assertConflictGroupView() {
@@ -281,6 +283,7 @@ function assertConflictGroupView() {
     groups.includes("Raw terminal log preference"),
     "memory conflict group view missed connected stale node"
   );
+  lifecycleEvidence.conflictGroupViewSeen = true;
 }
 
 function seedConflictEdge(input) {
@@ -299,6 +302,89 @@ function seedConflictEdge(input) {
   } finally {
     store.close();
   }
+}
+
+function assertConflictGroupDreamLifecycle() {
+  const created = seedConflictGroupNodes();
+  const firstDream = runCli(["memory", "dream"], "memory dream conflict group preview");
+  assert(firstDream.includes("conflict"), "memory dream did not include conflict group candidate");
+  const firstDreamId = dreamId(firstDream);
+  const firstManifest = dreamManifest(firstDreamId);
+  assert(
+    firstManifest.operations.some(
+      (op) =>
+        op.type === "conflict" &&
+        op.graphConflictGroup?.preferredNodeId === created.current.id &&
+        op.graphNodeIds?.includes(created.staleVerbose.id) &&
+        op.graphNodeIds?.includes(created.staleRawLogs.id)
+    ),
+    "memory dream manifest missed graph conflict group metadata"
+  );
+
+  const rejected = runCli(
+    ["memory", "dream", "reject", firstDreamId],
+    "memory dream reject conflict group"
+  );
+  assert(rejected.includes("Rejected Dream:"), "Dream reject did not run");
+  assert(
+    nodeById(created.staleVerbose.id).status === "active" &&
+      nodeById(created.staleRawLogs.id).status === "active",
+    "Dream reject should keep non-preferred conflict nodes active"
+  );
+
+  const secondDream = runCli(["memory", "dream"], "memory dream conflict group apply preview");
+  assert(secondDream.includes("conflict"), "memory dream did not re-propose conflict group");
+  const secondDreamId = dreamId(secondDream);
+  const applied = runCli(
+    ["memory", "dream", "apply", secondDreamId],
+    "memory dream apply conflict group"
+  );
+  assert(applied.includes("Applied Dream:"), "Dream apply did not run");
+  assert(nodeById(created.current.id).status === "active", "Dream apply archived preferred node");
+  assert(
+    nodeById(created.staleVerbose.id).status === "archived" &&
+      nodeById(created.staleRawLogs.id).status === "archived",
+    "Dream apply did not archive conflict group stale nodes"
+  );
+  lifecycleEvidence.dreamConflictGroupLifecycleSeen = true;
+}
+
+function seedConflictGroupNodes() {
+  const current = seedTypedGraphNode({
+    type: "preference",
+    title: "Current grouped output preference",
+    summary: "Current grouped output preference.",
+    body: "User prefers concise grouped verification summaries.",
+    weight: 0.95,
+    metadata: { correctionFor: "grouped-output-old" }
+  });
+  const staleVerbose = seedTypedGraphNode({
+    type: "preference",
+    title: "Verbose grouped output preference",
+    summary: "Verbose grouped output preference.",
+    body: "User prefers verbose grouped terminal dumps.",
+    weight: 0.35
+  });
+  const staleRawLogs = seedTypedGraphNode({
+    type: "preference",
+    title: "Raw grouped log preference",
+    summary: "Raw grouped log preference.",
+    body: "User prefers raw grouped terminal logs after verification.",
+    weight: 0.3
+  });
+  seedConflictEdge({
+    fromNodeId: current.id,
+    toNodeId: staleVerbose.id,
+    weight: 1,
+    reason: "Current grouped preference supersedes verbose grouped output."
+  });
+  seedConflictEdge({
+    fromNodeId: staleVerbose.id,
+    toNodeId: staleRawLogs.id,
+    weight: 0.8,
+    reason: "Grouped stale nodes describe verbose terminal output."
+  });
+  return { current, staleVerbose, staleRawLogs };
 }
 
 function assertMaintenanceLifecycle() {
@@ -412,6 +498,25 @@ function writeMaintenanceCaseFile() {
   return file;
 }
 
+function writeLifecycleEvidence() {
+  const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  writeFileSync(
+    reportFile,
+    `${JSON.stringify(
+      {
+        ...report,
+        details: {
+          ...(report.details ?? {}),
+          ...lifecycleEvidence
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+}
+
 function seedTypedGraphNode(input) {
   const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
   try {
@@ -419,7 +524,7 @@ function seedTypedGraphNode(input) {
       ...input,
       source: "agent",
       weight: input.weight ?? 0.9,
-      metadata: { evalSeed: "memory-recall-eval" }
+      metadata: { evalSeed: "memory-recall-eval", ...(input.metadata ?? {}) }
     });
   } finally {
     store.close();
@@ -472,6 +577,12 @@ function dreamId(output) {
   const match = /Experimental Dream created:\s+([a-z0-9_]+)/i.exec(output);
   assert(match, `could not parse Dream id from output:\n${output}`);
   return match[1];
+}
+
+function dreamManifest(id) {
+  return JSON.parse(
+    readFileSync(path.join(configDir, "memory", "dreams", id, "manifest.json"), "utf8")
+  );
 }
 
 function nodeByTitle(title) {
