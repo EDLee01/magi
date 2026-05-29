@@ -40,6 +40,8 @@ try {
     failureKindRecorded: false,
     failureKindShownInRanking: false,
     failureRecoverySuggested: false,
+    crossTaskRecoveryRankingSeen: false,
+    crossTaskRecoveryGuidanceSeen: false,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -102,6 +104,8 @@ try {
     assert(state.failureKindShownInRanking, "ToolSearch did not expose failure kind feedback");
     assert(state.failureRecoverySuggested, "ToolSearch did not expose recovery guidance");
 
+    const crossTask = await runCrossTaskRecoveryEval(provider, state);
+
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
       startedAt,
@@ -125,6 +129,9 @@ try {
             failureKindRecorded: state.failureKindRecorded,
             failureKindShownInRanking: state.failureKindShownInRanking,
             failureRecoverySuggested: state.failureRecoverySuggested,
+            crossTaskRecoveryRankingSeen: crossTask.rankingSeen,
+            crossTaskRecoveryGuidanceSeen: crossTask.recoveryGuidanceSeen,
+            crossTaskProviderCalls: crossTask.providerCalls,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
@@ -154,7 +161,41 @@ try {
 
 function createRouter(state) {
   let turn = 0;
+  let crossTaskTurn = 0;
   return ({ transcript, toolNames }) => {
+    if (
+      transcript.includes(
+        "Run a new independent ToolSearch task for workspace file search after prior feedback."
+      )
+    ) {
+      crossTaskTurn += 1;
+      if (crossTaskTurn === 1) {
+        return toolResponse([
+          toolCall("cross-task-tool-search", "ToolSearch", {
+            query: "search workspace files",
+            max_results: 5
+          })
+        ]);
+      }
+      assert(
+        transcript.includes('ToolSearch results for "search workspace files"'),
+        "cross-task ToolSearch result was not visible"
+      );
+      assert(transcript.includes("1. Glob"), "Glob was not ranked first across tasks");
+      assert(transcript.includes("usage:+"), "cross-task positive usage feedback missing");
+      assert(transcript.includes("usage:-"), "cross-task negative usage feedback missing");
+      assert(transcript.includes("failure:path"), "cross-task failure kind feedback missing");
+      assert(
+        transcript.includes(
+          "recovery:path=use Glob for broad search or pass a workspace-relative path"
+        ),
+        "cross-task recovery guidance missing"
+      );
+      state.crossTaskRecoveryRankingSeen = true;
+      state.crossTaskRecoveryGuidanceSeen = true;
+      return messageText("Cross-task Tool Discovery recovery verified.");
+    }
+
     turn += 1;
     if (turn === 1) {
       state.initialToolCount = toolNames.length;
@@ -253,6 +294,34 @@ function createRouter(state) {
     state.failureRecoverySuggested = true;
     return messageText("Tool Discovery eval completed.");
   };
+}
+
+async function runCrossTaskRecoveryEval(provider, state) {
+  const output = await runCli([
+    "--model",
+    "main",
+    "--output-format",
+    "stream-json",
+    "-p",
+    "Run a new independent ToolSearch task for workspace file search after prior feedback."
+  ]);
+  const matchingCalls = providerCallsForPrompt("Run a new independent ToolSearch task");
+  assert(matchingCalls.length > 0, "cross-task ToolSearch prompt did not call provider");
+  assert(
+    output.includes("Cross-task Tool Discovery recovery verified"),
+    "cross-task recovery final answer missing"
+  );
+  assert(state.crossTaskRecoveryRankingSeen, "cross-task recovery ranking was not verified");
+  assert(state.crossTaskRecoveryGuidanceSeen, "cross-task recovery guidance was not verified");
+  return {
+    rankingSeen: state.crossTaskRecoveryRankingSeen,
+    recoveryGuidanceSeen: state.crossTaskRecoveryGuidanceSeen,
+    providerCalls: matchingCalls.length
+  };
+
+  function providerCallsForPrompt(prompt) {
+    return provider.calls.filter((call) => call.transcript.includes(prompt));
+  }
 }
 
 async function startProvider({ routeRequest }) {

@@ -388,6 +388,13 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.failureRecoverySuggested !== true) {
     failures.push("failureRecoverySuggested=false");
   }
+  if (details.crossTaskRecoveryRankingSeen !== true) {
+    failures.push("crossTaskRecoveryRankingSeen=false");
+  }
+  if (details.crossTaskRecoveryGuidanceSeen !== true) {
+    failures.push("crossTaskRecoveryGuidanceSeen=false");
+  }
+  if (readNumber(details.crossTaskProviderCalls) <= 0) failures.push("crossTaskProviderCalls=0");
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
   if (readNumber(details.grepIntentFailures) < 4) failures.push("grepIntentFailures < 4");
@@ -416,6 +423,9 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       failureKindRecorded: details.failureKindRecorded === true,
       failureKindShownInRanking: details.failureKindShownInRanking === true,
       failureRecoverySuggested: details.failureRecoverySuggested === true,
+      crossTaskRecoveryRankingSeen: details.crossTaskRecoveryRankingSeen === true,
+      crossTaskRecoveryGuidanceSeen: details.crossTaskRecoveryGuidanceSeen === true,
+      crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),
