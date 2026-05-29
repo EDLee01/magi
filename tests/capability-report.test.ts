@@ -7,6 +7,7 @@ describe("capability report", () => {
     const report = buildCapabilityReport({
       generatedAt: new Date("2026-05-29T00:00:00.000Z"),
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -24,9 +25,10 @@ describe("capability report", () => {
 
     expect(report).toMatchObject({
       status: "passed",
-      summary: { total: 6, passed: 6, failed: 0, score: 1 },
+      summary: { total: 7, passed: 7, failed: 0, score: 1 },
       checks: [
         { id: "blackbox", status: "passed" },
+        { id: "model-tasks", status: "passed" },
         { id: "memory", status: "passed" },
         { id: "patch", status: "passed" },
         { id: "goal-plan", status: "passed" },
@@ -39,6 +41,7 @@ describe("capability report", () => {
   it("fails patch alignment when existing file edits bypass FilePatch", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
         filePatchCalls: 1,
@@ -80,6 +83,7 @@ describe("capability report", () => {
         uniqueToolCount: 2,
         regressions: 1
       }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -111,6 +115,7 @@ describe("capability report", () => {
   it("fails memory alignment when recall misses the threshold", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({
         failed: 1,
         thresholdPassed: false,
@@ -138,9 +143,52 @@ describe("capability report", () => {
     expect(output).toContain("maintenanceRecallSeen=false");
   });
 
+  it("fails model task alignment when task coverage or scorer evidence is too thin", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport({
+        scenarios: 2,
+        assertions: 4,
+        filesVerified: 1,
+        toolCallCount: 3,
+        uniqueToolCount: 2,
+        taskClasses: ["project_edit", "memory_driven"],
+        regressions: 1
+      }),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 2,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 2 / 3
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport()
+    });
+
+    const modelTasks = report.checks.find((check) => check.id === "model-tasks");
+    expect(report.status).toBe("failed");
+    expect(modelTasks?.failures).toEqual(
+      expect.arrayContaining([
+        "scenarios=2",
+        "taskClasses=2",
+        "assertions=4",
+        "filesVerified=1",
+        "toolCallCount=3",
+        "uniqueToolCount=2",
+        "regressions=1"
+      ])
+    );
+  });
+
   it("fails goal-plan alignment when the lifecycle evidence is incomplete", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -174,6 +222,7 @@ describe("capability report", () => {
   it("fails tool discovery alignment when reveal or usage feedback evidence is incomplete", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -223,6 +272,7 @@ describe("capability report", () => {
   it("fails control API alignment when mobile workflow evidence is incomplete", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
       patch: patchReport({
         filePatchCalls: 2,
@@ -316,6 +366,46 @@ function harnessReport(input: {
       regressions
     },
     scenarios: []
+  };
+}
+
+function modelTaskReport(
+  overrides: Partial<{
+    scenarios: number;
+    providerCalls: number;
+    assertions: number;
+    filesVerified: number;
+    toolCallCount: number;
+    uniqueToolCount: number;
+    taskClasses: string[];
+    regressions: number;
+  }> = {}
+): Record<string, unknown> {
+  const taskClasses = overrides.taskClasses ?? ["project_edit", "memory_driven", "tool_discovery"];
+  const total = overrides.scenarios ?? taskClasses.length;
+  const report = harnessReport({
+    name: "model-task-benchmark",
+    scenarios: total,
+    providerCalls: overrides.providerCalls ?? 8,
+    assertions: overrides.assertions ?? 9,
+    filesVerified: overrides.filesVerified ?? 3,
+    toolCallCount: overrides.toolCallCount ?? 7,
+    uniqueToolCount: overrides.uniqueToolCount ?? 6,
+    regressions: overrides.regressions ?? 0
+  });
+  return {
+    ...report,
+    scenarios: Array.from({ length: total }, (_, index) => ({
+      name: `${taskClasses[index] ?? "missing"} task`,
+      status: "passed",
+      durationMs: 300,
+      score: 1,
+      failureKind: null,
+      details: {
+        taskClass: taskClasses[index],
+        provider: { callCount: 2 }
+      }
+    }))
   };
 }
 

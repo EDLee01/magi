@@ -26,11 +26,12 @@
     "test:tool-discovery-eval": "npm run build && node scripts/tool-discovery-eval.mjs",
     "test:control-api-eval": "npm run build && node scripts/control-api-eval.mjs",
     "test:blackbox": "npm run build && node scripts/blackbox-e2e.mjs",
+    "test:model-tasks": "npm run build && node scripts/model-task-benchmark.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "scan:licenses": "node scripts/scan-licenses.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
     "report:capability": "npm run build && node scripts/capability-report.mjs",
-    "verify": "npm run lint && npm run test && npm run test:memory-eval && npm run test:patch-eval && npm run test:goal-plan-eval && npm run test:tool-discovery-eval && npm run test:control-api-eval && npm run test:blackbox && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom && npm run report:capability"
+    "verify": "npm run lint && npm run test && npm run test:memory-eval && npm run test:patch-eval && npm run test:goal-plan-eval && npm run test:tool-discovery-eval && npm run test:control-api-eval && npm run test:blackbox && npm run test:model-tasks && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom && npm run report:capability"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",

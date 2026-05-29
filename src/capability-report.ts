@@ -3,6 +3,7 @@ import path from "node:path";
 
 export interface CapabilityReportInput {
   blackbox: Record<string, unknown>;
+  modelTasks: Record<string, unknown>;
   memory: Record<string, unknown>;
   patch: Record<string, unknown>;
   goalPlan: Record<string, unknown>;
@@ -39,6 +40,7 @@ export interface CapabilityReport {
 export function buildCapabilityReport(input: CapabilityReportInput): CapabilityReport {
   const checks = [
     checkBlackboxReport(input.blackbox),
+    checkModelTaskReport(input.modelTasks),
     checkMemoryReport(input.memory),
     checkPatchReport(input.patch),
     checkGoalPlanReport(input.goalPlan),
@@ -71,6 +73,7 @@ export function buildCapabilityReportFromFiles(input: {
   const reportPath = (name: string) => path.join(reportsRoot, name);
   return buildCapabilityReport({
     blackbox: readJsonReport(reportPath("blackbox-e2e.json")),
+    modelTasks: readJsonReport(reportPath("model-task-benchmark.json")),
     memory: readJsonReport(reportPath("memory-recall-eval.json")),
     patch: readJsonReport(reportPath("patch-engine-eval.json")),
     goalPlan: readJsonReport(reportPath("goal-plan-eval.json")),
@@ -79,6 +82,7 @@ export function buildCapabilityReportFromFiles(input: {
     generatedAt: input.generatedAt,
     sources: {
       blackbox: path.relative(input.repoRoot, reportPath("blackbox-e2e.json")),
+      modelTasks: path.relative(input.repoRoot, reportPath("model-task-benchmark.json")),
       memory: path.relative(input.repoRoot, reportPath("memory-recall-eval.json")),
       patch: path.relative(input.repoRoot, reportPath("patch-engine-eval.json")),
       goalPlan: path.relative(input.repoRoot, reportPath("goal-plan-eval.json")),
@@ -138,6 +142,57 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     score: failures.length === 0 ? 1 : 0,
     metrics: {
       ...base.metrics,
+      providerCallsPerScenario,
+      assertions,
+      filesVerified,
+      toolCallCount,
+      uniqueToolCount,
+      topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
+      regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
+    },
+    failures
+  };
+}
+
+function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck {
+  const base = checkHarnessReport({
+    id: "model-tasks",
+    title: "Model task benchmark",
+    report,
+    minScore: 1,
+    minSuccessRate: 1
+  });
+  const summary = readRecord(report.summary);
+  const toolEfficiency = readRecord(summary.toolEfficiency);
+  const failures = [...base.failures];
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios.map(readRecord) : [];
+  const taskClasses = new Set(
+    scenarios
+      .map((scenario) => readRecord(scenario.details).taskClass)
+      .filter((taskClass): taskClass is string => typeof taskClass === "string")
+  );
+  const assertions = readNumber(summary.assertions);
+  const filesVerified = readNumber(summary.filesVerified);
+  const toolCallCount = readNumber(toolEfficiency.toolCallCount);
+  const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
+  const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
+  if (readNumber(summary.total) < 3) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 3) failures.push(`taskClasses=${taskClasses.size}`);
+  if (assertions < 9) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 3) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 6) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 5) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
+  if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
+    failures.push(`regressions=${summary.regressions.length}`);
+  }
+  return {
+    ...base,
+    status: failures.length === 0 ? "passed" : "failed",
+    score: failures.length === 0 ? 1 : 0,
+    metrics: {
+      ...base.metrics,
+      taskClasses: Array.from(taskClasses).sort(),
       providerCallsPerScenario,
       assertions,
       filesVerified,
