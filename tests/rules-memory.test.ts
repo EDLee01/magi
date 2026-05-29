@@ -247,6 +247,21 @@ describe("AGENTS rules and memory", () => {
       source: "agent",
       weight: 0.45
     });
+    const project = nodeStore.upsertNode({
+      type: "project",
+      title: "Release project",
+      summary: "Release project context.",
+      body: "Release project uses the duplicate verification workflow for package publishing.",
+      source: "explicit",
+      weight: 0.7
+    });
+    nodeStore.addEdge({
+      fromNodeId: project.id,
+      toNodeId: duplicate.id,
+      relation: "depends_on",
+      weight: 0.8,
+      metadata: { source: "test" }
+    });
     nodeStore.close();
 
     const dream = await runCli(["memory", "dream"], temp.env, workspace);
@@ -260,16 +275,30 @@ describe("AGENTS rules and memory", () => {
         type: "duplicate",
         reason: expect.stringContaining(duplicate.id),
         relatedFiles: [`graph:${keep.id}`, `graph:${duplicate.id}`],
-        graphNodeIds: [duplicate.id]
+        graphNodeIds: [duplicate.id],
+        graphMerge: {
+          keepNodeId: keep.id,
+          duplicateNodeId: duplicate.id
+        }
       })
     );
 
     const applied = await runCli(["memory", "dream", "apply", dreams[0].id], temp.env, workspace);
     expect(applied.exitCode).toBe(0);
     expect(applied.stdout).toContain("Archived graph nodes: 1");
+    expect(applied.stdout).toContain("Redirected graph edges: 1");
     const afterApply = MemoryNodeStore.open(paths);
     expect(afterApply.getNode(keep.id)?.status).toBe("active");
     expect(afterApply.getNode(duplicate.id)?.status).toBe("archived");
+    expect(afterApply.getNode(duplicate.id)?.metadata).toMatchObject({
+      archive: expect.objectContaining({
+        mergedInto: keep.id,
+        redirectedEdgeCount: 1
+      })
+    });
+    expect(
+      afterApply.searchGraph({ query: "package publishing", limit: 5 }).map((hit) => hit.node.id)
+    ).toContain(keep.id);
     afterApply.close();
   });
 

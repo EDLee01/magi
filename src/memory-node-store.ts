@@ -111,6 +111,20 @@ export interface MemoryDuplicateCandidate {
   reason: string;
 }
 
+export interface MergeDuplicateMemoryNodeInput {
+  keepId: string;
+  duplicateId: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MergeDuplicateMemoryNodeResult {
+  keep: MemoryNode;
+  duplicate: MemoryNode;
+  redirectedEdges: MemoryEdge[];
+  archived: MemoryNode[];
+}
+
 export interface ArchiveMemoryNodesInput {
   ids: string[];
   reason?: string;
@@ -1047,6 +1061,52 @@ export class MemoryNodeStore {
     return archived;
   }
 
+  mergeDuplicateNode(input: MergeDuplicateMemoryNodeInput): MergeDuplicateMemoryNodeResult {
+    const keepId = input.keepId.trim();
+    const duplicateId = input.duplicateId.trim();
+    if (!keepId || !duplicateId) {
+      throw new Error("Memory merge requires keepId and duplicateId");
+    }
+    if (keepId === duplicateId) {
+      throw new Error("Memory merge cannot merge a node into itself");
+    }
+    const now = nowIso();
+    return this.db.transaction(() => {
+      const keep = this.getNode(keepId);
+      const duplicate = this.getNode(duplicateId);
+      if (!keep) {
+        throw new Error(`Memory keep node not found: ${keepId}`);
+      }
+      if (!duplicate) {
+        throw new Error(`Memory duplicate node not found: ${duplicateId}`);
+      }
+      if (keep.status === "archived") {
+        throw new Error(`Cannot merge into archived Memory node: ${keepId}`);
+      }
+      if (duplicate.status === "archived") {
+        return { keep, duplicate, redirectedEdges: [], archived: [] };
+      }
+
+      const redirectedEdges = this.redirectEdgesFromDuplicate({
+        keepId,
+        duplicateId,
+        now,
+        reason: input.reason ?? "Merged duplicate Memory node",
+        metadata: input.metadata
+      });
+      const archived = this.archiveNodes({
+        ids: [duplicateId],
+        reason: input.reason ?? `Merged into Memory node ${keepId}`,
+        metadata: {
+          ...input.metadata,
+          mergedInto: keepId,
+          redirectedEdgeCount: redirectedEdges.length
+        }
+      });
+      return { keep: this.getNode(keepId) ?? keep, duplicate, redirectedEdges, archived };
+    })();
+  }
+
   keepNodes(input: KeepMemoryNodesInput): MemoryNode[] {
     const ids = uniqueIds(input.ids);
     if (ids.length === 0) return [];
@@ -1245,6 +1305,135 @@ export class MemoryNodeStore {
       weight: input.weight ?? 0.5,
       createdAt: now,
       metadata: input.metadata ?? {}
+    };
+  }
+
+  private redirectEdgesFromDuplicate(input: {
+    keepId: string;
+    duplicateId: string;
+    now: string;
+    reason: string;
+    metadata?: Record<string, unknown>;
+  }): MemoryEdge[] {
+    const rows = this.db
+      .prepare(
+        `
+      select *
+      from memory_edges
+      where from_node_id = ? or to_node_id = ?
+      order by id asc
+    `
+      )
+      .all(input.duplicateId, input.duplicateId) as DbMemoryEdge[];
+    const redirected: MemoryEdge[] = [];
+    for (const row of rows) {
+      const edge = toMemoryEdge(row);
+      const fromNodeId = edge.fromNodeId === input.duplicateId ? input.keepId : edge.fromNodeId;
+      const toNodeId = edge.toNodeId === input.duplicateId ? input.keepId : edge.toNodeId;
+      if (fromNodeId === toNodeId) {
+        continue;
+      }
+      redirected.push(
+        this.upsertRedirectedEdge({
+          fromNodeId,
+          toNodeId,
+          relation: edge.relation,
+          weight: edge.weight,
+          now: input.now,
+          sourceEdge: edge,
+          keepId: input.keepId,
+          duplicateId: input.duplicateId,
+          reason: input.reason,
+          metadata: input.metadata
+        })
+      );
+    }
+    return redirected;
+  }
+
+  private upsertRedirectedEdge(input: {
+    fromNodeId: string;
+    toNodeId: string;
+    relation: MemoryEdgeRelation;
+    weight: number;
+    now: string;
+    sourceEdge: MemoryEdge;
+    keepId: string;
+    duplicateId: string;
+    reason: string;
+    metadata?: Record<string, unknown>;
+  }): MemoryEdge {
+    const existing = this.db
+      .prepare(
+        `
+      select *
+      from memory_edges
+      where from_node_id = ? and to_node_id = ? and relation = ?
+      order by weight desc, id asc
+      limit 1
+    `
+      )
+      .get(input.fromNodeId, input.toNodeId, input.relation) as DbMemoryEdge | undefined;
+    const mergeMetadata = {
+      keepNodeId: input.keepId,
+      duplicateNodeId: input.duplicateId,
+      sourceEdgeId: input.sourceEdge.id,
+      reason: input.reason,
+      mergedAt: input.now,
+      ...(input.metadata ?? {})
+    };
+    if (existing) {
+      this.db
+        .prepare(
+          `
+        update memory_edges
+        set weight = ?,
+            metadata_json = ?
+        where id = ?
+      `
+        )
+        .run(
+          Math.max(existing.weight, input.weight),
+          encodeJson({
+            ...decodeJson(existing.metadata_json),
+            merge: mergeMetadata
+          }),
+          existing.id
+        );
+      const updated = this.db
+        .prepare("select * from memory_edges where id = ?")
+        .get(existing.id) as DbMemoryEdge | undefined;
+      return toMemoryEdge(updated ?? existing);
+    }
+    const result = this.db
+      .prepare(
+        `
+      insert into memory_edges (from_node_id, to_node_id, relation, weight, created_at, metadata_json)
+      values (?, ?, ?, ?, ?, ?)
+    `
+      )
+      .run(
+        input.fromNodeId,
+        input.toNodeId,
+        input.relation,
+        input.weight,
+        input.now,
+        encodeJson({
+          ...input.sourceEdge.metadata,
+          merge: mergeMetadata
+        })
+      );
+    return {
+      id: Number(result.lastInsertRowid),
+      fromNodeId: input.fromNodeId,
+      toNodeId: input.toNodeId,
+      relation: input.relation,
+      weight: input.weight,
+      createdAt: input.now,
+      metadata: {
+        ...input.sourceEdge.metadata,
+        merge: mergeMetadata
+      }
     };
   }
 

@@ -280,6 +280,96 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("merges duplicate memory nodes without dropping graph edges", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const keep = store.upsertNode({
+        type: "workflow",
+        title: "Focused release verification",
+        summary: "Run focused checks before broad checks.",
+        body: "Run focused checks and typecheck before broad checks for releases.",
+        source: "agent",
+        weight: 0.9
+      });
+      const duplicate = store.upsertNode({
+        type: "workflow",
+        title: "Focused release verification",
+        summary: "Run focused checks before broad checks.",
+        body: "Run focused checks and typecheck before broad verification for releases.",
+        source: "agent",
+        weight: 0.45
+      });
+      const project = store.upsertNode({
+        type: "project",
+        title: "Release project",
+        summary: "Release project context.",
+        body: "Release project uses the duplicate workflow for package publishing.",
+        source: "explicit",
+        weight: 0.7
+      });
+      const skill = store.upsertNode({
+        type: "skill_ref",
+        title: "Verification skill",
+        summary: "Verification skill.",
+        body: "Verification skill supports focused release checks.",
+        source: "explicit",
+        weight: 0.7
+      });
+      store.addEdge({
+        fromNodeId: project.id,
+        toNodeId: duplicate.id,
+        relation: "depends_on",
+        weight: 0.8,
+        metadata: { source: "test" }
+      });
+      store.addEdge({
+        fromNodeId: duplicate.id,
+        toNodeId: skill.id,
+        relation: "uses_skill",
+        weight: 0.6,
+        metadata: { source: "test" }
+      });
+
+      const result = store.mergeDuplicateNode({
+        keepId: keep.id,
+        duplicateId: duplicate.id,
+        reason: "Duplicate cleanup",
+        metadata: { dreamId: "dream_merge" }
+      });
+
+      expect(result.archived.map((node) => node.id)).toEqual([duplicate.id]);
+      expect(result.redirectedEdges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromNodeId: project.id,
+            toNodeId: keep.id,
+            relation: "depends_on"
+          }),
+          expect.objectContaining({
+            fromNodeId: keep.id,
+            toNodeId: skill.id,
+            relation: "uses_skill"
+          })
+        ])
+      );
+      expect(store.getNode(duplicate.id)).toMatchObject({
+        status: "archived",
+        metadata: expect.objectContaining({
+          archive: expect.objectContaining({
+            mergedInto: keep.id,
+            redirectedEdgeCount: 2
+          })
+        })
+      });
+      expect(
+        store.searchGraph({ query: "package publishing", limit: 5 }).map((hit) => hit.node.id)
+      ).toContain(keep.id);
+    } finally {
+      store.close();
+    }
+  });
+
   it("archives and keeps reviewed graph cleanup nodes", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

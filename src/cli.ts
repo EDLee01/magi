@@ -737,7 +737,7 @@ async function runCliUnsafeWithParsed(
         });
         return {
           exitCode: 0,
-          stdout: `Applied Dream: ${dream.id}\nArchived graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}\n`,
+          stdout: `Applied Dream: ${dream.id}\nArchived graph nodes: ${dream.graphReview?.nodeIds.length ?? 0}\nRedirected graph edges: ${dream.graphReview?.redirectedEdgeCount ?? 0}\n`,
           stderr: ""
         };
       }

@@ -24,6 +24,10 @@ export interface DreamOperation {
   content?: string;
   relatedFiles?: string[];
   graphNodeIds?: string[];
+  graphMerge?: {
+    keepNodeId: string;
+    duplicateNodeId: string;
+  };
 }
 
 export interface DreamManifest {
@@ -38,6 +42,7 @@ export interface DreamManifest {
     decision: "archive" | "keep";
     nodeIds: string[];
     reviewedAt: string;
+    redirectedEdgeCount?: number;
   };
 }
 
@@ -147,20 +152,29 @@ export function applyDream(
   for (const draftId of manifest.draftIds) {
     input.applyDraft(draftId);
   }
+  const graphMergeResult = mergeDreamGraphDuplicates({
+    paths: input.paths,
+    dreamId: manifest.id,
+    operations: manifest.operations
+  });
   const graphNodeIds = extractGraphNodeIds(manifest.operations, manifest.graphNodeIds);
   const archivedGraphNodeIds = archiveDreamGraphNodes({
     paths: input.paths,
     dreamId: manifest.id,
     nodeIds: graphNodeIds
   });
+  const reviewedGraphNodeIds = Array.from(
+    new Set([...graphMergeResult.mergedNodeIds, ...archivedGraphNodeIds])
+  );
   const applied: DreamManifest = {
     ...manifest,
     status: "applied",
     graphNodeIds,
     graphReview: {
       decision: "archive",
-      nodeIds: archivedGraphNodeIds,
-      reviewedAt: new Date().toISOString()
+      nodeIds: reviewedGraphNodeIds,
+      reviewedAt: new Date().toISOString(),
+      redirectedEdgeCount: graphMergeResult.redirectedEdgeCount
     }
   };
   atomicWrite(file, JSON.stringify(applied, null, 2) + "\n");
@@ -169,7 +183,13 @@ export function applyDream(
     root,
     action: "memory.dream.applied",
     target: manifest.id,
-    metadata: { draftIds: manifest.draftIds, graphNodeIds, archivedGraphNodeIds }
+    metadata: {
+      draftIds: manifest.draftIds,
+      graphNodeIds,
+      archivedGraphNodeIds: reviewedGraphNodeIds,
+      graphMerges: graphMergeResult.mergedNodeIds,
+      redirectedEdgeCount: graphMergeResult.redirectedEdgeCount
+    }
   });
   return applied;
 }
@@ -277,7 +297,11 @@ function analyzeGraphDuplicateCandidates(paths: MagiPaths): DreamOperation[] {
       reason: `Graph node ${candidate.duplicate.id}: ${candidate.reason}`,
       content: `\n<!-- Dream graph duplicate candidate -->\n- Merge candidate: archive ${candidate.duplicate.title} (${candidate.duplicate.id}) because it duplicates ${candidate.keep.title} (${candidate.keep.id}).\n`,
       relatedFiles: [`graph:${candidate.keep.id}`, `graph:${candidate.duplicate.id}`],
-      graphNodeIds: [candidate.duplicate.id]
+      graphNodeIds: [candidate.duplicate.id],
+      graphMerge: {
+        keepNodeId: candidate.keep.id,
+        duplicateNodeId: candidate.duplicate.id
+      }
     }));
   } finally {
     store.close();
@@ -297,6 +321,38 @@ function analyzeGraphCleanupCandidates(paths: MagiPaths): DreamOperation[] {
         relatedFiles: [`graph:${candidate.node.id}`],
         graphNodeIds: [candidate.node.id]
       }));
+  } finally {
+    store.close();
+  }
+}
+
+function mergeDreamGraphDuplicates(input: {
+  paths?: MagiPaths;
+  dreamId: string;
+  operations: DreamOperation[];
+}): { mergedNodeIds: string[]; redirectedEdgeCount: number } {
+  const mergeOperations = input.operations.filter((op) => op.graphMerge);
+  if (!input.paths || mergeOperations.length === 0) {
+    return { mergedNodeIds: [], redirectedEdgeCount: 0 };
+  }
+  const store = MemoryNodeStore.open(input.paths);
+  try {
+    const mergedNodeIds: string[] = [];
+    let redirectedEdgeCount = 0;
+    for (const op of mergeOperations) {
+      const merge = op.graphMerge!;
+      const result = store.mergeDuplicateNode({
+        keepId: merge.keepNodeId,
+        duplicateId: merge.duplicateNodeId,
+        reason: `Merged by Dream ${input.dreamId}`,
+        metadata: { dreamId: input.dreamId }
+      });
+      if (result.archived.length > 0) {
+        mergedNodeIds.push(result.duplicate.id);
+      }
+      redirectedEdgeCount += result.redirectedEdges.length;
+    }
+    return { mergedNodeIds, redirectedEdgeCount };
   } finally {
     store.close();
   }

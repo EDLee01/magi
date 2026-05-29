@@ -663,6 +663,23 @@ async function scenarioComplexWorkflow() {
 
       const memorySearch = await runCli({ args: ["memory", "search", "CLI E2E workflow"], cwd: workDir, configDir, label: "memory search" });
       assert(memorySearch.includes("focused CLI E2E"), "memory search did not find memorized workflow");
+      await runCli({
+        args: [
+          "memory",
+          "link",
+          "--from",
+          "Run focused CLI E2E before internal unit tests for Magi changes, especially when checking harness regressions.",
+          "--to",
+          "User prefers focused CLI black-box verification for complex Magi work.",
+          "--relation",
+          "relates_to",
+          "--weight",
+          "0.8",
+        ],
+        cwd: workDir,
+        configDir,
+        label: "complex duplicate memory link",
+      });
       const dream = await runCli({ args: ["memory", "dream"], cwd: workDir, configDir, label: "complex memory dream duplicate" });
       assert(dream.includes("duplicate"), "memory dream did not detect duplicate graph workflow");
       const dreamId = parseDreamId(dream);
@@ -673,6 +690,7 @@ async function scenarioComplexWorkflow() {
         label: "complex memory dream apply duplicate",
       });
       assert(appliedDream.includes("Archived graph nodes: 1"), "memory dream did not archive duplicate graph workflow");
+      assert(appliedDream.includes("Redirected graph edges: 1"), "memory dream did not redirect duplicate graph edges");
 
       await runCli({ args: ["goal", "done", "verified"], cwd: workDir, configDir, label: "goal done" });
       const goalStatus = await runCli({ args: ["goal"], cwd: workDir, configDir, label: "goal status" });
@@ -688,6 +706,7 @@ async function scenarioComplexWorkflow() {
           "todo state persisted",
           "memory search found learned workflow",
           "Dream archived duplicate workflow memory",
+          "Dream redirected duplicate workflow graph edge",
           "learning draft listed"
         ],
         filesVerified: ["reports/e2e-result.md", "state/todos.json"],
