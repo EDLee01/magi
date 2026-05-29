@@ -353,6 +353,7 @@ const TERM_ALIASES: Record<string, string[]> = {
   recall: ["memory", "session"],
   refactor: ["patch", "edit", "lsp"],
   remember: ["memory", "memorize", "persist"],
+  replace: ["correct", "supersede"],
   remote: ["ssh"],
   research: ["search", "web", "agent"],
   run: ["execute"],
@@ -368,6 +369,7 @@ const TERM_ALIASES: Record<string, string[]> = {
   verify: ["test", "build"],
   verification: ["verify", "test", "build"],
   web: ["browser", "fetch", "search"],
+  wrong: ["correct", "dispute", "supersede"],
   workflow: ["learning", "memory"]
 };
 
@@ -410,11 +412,19 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
     toolBoosts: { Memorize: 260, LearningDraft: 90, SessionSearch: 45 }
   },
   {
+    name: "memory-correction",
+    triggers: ["correct", "wrong", "outdated", "replace", "dispute", "supersede", "incorrect"],
+    phrases: ["memory is wrong", "not true anymore", "replace memory", "纠正记忆", "记忆不对"],
+    categories: ["memory"],
+    tags: ["memory", "correct", "dispute", "supersede", "graph"],
+    toolBoosts: { MemoryCorrect: 300, Memorize: 95, SessionSearch: 70 }
+  },
+  {
     name: "memory-recall",
     triggers: ["memory", "recall", "history", "previous"],
     categories: ["memory"],
     tags: ["memory", "session", "history", "recall", "learning"],
-    toolBoosts: { SessionSearch: 150, Memorize: 120, LearningDraft: 90 }
+    toolBoosts: { SessionSearch: 150, Memorize: 120, MemoryCorrect: 100, LearningDraft: 90 }
   },
   {
     name: "skill-learning",

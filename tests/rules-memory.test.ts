@@ -345,6 +345,57 @@ describe("AGENTS rules and memory", () => {
     expect(search.stdout).toContain("Linked workflow neighbor");
   });
 
+  it("corrects graph memory through the CLI and stops returning the disputed node", async () => {
+    temp = makeTempRoot();
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));
+    const paths = getMagiPaths(temp.env);
+    const nodeStore = MemoryNodeStore.open(paths);
+    const wrong = nodeStore.upsertNode({
+      type: "user_profile",
+      title: "User role",
+      summary: "Incorrect role.",
+      body: "The user is only a documentation reviewer.",
+      source: "explicit",
+      weight: 0.95
+    });
+    nodeStore.close();
+
+    const corrected = await runCli(
+      [
+        "memory",
+        "correct",
+        "--target",
+        wrong.id,
+        "--reason",
+        "User corrected the stale profile.",
+        "--replacement",
+        "The user is the creator of Magi.",
+        "--replacement-summary",
+        "Correct user role.",
+        "--type",
+        "user_profile"
+      ],
+      temp.env,
+      workspace
+    );
+    expect(corrected.exitCode).toBe(0);
+    expect(corrected.stdout).toContain("Corrected Memory node:");
+    expect(corrected.stdout).toContain("replacement:");
+
+    const search = await runCli(
+      ["memory", "search", "documentation reviewer"],
+      temp.env,
+      workspace
+    );
+    expect(search.exitCode).toBe(0);
+    expect(search.stdout).toContain("creator of Magi");
+    expect(search.stdout).not.toContain("only a documentation reviewer");
+
+    const audit = readFileSync(path.join(paths.root, "memory", "logs", "audit.jsonl"), "utf8");
+    expect(audit).toContain("memory.corrected");
+    expect(audit).toContain(wrong.id);
+  });
+
   it("searches layered memory with session and project relevance", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-memory-"));

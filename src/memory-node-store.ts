@@ -61,6 +61,28 @@ export interface ListHotMemoryNodesInput {
   minWeight?: number;
 }
 
+export interface CorrectMemoryNodeInput {
+  nodeId: string;
+  reason: string;
+  replacement?: {
+    type?: MemoryNodeType;
+    title?: string;
+    summary?: string;
+    body: string;
+    weight?: number;
+    source?: string;
+    sourceSessionId?: string;
+    metadata?: Record<string, unknown>;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export interface CorrectMemoryNodeResult {
+  disputed: MemoryNode;
+  replacement?: MemoryNode;
+  edges: MemoryEdge[];
+}
+
 export interface MemoryEdge {
   id: number;
   fromNodeId: string;
@@ -454,11 +476,12 @@ export class MemoryNodeStore {
     if (existing) {
       const node = this.getNode(existing.nodeId);
       const weight = Math.max(node?.weight ?? 0, input.weight ?? defaultWeight(source.kind));
+      const nodeStatus = node?.status === "disputed" ? "disputed" : "active";
       this.db
         .prepare(
           `
         update memory_nodes
-        set type = ?, title = ?, summary = ?, body = ?, weight = ?, status = 'active',
+        set type = ?, title = ?, summary = ?, body = ?, weight = ?, status = ?,
             source = ?, updated_at = ?, metadata_json = ?
         where id = ?
       `
@@ -469,6 +492,7 @@ export class MemoryNodeStore {
           input.summary?.trim() || defaultSummary(body),
           body,
           weight,
+          nodeStatus,
           source.kind,
           now,
           encodeJson({
@@ -596,7 +620,7 @@ export class MemoryNodeStore {
       from memory_nodes n
       join memory_chunks c on c.node_id = n.id
       join memory_sources s on s.id = c.source_id
-      where n.status = 'active' and c.status = 'active' and s.status = 'active'
+      where n.status in ('active', 'disputed') and c.status = 'active' and s.status = 'active'
     `
       )
       .all() as DbGraphSearchRow[];
@@ -611,11 +635,120 @@ export class MemoryNodeStore {
         score: scoreGraphHit({ node, source, chunk }, terms)
       };
     });
+    const standaloneRows = this.db
+      .prepare(
+        `
+      select *
+      from memory_nodes n
+      where n.status in ('active', 'disputed')
+        and not exists (select 1 from memory_chunks c where c.node_id = n.id)
+    `
+      )
+      .all() as DbMemoryNode[];
+    for (const row of standaloneRows) {
+      const node = toMemoryNode(row);
+      const source = standaloneNodeSource(node);
+      const chunk = standaloneNodeChunk(node);
+      baseHits.push({
+        node,
+        source,
+        chunk,
+        score: scoreGraphHit({ node, source, chunk }, terms)
+      });
+    }
     const rankedHits = applyGraphEdges(baseHits, this.listActiveEdges(), minScore)
-      .filter((hit) => hit.score >= minScore)
+      .filter((hit) => hit.node.status === "active" && hit.score >= minScore)
       .sort(compareGraphSearchHits)
       .slice(0, limit);
     return rankedHits;
+  }
+
+  correctNode(input: CorrectMemoryNodeInput): CorrectMemoryNodeResult {
+    const existing = this.getNode(input.nodeId);
+    if (!existing) {
+      throw new Error(`Memory node not found: ${input.nodeId}`);
+    }
+    if (existing.status === "archived") {
+      throw new Error(`Cannot correct archived Memory node: ${input.nodeId}`);
+    }
+    const reason = normalizeWhitespace(input.reason);
+    if (!reason) {
+      throw new Error("Memory correction reason must not be empty");
+    }
+    const now = nowIso();
+    return this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+        update memory_nodes
+        set status = 'disputed',
+            weight = max(0, weight * 0.25),
+            updated_at = ?,
+            metadata_json = ?
+        where id = ?
+      `
+        )
+        .run(
+          now,
+          encodeJson({
+            ...existing.metadata,
+            correction: {
+              reason,
+              correctedAt: now,
+              ...(input.metadata ?? {})
+            }
+          }),
+          existing.id
+        );
+      const disputed = this.getNode(existing.id)!;
+      const edges: MemoryEdge[] = [];
+      let replacement: MemoryNode | undefined;
+      if (input.replacement?.body) {
+        replacement = this.upsertNode({
+          type: input.replacement.type ?? existing.type,
+          title: input.replacement.title ?? existing.title,
+          summary: input.replacement.summary ?? input.replacement.body,
+          body: input.replacement.body,
+          weight: input.replacement.weight ?? Math.max(0.75, existing.weight),
+          source: input.replacement.source ?? "explicit",
+          sourceSessionId: input.replacement.sourceSessionId ?? existing.sourceSessionId,
+          metadata: {
+            correctionFor: existing.id,
+            correctionReason: reason,
+            ...(input.replacement.metadata ?? {})
+          }
+        });
+        edges.push(
+          this.addEdge({
+            fromNodeId: replacement.id,
+            toNodeId: disputed.id,
+            relation: "supersedes",
+            weight: 1,
+            metadata: {
+              source: "memory-correction",
+              reason,
+              ...(input.metadata ?? {})
+            }
+          })
+        );
+      }
+      if (replacement) {
+        edges.push(
+          this.addEdge({
+            fromNodeId: replacement.id,
+            toNodeId: disputed.id,
+            relation: "conflicts_with",
+            weight: 1,
+            metadata: {
+              source: "memory-correction",
+              reason,
+              ...(input.metadata ?? {})
+            }
+          })
+        );
+      }
+      return { disputed, replacement, edges };
+    })();
   }
 
   markSourceMissing(sourceId: string): void {
@@ -779,7 +912,7 @@ export class MemoryNodeStore {
       from memory_edges e
       join memory_nodes from_node on from_node.id = e.from_node_id
       join memory_nodes to_node on to_node.id = e.to_node_id
-      where from_node.status = 'active' and to_node.status = 'active'
+      where from_node.status in ('active', 'disputed') and to_node.status in ('active', 'disputed')
     `
       )
       .all() as DbMemoryEdge[];
@@ -791,7 +924,7 @@ export class MemoryNodeStore {
       .prepare(
         `
       select * from memory_nodes
-      where type = ? and lower(body) = lower(?) and status != 'archived'
+      where type = ? and lower(body) = lower(?) and status = 'active'
       order by updated_at desc
       limit 1
     `
@@ -1066,6 +1199,43 @@ function graphRowToChunk(row: DbGraphSearchRow): MemoryChunk {
     status: row.chunk_status,
     updatedAt: row.chunk_updated_at,
     metadata: decodeJson(row.chunk_metadata_json)
+  };
+}
+
+function standaloneNodeSource(node: MemoryNode): MemorySource {
+  return {
+    id: `node-source:${node.id}`,
+    kind: node.source === "memdir" ? "memdir" : node.source === "wiki" ? "wiki" : "explicit",
+    uri: `memory-node/${node.id}`,
+    title: node.title,
+    contentHash: hashText(node.body),
+    status: "active",
+    indexedAt: node.createdAt,
+    updatedAt: node.updatedAt,
+    metadata: {
+      standalone: true,
+      nodeSource: node.source
+    }
+  };
+}
+
+function standaloneNodeChunk(node: MemoryNode): MemoryChunk {
+  return {
+    id: `node-chunk:${node.id}`,
+    sourceId: `node-source:${node.id}`,
+    nodeId: node.id,
+    uri: `memory-node/${node.id}`,
+    heading: node.title,
+    body: node.body,
+    summary: node.summary,
+    contentHash: hashText(node.body),
+    orderIndex: 0,
+    status: "active",
+    updatedAt: node.updatedAt,
+    metadata: {
+      standalone: true,
+      nodeSource: node.source
+    }
   };
 }
 

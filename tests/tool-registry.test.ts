@@ -315,6 +315,58 @@ describe("tool registry", () => {
     );
   });
 
+  it("corrects durable memory graph nodes through MemoryCorrect", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+    const store = MemoryNodeStore.open(paths);
+    const wrong = store.upsertNode({
+      type: "preference",
+      title: "Output preference",
+      summary: "Incorrect output preference.",
+      body: "User prefers verbose terminal dumps.",
+      source: "explicit",
+      weight: 0.95
+    });
+    store.close();
+
+    const result = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      sessionId: "session-1",
+      permissionMode: "acceptEdits",
+      toolUse: {
+        type: "tool-use",
+        id: "correct-memory",
+        name: "MemoryCorrect",
+        input: {
+          target: wrong.id,
+          reason: "User said this memory is wrong.",
+          replacement: "User prefers concise verification summaries.",
+          replacement_title: "Output preference",
+          replacement_summary: "Correct output preference.",
+          replacement_type: "preference"
+        }
+      }
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("Corrected Memory node");
+    expect(result.content).toContain("replacement:");
+
+    const after = MemoryNodeStore.open(paths);
+    try {
+      expect(after.getNode(wrong.id)?.status).toBe("disputed");
+      const hits = after.searchGraph({ query: "verbose terminal dumps", limit: 5 });
+      expect(hits.map((hit) => hit.node.body)).toContain(
+        "User prefers concise verification summaries."
+      );
+      expect(hits.map((hit) => hit.node.id)).not.toContain(wrong.id);
+    } finally {
+      after.close();
+    }
+  });
+
   it("creates and patches skills with SkillManage path limits", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });

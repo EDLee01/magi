@@ -214,6 +214,7 @@ import {
   parseLearningDraftToolInput
 } from "./learning-draft-tool.js";
 import { MemoryNodeStore, MemoryNodeType } from "../memory-node-store.js";
+import { correctMemory, formatMemoryCorrectionResult } from "../memory-correction.js";
 import { SessionStore } from "../session-store.js";
 import {
   formatSessionSearchResult,
@@ -708,6 +709,7 @@ const CORE_TOOL_NAMES = [
   "SendUserMessage",
   "Brief",
   "Memorize",
+  "MemoryCorrect",
   "ToolSearch",
   "WorkspaceDiagnostics",
   "EnterPlanMode",
@@ -1662,6 +1664,78 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       });
       nodeStore.close();
       return `Wrote Memory node: ${node.id} (${node.type}, weight ${node.weight.toFixed(2)}).`;
+    },
+    isReadOnly: () => false,
+    isDestructive: () => false,
+    isConcurrencySafe: () => false
+  },
+  {
+    name: "MemoryCorrect",
+    description:
+      "Correct a wrong durable Memory graph node. Marks the old node as disputed, optionally writes a replacement node, and links the replacement with supersedes/conflicts edges.",
+    category: "memory",
+    tags: ["memory", "graph", "correct", "dispute", "supersede"],
+    inputSchema: objectSchema(
+      {
+        target: {
+          type: "string",
+          description: "Memory node id, exact title, or search query for the wrong memory."
+        },
+        reason: {
+          type: "string",
+          description: "Why the existing memory is wrong or should no longer be trusted."
+        },
+        replacement: {
+          type: "string",
+          description: "Optional corrected memory content to store as a replacement node."
+        },
+        replacement_title: {
+          type: "string",
+          description: "Optional short title for the replacement node."
+        },
+        replacement_summary: {
+          type: "string",
+          description: "Optional one-line relevance summary for the replacement node."
+        },
+        replacement_type: {
+          type: "string",
+          enum: [
+            "user_profile",
+            "preference",
+            "work_habit",
+            "workflow",
+            "project",
+            "decision",
+            "problem",
+            "reference",
+            "skill_ref",
+            "session"
+          ]
+        }
+      },
+      ["target", "reason"]
+    ),
+    call: (input, context) => {
+      const appRoot = requireAppRoot(context, "MemoryCorrect");
+      const paths = pathsFromContext(context, "MemoryCorrect");
+      const rawReplacementType = readOptionalString(input, "replacement_type");
+      if (rawReplacementType && !isValidMemoryNodeType(rawReplacementType)) {
+        throw new Error(`Invalid replacement memory type: ${rawReplacementType}`);
+      }
+      const replacementType = rawReplacementType as MemoryNodeType | undefined;
+      const result = correctMemory({
+        appRoot,
+        root: context.memoryRoot,
+        paths,
+        sessionId: context.sessionId,
+        target: readString(input, "target"),
+        reason: readString(input, "reason"),
+        replacement: readOptionalString(input, "replacement"),
+        replacementTitle: readOptionalString(input, "replacement_title"),
+        replacementSummary: readOptionalString(input, "replacement_summary"),
+        replacementType
+      });
+      return formatMemoryCorrectionResult(result);
     },
     isReadOnly: () => false,
     isDestructive: () => false,
@@ -3141,6 +3215,37 @@ function requireSkillsRoot(context: ToolExecutionContext): string {
     throw new Error("Skill requires Magi stateRoot");
   }
   return path.join(path.dirname(context.stateRoot), "skills");
+}
+
+function pathsFromContext(
+  context: ToolExecutionContext,
+  toolName: string
+): {
+  root: string;
+  configFile: string;
+  stateRoot: string;
+  sessionsRoot: string;
+  logsRoot: string;
+  cacheRoot: string;
+  pluginsRoot: string;
+  skillsRoot: string;
+  devicesRoot: string;
+  sessionDbFile: string;
+} {
+  const stateRoot = requireStateRoot(context, toolName);
+  const root = path.dirname(stateRoot);
+  return {
+    root,
+    configFile: path.join(root, "config.yaml"),
+    stateRoot,
+    sessionsRoot: path.join(root, "sessions"),
+    logsRoot: path.join(root, "logs"),
+    cacheRoot: path.join(root, "cache"),
+    pluginsRoot: path.join(root, "plugins"),
+    skillsRoot: path.join(root, "skills"),
+    devicesRoot: path.join(root, "devices"),
+    sessionDbFile: path.join(stateRoot, "sessions.sqlite")
+  };
 }
 
 function isValidMemoryNodeType(value: string): value is MemoryNodeType {

@@ -806,6 +806,76 @@ async function scenarioMemoryGraphLink() {
   });
 }
 
+async function scenarioMemoryCorrection() {
+  return await withTempWorkspace("memory-correction", async ({ configDir, workDir }) => {
+    writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
+    await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory correction init" });
+    const draftId = parseDraftId(await runCli({
+      args: [
+        "memory",
+        "append",
+        "user",
+        "The user prefers verbose terminal dumps after verification."
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory correction append",
+    }));
+    await runCli({ args: ["memory", "draft", "apply", draftId], cwd: workDir, configDir, label: "memory correction apply" });
+    const before = await runCli({
+      args: ["memory", "search", "verbose terminal dumps verification"],
+      cwd: workDir,
+      configDir,
+      label: "memory correction search before",
+    });
+    assert(before.includes("verbose terminal dumps"), "correction precondition did not retrieve stale memory");
+
+    const corrected = await runCli({
+      args: [
+        "memory",
+        "correct",
+        "--target",
+        "verbose terminal dumps",
+        "--reason",
+        "User corrected the stale verification output preference.",
+        "--replacement",
+        "The user prefers concise verification summaries with only key outcomes.",
+        "--replacement-summary",
+        "Correct verification output preference.",
+        "--type",
+        "preference"
+      ],
+      cwd: workDir,
+      configDir,
+      label: "memory correction correct",
+    });
+    assert(corrected.includes("Corrected Memory node:"), "memory correction did not dispute a node");
+    assert(corrected.includes("replacement:"), "memory correction did not create a replacement");
+
+    const after = await runCli({
+      args: ["memory", "search", "verbose terminal dumps verification"],
+      cwd: workDir,
+      configDir,
+      label: "memory correction search after",
+    });
+    assert(after.includes("concise verification summaries"), "replacement memory was not recalled");
+    assert(!after.includes("prefers verbose terminal dumps"), "disputed stale memory was still recalled");
+    const auditPath = path.join(configDir, "memory", "logs", "audit.jsonl");
+    assert(existsSync(auditPath), "memory correction audit log was not written");
+    assert(readFileSync(auditPath, "utf8").includes("memory.corrected"), "memory correction audit event missing");
+    return {
+      score: 1,
+      assertions: [
+        "stale memory retrieved before correction",
+        "memory correct disputed old node",
+        "replacement memory recalled through graph search",
+        "disputed stale memory excluded from search results",
+        "memory correction audit persisted"
+      ]
+    };
+  });
+}
+
 async function scenarioToolFeedbackRanking() {
   return await withTempWorkspace("tool-feedback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -1185,6 +1255,7 @@ async function main() {
     ["default permission denied", scenarioDefaultPermissionDenied],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
+    ["memory correction", scenarioMemoryCorrection],
     ["tool feedback ranking", scenarioToolFeedbackRanking],
     ["plan mode", scenarioPlanMode],
     ["control approval flow", scenarioControlApprovalFlow],

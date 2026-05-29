@@ -13,6 +13,7 @@ import { formatMemory, MemoryScope } from "./memory.js";
 import { initMemory, listMemoryFiles, readMemoryFile } from "./memory-files.js";
 import { retrieveRelevantMemory, formatMemoryContext } from "./memory-search.js";
 import { formatMemoryLinkResult, linkMemoryNodes } from "./memory-link.js";
+import { correctMemory, formatMemoryCorrectionResult } from "./memory-correction.js";
 import {
   formatPlanReview,
   formatPlanReviewList,
@@ -588,7 +589,13 @@ async function runCliUnsafeWithParsed(
         ...rootInput,
         query,
         maxResults: config.memory.maxResults,
-        sessionId
+        sessionId,
+        legacy: {
+          paths,
+          cwd,
+          sessionId,
+          scopes: config.memory.scopes
+        }
       });
       return {
         exitCode: 0,
@@ -607,6 +614,21 @@ async function runCliUnsafeWithParsed(
         weight: options.weight
       });
       return { exitCode: 0, stdout: `${formatMemoryLinkResult(result)}\n`, stderr: "" };
+    }
+    if (subcommand === "correct") {
+      const options = parseMemoryCorrectArgs(parsed.rest.slice(1));
+      const result = correctMemory({
+        ...rootInput,
+        paths,
+        sessionId: parsed.resumeSessionId ?? parsed.sessionId,
+        target: options.target,
+        reason: options.reason,
+        replacement: options.replacement,
+        replacementTitle: options.replacementTitle,
+        replacementSummary: options.replacementSummary,
+        replacementType: options.replacementType
+      });
+      return { exitCode: 0, stdout: `${formatMemoryCorrectionResult(result)}\n`, stderr: "" };
     }
     if (subcommand === "drafts") {
       const drafts = listDrafts(rootInput);
@@ -1689,6 +1711,7 @@ function helpText(): string {
     "  magi memory view [user|project|session] [--session-id <id>]",
     "  magi memory search <query> [--session-id <id>]",
     "  magi memory link --from <node> --to <node> [--relation <rel>] [--weight <0..1>]",
+    "  magi memory correct --target <node|query> --reason <text> [--replacement <text>]",
     "  magi memory append <user|project|session> <text> [--session-id <id>]",
     "  magi learning list",
     "  magi learning draft <show|apply|reject> <id>",
@@ -1791,6 +1814,75 @@ function parseMemoryLinkArgs(args: string[]): {
     throw new MagiUsageError("magi memory link requires --from <node> and --to <node>");
   }
   return { from, to, relation, weight };
+}
+
+function parseMemoryCorrectArgs(args: string[]): {
+  target: string;
+  reason: string;
+  replacement?: string;
+  replacementTitle?: string;
+  replacementSummary?: string;
+  replacementType?: import("./memory-node-store.js").MemoryNodeType;
+} {
+  let target = "";
+  let reason = "";
+  let replacement: string | undefined;
+  let replacementTitle: string | undefined;
+  let replacementSummary: string | undefined;
+  let replacementType: import("./memory-node-store.js").MemoryNodeType | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--target") {
+      target = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--reason") {
+      reason = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--replacement") {
+      replacement = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--replacement-title") {
+      replacementTitle = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--replacement-summary") {
+      replacementSummary = args[++index] ?? "";
+      continue;
+    }
+    if (arg === "--type") {
+      const value = args[++index] ?? "";
+      if (!isMemoryNodeType(value)) {
+        throw new MagiUsageError(`Invalid memory correction --type: ${value}`);
+      }
+      replacementType = value;
+      continue;
+    }
+    throw new MagiUsageError(`Unknown magi memory correct option: ${arg}`);
+  }
+  if (!target || !reason) {
+    throw new MagiUsageError(
+      "magi memory correct requires --target <node|query> and --reason <text>"
+    );
+  }
+  return { target, reason, replacement, replacementTitle, replacementSummary, replacementType };
+}
+
+function isMemoryNodeType(value: string): value is import("./memory-node-store.js").MemoryNodeType {
+  return (
+    value === "user_profile" ||
+    value === "preference" ||
+    value === "work_habit" ||
+    value === "workflow" ||
+    value === "project" ||
+    value === "decision" ||
+    value === "problem" ||
+    value === "reference" ||
+    value === "skill_ref" ||
+    value === "session"
+  );
 }
 
 interface ParsedArgs {

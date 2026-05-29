@@ -104,6 +104,51 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("disputes incorrect nodes and recalls corrected replacements through supersedes edges", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const oldNode = store.upsertNode({
+        type: "user_profile",
+        title: "User role",
+        summary: "Incorrect user role.",
+        body: "The user is a documentation reviewer.",
+        source: "explicit",
+        weight: 0.95
+      });
+
+      const corrected = store.correctNode({
+        nodeId: oldNode.id,
+        reason: "User explicitly corrected their role.",
+        replacement: {
+          body: "The user is the creator of Magi.",
+          title: "User role",
+          summary: "Correct user role.",
+          source: "explicit"
+        }
+      });
+
+      expect(corrected.disputed).toMatchObject({
+        id: oldNode.id,
+        status: "disputed"
+      });
+      expect(corrected.replacement).toMatchObject({
+        status: "active",
+        body: "The user is the creator of Magi."
+      });
+      expect(corrected.edges.map((edge) => edge.relation)).toEqual([
+        "supersedes",
+        "conflicts_with"
+      ]);
+
+      const hits = store.searchGraph({ query: "documentation reviewer", limit: 5 });
+      expect(hits.map((hit) => hit.node.id)).toContain(corrected.replacement!.id);
+      expect(hits.map((hit) => hit.node.id)).not.toContain(oldNode.id);
+    } finally {
+      store.close();
+    }
+  });
+
   it("uses graph edges to recall related memory nodes", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);
