@@ -2575,6 +2575,9 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
   const multiFileRecoverySeen = details.multiFileRecoverySeen === true;
   const conflictExplanationSeen = details.conflictExplanationSeen === true;
   const rollbackVerified = details.rollbackVerified === true;
+  const rollbackQualitySeen =
+    details.rollbackQualitySeen === true ||
+    scenarios.some((scenario) => readRecord(scenario.details).rollbackQualitySeen === true);
   const finalDiffQualityVerified = details.finalDiffQualityVerified === true;
   const unrelatedFilePreserved = details.unrelatedFilePreserved === true;
   const toolSearchRankedFilePatch =
@@ -2594,6 +2597,7 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
   if (!multiFileRecoverySeen) failures.push("multiFileRecoverySeen=false");
   if (!conflictExplanationSeen) failures.push("conflictExplanationSeen=false");
   if (!rollbackVerified) failures.push("rollbackVerified=false");
+  if (!rollbackQualitySeen) failures.push("rollbackQualitySeen=false");
   if (!finalDiffQualityVerified) failures.push("finalDiffQualityVerified=false");
   if (!unrelatedFilePreserved) failures.push("unrelatedFilePreserved=false");
   if (!toolSearchRankedFilePatch) failures.push("toolSearchRankedFilePatch=false");
@@ -2613,6 +2617,7 @@ function checkPatchReport(report: Record<string, unknown>): CapabilityCheck {
       multiFileRecoverySeen,
       conflictExplanationSeen,
       rollbackVerified,
+      rollbackQualitySeen,
       finalDiffQualityVerified,
       unrelatedFilePreserved,
       toolSearchRankedFilePatch,

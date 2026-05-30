@@ -56,6 +56,7 @@ describe("capability report", () => {
         multiFileRecoverySeen: false,
         conflictExplanationSeen: false,
         rollbackVerified: false,
+        rollbackQualitySeen: false,
         finalDiffQualityVerified: false,
         unrelatedFilePreserved: false,
         toolSearchRankedFilePatch: false,
@@ -79,6 +80,7 @@ describe("capability report", () => {
         "multiFileRecoverySeen=false",
         "conflictExplanationSeen=false",
         "rollbackVerified=false",
+        "rollbackQualitySeen=false",
         "finalDiffQualityVerified=false",
         "unrelatedFilePreserved=false",
         "toolSearchRankedFilePatch=false",
@@ -3564,6 +3566,7 @@ function patchReport(input: {
   multiFileRecoverySeen?: boolean;
   conflictExplanationSeen?: boolean;
   rollbackVerified?: boolean;
+  rollbackQualitySeen?: boolean;
   finalDiffQualityVerified?: boolean;
   unrelatedFilePreserved?: boolean;
   toolSearchRankedFilePatch: boolean;
@@ -3573,6 +3576,7 @@ function patchReport(input: {
   const scenarioCount = input.multiFileRecoverySeen === false ? 1 : 4;
   const conflictExplanationSeen = input.conflictExplanationSeen !== false;
   const rollbackVerified = input.rollbackVerified !== false;
+  const rollbackQualitySeen = input.rollbackQualitySeen !== false;
   const finalDiffQualityVerified = input.finalDiffQualityVerified !== false;
   const unrelatedFilePreserved = input.unrelatedFilePreserved !== false;
   return {
@@ -3588,6 +3592,7 @@ function patchReport(input: {
       multiFileRecoverySeen: input.multiFileRecoverySeen !== false,
       conflictExplanationSeen,
       rollbackVerified,
+      rollbackQualitySeen,
       finalDiffQualityVerified,
       unrelatedFilePreserved,
       toolSearchRankedFilePatch: input.toolSearchRankedFilePatch,
@@ -3672,6 +3677,7 @@ function patchReport(input: {
                 },
                 patchUsageRate: input.patchUsageRate,
                 recoverySeen: input.recoverySeen,
+                rollbackQualitySeen,
                 finalDiffQualityVerified,
                 unrelatedFilePreserved
               }
