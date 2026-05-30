@@ -111,6 +111,7 @@ describe("capability report", () => {
         streamJsonExtendedProtocolSeen: false,
         jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
+        headlessPlanModeSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         resumePickerSearchFieldsSeen: false,
@@ -165,6 +166,7 @@ describe("capability report", () => {
         "streamJsonExtendedProtocolSeen=false",
         "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
+        "headlessPlanModeSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
         "resumePickerSearchFieldsSeen=false",
@@ -1019,6 +1021,7 @@ function harnessReport(input: {
   streamJsonExtendedProtocolSeen?: boolean;
   jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
+  headlessPlanModeSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
   resumePickerSearchFieldsSeen?: boolean;
@@ -1089,6 +1092,7 @@ function harnessReport(input: {
                   ...streamJsonExtendedProtocolAssertions(input),
                   ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
+                  ...headlessPlanModeAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...resumePickerSearchFieldsAssertions(input),
@@ -1922,6 +1926,12 @@ function barePromptHeadlessAssertions(input: { barePromptHeadlessSeen?: boolean 
         "bare prompt stream-json emitted valid lifecycle events",
         "bare prompt headless session completed"
       ];
+}
+
+function headlessPlanModeAssertions(input: { headlessPlanModeSeen?: boolean }): string[] {
+  return input.headlessPlanModeSeen === false
+    ? []
+    : ["write denied in plan mode", "ExitPlanMode surfaced plan", "plan review persisted"];
 }
 
 function resumePickerTtyAssertions(input: { resumePickerTtySeen?: boolean }): string[] {

@@ -194,6 +194,10 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("bare prompt argument entered headless provider path") &&
     assertionList.includes("bare prompt stream-json emitted valid lifecycle events") &&
     assertionList.includes("bare prompt headless session completed");
+  const headlessPlanModeSeen =
+    assertionList.includes("write denied in plan mode") &&
+    assertionList.includes("ExitPlanMode surfaced plan") &&
+    assertionList.includes("plan review persisted");
   const resumePickerTtySeen =
     assertionList.includes("TTY -r rendered searchable session picker") &&
     assertionList.includes("TTY -r filtered sessions by typed query") &&
@@ -319,6 +323,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!streamJsonExtendedProtocolSeen) failures.push("streamJsonExtendedProtocolSeen=false");
   if (!jsonOutputProtocolSeen) failures.push("jsonOutputProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
+  if (!headlessPlanModeSeen) failures.push("headlessPlanModeSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!resumePickerSearchFieldsSeen) failures.push("resumePickerSearchFieldsSeen=false");
@@ -366,6 +371,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       streamJsonExtendedProtocolSeen,
       jsonOutputProtocolSeen,
       barePromptHeadlessSeen,
+      headlessPlanModeSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
       resumePickerSearchFieldsSeen,
