@@ -599,7 +599,13 @@ Checks:
 - Events include tool start/completion.
 - File exists.
 
-Current status: not implemented.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H7 fixture drives a small external automation scenario through
+`--output-format stream-json`. The harness verifies stdout is valid NDJSON
+only, stderr is empty, the stream starts with `session.started`, includes user
+message plus `FileWrite` start/completion and raw agent tool events, ends with
+`session.completed`, writes exactly `output/automation-result.txt`, preserves
+forbidden paths, runs `checks.sh`, and persists SQLite session/audit evidence.
 
 #### H8. Multi-agent conflict
 

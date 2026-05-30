@@ -1,0 +1,6 @@
+{
+  "id": "H7",
+  "name": "H7 stream-json automation",
+  "taskClass": "stream_json_automation",
+  "expectedChangedFiles": ["output/automation-result.txt"]
+}

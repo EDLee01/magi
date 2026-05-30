@@ -1,0 +1,3 @@
+# These project paths must not change.
+package.json
+generated/**

@@ -943,6 +943,40 @@ function createH6Router() {
   };
 }
 
+function createH7Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (!transcript.includes("Create a file and report the path")) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("FileWrite"), "H7 missing FileWrite");
+      assert(
+        transcript.includes("output/automation-result.txt"),
+        "H7 output path constraint was not visible"
+      );
+      return toolResponse([
+        toolCall("h7-write-automation-result", "FileWrite", {
+          file_path: "output/automation-result.txt",
+          content: "stream-json automation ok\n"
+        })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(
+        transcript.includes("Wrote output/automation-result.txt"),
+        "H7 FileWrite result was not visible"
+      );
+      return messageText("Created output/automation-result.txt.");
+    }
+
+    throw new Error(`H7 exceeded expected provider turns: ${turn}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -1248,6 +1282,64 @@ function taskDefinitionFor(taskId) {
     };
   }
 
+  if (taskId === "H7") {
+    return {
+      createRouter: createH7Router,
+      finalMessage: "Created output/automation-result.txt.",
+      assertions: [
+        "H7 fixture copied into isolated workspace",
+        "H7 provider saw output path constraint",
+        "H7 stdout emitted only valid NDJSON lines",
+        "H7 stream-json started with session.started",
+        "H7 stream-json emitted user message event",
+        "H7 stream-json emitted FileWrite tool.started",
+        "H7 stream-json emitted FileWrite tool.completed",
+        "H7 stream-json preserved raw agent tool_use event",
+        "H7 stream-json preserved raw agent tool_result event",
+        "H7 stream-json ended with session.completed",
+        "H7 session.completed carried final message",
+        "H7 output file exists with expected content",
+        "H7 changed exactly expected file",
+        "H7 forbidden paths unchanged",
+        "H7 checks.sh passed",
+        "H7 session and audit persisted"
+      ],
+      filesVerified: [
+        "output/automation-result.txt",
+        "stdout.jsonl",
+        "stderr.txt",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session, stream }) => {
+        assert((toolCounts.FileWrite ?? 0) === 1, "H7 should use one FileWrite");
+        assert((toolCounts.FileRead ?? 0) === 0, "H7 should not need FileRead");
+        assert((toolCounts.FilePatch ?? 0) === 0, "H7 should not use FilePatch");
+        assert((toolCounts.Bash ?? 0) === 0, "H7 should not run shell commands");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H7 should not use FileEdit");
+        assert(
+          after["output/automation-result.txt"]?.text === "stream-json automation ok\n",
+          "H7 output file content mismatch"
+        );
+        assert(stream?.validNdjson === true, "H7 stream output was not valid NDJSON");
+        assert(stream?.stderrEmpty === true, "H7 stderr was not empty");
+        assert(stream?.startedFirst === true, "H7 stream did not start with session.started");
+        assert(stream?.completedLast === true, "H7 stream did not end with session.completed");
+        assert(stream?.userMessageSeen === true, "H7 stream missed user message event");
+        assert(stream?.toolStartedSeen === true, "H7 stream missed tool.started");
+        assert(stream?.toolCompletedSeen === true, "H7 stream missed tool.completed");
+        assert(stream?.rawToolUseSeen === true, "H7 stream missed raw agent tool_use event");
+        assert(stream?.rawToolResultSeen === true, "H7 stream missed raw agent tool_result event");
+        assert(
+          stream?.completedMessage === "Created output/automation-result.txt.",
+          "H7 final message missing"
+        );
+        assert(session.auditEventCount > 0, "H7 audit events were not persisted");
+        assert(session.messageCount >= 2, "H7 session messages were not persisted");
+      }
+    };
+  }
+
   throw new Error(`Unknown complex harness task id: ${taskId}`);
 }
 
@@ -1363,6 +1455,12 @@ async function runTask(taskName) {
     writeFileSync(path.join(archiveDir, "stderr.txt"), result.stderr, "utf8");
 
     const events = parseStreamEvents(result.stdout);
+    const stream = summarizeStreamProtocol({
+      output: result.stdout,
+      stderr: result.stderr,
+      events,
+      finalMessage: taskDefinition.finalMessage
+    });
     const completed = events.at(-1);
     assert(completed?.type === "session.completed", "stream-json did not complete");
     assert(completed.status === "completed", "session did not finish completed");
@@ -1413,7 +1511,7 @@ async function runTask(taskName) {
       changedFiles.length <= limits.maxFileChanges,
       `file changes ${changedFiles.length} exceeded limit`
     );
-    taskDefinition.validate({ before, after, changedFiles, toolCounts, session });
+    taskDefinition.validate({ before, after, changedFiles, toolCounts, session, stream });
 
     return {
       name: expected.name,
@@ -1434,6 +1532,7 @@ async function runTask(taskName) {
         checksPassed: true,
         checksExitCode: checks.code,
         streamJsonLifecycleVerified: true,
+        stream,
         session,
         limits,
         limitResults: {
@@ -1690,6 +1789,39 @@ function parseStreamEvents(output) {
   return events;
 }
 
+function summarizeStreamProtocol({ output, stderr, events, finalMessage }) {
+  let validNdjson = true;
+  for (const line of output.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      JSON.parse(line);
+    } catch {
+      validNdjson = false;
+    }
+  }
+  const completed = events.at(-1);
+  return {
+    validNdjson,
+    stderrEmpty: stderr.trim() === "",
+    startedFirst: events[0]?.type === "session.started",
+    completedLast: completed?.type === "session.completed",
+    userMessageSeen: events.some(
+      (event) => event.type === "message.created" && event.role === "user"
+    ),
+    assistantMessageSeen: events.some(
+      (event) => event.type === "message.created" && event.role === "assistant"
+    ),
+    toolStartedSeen: events.some((event) => event.type === "tool.started"),
+    toolCompletedSeen: events.some((event) => event.type === "tool.completed"),
+    rawToolUseSeen: events.some((event) => event.type === "agent.tool_use"),
+    rawToolResultSeen: events.some((event) => event.type === "agent.tool_result"),
+    completedMessage: typeof completed?.message === "string" ? completed.message : undefined,
+    completedStatus: typeof completed?.status === "string" ? completed.status : undefined,
+    finalMessageMatched: completed?.message === finalMessage,
+    eventCount: events.length
+  };
+}
+
 function countStreamTools(events) {
   const counts = {};
   for (const event of events) {
@@ -1796,7 +1928,8 @@ async function main() {
     "h3-refactor-behavior-preservation",
     "h4-repository-investigation",
     "h5-permission-boundary",
-    "h6-resume-after-interruption"
+    "h6-resume-after-interruption",
+    "h7-stream-json-automation"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);
