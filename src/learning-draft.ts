@@ -213,16 +213,20 @@ export function maybeProposePostTaskLearningDraft(
     `Source session: ${input.sourceSession ?? "unknown"}`,
     `Working directory: ${input.cwd}`,
     "",
-    "### When to use",
+    "**When to use**",
+    "",
     truncateBlock(input.prompt, 500),
     "",
-    "### Reusable lesson",
+    "**Reusable lesson**",
+    "",
     "Review this draft before applying. Keep only stable workflow facts, durable project context, or reusable troubleshooting steps.",
     "",
-    "### Evidence",
+    "**Evidence**",
+    "",
     ...evidence.map((item) => `- ${item}`),
     "",
-    "### Completed result excerpt",
+    "**Completed result excerpt**",
+    "",
     truncateBlock(input.answer, 700)
   ].join("\n");
 
@@ -255,7 +259,7 @@ function applyLearningDraftContent(input: LearningDraftRootOptions, draft: Learn
       appRoot: input.appRoot,
       root: input.memoryRoot,
       filePath: draft.target,
-      content: draft.content
+      content: formatMemoryLearningDraftContent(draft)
     });
     return;
   }
@@ -315,6 +319,10 @@ function updateLearningDraftStatus(
   };
   atomicWrite(file, `${JSON.stringify(next, null, 2)}\n`);
   return next;
+}
+
+function formatMemoryLearningDraftContent(draft: LearningDraft): string {
+  return [draft.content.trimEnd(), "", `<!-- LearningDraft ${draft.id} -->`].join("\n");
 }
 
 function validateLearningTarget(

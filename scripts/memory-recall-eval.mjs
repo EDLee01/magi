@@ -26,6 +26,7 @@ const lifecycleEvidence = {
   longCycleFeedbackTrendSeen: false,
   longProjectFeedbackConvergenceSeen: false,
   longProjectLearningDraftRecallSeen: false,
+  autonomousLearningCycleSeen: false,
   staleKnowledgeDemotionSeen: false,
   crossNodeRecommendationSeen: false,
   projectCaseRecallSeen: false,
@@ -54,6 +55,7 @@ try {
   assertMultiProjectConflictRecall();
   assertLongProjectFeedbackConvergence();
   assertLongProjectLearningDraftRecall();
+  await assertAutonomousLearningCycle();
   writeLifecycleEvidence();
   process.stdout.write(`${evalOutput.trim()}\nBusiness memory recall eval passed.\n`);
 } finally {
@@ -595,6 +597,159 @@ function assertLongProjectLearningDraftRecall() {
   recordAssertion("rejected learning draft did not enter memory recall");
   recordAssertion("learned long-project workflow recalled across CLI process");
   recordAssertion("learned long-project workflow feedback raised weight");
+}
+
+async function assertAutonomousLearningCycle() {
+  const provider = await startAutonomousLearningProvider();
+  try {
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderAutonomousLearningConfig(provider.port),
+      "utf8"
+    );
+    const output = await runCliAsync(
+      [
+        "--model",
+        "main",
+        "-p",
+        [
+          "Run a long project cycle for the Phoenix billing migration.",
+          "Track the recurring lesson across release alpha, release beta, release gamma, and release delta.",
+          "Remember the reusable workflow for future project handoffs."
+        ].join(" ")
+      ],
+      "autonomous long project learning prompt"
+    );
+    assert(
+      output.includes("Phoenix migration cycle captured"),
+      "autonomous learning prompt did not complete through provider"
+    );
+
+    const drafts = runCli(["learning", "list"], "autonomous learning draft list");
+    assert(drafts.includes("LearningDrafts:"), "autonomous learning did not create a draft");
+    assert(
+      drafts.includes("workflows/README.md"),
+      "autonomous learning draft did not target workflow memory"
+    );
+    const draft = newestLearningDraftId(drafts);
+    const review = runCli(
+      ["learning", "draft", "show", draft],
+      "autonomous learning draft show"
+    );
+    assert(review.includes("tool results:"), "autonomous learning draft missed tool evidence");
+    assert(
+      review.includes("Phoenix billing migration"),
+      "autonomous learning draft missed project cycle prompt"
+    );
+    assert(
+      review.includes("Phoenix migration cycle captured"),
+      "autonomous learning draft missed completed result excerpt"
+    );
+
+    const applied = runCli(
+      ["learning", "draft", "apply", draft],
+      "autonomous learning draft apply"
+    );
+    assert(applied.includes("Applied LearningDraft:"), "autonomous learning draft did not apply");
+
+    const memoryFile = readFileSync(path.join(configDir, "memory", "workflows", "README.md"), "utf8");
+    assert(
+      memoryFile.includes(`LearningDraft ${draft}`),
+      "autonomous learning draft source marker was not written to wiki memory"
+    );
+    assert(
+      memoryFile.includes("Phoenix migration cycle captured"),
+      "autonomous learning memory file missed completed result"
+    );
+
+    const recall = runCli(
+      ["memory", "search", "Phoenix billing migration release alpha beta gamma handoff"],
+      "autonomous learning recall"
+    );
+    assert(
+      recall.includes("Learned Workflow:"),
+      "autonomous learning recall missed learned workflow heading"
+    );
+    assert(
+      recall.includes("Phoenix billing migration"),
+      "autonomous learning recall missed project cycle context"
+    );
+    assert(
+      recall.includes("source: workflows/README.md#Learned Workflow"),
+      "autonomous learning recall was not served from wiki graph source"
+    );
+
+    const learned = newestWorkflowReadmeChunk();
+    const existingHabit = seedTypedGraphNode({
+      type: "work_habit",
+      title: "Phoenix concise handoff habit",
+      summary: "Phoenix concise handoff habit.",
+      body: "Phoenix migration handoffs should keep owner, risk, verification, and next action together.",
+      weight: 0.6
+    });
+    seedGraphEdge({
+      fromNodeId: learned.nodeId,
+      toNodeId: existingHabit.id,
+      relation: "relates_to",
+      weight: 0.96,
+      reason: "Autonomous learning connected the new workflow to an existing handoff habit."
+    });
+
+    const neighborRecall = runCli(
+      ["memory", "search", "Phoenix billing migration release cycle"],
+      "autonomous learning graph neighbor recall"
+    );
+    assert(
+      neighborRecall.includes("Phoenix concise handoff habit"),
+      "autonomous learning recall missed connected handoff habit"
+    );
+    assert(
+      neighborRecall.includes("graph-distance:"),
+      "autonomous learning neighbor recall missed graph path metadata"
+    );
+
+    const learnedBefore = nodeById(learned.nodeId);
+    const feedback = runCli(
+      [
+        "memory",
+        "feedback",
+        "--target",
+        learned.nodeId,
+        "--signal",
+        "useful",
+        "--reason",
+        "Fifth Phoenix migration cycle reused the autonomous learning workflow."
+      ],
+      "autonomous learned workflow useful feedback"
+    );
+    assert(feedback.includes("Memory feedback applied"), "autonomous learning feedback did not run");
+    assert(
+      nodeById(learned.nodeId).weight > learnedBefore.weight,
+      "autonomous learned workflow feedback did not raise weight"
+    );
+    const trends = runCli(
+      ["memory", "feedback", "trends", "--limit", "5"],
+      "autonomous learning feedback trends"
+    );
+    assert(
+      trends.includes("Learned Workflow:"),
+      "autonomous learning feedback trends missed learned workflow"
+    );
+    assert(trends.includes("useful=1"), "autonomous learning trends missed useful signal");
+
+    assertAutonomousLearningSqliteLinked(learned, existingHabit.id);
+    lifecycleEvidence.autonomousLearningCycleSeen = true;
+    recordAssertion("autonomous post-task learning draft created from long project cycle");
+    recordAssertion("autonomous learning draft review preserved project evidence");
+    recordAssertion("autonomous learning draft applied into wiki memory");
+    recordAssertion("autonomous learned workflow indexed into sqlite graph");
+    recordAssertion("autonomous learned workflow linked to existing habit");
+    recordAssertion("autonomous learned workflow recalled with graph neighbor");
+    recordAssertion("autonomous learned workflow feedback raised weight and trend");
+  } finally {
+    await provider.close();
+    removeConfigFile();
+  }
 }
 
 function assertStaleKnowledgeDemotionLifecycle() {
@@ -1396,6 +1551,25 @@ function writeMemoryWikiFile(filePath, content) {
   writeFileSync(absolutePath, `${content.trimEnd()}\n`, "utf8");
 }
 
+function newestWorkflowReadmeChunk() {
+  const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
+  try {
+    const source = store.getSourceByUri("memory/workflows/README.md");
+    assert(source, "workflow README source was not indexed into sqlite");
+    const chunks = store
+      .listChunksForSource(source.id)
+      .filter(
+        (item) =>
+          item.heading.startsWith("Learned Workflow:") &&
+          item.body.includes("Phoenix billing migration")
+      );
+    assert(chunks.length > 0, "autonomous learned workflow chunk was not indexed");
+    return chunks.at(-1);
+  } finally {
+    store.close();
+  }
+}
+
 function wikiChunkByHeading(sourceUri, heading) {
   const store = new MemoryNodeStore(path.join(configDir, "state", "sessions.sqlite"));
   try {
@@ -1424,6 +1598,44 @@ function seedGraphEdge(input) {
     });
   } finally {
     store.close();
+  }
+}
+
+function assertAutonomousLearningSqliteLinked(learned, habitNodeId) {
+  const db = openDb();
+  try {
+    const source = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_sources
+        where uri = 'memory/workflows/README.md' and status = 'active'
+      `
+      )
+      .get();
+    assert(source.count === 1, "autonomous learning wiki source was not active in sqlite");
+    const chunk = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_chunks
+        where node_id = ? and status = 'active'
+      `
+      )
+      .get(learned.nodeId);
+    assert(chunk.count === 1, "autonomous learned workflow chunk was not active in sqlite");
+    const edge = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_edges
+        where from_node_id = ? and to_node_id = ? and relation = 'relates_to'
+      `
+      )
+      .get(learned.nodeId, habitNodeId);
+    assert(edge.count === 1, "autonomous learned workflow graph edge was not persisted");
+  } finally {
+    db.close();
   }
 }
 
@@ -1490,6 +1702,8 @@ function writeLifecycleEvidence() {
   recordFileVerified("memory-recall-project-business.json");
   recordFileVerified("memory-recall-multi-project-business.json");
   recordFileVerified("memory-recall-maintenance-business.json");
+  recordFileVerified("memory/workflows/README.md");
+  recordFileVerified("state/learning-drafts");
   writeFileSync(
     reportFile,
     `${JSON.stringify(
@@ -1611,6 +1825,31 @@ function renderMemoryDecisionConfig(port) {
     "  autoWrite: explicit",
     "  maxResults: 5",
     "  writeDecisionModel: fast",
+    "  scopes:",
+    "    - user",
+    "    - project",
+    "    - session",
+    ""
+  ].join("\n");
+}
+
+function renderAutonomousLearningConfig(port) {
+  return [
+    "defaultProvider: openai",
+    "defaultModel: main",
+    "providers:",
+    "  openai:",
+    "    type: openai",
+    "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+    `    baseUrl: http://127.0.0.1:${port}/v1`,
+    "models:",
+    "  aliases:",
+    "    main: openai:mock-main",
+    "  fallbacks: {}",
+    "memory:",
+    "  enabled: true",
+    "  autoWrite: off",
+    "  maxResults: 8",
     "  scopes:",
     "    - user",
     "    - project",
@@ -1774,6 +2013,54 @@ function startMemoryDecisionProvider(input) {
   });
 }
 
+function startAutonomousLearningProvider() {
+  const calls = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const body = JSON.parse(raw);
+      const transcript = (body.messages ?? [])
+        .map((message) =>
+          Array.isArray(message.content)
+            ? message.content.map((part) => part.text ?? "").join("\n")
+            : String(message.content ?? "")
+        )
+        .join("\n");
+      calls.push({ model: body.model, transcript });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: [
+                  "Phoenix migration cycle captured.",
+                  "The reusable lesson is to run focused billing validation before broad release checks,",
+                  "then keep owner, risk, verification, and next action in the handoff."
+                ].join(" ")
+              }
+            }
+          ],
+          usage: { prompt_tokens: 25, completion_tokens: 16 }
+        })
+      );
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      assert(address && typeof address === "object", "autonomous learning provider did not bind");
+      resolve({
+        port: address.port,
+        calls,
+        close: () => new Promise((closeResolve) => server.close(closeResolve))
+      });
+    });
+  });
+}
+
 function draftId(output) {
   const match = /Created Memory Draft:\s+([a-z0-9_]+)/i.exec(output);
   assert(match, `could not parse memory draft id from output:\n${output}`);
@@ -1784,6 +2071,12 @@ function learningDraftId(output) {
   const match = /Created LearningDraft:\s+([a-z0-9_]+)/i.exec(output);
   assert(match, `could not parse LearningDraft id from output:\n${output}`);
   return match[1];
+}
+
+function newestLearningDraftId(output) {
+  const matches = [...output.matchAll(/\b(learn_[a-z0-9_]+)\b/gi)].map((match) => match[1]);
+  assert(matches.length > 0, `could not parse LearningDraft id from output:\n${output}`);
+  return matches.at(-1);
 }
 
 function removeConfigFile() {

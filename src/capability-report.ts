@@ -1066,6 +1066,15 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("rejected learning draft did not enter memory recall") &&
     assertionList.includes("learned long-project workflow recalled across CLI process") &&
     assertionList.includes("learned long-project workflow feedback raised weight");
+  const autonomousLearningCycleSeen =
+    details.autonomousLearningCycleSeen === true &&
+    assertionList.includes("autonomous post-task learning draft created from long project cycle") &&
+    assertionList.includes("autonomous learning draft review preserved project evidence") &&
+    assertionList.includes("autonomous learning draft applied into wiki memory") &&
+    assertionList.includes("autonomous learned workflow indexed into sqlite graph") &&
+    assertionList.includes("autonomous learned workflow linked to existing habit") &&
+    assertionList.includes("autonomous learned workflow recalled with graph neighbor") &&
+    assertionList.includes("autonomous learned workflow feedback raised weight and trend");
   const staleKnowledgeDemotionSeen =
     details.staleKnowledgeDemotionSeen === true &&
     assertionList.includes("stale knowledge maintenance lowered old workflow weight") &&
@@ -1103,8 +1112,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (results.length < 8) failures.push(`cases=${results.length}`);
-  if (assertions < 52) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
+  if (assertions < 59) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 9) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
@@ -1119,6 +1128,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!longProjectLearningDraftRecallSeen) {
     failures.push("longProjectLearningDraftRecallSeen=false");
   }
+  if (!autonomousLearningCycleSeen) failures.push("autonomousLearningCycleSeen=false");
   if (!staleKnowledgeDemotionSeen) failures.push("staleKnowledgeDemotionSeen=false");
   if (!crossNodeRecommendationSeen) failures.push("crossNodeRecommendationSeen=false");
   if (!projectCaseRecallSeen) failures.push("projectCaseRecallSeen=false");
@@ -1148,6 +1158,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       longCycleFeedbackTrendSeen,
       longProjectFeedbackConvergenceSeen,
       longProjectLearningDraftRecallSeen,
+      autonomousLearningCycleSeen,
       staleKnowledgeDemotionSeen,
       crossNodeRecommendationSeen,
       projectCaseRecallSeen,

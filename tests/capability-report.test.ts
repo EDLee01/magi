@@ -158,6 +158,7 @@ describe("capability report", () => {
         longCycleFeedbackTrendSeen: false,
         longProjectFeedbackConvergenceSeen: false,
         longProjectLearningDraftRecallSeen: false,
+        autonomousLearningCycleSeen: false,
         staleKnowledgeDemotionSeen: false,
         crossNodeRecommendationSeen: false,
         projectCaseRecallSeen: false,
@@ -197,6 +198,7 @@ describe("capability report", () => {
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
     expect(output).toContain("longProjectFeedbackConvergenceSeen=false");
     expect(output).toContain("longProjectLearningDraftRecallSeen=false");
+    expect(output).toContain("autonomousLearningCycleSeen=false");
     expect(output).toContain("staleKnowledgeDemotionSeen=false");
     expect(output).toContain("crossNodeRecommendationSeen=false");
     expect(output).toContain("projectCaseRecallSeen=false");
@@ -1453,6 +1455,7 @@ function memoryReport(input: {
   longCycleFeedbackTrendSeen?: boolean;
   longProjectFeedbackConvergenceSeen?: boolean;
   longProjectLearningDraftRecallSeen?: boolean;
+  autonomousLearningCycleSeen?: boolean;
   staleKnowledgeDemotionSeen?: boolean;
   crossNodeRecommendationSeen?: boolean;
   projectCaseRecallSeen?: boolean;
@@ -1532,6 +1535,17 @@ function memoryReport(input: {
               "learned long-project workflow recalled across CLI process",
               "learned long-project workflow feedback raised weight"
             ]),
+        ...(input.autonomousLearningCycleSeen === false
+          ? []
+          : [
+              "autonomous post-task learning draft created from long project cycle",
+              "autonomous learning draft review preserved project evidence",
+              "autonomous learning draft applied into wiki memory",
+              "autonomous learned workflow indexed into sqlite graph",
+              "autonomous learned workflow linked to existing habit",
+              "autonomous learned workflow recalled with graph neighbor",
+              "autonomous learned workflow feedback raised weight and trend"
+            ]),
         ...(input.staleKnowledgeDemotionSeen === false
           ? []
           : [
@@ -1576,7 +1590,7 @@ function memoryReport(input: {
         )
       ],
       filesVerified: Array.from(
-        { length: input.filesVerified ?? 7 },
+        { length: input.filesVerified ?? 9 },
         (_, index) => `memory-file-${index + 1}.json`
       ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
@@ -1584,6 +1598,7 @@ function memoryReport(input: {
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
       longProjectFeedbackConvergenceSeen: input.longProjectFeedbackConvergenceSeen !== false,
       longProjectLearningDraftRecallSeen: input.longProjectLearningDraftRecallSeen !== false,
+      autonomousLearningCycleSeen: input.autonomousLearningCycleSeen !== false,
       staleKnowledgeDemotionSeen: input.staleKnowledgeDemotionSeen !== false,
       crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
       projectCaseRecallSeen: input.projectCaseRecallSeen !== false,

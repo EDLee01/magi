@@ -238,6 +238,9 @@ describe("tool registry", () => {
     expect(
       readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")
     ).toContain("Use rg before broad file reads.");
+    expect(
+      readFileSync(path.join(paths.root, "memory", "workflows", "README.md"), "utf8")
+    ).toContain(`<!-- LearningDraft ${id} -->`);
 
     const skillDraft = await executeRegisteredTool({
       cwd: workspace,
