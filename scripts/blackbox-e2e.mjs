@@ -4411,6 +4411,14 @@ async function scenarioToolFeedbackRanking() {
         ),
         "ToolSearch did not report recovery guidance"
       );
+      assert(
+        output.includes("Tool feedback ranking completed."),
+        "tool feedback final response missing"
+      );
+      assert(
+        turn === 3,
+        `tool feedback ranking should complete in three provider turns, got ${turn}`
+      );
       const statsPath = path.join(configDir, "state", "tool-usage-stats.json");
       assert(existsSync(statsPath), "tool feedback stats were not persisted");
       const stats = JSON.parse(readFileSync(statsPath, "utf8"));
@@ -4422,14 +4430,17 @@ async function scenarioToolFeedbackRanking() {
           "tool failures persisted",
           "tool successes persisted",
           "ToolSearch ranking used feedback",
-          "ToolSearch recovery guidance visible"
+          "ToolSearch recovery guidance visible",
+          "ToolSearch feedback returned to model",
+          "tool feedback ranking completed three-turn provider loop"
         ],
         provider: provider.summary(),
         toolFeedback: {
           grepFailures: stats.tools.Grep.failures,
           globSuccesses: stats.tools.Glob.successes,
           recoveryGuidanceSeen: true
-        }
+        },
+        filesVerified: ["state/tool-usage-stats.json"]
       };
     } catch (error) {
       printProviderLog(providerLog);

@@ -115,6 +115,7 @@ describe("capability report", () => {
         headlessPlanModeSeen: false,
         controlApprovalFlowSeen: false,
         providerRetryFallbackSeen: false,
+        toolFeedbackRankingSeen: false,
         memoryCorrectionMaintenanceSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
@@ -174,6 +175,7 @@ describe("capability report", () => {
         "headlessPlanModeSeen=false",
         "controlApprovalFlowSeen=false",
         "providerRetryFallbackSeen=false",
+        "toolFeedbackRankingSeen=false",
         "memoryCorrectionMaintenanceSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
@@ -1033,6 +1035,7 @@ function harnessReport(input: {
   headlessPlanModeSeen?: boolean;
   controlApprovalFlowSeen?: boolean;
   providerRetryFallbackSeen?: boolean;
+  toolFeedbackRankingSeen?: boolean;
   memoryCorrectionMaintenanceSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
@@ -1067,7 +1070,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 184,
+      assertions: input.assertions ?? 186,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1108,6 +1111,7 @@ function harnessReport(input: {
                   ...headlessPlanModeAssertions(input),
                   ...controlApprovalFlowAssertions(input),
                   ...providerRetryFallbackAssertions(input),
+                  ...toolFeedbackRankingAssertions(input),
                   ...memoryCorrectionMaintenanceAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
@@ -1985,6 +1989,19 @@ function providerRetryFallbackAssertions(input: { providerRetryFallbackSeen?: bo
         "fallback event emitted",
         "backup model recovered",
         "retry fallback used one backup provider call"
+      ];
+}
+
+function toolFeedbackRankingAssertions(input: { toolFeedbackRankingSeen?: boolean }): string[] {
+  return input.toolFeedbackRankingSeen === false
+    ? []
+    : [
+        "tool failures persisted",
+        "tool successes persisted",
+        "ToolSearch ranking used feedback",
+        "ToolSearch recovery guidance visible",
+        "ToolSearch feedback returned to model",
+        "tool feedback ranking completed three-turn provider loop"
       ];
 }
 

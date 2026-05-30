@@ -216,6 +216,13 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("fallback event emitted") &&
     assertionList.includes("backup model recovered") &&
     assertionList.includes("retry fallback used one backup provider call");
+  const toolFeedbackRankingSeen =
+    assertionList.includes("tool failures persisted") &&
+    assertionList.includes("tool successes persisted") &&
+    assertionList.includes("ToolSearch ranking used feedback") &&
+    assertionList.includes("ToolSearch recovery guidance visible") &&
+    assertionList.includes("ToolSearch feedback returned to model") &&
+    assertionList.includes("tool feedback ranking completed three-turn provider loop");
   const memoryCorrectionMaintenanceSeen =
     assertionList.includes("stale memory retrieved before correction") &&
     assertionList.includes("memory correct disputed old node") &&
@@ -339,7 +346,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 184) failures.push(`assertions=${assertions}`);
+  if (assertions < 186) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -359,6 +366,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!headlessPlanModeSeen) failures.push("headlessPlanModeSeen=false");
   if (!controlApprovalFlowSeen) failures.push("controlApprovalFlowSeen=false");
   if (!providerRetryFallbackSeen) failures.push("providerRetryFallbackSeen=false");
+  if (!toolFeedbackRankingSeen) failures.push("toolFeedbackRankingSeen=false");
   if (!memoryCorrectionMaintenanceSeen) {
     failures.push("memoryCorrectionMaintenanceSeen=false");
   }
@@ -413,6 +421,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       headlessPlanModeSeen,
       controlApprovalFlowSeen,
       providerRetryFallbackSeen,
+      toolFeedbackRankingSeen,
       memoryCorrectionMaintenanceSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
