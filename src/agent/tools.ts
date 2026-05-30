@@ -7,7 +7,8 @@ import {
   getCoreToolDefinitions,
   SubAgentRequest,
   SubAgentResult,
-  ToolPermissionMode
+  ToolPermissionMode,
+  ToolPermissionRules
 } from "../tools/registry.js";
 import { UserQuestionResolver } from "../tools/user-question.js";
 import { UserMessageSink } from "../tools/user-message.js";
@@ -35,6 +36,7 @@ export async function executeBuiltinAgentTool(input: {
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
+  rules?: ToolPermissionRules;
   promptModel?: (request: { messages: MagiMessage[] }) => Promise<{ text: string }>;
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
@@ -54,6 +56,7 @@ export async function executeBuiltinAgentTool(input: {
     sessionId: input.sessionId,
     webSearchConfig: input.webSearchConfig,
     permissionMode: input.permissionMode ?? "default",
+    rules: input.rules,
     promptModel: input.promptModel,
     userQuestionResolver: input.userQuestionResolver,
     userMessageSink: input.userMessageSink,
@@ -72,6 +75,7 @@ export async function executeBuiltinAgentTools(input: {
   sessionId?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
+  rules?: ToolPermissionRules;
   promptModel?: (request: { messages: MagiMessage[] }) => Promise<{ text: string }>;
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
@@ -91,6 +95,7 @@ export async function executeBuiltinAgentTools(input: {
     sessionId: input.sessionId,
     webSearchConfig: input.webSearchConfig,
     permissionMode: input.permissionMode ?? "default",
+    rules: input.rules,
     promptModel: input.promptModel,
     userQuestionResolver: input.userQuestionResolver,
     userMessageSink: input.userMessageSink,

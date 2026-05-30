@@ -21,9 +21,15 @@ import {
   getBuiltinToolDefinitionByName,
   getDeferredToolDefinitions,
   isCoreToolName,
+  ToolPermissionRules,
   SubAgentRequest,
   SubAgentResult
 } from "../tools/registry.js";
+import {
+  checkToolPolicy,
+  filterNamedToolRecordsByRules,
+  filterToolDefinitionsByRules
+} from "../tool-policy.js";
 import { McpToolRegistry } from "../mcp/tool-registry.js";
 import {
   AskUserQuestionRequest,
@@ -150,6 +156,7 @@ export interface AgentQueryInput {
   temperature?: number;
   maxOutputTokens?: number;
   permissionMode?: ToolPermissionMode;
+  toolRules?: ToolPermissionRules;
   approvalResolver?: (request: {
     toolUse: MagiToolUsePart;
     reason: string;
@@ -205,7 +212,7 @@ async function* runAgentQueryInner(
     : undefined;
 
   try {
-    const toolCatalog = await createAgentToolCatalog(mcpTools);
+    const toolCatalog = await createAgentToolCatalog(mcpTools, input.toolRules);
     yield { type: "request_start" };
 
     for (let turn = 0; turn < maxTurns; turn++) {
@@ -394,6 +401,7 @@ async function* runAgentQueryInner(
         return { text: response.text };
       };
       const prepared = await prepareToolUsesWithPreHooks(input, toolUses, promptModel);
+      applyToolPolicyGuard(input, prepared);
       applyToolExecutionGuard(input, prepared, toolUses);
       for (const hookResult of prepared.hookResults) {
         yield hookResult;
@@ -747,6 +755,7 @@ async function executePreparedToolUses(
       sessionId: input.sessionId,
       webSearchConfig: input.webSearchConfig,
       permissionMode: input.permissionMode,
+      rules: input.toolRules,
       promptModel,
       userQuestionResolver: async (request) => {
         if (!input.userQuestionResolver) {
@@ -795,6 +804,17 @@ async function executePreparedToolUses(
     }
     if (mcpTools) {
       for (const { index, toolUse } of mcp) {
+        const policy = checkToolPolicy(toolUse, input.toolRules);
+        if (policy?.decision === "deny") {
+          results[index] = {
+            toolCallId: toolUse.id,
+            toolName: toolUse.name,
+            content: `Permission deny: ${policy.reason}`,
+            isError: true,
+            permission: policy
+          };
+          continue;
+        }
         const first = await mcpTools.executeTool({ toolUse });
         if (first.permission?.decision === "ask" && input.approvalResolver) {
           const approved = await input.approvalResolver({
@@ -822,6 +842,26 @@ async function executePreparedToolUses(
   };
 }
 
+function applyToolPolicyGuard(input: AgentQueryInput, prepared: PreparedToolUses): void {
+  if (!input.toolRules) return;
+  const allowed: PreparedToolUses["allowed"] = [];
+  for (const entry of prepared.allowed) {
+    const policy = checkToolPolicy(entry.toolUse, input.toolRules);
+    if (policy?.decision === "deny") {
+      prepared.results[entry.index] = {
+        toolCallId: entry.toolUse.id,
+        toolName: entry.toolUse.name,
+        content: `Permission deny: ${policy.reason}`,
+        isError: true,
+        permission: policy
+      };
+    } else {
+      allowed.push(entry);
+    }
+  }
+  prepared.allowed = allowed;
+}
+
 interface AgentToolCatalog {
   definitions(): MagiToolDefinition[];
   deferredCount(): number;
@@ -829,16 +869,22 @@ interface AgentToolCatalog {
 }
 
 async function createAgentToolCatalog(
-  mcpTools: McpToolRegistry | undefined
+  mcpTools: McpToolRegistry | undefined,
+  rules: ToolPermissionRules | undefined
 ): Promise<AgentToolCatalog> {
-  const dynamic = mcpTools ? await mcpTools.getToolDefinitions() : [];
+  const dynamic = filterToolDefinitionsByRules(
+    mcpTools ? await mcpTools.getToolDefinitions() : [],
+    rules
+  );
   const dynamicNames = new Set(dynamic.map((tool) => tool.name));
-  const exposedBuiltIns = new Set(CORE_AGENT_TOOLS.map((tool) => tool.name));
-  const allDeferredBuiltIns = new Set(getDeferredToolDefinitions().map((tool) => tool.name));
+  const coreBuiltIns = filterToolDefinitionsByRules(CORE_AGENT_TOOLS, rules);
+  const deferredBuiltIns = filterToolDefinitionsByRules(getDeferredToolDefinitions(), rules);
+  const exposedBuiltIns = new Set(coreBuiltIns.map((tool) => tool.name));
+  const allDeferredBuiltIns = new Set(deferredBuiltIns.map((tool) => tool.name));
 
   return {
     definitions() {
-      const builtIns = CORE_AGENT_TOOLS.slice();
+      const builtIns = coreBuiltIns.slice();
       for (const name of exposedBuiltIns) {
         if (isCoreToolName(name)) continue;
         const definition = getBuiltinToolDefinitionByName(name);
@@ -853,6 +899,9 @@ async function createAgentToolCatalog(
       for (const result of results) {
         const selected = readSelectedToolName(result);
         if (!selected || dynamicNames.has(selected)) {
+          continue;
+        }
+        if (filterNamedToolRecordsByRules([{ name: selected }], rules).length === 0) {
           continue;
         }
         if (getBuiltinToolDefinitionByName(selected)) {

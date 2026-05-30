@@ -113,6 +113,7 @@ import { VERSION } from "./version.js";
 import { triggerHooks } from "./hooks/events.js";
 import { buildProviderRegistry } from "./providers/registry.js";
 import { resolveModelAlias } from "./routing/model-alias.js";
+import { buildToolPermissionRules, parseToolPolicyList } from "./tool-policy.js";
 import {
   createGoal,
   clearGoal,
@@ -295,7 +296,8 @@ async function runCliUnsafeWithParsed(
         sessionName: parsed.sessionName,
         persistSession: parsed.persistSession,
         collectEvents: parsed.outputFormat === "stream-json",
-        permissionMode: parsed.permissionMode
+        permissionMode: parsed.permissionMode,
+        toolRules: parsed.toolRules
       });
       if (parsed.outputFormat === "stream-json") {
         return {
@@ -2154,6 +2156,8 @@ function helpText(): string {
     "  magi config",
     "  magi --model <alias-or-model> -p <prompt>",
     "  magi --permission-mode <default|acceptEdits|bypassPermissions|plan> -p <prompt>",
+    "  magi --tools <tool[,tool...]> -p <prompt>",
+    "  magi --allowed-tools <rule[,rule...]> --disallowed-tools <rule[,rule...]> -p <prompt>",
     "  magi --output-format json -p <prompt>",
     "  magi -c -p <prompt>",
     "  magi -p <prompt>",
@@ -2673,6 +2677,7 @@ interface ParsedArgs {
   runnerTimeoutMs?: number;
   approve: boolean;
   permissionMode?: ToolPermissionMode;
+  toolRules?: ReturnType<typeof buildToolPermissionRules>;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -2690,6 +2695,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   let runnerTimeoutMs: number | undefined;
   let approve = false;
   let permissionMode: ToolPermissionMode | undefined;
+  const tools: string[] = [];
+  const allowedTools: string[] = [];
+  const disallowedTools: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -2761,6 +2769,18 @@ function parseArgs(argv: string[]): ParsedArgs {
       permissionMode = parsedMode;
       continue;
     }
+    if (arg === "--tools") {
+      tools.push(...readToolPolicyList(argv[++index], "--tools"));
+      continue;
+    }
+    if (arg === "--allowed-tools") {
+      allowedTools.push(...readToolPolicyList(argv[++index], "--allowed-tools"));
+      continue;
+    }
+    if (arg === "--disallowed-tools") {
+      disallowedTools.push(...readToolPolicyList(argv[++index], "--disallowed-tools"));
+      continue;
+    }
     if (!command) {
       command = arg;
     } else {
@@ -2782,8 +2802,17 @@ function parseArgs(argv: string[]): ParsedArgs {
     writeFiles,
     runnerTimeoutMs,
     approve,
-    permissionMode
+    permissionMode,
+    toolRules: buildToolPermissionRules({ tools, allowedTools, disallowedTools })
   };
+}
+
+function readToolPolicyList(value: string | undefined, label: string): string[] {
+  try {
+    return parseToolPolicyList(value, label);
+  } catch (error) {
+    throw new MagiUsageError(error instanceof Error ? error.message : String(error));
+  }
 }
 
 function readPositiveInteger(value: string | undefined, label: string): number {

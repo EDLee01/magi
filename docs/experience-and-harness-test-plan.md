@@ -20,6 +20,8 @@ Already covered by automated tests:
 - SQLite sessions, jobs, audit, usage.
 - TUI basic startup, slash command dispatch, and `/` suggestion menu behavior.
 - Searchable `-r` TTY resume picker and non-TTY resume session list.
+- CLI `--tools`, `--allowed-tools`, and `--disallowed-tools` schema filtering
+  plus execution-time denial.
 - MCP list/call approval basics.
 - Control API pairing, auth, jobs, approvals, SSE, agents.
 - Multi-agent queue and write conflict detection.
@@ -32,7 +34,7 @@ Not yet fully covered:
 - Richer `/resume` picker edge cases and visual polish.
 - TUI keyboard navigation polish.
 - Broader stream-json parity for less common event types.
-- Tool permission modes across every tool.
+- Full dangerous-tool semantics across every permission mode.
 - Complex multi-step task harness with objective scoring.
 - Long-running coding task recovery after interruption.
 - Real provider-driven tool loop for non-trivial code changes.
@@ -350,7 +352,10 @@ Acceptance:
 - Denied tool attempts produce a clear message.
 - Audit records include policy decision.
 
-Current status: not implemented.
+Current status: implemented and black-box gated for CLI allow/deny rules. Tool
+schemas are filtered before provider calls, and hidden or denied tools are still
+blocked if the model requests them manually. Scoped selectors such as
+`Bash(git:*)` are enforced at execution time.
 
 ### E2. Permission Modes
 
@@ -369,7 +374,10 @@ Acceptance:
 - `bypassPermissions` requires explicit dangerous flag and audit.
 - Dangerous shell remains blocked unless mode and flags allow it.
 
-Current status: not implemented as unified policy.
+Current status: partially implemented. `default`, `acceptEdits`,
+`bypassPermissions`, and `plan` exist, and CLI allow/deny rules compose with
+them. Dangerous-tool semantics and exhaustive per-tool mode coverage still need
+the unified policy pass.
 
 ## F. Complex Task Harness
 

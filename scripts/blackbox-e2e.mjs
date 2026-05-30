@@ -2,7 +2,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -1698,6 +1698,186 @@ async function scenarioDefaultPermissionDenied() {
   });
 }
 
+async function scenarioToolPolicyAllowDeny() {
+  return await withTempWorkspace("tool-policy", async ({ root, configDir, workDir }) => {
+    await writeFile(path.join(workDir, "tracked.txt"), "tracked\n", "utf8");
+    spawnSync("git", ["init"], { cwd: workDir, stdio: "ignore" });
+    spawnSync("git", ["add", "tracked.txt"], { cwd: workDir, stdio: "ignore" });
+    const providerLog = path.join(root, "provider-log.json");
+    const seenInitialTools = [];
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ body, transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          seenInitialTools.push(...toolNames);
+          assert(toolNames.includes("FileRead"), "--tools Read did not expose FileRead");
+          assert(toolNames.includes("Grep"), "--tools Search did not expose Grep");
+          assert(!toolNames.includes("FileWrite"), "--tools Read,Search exposed FileWrite");
+          return toolResponse([
+            toolCall("policy-write", "FileWrite", {
+              file_path: "policy-denied.txt",
+              content: "no"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(
+            transcript.includes("Permission deny: FileWrite is not in allowed tools"),
+            "allow-list denial was not returned to the model"
+          );
+          return messageText("Tool allow-list denial observed.");
+        }
+        if (turn === 3) {
+          assert(!toolNames.includes("Bash"), "--disallowed-tools Bash exposed Bash");
+          return toolResponse([
+            toolCall("policy-bash-denied", "Bash", {
+              command: "pwd"
+            })
+          ]);
+        }
+        if (turn === 4) {
+          assert(
+            transcript.includes("Permission deny: matched rule Bash(*)"),
+            "disallowed Bash denial was not returned to the model"
+          );
+          return messageText("Tool deny-list denial observed.");
+        }
+        if (turn === 5) {
+          assert(toolNames.includes("Bash"), "allowed Bash(git:*) did not expose Bash schema");
+          return toolResponse([
+            toolCall("policy-bash-git", "Bash", {
+              command: "git status --short"
+            })
+          ]);
+        }
+        if (turn === 6) {
+          assert(
+            transcript.includes("Command exited 0"),
+            "allowed Bash(git:*) did not run successfully"
+          );
+          return messageText("Tool scoped allow observed.");
+        }
+        if (turn === 7) {
+          assert(toolNames.includes("Bash"), "allowed Bash(git:*) did not expose Bash schema");
+          return toolResponse([
+            toolCall("policy-bash-rm", "Bash", {
+              command: "pwd"
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("Permission deny: Bash is not in allowed tools"),
+          "scoped Bash allow did not deny unmatched command"
+        );
+        return messageText("Tool scoped deny observed.");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const allowOutput = await runCli({
+        args: [
+          "--tools",
+          "Read,Search",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try to write with read-only tools."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "tool policy allow-list"
+      });
+      assert(
+        allowOutput.includes("Tool allow-list denial observed"),
+        "allow-list scenario did not complete"
+      );
+      assert(
+        !existsSync(path.join(workDir, "policy-denied.txt")),
+        "allow-list denied write unexpectedly created a file"
+      );
+      const denyOutput = await runCli({
+        args: [
+          "--disallowed-tools",
+          "Bash",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try to run pwd with Bash denied."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "tool policy deny-list"
+      });
+      assert(
+        denyOutput.includes("Tool deny-list denial observed"),
+        "deny-list scenario did not complete"
+      );
+      const scopedAllowOutput = await runCli({
+        args: [
+          "--allowed-tools",
+          "Bash(git:*)",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Run git status through scoped Bash."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "tool policy scoped allow"
+      });
+      assert(
+        scopedAllowOutput.includes("Tool scoped allow observed"),
+        "scoped allow scenario did not complete"
+      );
+      const scopedDenyOutput = await runCli({
+        args: [
+          "--allowed-tools",
+          "Bash(git:*)",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Run pwd through scoped Bash."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "tool policy scoped deny"
+      });
+      assert(
+        scopedDenyOutput.includes("Tool scoped deny observed"),
+        "scoped deny scenario did not complete"
+      );
+      assert(seenInitialTools.length > 0, "tool policy scenario did not capture exposed tools");
+      return {
+        score: 1,
+        assertions: [
+          "--tools allow-list filtered exposed schemas",
+          "--tools allow-list denied hidden write execution",
+          "--disallowed-tools filtered exposed schemas",
+          "--disallowed-tools denied requested tool execution",
+          "--allowed-tools scoped selector allowed matching Bash command",
+          "--allowed-tools scoped selector denied non-matching Bash command"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioBarePromptHeadless() {
   return await withTempWorkspace("bare-prompt", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -2873,6 +3053,7 @@ async function main() {
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
+    ["tool policy allow deny", scenarioToolPolicyAllowDeny],
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],
     ["retry fallback", scenarioRetryAndFallback],

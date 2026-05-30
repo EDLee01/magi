@@ -230,6 +230,7 @@ import {
   TodoWriteInputSchema
 } from "./todo.js";
 import { executeToolSearch, parseToolSearchInput, ToolSearchInputSchema } from "./tool-search.js";
+import { filterNamedToolRecordsByRules } from "../tool-policy.js";
 import {
   loadToolUsageStats,
   recordToolUsage,
@@ -1638,10 +1639,14 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     tags: ["tool", "search", "schema", "docs"],
     inputSchema: ToolSearchInputSchema,
     call: (input, context) =>
-      executeToolSearch(parseToolSearchInput(input), BUILTIN_TOOLS, {
-        usageStats: loadToolUsageStats(context.stateRoot),
-        stateRoot: context.stateRoot
-      }),
+      executeToolSearch(
+        parseToolSearchInput(input),
+        filterNamedToolRecordsByRules(BUILTIN_TOOLS, context.rules),
+        {
+          usageStats: loadToolUsageStats(context.stateRoot),
+          stateRoot: context.stateRoot
+        }
+      ),
     isReadOnly: () => true,
     isDestructive: () => false,
     isConcurrencySafe: () => true

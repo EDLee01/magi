@@ -105,6 +105,7 @@ describe("capability report", () => {
         streamJsonProtocolSeen: false,
         barePromptHeadlessSeen: false,
         resumePickerTtySeen: false,
+        toolPolicySeen: false,
         slashSuggestionPromptSeen: false
       }),
       modelTasks: modelTaskReport(),
@@ -140,6 +141,7 @@ describe("capability report", () => {
         "streamJsonProtocolSeen=false",
         "barePromptHeadlessSeen=false",
         "resumePickerTtySeen=false",
+        "toolPolicySeen=false",
         "slashSuggestionPromptSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
@@ -869,6 +871,7 @@ function harnessReport(input: {
   streamJsonProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
   resumePickerTtySeen?: boolean;
+  toolPolicySeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
@@ -887,7 +890,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 59,
+      assertions: input.assertions ?? 65,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -921,6 +924,7 @@ function harnessReport(input: {
                   ...streamJsonProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
                   ...resumePickerTtyAssertions(input),
+                  ...toolPolicyAssertions(input),
                   ...slashSuggestionPromptAssertions(input)
                 ],
           filesVerified:
@@ -1021,6 +1025,19 @@ function resumePickerTtyAssertions(input: { resumePickerTtySeen?: boolean }): st
         "TTY -r filtered sessions by typed query",
         "TTY -r resumed selected session",
         "non-TTY -r session list remains available"
+      ];
+}
+
+function toolPolicyAssertions(input: { toolPolicySeen?: boolean }): string[] {
+  return input.toolPolicySeen === false
+    ? []
+    : [
+        "--tools allow-list filtered exposed schemas",
+        "--tools allow-list denied hidden write execution",
+        "--disallowed-tools filtered exposed schemas",
+        "--disallowed-tools denied requested tool execution",
+        "--allowed-tools scoped selector allowed matching Bash command",
+        "--allowed-tools scoped selector denied non-matching Bash command"
       ];
 }
 

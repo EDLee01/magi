@@ -971,6 +971,104 @@ describe("CLI entrypoint", () => {
     expect(JSON.stringify(requests.at(-1))).toContain("Wrote permission-mode.txt");
   });
 
+  it("applies CLI tool allow and deny rules to exposed schemas and execution", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{
+      messages: Array<{ role: string; content?: unknown }>;
+      tools?: Array<{ function: { name: string } }>;
+    }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as {
+        messages: Array<{ role: string; content?: unknown }>;
+        tools?: Array<{ function: { name: string } }>;
+      };
+      requests.push(body);
+      const hasToolResult = body.messages.some((message) => message.role === "tool");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: hasToolResult
+                ? body.messages.filter((message) => message.role === "tool").length >= 2
+                  ? { content: "POLICY OBSERVED" }
+                  : {
+                      content: "",
+                      tool_calls: [
+                        {
+                          id: "policy-tool-search",
+                          type: "function",
+                          function: {
+                            name: "ToolSearch",
+                            arguments: JSON.stringify({ query: "select:FileWrite" })
+                          }
+                        }
+                      ]
+                    }
+                : {
+                    content: "",
+                    tool_calls: [
+                      {
+                        id: "policy-write",
+                        type: "function",
+                        function: {
+                          name: "FileWrite",
+                          arguments: JSON.stringify({
+                            file_path: "policy-cli-denied.txt",
+                            content: "no"
+                          })
+                        }
+                      }
+                    ]
+                  }
+            }
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["--tools", "Read,Search", "--model", "main", "-p", "try a write"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      temp.path
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("POLICY OBSERVED");
+    expect(requests[0].tools?.map((tool) => tool.function.name)).toContain("FileRead");
+    expect(requests[0].tools?.map((tool) => tool.function.name)).toContain("Grep");
+    expect(requests[0].tools?.map((tool) => tool.function.name)).not.toContain("FileWrite");
+    expect(JSON.stringify(requests.at(-1))).toContain("Permission deny");
+    expect(JSON.stringify(requests.at(-1))).toContain("Tool not found: FileWrite");
+    expect(existsSync(path.join(temp.path, "policy-cli-denied.txt"))).toBe(false);
+  });
+
   it("does not inject completed or blocked goals into resumed model context", async () => {
     temp = makeTempRoot();
     const requests: Array<{ messages: Array<{ role: string; content: string }> }> = [];

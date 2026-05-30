@@ -168,6 +168,13 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("TTY -r filtered sessions by typed query") &&
     assertionList.includes("TTY -r resumed selected session") &&
     assertionList.includes("non-TTY -r session list remains available");
+  const toolPolicySeen =
+    assertionList.includes("--tools allow-list filtered exposed schemas") &&
+    assertionList.includes("--tools allow-list denied hidden write execution") &&
+    assertionList.includes("--disallowed-tools filtered exposed schemas") &&
+    assertionList.includes("--disallowed-tools denied requested tool execution") &&
+    assertionList.includes("--allowed-tools scoped selector allowed matching Bash command") &&
+    assertionList.includes("--allowed-tools scoped selector denied non-matching Bash command");
   const slashSuggestionPromptSeen =
     assertionList.includes("slash suggestion menu rendered for slash input") &&
     assertionList.includes("slash suggestion filtered command descriptions") &&
@@ -178,7 +185,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 57) failures.push(`assertions=${assertions}`);
+  if (assertions < 63) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -189,6 +196,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!streamJsonProtocolSeen) failures.push("streamJsonProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
+  if (!toolPolicySeen) failures.push("toolPolicySeen=false");
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -216,6 +224,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       streamJsonProtocolSeen,
       barePromptHeadlessSeen,
       resumePickerTtySeen,
+      toolPolicySeen,
       slashSuggestionPromptSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0

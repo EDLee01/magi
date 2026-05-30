@@ -27,6 +27,7 @@ import {
 } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
+import type { ToolPermissionRules } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
 import { formatPlanContext, getLatestPlanReview } from "../plan-state.js";
 import { checkPlanExecutionGuard } from "../plan-execution-guard.js";
@@ -45,6 +46,7 @@ export interface QueryEngineInput {
   stateRoot?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
+  toolRules?: ToolPermissionRules;
   approvalResolver?: (request: {
     toolUse: import("../providers/ir.js").MagiToolUsePart;
     reason: string;
@@ -153,6 +155,7 @@ export class QueryEngine {
       memoryRoot: this.input.memoryOptions?.root,
       webSearchConfig: this.input.webSearchConfig,
       permissionMode: this.input.permissionMode,
+      toolRules: this.input.toolRules,
       approvalResolver: (request) => this.resolveApproval(jobId, request),
       userQuestionResolver: (request) => this.resolveUserQuestion(jobId, request),
       userMessageSink: this.input.userMessageSink,

@@ -173,6 +173,151 @@ describe("agent query loop", () => {
     await expect(readFile(path.join(workspace, "denied.txt"), "utf8")).rejects.toThrow();
   });
 
+  it("enforces allow-listed tools before execution even when the model requests a hidden tool", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const exposedToolNames: string[][] = [];
+    const adapter: ProviderAdapter = {
+      name: "tool-policy-provider",
+      complete: async (request) => {
+        exposedToolNames.push(request.tools?.map((tool) => tool.name) ?? []);
+        return request.messages.some((message) => message.role === "tool")
+          ? { text: "blocked write observed" }
+          : {
+              text: "",
+              toolUses: [
+                {
+                  type: "tool-use",
+                  id: "policy-write",
+                  name: "FileWrite",
+                  input: { file_path: "policy-denied.txt", content: "no" }
+                }
+              ]
+            };
+      }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [textMessage("user", "try to write with read-only tools")],
+        cwd: workspace,
+        permissionMode: "acceptEdits",
+        toolRules: {
+          allow: ["FileRead(*)", "Glob(*)", "Grep(*)", "ToolSearch(*)", "WorkspaceDiagnostics(*)"],
+          ask: [],
+          deny: []
+        }
+      })
+    );
+
+    expect(exposedToolNames[0]).toContain("FileRead");
+    expect(exposedToolNames[0]).not.toContain("FileWrite");
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: "tool_result",
+        toolCallId: "policy-write",
+        toolName: "FileWrite",
+        isError: true,
+        content: expect.stringContaining("Permission deny: FileWrite is not in allowed tools")
+      })
+    );
+    await expect(readFile(path.join(workspace, "policy-denied.txt"), "utf8")).rejects.toThrow();
+  });
+
+  it("filters ToolSearch candidates through the same tool allow-list", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const adapter: ProviderAdapter = {
+      name: "tool-search-policy-provider",
+      complete: async (request) =>
+        request.messages.some((message) => message.role === "tool")
+          ? { text: "tool search policy observed" }
+          : {
+              text: "",
+              toolUses: [
+                {
+                  type: "tool-use",
+                  id: "policy-search",
+                  name: "ToolSearch",
+                  input: { query: "select:FileWrite" }
+                }
+              ]
+            }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [textMessage("user", "search hidden write tool")],
+        cwd: workspace,
+        toolRules: {
+          allow: ["FileRead(*)", "ToolSearch(*)"],
+          ask: [],
+          deny: []
+        }
+      })
+    );
+
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: "tool_result",
+        toolCallId: "policy-search",
+        toolName: "ToolSearch",
+        isError: true,
+        content: expect.stringContaining("Tool not found: FileWrite")
+      })
+    );
+    expect(result.final.text).toBe("tool search policy observed");
+  });
+
+  it("allows scoped shell command families such as Bash(git:*)", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    spawnSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+    const adapter: ProviderAdapter = {
+      name: "tool-policy-bash-provider",
+      complete: async (request) =>
+        request.messages.some((message) => message.role === "tool")
+          ? { text: "scoped shell observed" }
+          : {
+              text: "",
+              toolUses: [
+                {
+                  type: "tool-use",
+                  id: "policy-git-status",
+                  name: "Bash",
+                  input: { command: "git status --short" }
+                }
+              ]
+            }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [textMessage("user", "run git status")],
+        cwd: workspace,
+        permissionMode: "acceptEdits",
+        toolRules: {
+          allow: ["Bash(git:*)"],
+          ask: [],
+          deny: []
+        }
+      })
+    );
+
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: "tool_result",
+        toolCallId: "policy-git-status",
+        toolName: "Bash",
+        isError: undefined
+      })
+    );
+    expect(result.final.text).toBe("scoped shell observed");
+  });
+
   it("recovers when a provider returns output tokens but no visible text or tools", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     let calls = 0;
