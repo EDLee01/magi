@@ -563,10 +563,21 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
     "oss_issue_regression_fix",
     "oss_style_open_source_migration"
   ];
+  const fileWriteAvoidanceTaskClasses = [
+    "patch_strategy",
+    "dependency_refactor",
+    "api_migration",
+    ...fileEditAvoidanceTaskClasses
+  ];
   const fileEditAvoidedTaskCount = fileEditAvoidanceTaskClasses.filter((taskClass) => {
     const details = detailsByTaskClass.get(taskClass);
     const toolCounts = readRecord(details?.toolCounts);
     return details?.fileEditAvoided === true && readNumber(toolCounts.FileEdit) === 0;
+  }).length;
+  const fileWriteAvoidedTaskCount = fileWriteAvoidanceTaskClasses.filter((taskClass) => {
+    const details = detailsByTaskClass.get(taskClass);
+    const toolCounts = readRecord(details?.toolCounts);
+    return details?.fileWriteAvoided === true && readNumber(toolCounts.FileWrite) === 0;
   }).length;
   const patchStrategy = scenarios.find(
     (scenario) => readRecord(scenario.details).taskClass === "patch_strategy"
@@ -925,6 +936,9 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (fileEditAvoidedTaskCount !== fileEditAvoidanceTaskClasses.length) {
     failures.push(`fileEditAvoidedTaskCount=${fileEditAvoidedTaskCount}`);
+  }
+  if (fileWriteAvoidedTaskCount !== fileWriteAvoidanceTaskClasses.length) {
+    failures.push(`fileWriteAvoidedTaskCount=${fileWriteAvoidedTaskCount}`);
   }
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -1429,6 +1443,8 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       fileEditAvoidedTaskCount,
       fileEditAvoidanceTaskTarget: fileEditAvoidanceTaskClasses.length,
+      fileWriteAvoidedTaskCount,
+      fileWriteAvoidanceTaskTarget: fileWriteAvoidanceTaskClasses.length,
       patchStrategyRate,
       patchStrategyFilePatchCalls,
       patchStrategyFileEditCalls,
@@ -1786,6 +1802,17 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h10RetryErrorKinds = readStringList(h10ProviderRouting.retryErrorKinds);
   const h10Limits = readRecord(h10?.limitResults);
   const h10Seen = Boolean(h10);
+  const normalStreamDiagnosticsTasks = [h1, h2, h3, h4, h5, h7, h8, h9];
+  const normalStreamDiagnosticsCount = normalStreamDiagnosticsTasks.filter((details) => {
+    const stream = readRecord(details?.stream);
+    return (
+      stream.providerRetrySeen === false &&
+      readNumber(stream.providerRetryCount) === 0 &&
+      stream.providerFallbackSeen === false &&
+      stream.sessionErrorSeen === false &&
+      stream.completedStatus === "completed"
+    );
+  }).length;
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
@@ -1820,6 +1847,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (filesVerified < 53) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 56) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (normalStreamDiagnosticsCount !== normalStreamDiagnosticsTasks.length) {
+    failures.push(`normalStreamDiagnosticsCount=${normalStreamDiagnosticsCount}`);
+  }
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
   if (readNumber(h1ToolCounts.Bash) !== 2) failures.push("H1BashCalls != 2");
@@ -2095,6 +2125,8 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       filesVerified,
       toolCallCount,
       uniqueToolCount,
+      normalStreamDiagnosticsCount,
+      normalStreamDiagnosticsTarget: normalStreamDiagnosticsTasks.length,
       H1Seen: h1Seen,
       H1FileReadCalls: readNumber(h1ToolCounts.FileRead),
       H1FilePatchCalls: readNumber(h1ToolCounts.FilePatch),

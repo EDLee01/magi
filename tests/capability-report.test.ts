@@ -375,6 +375,7 @@ describe("capability report", () => {
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
         "fileEditAvoidedTaskCount=0",
+        "fileWriteAvoidedTaskCount=0",
         "patchStrategyFileWriteAvoided=false",
         "dependencyRefactorBashCalls != 2",
         "dependencyRefactorFileReadCalls < 2",
@@ -1120,6 +1121,7 @@ describe("capability report", () => {
         "filesVerified=1",
         "toolCallCount=2",
         "uniqueToolCount=2",
+        "normalStreamDiagnosticsCount=1",
         "H1FileReadCalls < 2",
         "H1FilePatchCalls < 2",
         "H1BashCalls != 2",
@@ -1170,7 +1172,8 @@ describe("capability report", () => {
       expect.arrayContaining([
         "H7ProviderRetrySeen=true",
         "H7ProviderRetryStreamCount != 0",
-        "H7ProviderFallbackSeen=true"
+        "H7ProviderFallbackSeen=true",
+        "normalStreamDiagnosticsCount=7"
       ])
     );
   });
@@ -1594,6 +1597,14 @@ function complexHarnessReport(
     (includeH10 ? 1 : 0);
   const passed = status === "passed" ? scenarioCount : 0;
   const failed = status === "passed" ? 0 : scenarioCount;
+  const normalStream = (eventCount: number) => ({
+    providerRetrySeen: false,
+    providerRetryCount: 0,
+    providerFallbackSeen: false,
+    sessionErrorSeen: false,
+    completedStatus: "completed",
+    eventCount
+  });
   const scenarios: Record<string, unknown>[] = [
     {
       name: "H1 single-file bug fix",
@@ -1614,6 +1625,7 @@ function complexHarnessReport(
         forbiddenChanges: overrides.forbiddenChanges ?? [],
         checksPassed: overrides.checksPassed ?? true,
         streamJsonLifecycleVerified: overrides.streamJsonLifecycleVerified ?? true,
+        stream: normalStream(54),
         session: {
           messageCount: overrides.sessionMessages ?? 3,
           auditEventCount: overrides.auditEvents ?? 8
@@ -1646,6 +1658,7 @@ function complexHarnessReport(
         forbiddenChanges: [],
         checksPassed: true,
         streamJsonLifecycleVerified: true,
+        stream: normalStream(66),
         session: {
           messageCount: 3,
           auditEventCount: 8
@@ -1678,6 +1691,7 @@ function complexHarnessReport(
         forbiddenChanges: [],
         checksPassed: true,
         streamJsonLifecycleVerified: true,
+        stream: normalStream(58),
         session: {
           messageCount: 3,
           auditEventCount: 8
@@ -1710,6 +1724,7 @@ function complexHarnessReport(
         forbiddenChanges: [],
         checksPassed: true,
         streamJsonLifecycleVerified: true,
+        stream: normalStream(62),
         session: {
           messageCount: 3,
           auditEventCount: 8
@@ -1742,6 +1757,7 @@ function complexHarnessReport(
         forbiddenChanges: [],
         checksPassed: true,
         streamJsonLifecycleVerified: true,
+        stream: normalStream(50),
         session: {
           messageCount: 3,
           auditEventCount: 8,
@@ -1834,6 +1850,7 @@ function complexHarnessReport(
           providerRetrySeen: overrides.h7ProviderRetrySeen ?? false,
           providerRetryCount: overrides.h7ProviderRetryCount ?? 0,
           providerFallbackSeen: overrides.h7ProviderFallbackSeen ?? false,
+          sessionErrorSeen: false,
           completedMessage: "Created output/automation-result.txt.",
           completedStatus: "completed",
           finalMessageMatched: true,
@@ -1871,6 +1888,7 @@ function complexHarnessReport(
         forbiddenChanges: [],
         checksPassed: true,
         streamJsonLifecycleVerified: true,
+        stream: normalStream(34),
         session: {
           messageCount: 3,
           auditEventCount: 8
@@ -1911,6 +1929,7 @@ function complexHarnessReport(
         forbiddenChanges: [],
         checksPassed: true,
         streamJsonLifecycleVerified: true,
+        stream: normalStream(34),
         session: {
           messageCount: 3,
           auditEventCount: 8
@@ -2552,6 +2571,7 @@ function modelTaskReport(
       fileMoveCalls: number;
       filePatchCalls: number;
       fileWriteCalls: number;
+      fileWriteAvoided: boolean;
       fileMoveRevealed: boolean;
       movedFileVerified: boolean;
       oldPathRemoved: boolean;
@@ -2564,6 +2584,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       fileMoveRevealed: boolean;
       sourcePackageMoved: boolean;
@@ -2577,6 +2598,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       configMigrated: boolean;
       packageScriptsMigrated: boolean;
@@ -2592,6 +2614,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       tsContractMigrated: boolean;
       pythonContractMigrated: boolean;
@@ -2607,6 +2630,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       repoDiscoveryVerified: boolean;
       sourceContractsMigrated: boolean;
@@ -2624,6 +2648,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       pluginApiRepoDiscoveryVerified: boolean;
       pluginRuntimeMigrated: boolean;
@@ -2643,6 +2668,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       ossRepoDiscoveryVerified: boolean;
       coreContractsMigrated: boolean;
@@ -2661,6 +2687,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       securityPolicyRepoDiscoveryVerified: boolean;
       securityPolicyConfigMigrated: boolean;
@@ -2680,6 +2707,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       ossIssueRegressionTaskSeen: boolean;
       issueReportReadBeforePatch: boolean;
@@ -2700,6 +2728,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       securityAdvisoryReadBeforePatch: boolean;
       securityAdvisoryReproduced: boolean;
@@ -2719,6 +2748,7 @@ function modelTaskReport(
       filePatchCalls: number;
       fileWriteCalls: number;
       fileEditCalls: number;
+      fileWriteAvoided: boolean;
       fileEditAvoided: boolean;
       ciWorkflowReadBeforePatch: boolean;
       ciFailureLogReadBeforePatch: boolean;
@@ -2794,6 +2824,7 @@ function modelTaskReport(
     fileMoveCalls: 1,
     filePatchCalls: 3,
     fileWriteCalls: 0,
+    fileWriteAvoided: true,
     fileMoveRevealed: true,
     movedFileVerified: true,
     oldPathRemoved: true,
@@ -2806,6 +2837,7 @@ function modelTaskReport(
     filePatchCalls: 3,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     fileMoveRevealed: true,
     sourcePackageMoved: true,
@@ -2819,6 +2851,7 @@ function modelTaskReport(
     filePatchCalls: 6,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     configMigrated: true,
     packageScriptsMigrated: true,
@@ -2834,6 +2867,7 @@ function modelTaskReport(
     filePatchCalls: 3,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     tsContractMigrated: true,
     pythonContractMigrated: true,
@@ -2849,6 +2883,7 @@ function modelTaskReport(
     filePatchCalls: 9,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     repoDiscoveryVerified: true,
     sourceContractsMigrated: true,
@@ -2866,6 +2901,7 @@ function modelTaskReport(
     filePatchCalls: 7,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     pluginApiRepoDiscoveryVerified: true,
     pluginRuntimeMigrated: true,
@@ -2885,6 +2921,7 @@ function modelTaskReport(
     filePatchCalls: 7,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     ossRepoDiscoveryVerified: true,
     coreContractsMigrated: true,
@@ -2903,6 +2940,7 @@ function modelTaskReport(
     filePatchCalls: 7,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     securityPolicyRepoDiscoveryVerified: true,
     securityPolicyConfigMigrated: true,
@@ -2922,6 +2960,7 @@ function modelTaskReport(
     filePatchCalls: 5,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     ossIssueRegressionTaskSeen: true,
     issueReportReadBeforePatch: true,
@@ -2942,6 +2981,7 @@ function modelTaskReport(
     filePatchCalls: 5,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     securityAdvisoryReadBeforePatch: true,
     securityAdvisoryReproduced: true,
@@ -2961,6 +3001,7 @@ function modelTaskReport(
     filePatchCalls: 3,
     fileWriteCalls: 0,
     fileEditCalls: 0,
+    fileWriteAvoided: true,
     fileEditAvoided: true,
     ciWorkflowReadBeforePatch: true,
     ciFailureLogReadBeforePatch: true,
@@ -3054,6 +3095,7 @@ function modelTaskReport(
                 FilePatch: apiMigration.filePatchCalls,
                 FileWrite: apiMigration.fileWriteCalls
               },
+              fileWriteAvoided: apiMigration.fileWriteAvoided,
               fileMoveRevealed: apiMigration.fileMoveRevealed,
               movedFileVerified: apiMigration.movedFileVerified,
               oldPathRemoved: apiMigration.oldPathRemoved,
@@ -3070,6 +3112,7 @@ function modelTaskReport(
                 FileWrite: monorepoGeneratedBoundary.fileWriteCalls,
                 FileEdit: monorepoGeneratedBoundary.fileEditCalls
               },
+              fileWriteAvoided: monorepoGeneratedBoundary.fileWriteAvoided,
               fileMoveRevealed: monorepoGeneratedBoundary.fileMoveRevealed,
               sourcePackageMoved: monorepoGeneratedBoundary.sourcePackageMoved,
               oldSourcePackagePathRemoved: monorepoGeneratedBoundary.oldSourcePackagePathRemoved,
@@ -3094,6 +3137,7 @@ function modelTaskReport(
               docsMigrated: workspacePolicyMigration.docsMigrated,
               generatedFileUntouched: workspacePolicyMigration.generatedFileUntouched,
               vendorFileUntouched: workspacePolicyMigration.vendorFileUntouched,
+              fileWriteAvoided: workspacePolicyMigration.fileWriteAvoided,
               fileEditAvoided: workspacePolicyMigration.fileEditAvoided,
               workspacePolicyMigrationVerified:
                 workspacePolicyMigration.workspacePolicyMigrationVerified
@@ -3112,6 +3156,7 @@ function modelTaskReport(
               pythonContractMigrated: mixedLanguageContractMigration.pythonContractMigrated,
               docsContractMigrated: mixedLanguageContractMigration.docsContractMigrated,
               generatedClientUntouched: mixedLanguageContractMigration.generatedClientUntouched,
+              fileWriteAvoided: mixedLanguageContractMigration.fileWriteAvoided,
               fileEditAvoided: mixedLanguageContractMigration.fileEditAvoided,
               mixedLanguageContractVerified:
                 mixedLanguageContractMigration.mixedLanguageContractVerified
@@ -3134,6 +3179,7 @@ function modelTaskReport(
               oldOwnedReferencesRemoved: largeRepoLongChainMigration.oldOwnedReferencesRemoved,
               generatedClientUntouched: largeRepoLongChainMigration.generatedClientUntouched,
               vendorShimUntouched: largeRepoLongChainMigration.vendorShimUntouched,
+              fileWriteAvoided: largeRepoLongChainMigration.fileWriteAvoided,
               fileEditAvoided: largeRepoLongChainMigration.fileEditAvoided,
               largeRepoLongChainVerified: largeRepoLongChainMigration.largeRepoLongChainVerified
             }
@@ -3162,6 +3208,7 @@ function modelTaskReport(
               generatedPluginTypesUntouched:
                 pluginApiCompatibilityMigration.generatedPluginTypesUntouched,
               vendorPluginShimUntouched: pluginApiCompatibilityMigration.vendorPluginShimUntouched,
+              fileWriteAvoided: pluginApiCompatibilityMigration.fileWriteAvoided,
               fileEditAvoided: pluginApiCompatibilityMigration.fileEditAvoided,
               pluginApiCompatibilityVerified:
                 pluginApiCompatibilityMigration.pluginApiCompatibilityVerified
@@ -3187,6 +3234,7 @@ function modelTaskReport(
                 ossStyleOpenSourceMigration.oldOwnedOptionReferencesRemoved,
               generatedOptionsUntouched: ossStyleOpenSourceMigration.generatedOptionsUntouched,
               vendorOptionsUntouched: ossStyleOpenSourceMigration.vendorOptionsUntouched,
+              fileWriteAvoided: ossStyleOpenSourceMigration.fileWriteAvoided,
               fileEditAvoided: ossStyleOpenSourceMigration.fileEditAvoided,
               ossStyleMigrationVerified: ossStyleOpenSourceMigration.ossStyleMigrationVerified
             }
@@ -3217,6 +3265,7 @@ function modelTaskReport(
                 securityMiddlewarePolicyMigration.generatedSecuritySchemaUntouched,
               vendorSecurityShimUntouched:
                 securityMiddlewarePolicyMigration.vendorSecurityShimUntouched,
+              fileWriteAvoided: securityMiddlewarePolicyMigration.fileWriteAvoided,
               fileEditAvoided: securityMiddlewarePolicyMigration.fileEditAvoided,
               securityMiddlewarePolicyVerified:
                 securityMiddlewarePolicyMigration.securityMiddlewarePolicyVerified
@@ -3233,6 +3282,7 @@ function modelTaskReport(
                 FileWrite: ossIssueRegressionFix.fileWriteCalls,
                 FileEdit: ossIssueRegressionFix.fileEditCalls
               },
+              fileWriteAvoided: ossIssueRegressionFix.fileWriteAvoided,
               fileEditAvoided: ossIssueRegressionFix.fileEditAvoided,
               ossIssueRegressionTaskSeen: ossIssueRegressionFix.ossIssueRegressionTaskSeen,
               issueReportReadBeforePatch: ossIssueRegressionFix.issueReportReadBeforePatch,
@@ -3257,6 +3307,7 @@ function modelTaskReport(
                 FileWrite: ossSecurityAdvisoryFix.fileWriteCalls,
                 FileEdit: ossSecurityAdvisoryFix.fileEditCalls
               },
+              fileWriteAvoided: ossSecurityAdvisoryFix.fileWriteAvoided,
               fileEditAvoided: ossSecurityAdvisoryFix.fileEditAvoided,
               securityAdvisoryReadBeforePatch:
                 ossSecurityAdvisoryFix.securityAdvisoryReadBeforePatch,
@@ -3282,6 +3333,7 @@ function modelTaskReport(
                 FileWrite: ciFailureDiagnosisFix.fileWriteCalls,
                 FileEdit: ciFailureDiagnosisFix.fileEditCalls
               },
+              fileWriteAvoided: ciFailureDiagnosisFix.fileWriteAvoided,
               fileEditAvoided: ciFailureDiagnosisFix.fileEditAvoided,
               ciWorkflowReadBeforePatch: ciFailureDiagnosisFix.ciWorkflowReadBeforePatch,
               ciFailureLogReadBeforePatch: ciFailureDiagnosisFix.ciFailureLogReadBeforePatch,
