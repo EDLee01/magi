@@ -211,6 +211,11 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("phone approval unblocked FileWrite") &&
     assertionList.includes("control job completed and persisted audit events") &&
     assertionList.includes("control approval flow completed two provider turns");
+  const providerRetryFallbackSeen =
+    assertionList.includes("retry attempts exhausted on primary") &&
+    assertionList.includes("fallback event emitted") &&
+    assertionList.includes("backup model recovered") &&
+    assertionList.includes("retry fallback used one backup provider call");
   const memoryCorrectionMaintenanceSeen =
     assertionList.includes("stale memory retrieved before correction") &&
     assertionList.includes("memory correct disputed old node") &&
@@ -334,7 +339,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 183) failures.push(`assertions=${assertions}`);
+  if (assertions < 184) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -353,6 +358,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   }
   if (!headlessPlanModeSeen) failures.push("headlessPlanModeSeen=false");
   if (!controlApprovalFlowSeen) failures.push("controlApprovalFlowSeen=false");
+  if (!providerRetryFallbackSeen) failures.push("providerRetryFallbackSeen=false");
   if (!memoryCorrectionMaintenanceSeen) {
     failures.push("memoryCorrectionMaintenanceSeen=false");
   }
@@ -406,6 +412,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       headlessDefaultPermissionDeniedSeen,
       headlessPlanModeSeen,
       controlApprovalFlowSeen,
+      providerRetryFallbackSeen,
       memoryCorrectionMaintenanceSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,

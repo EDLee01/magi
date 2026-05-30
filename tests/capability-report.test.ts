@@ -114,6 +114,7 @@ describe("capability report", () => {
         headlessDefaultPermissionDeniedSeen: false,
         headlessPlanModeSeen: false,
         controlApprovalFlowSeen: false,
+        providerRetryFallbackSeen: false,
         memoryCorrectionMaintenanceSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
@@ -172,6 +173,7 @@ describe("capability report", () => {
         "headlessDefaultPermissionDeniedSeen=false",
         "headlessPlanModeSeen=false",
         "controlApprovalFlowSeen=false",
+        "providerRetryFallbackSeen=false",
         "memoryCorrectionMaintenanceSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
@@ -1030,6 +1032,7 @@ function harnessReport(input: {
   headlessDefaultPermissionDeniedSeen?: boolean;
   headlessPlanModeSeen?: boolean;
   controlApprovalFlowSeen?: boolean;
+  providerRetryFallbackSeen?: boolean;
   memoryCorrectionMaintenanceSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
@@ -1064,7 +1067,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 183,
+      assertions: input.assertions ?? 184,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1104,6 +1107,7 @@ function harnessReport(input: {
                   ...headlessDefaultPermissionDeniedAssertions(input),
                   ...headlessPlanModeAssertions(input),
                   ...controlApprovalFlowAssertions(input),
+                  ...providerRetryFallbackAssertions(input),
                   ...memoryCorrectionMaintenanceAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
@@ -1970,6 +1974,17 @@ function controlApprovalFlowAssertions(input: { controlApprovalFlowSeen?: boolea
         "phone approval unblocked FileWrite",
         "control job completed and persisted audit events",
         "control approval flow completed two provider turns"
+      ];
+}
+
+function providerRetryFallbackAssertions(input: { providerRetryFallbackSeen?: boolean }): string[] {
+  return input.providerRetryFallbackSeen === false
+    ? []
+    : [
+        "retry attempts exhausted on primary",
+        "fallback event emitted",
+        "backup model recovered",
+        "retry fallback used one backup provider call"
       ];
 }
 

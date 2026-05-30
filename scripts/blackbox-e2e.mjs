@@ -3997,7 +3997,8 @@ async function scenarioRetryAndFallback() {
         assertions: [
           "retry attempts exhausted on primary",
           "fallback event emitted",
-          "backup model recovered"
+          "backup model recovered",
+          "retry fallback used one backup provider call"
         ],
         provider: provider.summary(),
         retry: { primaryCalls, backupCalls }
