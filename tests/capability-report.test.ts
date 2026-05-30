@@ -262,6 +262,7 @@ describe("capability report", () => {
         "pluginApiCompatibilityMigrationTask=false",
         "ossStyleOpenSourceMigrationTask=false",
         "securityMiddlewarePolicyMigrationTask=false",
+        "ossIssueRegressionFixTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -360,6 +361,20 @@ describe("capability report", () => {
         "generatedSecuritySchemaUntouched=false",
         "vendorSecurityShimUntouched=false",
         "securityMiddlewarePolicyVerified=false",
+        "ossIssueRegressionFixBashCalls != 2",
+        "ossIssueRegressionFixGlobCalls != 1",
+        "ossIssueRegressionFixGrepCalls != 1",
+        "ossIssueRegressionFixFileReadCalls != 9",
+        "ossIssueRegressionFixFilePatchCalls < 5",
+        "ossIssueReportReadBeforePatch=false",
+        "ossIssueRegressionReproduced=false",
+        "ossIssueCoreUrlEncodingFixed=false",
+        "ossIssueClientUrlEncodingFixed=false",
+        "ossIssuePluginUrlEncodingFixed=false",
+        "ossIssueDocsChangelogUpdated=false",
+        "ossIssueGeneratedOpenapiUntouched=false",
+        "ossIssueVendorRouteUntouched=false",
+        "ossIssueRegressionVerified=false",
         "regressions=1"
       ])
     );
@@ -1067,6 +1082,24 @@ function modelTaskReport(
       vendorSecurityShimUntouched: boolean;
       securityMiddlewarePolicyVerified: boolean;
     };
+    ossIssueRegressionFix: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      issueReportReadBeforePatch: boolean;
+      issueRegressionReproduced: boolean;
+      coreUrlEncodingFixed: boolean;
+      clientUrlEncodingFixed: boolean;
+      pluginUrlEncodingFixed: boolean;
+      issueDocsChangelogUpdated: boolean;
+      generatedOpenapiUntouched: boolean;
+      vendorRouteUntouched: boolean;
+      issueRegressionVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -1086,6 +1119,7 @@ function modelTaskReport(
     "large_repo_long_chain_migration",
     "plugin_api_compatibility_migration",
     "security_middleware_policy_migration",
+    "oss_issue_regression_fix",
     "oss_style_open_source_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
@@ -1224,14 +1258,32 @@ function modelTaskReport(
     vendorSecurityShimUntouched: true,
     securityMiddlewarePolicyVerified: true
   };
+  const ossIssueRegressionFix = overrides.ossIssueRegressionFix ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 9,
+    filePatchCalls: 5,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    issueReportReadBeforePatch: true,
+    issueRegressionReproduced: true,
+    coreUrlEncodingFixed: true,
+    clientUrlEncodingFixed: true,
+    pluginUrlEncodingFixed: true,
+    issueDocsChangelogUpdated: true,
+    generatedOpenapiUntouched: true,
+    vendorRouteUntouched: true,
+    issueRegressionVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 17,
-    assertions: overrides.assertions ?? 178,
-    filesVerified: overrides.filesVerified ?? 81,
-    toolCallCount: overrides.toolCallCount ?? 167,
+    assertions: overrides.assertions ?? 198,
+    filesVerified: overrides.filesVerified ?? 90,
+    toolCallCount: overrides.toolCallCount ?? 185,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1440,6 +1492,28 @@ function modelTaskReport(
                 securityMiddlewarePolicyMigration.vendorSecurityShimUntouched,
               securityMiddlewarePolicyVerified:
                 securityMiddlewarePolicyMigration.securityMiddlewarePolicyVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "oss_issue_regression_fix"
+          ? {
+              toolCounts: {
+                Bash: ossIssueRegressionFix.bashCalls,
+                Glob: ossIssueRegressionFix.globCalls,
+                Grep: ossIssueRegressionFix.grepCalls,
+                FileRead: ossIssueRegressionFix.fileReadCalls,
+                FilePatch: ossIssueRegressionFix.filePatchCalls,
+                FileWrite: ossIssueRegressionFix.fileWriteCalls,
+                FileEdit: ossIssueRegressionFix.fileEditCalls
+              },
+              issueReportReadBeforePatch: ossIssueRegressionFix.issueReportReadBeforePatch,
+              issueRegressionReproduced: ossIssueRegressionFix.issueRegressionReproduced,
+              coreUrlEncodingFixed: ossIssueRegressionFix.coreUrlEncodingFixed,
+              clientUrlEncodingFixed: ossIssueRegressionFix.clientUrlEncodingFixed,
+              pluginUrlEncodingFixed: ossIssueRegressionFix.pluginUrlEncodingFixed,
+              issueDocsChangelogUpdated: ossIssueRegressionFix.issueDocsChangelogUpdated,
+              generatedOpenapiUntouched: ossIssueRegressionFix.generatedOpenapiUntouched,
+              vendorRouteUntouched: ossIssueRegressionFix.vendorRouteUntouched,
+              issueRegressionVerified: ossIssueRegressionFix.issueRegressionVerified
             }
           : {})
       }

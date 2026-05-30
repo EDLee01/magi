@@ -4668,6 +4668,417 @@ async function scenarioOssStyleOpenSourceMigrationTask() {
   });
 }
 
+async function scenarioOssIssueRegressionFixTask() {
+  return await withWorkspace("oss-issue-regression-fix", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "issues"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "client", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "plugin-github", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "changelog"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "issues", "429.md"),
+      [
+        "# Issue 429: issue URLs break when path segments contain spaces or slashes",
+        "",
+        "Customers report 404 responses when owner, repo, or issue ids contain reserved URL characters.",
+        "",
+        "Acceptance:",
+        "- reproduce the failure with `node tests/issue-url.test.mjs` before editing",
+        "- encode owner, repo, and issueId path segments in owned source packages",
+        "- update docs and changelog",
+        "- do not edit generated or vendor files",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "core", "src", "url-builder.js"),
+      [
+        "export function trimTrailingSlash(baseUrl) {",
+        '  return baseUrl.replace(/\\/+$/, "");',
+        "}",
+        "",
+        "export function issuePath(owner, repo, issueId) {",
+        "  return `/repos/${owner}/${repo}/issues/${issueId}`;",
+        "}",
+        "",
+        "export function buildIssueUrl(baseUrl, owner, repo, issueId) {",
+        "  return `${trimTrailingSlash(baseUrl)}${issuePath(owner, repo, issueId)}`;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "client", "src", "issues.js"),
+      [
+        "export function issueRequest(baseUrl, owner, repo, issueId) {",
+        "  return {",
+        '    method: "GET",',
+        "    url: `${baseUrl}/repos/${owner}/${repo}/issues/${issueId}`",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "plugin-github", "src", "index.js"),
+      [
+        "export function githubIssueLink(owner, repo, issueId) {",
+        "  return `/repos/${owner}/${repo}/issues/${issueId}`;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "issues.md"),
+      [
+        "# Issue URLs",
+        "",
+        "The issue URL helpers place owner, repo, and issueId directly into the path.",
+        "Callers should only pass simple path-safe ids.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "changelog", "unreleased.md"),
+      ["# Unreleased", "", "- Documented issue URL helpers.", ""].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "{",
+      '  "resource": "issue",',
+      '  "path": "/repos/{owner}/{repo}/issues/{issueId}",',
+      '  "generated": true',
+      "}",
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// vendored GitHub route shim",
+      "export const issueRoute = \"/repos/{owner}/{repo}/issues/{issueId}\";",
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "openapi.json"), generatedBefore, "utf8");
+    writeFileSync(path.join(workDir, "vendor", "github-route.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "issue-url.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        'import { issuePath, buildIssueUrl } from "../packages/core/src/url-builder.js";',
+        'import { issueRequest } from "../packages/client/src/issues.js";',
+        'import { githubIssueLink } from "../packages/plugin-github/src/index.js";',
+        "",
+        'const owner = "edward lee";',
+        'const repo = "magi/next";',
+        'const issueId = "A-42/beta";',
+        'const expectedPath = "/repos/edward%20lee/magi%2Fnext/issues/A-42%2Fbeta";',
+        'const expectedUrl = `https://api.example.test${expectedPath}`;',
+        "",
+        "assert.equal(issuePath(owner, repo, issueId), expectedPath);",
+        'assert.equal(buildIssueUrl("https://api.example.test/", owner, repo, issueId), expectedUrl);',
+        "assert.deepEqual(issueRequest(\"https://api.example.test\", owner, repo, issueId), {",
+        '  method: "GET",',
+        "  url: expectedUrl",
+        "});",
+        "assert.equal(githubIssueLink(owner, repo, issueId), expectedPath);",
+        "",
+        'const docs = readFileSync("docs/issues.md", "utf8");',
+        'assert.match(docs, /URL-encodes owner, repo, and issueId/);',
+        'const changelog = readFileSync("changelog/unreleased.md", "utf8");',
+        'assert.match(changelog, /issue URL encoding regression/);',
+        "",
+        'const generated = readFileSync("generated/openapi.json", "utf8");',
+        'assert.match(generated, /"generated": true/);',
+        'assert.match(generated, /\\{issueId\\}/);',
+        'const vendor = readFileSync("vendor/github-route.js", "utf8");',
+        'assert.match(vendor, /vendored GitHub route shim/);',
+        'assert.match(vendor, /\\{issueId\\}/);',
+        'console.log("issue url regression ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-issue-url-before", "Bash", {
+              command: "node tests/issue-url.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-issue-repo", "Glob", {
+              pattern: "**/*.{js,md,json,mjs}",
+              max_matches: 40
+            }),
+            toolCall("grep-issue-id", "Grep", {
+              pattern: "issueId",
+              path: ".",
+              output_mode: "content",
+              max_matches: 40
+            }),
+            toolCall("read-issue-report", "FileRead", {
+              file_path: "issues/429.md"
+            }),
+            toolCall("read-issue-test", "FileRead", {
+              file_path: "tests/issue-url.test.mjs"
+            }),
+            toolCall("read-core-url-builder", "FileRead", {
+              file_path: "packages/core/src/url-builder.js"
+            }),
+            toolCall("read-client-issues", "FileRead", {
+              file_path: "packages/client/src/issues.js"
+            }),
+            toolCall("read-github-plugin", "FileRead", {
+              file_path: "packages/plugin-github/src/index.js"
+            }),
+            toolCall("read-issue-docs", "FileRead", {
+              file_path: "docs/issues.md"
+            }),
+            toolCall("read-issue-changelog", "FileRead", {
+              file_path: "changelog/unreleased.md"
+            }),
+            toolCall("read-generated-openapi", "FileRead", {
+              file_path: "generated/openapi.json"
+            }),
+            toolCall("read-vendor-github-route", "FileRead", {
+              file_path: "vendor/github-route.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing issue URL test missing");
+          assert(transcript.includes("Issue 429"), "issue report context missing");
+          assert(transcript.includes("reserved URL characters"), "issue business context missing");
+          assert(transcript.includes("packages/core/src/url-builder.js"), "repo discovery missing");
+          assert(transcript.includes("issueId"), "issueId search output missing");
+          assert(transcript.includes('"generated": true'), "generated boundary missing");
+          assert(transcript.includes("vendored GitHub route shim"), "vendor boundary missing");
+          return toolResponse([
+            toolCall("patch-core-url-builder", "FilePatch", {
+              file_path: "packages/core/src/url-builder.js",
+              patch: [
+                "@@",
+                " export function issuePath(owner, repo, issueId) {",
+                "-  return `/repos/${owner}/${repo}/issues/${issueId}`;",
+                "+  const safeOwner = encodeURIComponent(owner);",
+                "+  const safeRepo = encodeURIComponent(repo);",
+                "+  const safeIssueId = encodeURIComponent(issueId);",
+                "+  return `/repos/${safeOwner}/${safeRepo}/issues/${safeIssueId}`;",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-client-issues", "FilePatch", {
+              file_path: "packages/client/src/issues.js",
+              patch: [
+                "@@",
+                "+import { buildIssueUrl } from \"../../core/src/url-builder.js\";",
+                "+",
+                " export function issueRequest(baseUrl, owner, repo, issueId) {",
+                "   return {",
+                "     method: \"GET\",",
+                "-    url: `${baseUrl}/repos/${owner}/${repo}/issues/${issueId}`",
+                "+    url: buildIssueUrl(baseUrl, owner, repo, issueId)",
+                "   };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-github-plugin", "FilePatch", {
+              file_path: "packages/plugin-github/src/index.js",
+              patch: [
+                "@@",
+                " export function githubIssueLink(owner, repo, issueId) {",
+                "-  return `/repos/${owner}/${repo}/issues/${issueId}`;",
+                "+  const safeOwner = encodeURIComponent(owner);",
+                "+  const safeRepo = encodeURIComponent(repo);",
+                "+  const safeIssueId = encodeURIComponent(issueId);",
+                "+  return `/repos/${safeOwner}/${safeRepo}/issues/${safeIssueId}`;",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-issue-docs", "FilePatch", {
+              file_path: "docs/issues.md",
+              patch: [
+                "@@",
+                " # Issue URLs",
+                " ",
+                "-The issue URL helpers place owner, repo, and issueId directly into the path.",
+                "-Callers should only pass simple path-safe ids.",
+                "+The issue URL helpers URL-encodes owner, repo, and issueId path segments.",
+                "+Callers can pass ids with spaces or slashes; owned helpers encode them before routing."
+              ].join("\n")
+            }),
+            toolCall("patch-issue-changelog", "FilePatch", {
+              file_path: "changelog/unreleased.md",
+              patch: [
+                "@@",
+                " # Unreleased",
+                " ",
+                "-- Documented issue URL helpers.",
+                "+- Fixed the issue URL encoding regression for owner, repo, and issueId path segments."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched packages/core/src/url-builder.js"),
+            "core URL patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/client/src/issues.js"),
+            "client URL patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/plugin-github/src/index.js"),
+            "plugin URL patch result missing"
+          );
+          assert(transcript.includes("Patched docs/issues.md"), "docs patch result missing");
+          assert(transcript.includes("Patched changelog/unreleased.md"), "changelog patch missing");
+          return toolResponse([
+            toolCall("run-issue-url-after", "Bash", {
+              command: "node tests/issue-url.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(transcript.includes("issue url regression ok"), "passing issue URL test missing");
+        return messageText(
+          "OSS issue URL regression fixed with source packages updated and generated/vendor boundaries preserved."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Fix OSS issue 429 in this multi-package repository.",
+            "First reproduce the failing issue URL regression test, discover the repo with Glob and Grep,",
+            "read the issue report, source packages, docs, changelog, generated schema, and vendor shim,",
+            "encode owner, repo, and issueId path segments in owned source only, update docs and changelog,",
+            "do not modify generated or vendor files, then rerun the focused test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "OSS issue regression fix task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "OSS issue regression fix did not complete");
+      const core = readFileSync(path.join(workDir, "packages/core/src/url-builder.js"), "utf8");
+      const client = readFileSync(path.join(workDir, "packages/client/src/issues.js"), "utf8");
+      const plugin = readFileSync(
+        path.join(workDir, "packages", "plugin-github", "src", "index.js"),
+        "utf8"
+      );
+      const docs = readFileSync(path.join(workDir, "docs", "issues.md"), "utf8");
+      const changelog = readFileSync(path.join(workDir, "changelog", "unreleased.md"), "utf8");
+      assert(core.includes("encodeURIComponent(owner)"), "core owner encoding missing");
+      assert(core.includes("encodeURIComponent(repo)"), "core repo encoding missing");
+      assert(core.includes("encodeURIComponent(issueId)"), "core issueId encoding missing");
+      assert(client.includes("buildIssueUrl(baseUrl, owner, repo, issueId)"), "client not routed through encoded helper");
+      assert(plugin.includes("encodeURIComponent(issueId)"), "plugin issueId encoding missing");
+      assert(docs.includes("URL-encodes owner, repo, and issueId"), "issue docs not updated");
+      assert(changelog.includes("issue URL encoding regression"), "issue changelog not updated");
+      const generatedAfter = readFileSync(path.join(workDir, "generated", "openapi.json"), "utf8");
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "github-route.js"), "utf8");
+      assert(generatedAfter === generatedBefore, "generated OpenAPI schema was modified");
+      assert(vendorAfter === vendorBefore, "vendor GitHub route shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "OSS issue fix should run tests before and after");
+      assert(toolCounts.Glob === 1, "OSS issue fix should discover files with Glob");
+      assert(toolCounts.Grep === 1, "OSS issue fix should search issueId with Grep");
+      assert(toolCounts.FileRead === 9, "OSS issue fix should inspect issue, source, docs, and boundaries");
+      assert(toolCounts.FilePatch === 5, "OSS issue fix should patch five owned files");
+      assert(!toolCounts.FileWrite, "OSS issue fix should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "OSS issue fix should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing issue URL test ran first",
+          "OSS issue report was read before editing",
+          "repo discovery ran with Glob",
+          "issueId search ran with Grep",
+          "core URL builder inspected before patching",
+          "client issue request inspected before patching",
+          "GitHub plugin inspected before patching",
+          "generated OpenAPI boundary inspected",
+          "vendor route boundary inspected",
+          "core path segments encoded",
+          "client request routed through encoded helper",
+          "plugin issue link encoded",
+          "issue docs updated",
+          "issue changelog updated",
+          "focused issue URL test passed after fix",
+          "generated OpenAPI schema stayed unchanged",
+          "vendor GitHub route shim stayed unchanged",
+          "FileWrite avoided for OSS issue fix",
+          "FileEdit avoided for OSS issue fix",
+          "final response completed"
+        ],
+        filesVerified: [
+          "issues/429.md",
+          "packages/core/src/url-builder.js",
+          "packages/client/src/issues.js",
+          "packages/plugin-github/src/index.js",
+          "docs/issues.md",
+          "changelog/unreleased.md",
+          "generated/openapi.json",
+          "vendor/github-route.js",
+          "tests/issue-url.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "oss_issue_regression_fix",
+        toolCounts,
+        ossIssueRegressionTaskSeen: true,
+        issueReportReadBeforePatch: true,
+        issueRegressionReproduced: true,
+        coreUrlEncodingFixed: true,
+        clientUrlEncodingFixed: true,
+        pluginUrlEncodingFixed: true,
+        issueDocsChangelogUpdated: true,
+        generatedOpenapiUntouched: true,
+        vendorRouteUntouched: true,
+        issueRegressionVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -4728,6 +5139,7 @@ async function main() {
     ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask],
     ["plugin API compatibility migration task", scenarioPluginApiCompatibilityMigrationTask],
     ["security middleware policy migration task", scenarioSecurityMiddlewarePolicyMigrationTask],
+    ["OSS issue regression fix task", scenarioOssIssueRegressionFixTask],
     ["oss-style open source migration task", scenarioOssStyleOpenSourceMigrationTask]
   ];
   const results = [];

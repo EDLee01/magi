@@ -453,13 +453,28 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const securityMiddlewarePolicyMigrationFileEditCalls = readNumber(
     securityMiddlewarePolicyMigrationToolCounts.FileEdit
   );
+  const ossIssueRegressionFix = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "oss_issue_regression_fix"
+  );
+  const ossIssueRegressionFixDetails = readRecord(
+    ossIssueRegressionFix ? readRecord(ossIssueRegressionFix).details : {}
+  );
+  const ossIssueRegressionFixToolCounts = readRecord(ossIssueRegressionFixDetails.toolCounts);
+  const ossIssueRegressionFixTaskSeen = taskClasses.has("oss_issue_regression_fix");
+  const ossIssueRegressionFixBashCalls = readNumber(ossIssueRegressionFixToolCounts.Bash);
+  const ossIssueRegressionFixGlobCalls = readNumber(ossIssueRegressionFixToolCounts.Glob);
+  const ossIssueRegressionFixGrepCalls = readNumber(ossIssueRegressionFixToolCounts.Grep);
+  const ossIssueRegressionFixFileReadCalls = readNumber(ossIssueRegressionFixToolCounts.FileRead);
+  const ossIssueRegressionFixFilePatchCalls = readNumber(ossIssueRegressionFixToolCounts.FilePatch);
+  const ossIssueRegressionFixFileWriteCalls = readNumber(ossIssueRegressionFixToolCounts.FileWrite);
+  const ossIssueRegressionFixFileEditCalls = readNumber(ossIssueRegressionFixToolCounts.FileEdit);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 16) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 16) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 17) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 17) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -482,9 +497,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!securityMiddlewarePolicyMigrationTaskSeen) {
     failures.push("securityMiddlewarePolicyMigrationTask=false");
   }
-  if (assertions < 178) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 81) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 167) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!ossIssueRegressionFixTaskSeen) {
+    failures.push("ossIssueRegressionFixTask=false");
+  }
+  if (assertions < 198) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 90) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 185) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -798,6 +816,54 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (securityMiddlewarePolicyMigrationDetails.securityMiddlewarePolicyVerified !== true) {
     failures.push("securityMiddlewarePolicyVerified=false");
   }
+  if (ossIssueRegressionFixBashCalls !== 2) {
+    failures.push("ossIssueRegressionFixBashCalls != 2");
+  }
+  if (ossIssueRegressionFixGlobCalls !== 1) {
+    failures.push("ossIssueRegressionFixGlobCalls != 1");
+  }
+  if (ossIssueRegressionFixGrepCalls !== 1) {
+    failures.push("ossIssueRegressionFixGrepCalls != 1");
+  }
+  if (ossIssueRegressionFixFileReadCalls !== 9) {
+    failures.push("ossIssueRegressionFixFileReadCalls != 9");
+  }
+  if (ossIssueRegressionFixFilePatchCalls < 5) {
+    failures.push("ossIssueRegressionFixFilePatchCalls < 5");
+  }
+  if (ossIssueRegressionFixFileWriteCalls !== 0) {
+    failures.push("ossIssueRegressionFixFileWrite used");
+  }
+  if (ossIssueRegressionFixFileEditCalls !== 0) {
+    failures.push("ossIssueRegressionFixFileEdit used");
+  }
+  if (ossIssueRegressionFixDetails.issueReportReadBeforePatch !== true) {
+    failures.push("ossIssueReportReadBeforePatch=false");
+  }
+  if (ossIssueRegressionFixDetails.issueRegressionReproduced !== true) {
+    failures.push("ossIssueRegressionReproduced=false");
+  }
+  if (ossIssueRegressionFixDetails.coreUrlEncodingFixed !== true) {
+    failures.push("ossIssueCoreUrlEncodingFixed=false");
+  }
+  if (ossIssueRegressionFixDetails.clientUrlEncodingFixed !== true) {
+    failures.push("ossIssueClientUrlEncodingFixed=false");
+  }
+  if (ossIssueRegressionFixDetails.pluginUrlEncodingFixed !== true) {
+    failures.push("ossIssuePluginUrlEncodingFixed=false");
+  }
+  if (ossIssueRegressionFixDetails.issueDocsChangelogUpdated !== true) {
+    failures.push("ossIssueDocsChangelogUpdated=false");
+  }
+  if (ossIssueRegressionFixDetails.generatedOpenapiUntouched !== true) {
+    failures.push("ossIssueGeneratedOpenapiUntouched=false");
+  }
+  if (ossIssueRegressionFixDetails.vendorRouteUntouched !== true) {
+    failures.push("ossIssueVendorRouteUntouched=false");
+  }
+  if (ossIssueRegressionFixDetails.issueRegressionVerified !== true) {
+    failures.push("ossIssueRegressionVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -982,6 +1048,25 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
         securityMiddlewarePolicyMigrationDetails.vendorSecurityShimUntouched === true,
       securityMiddlewarePolicyVerified:
         securityMiddlewarePolicyMigrationDetails.securityMiddlewarePolicyVerified === true,
+      ossIssueRegressionFixTaskSeen,
+      ossIssueRegressionFixBashCalls,
+      ossIssueRegressionFixGlobCalls,
+      ossIssueRegressionFixGrepCalls,
+      ossIssueRegressionFixFileReadCalls,
+      ossIssueRegressionFixFilePatchCalls,
+      ossIssueRegressionFixFileWriteCalls,
+      ossIssueRegressionFixFileEditCalls,
+      ossIssueReportReadBeforePatch:
+        ossIssueRegressionFixDetails.issueReportReadBeforePatch === true,
+      ossIssueRegressionReproduced: ossIssueRegressionFixDetails.issueRegressionReproduced === true,
+      ossIssueCoreUrlEncodingFixed: ossIssueRegressionFixDetails.coreUrlEncodingFixed === true,
+      ossIssueClientUrlEncodingFixed: ossIssueRegressionFixDetails.clientUrlEncodingFixed === true,
+      ossIssuePluginUrlEncodingFixed: ossIssueRegressionFixDetails.pluginUrlEncodingFixed === true,
+      ossIssueDocsChangelogUpdated: ossIssueRegressionFixDetails.issueDocsChangelogUpdated === true,
+      ossIssueGeneratedOpenapiUntouched:
+        ossIssueRegressionFixDetails.generatedOpenapiUntouched === true,
+      ossIssueVendorRouteUntouched: ossIssueRegressionFixDetails.vendorRouteUntouched === true,
+      ossIssueRegressionVerified: ossIssueRegressionFixDetails.issueRegressionVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
