@@ -114,6 +114,7 @@ describe("capability report", () => {
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         resumePickerSearchFieldsSeen: false,
+        resumePickerVisualContractSeen: false,
         toolPolicySeen: false,
         dangerousPermissionMatrixSeen: false,
         slashSuggestionPromptSeen: false,
@@ -164,6 +165,7 @@ describe("capability report", () => {
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
         "resumePickerSearchFieldsSeen=false",
+        "resumePickerVisualContractSeen=false",
         "toolPolicySeen=false",
         "dangerousPermissionMatrixSeen=false",
         "slashSuggestionPromptSeen=false",
@@ -1014,6 +1016,7 @@ function harnessReport(input: {
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
   resumePickerSearchFieldsSeen?: boolean;
+  resumePickerVisualContractSeen?: boolean;
   toolPolicySeen?: boolean;
   dangerousPermissionMatrixSeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
@@ -1040,7 +1043,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 159,
+      assertions: input.assertions ?? 163,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1080,6 +1083,7 @@ function harnessReport(input: {
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...resumePickerSearchFieldsAssertions(input),
+                  ...resumePickerVisualContractAssertions(input),
                   ...toolPolicyAssertions(input),
                   ...dangerousPermissionMatrixAssertions(input),
                   ...slashSuggestionPromptAssertions(input),
@@ -1941,6 +1945,19 @@ function resumePickerSearchFieldsAssertions(input: {
         "slash /resume cwd search showed multiple matching sessions",
         "slash /resume cwd search excluded nonmatching session",
         "slash /resume partial session id resumed target"
+      ];
+}
+
+function resumePickerVisualContractAssertions(input: {
+  resumePickerVisualContractSeen?: boolean;
+}): string[] {
+  return input.resumePickerVisualContractSeen === false
+    ? []
+    : [
+        "resume picker visual contract bounded narrow frame",
+        "resume picker visual contract rendered selection and scroll position",
+        "resume picker visual contract rendered filter prompt and footer",
+        "resume picker visual contract clipped long session detail"
       ];
 }
 

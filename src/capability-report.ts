@@ -210,6 +210,13 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("slash /resume cwd search showed multiple matching sessions") &&
     assertionList.includes("slash /resume cwd search excluded nonmatching session") &&
     assertionList.includes("slash /resume partial session id resumed target");
+  const resumePickerVisualContractSeen =
+    assertionList.includes("resume picker visual contract bounded narrow frame") &&
+    assertionList.includes(
+      "resume picker visual contract rendered selection and scroll position"
+    ) &&
+    assertionList.includes("resume picker visual contract rendered filter prompt and footer") &&
+    assertionList.includes("resume picker visual contract clipped long session detail");
   const toolPolicySeen =
     assertionList.includes("--tools allow-list filtered exposed schemas") &&
     assertionList.includes("--tools allow-list denied hidden write execution") &&
@@ -279,7 +286,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 159) failures.push(`assertions=${assertions}`);
+  if (assertions < 163) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -296,6 +303,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!resumePickerSearchFieldsSeen) failures.push("resumePickerSearchFieldsSeen=false");
+  if (!resumePickerVisualContractSeen) failures.push("resumePickerVisualContractSeen=false");
   if (!toolPolicySeen) failures.push("toolPolicySeen=false");
   if (!dangerousPermissionMatrixSeen) failures.push("dangerousPermissionMatrixSeen=false");
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
@@ -337,6 +345,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
       resumePickerSearchFieldsSeen,
+      resumePickerVisualContractSeen,
       toolPolicySeen,
       dangerousPermissionMatrixSeen,
       slashSuggestionPromptSeen,

@@ -542,11 +542,12 @@ async function runCliWithTtyIo({
   label,
   inputText,
   waitForText = "resume sessions",
-  timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS
+  timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS,
+  columns
 }) {
   console.log(`+ ${label}: runCli(${args.map((part) => JSON.stringify(part)).join(" ")})`);
   const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
-  const harness = createPromptHarness();
+  const harness = createPromptHarness({ columns });
   const promise = runCliApi(
     args,
     {
@@ -593,11 +594,12 @@ async function runInteractiveCliWithTtySteps({
   configDir,
   label,
   steps,
-  timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS
+  timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS,
+  columns
 }) {
   console.log(`+ ${label}: runInteractiveCliWithTtySteps`);
   const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
-  const harness = createPromptHarness();
+  const harness = createPromptHarness({ columns });
   const promise = runCliApi(
     ["--no-color"],
     {
@@ -2860,6 +2862,97 @@ async function scenarioResumePickerTty() {
   });
 }
 
+async function scenarioResumePickerVisualContract() {
+  return await withTempWorkspace("resume-picker-visual", async ({ configDir, workDir }) => {
+    writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
+    await seedSessionPickerVisualData({ configDir, workDir, count: 12 });
+    const result = await runCliWithTtyIo({
+      args: ["--no-color", "-r"],
+      cwd: workDir,
+      configDir,
+      label: "resume picker visual contract",
+      inputText: "\r",
+      columns: 56
+    });
+    assert(
+      result.exitCode === 0,
+      `resume picker visual exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+    );
+    const frames = extractTerminalFrames(`${result.stdout}\n${result.stderr}`, "resume sessions");
+    assert(frames.length > 0, "resume picker visual frame was not captured");
+    const frame = frames[0];
+    assertFrameLinesWithin(frame, 54, "resume picker visual frame");
+    assert(frame.some((line) => line.includes("❯")), "resume picker selected row marker missing");
+    assert(frame.some((line) => line.includes("1/12")), "resume picker scroll position missing");
+    assert(
+      frame.some((line) => line.includes("type to filter")),
+      "resume picker filter prompt missing"
+    );
+    assert(
+      frame.some((line) => line.includes("Enter resume") && line.includes("Esc cancel")),
+      "resume picker footer missing"
+    );
+    assert(frame.some((line) => line.includes("…")), "resume picker did not clip long row detail");
+    assert(
+      stripTerminalControls(result.stdout).includes("visual resume transcript 11"),
+      "resume picker visual selection did not resume the selected seeded session"
+    );
+    return {
+      score: 1,
+      assertions: [
+        "resume picker visual contract bounded narrow frame",
+        "resume picker visual contract rendered selection and scroll position",
+        "resume picker visual contract rendered filter prompt and footer",
+        "resume picker visual contract clipped long session detail"
+      ]
+    };
+  });
+}
+
+async function seedSessionPickerVisualData({ configDir, workDir, count }) {
+  const { ensureMagiHome, getMagiPaths } = await import(
+    pathToFileURL(path.join(repoRoot, "dist", "paths.js")).href
+  );
+  const { SessionStore } = await import(
+    pathToFileURL(path.join(repoRoot, "dist", "session-store.js")).href
+  );
+  const env = { MAGI_CONFIG_DIR: configDir };
+  const paths = getMagiPaths(env);
+  ensureMagiHome(paths);
+  const store = SessionStore.open(paths);
+  try {
+    for (let index = 0; index < count; index += 1) {
+      const padded = String(index).padStart(2, "0");
+      const sessionId = `visual-session-${padded}`;
+      const sessionCwd = path.join(
+        workDir,
+        "packages",
+        "client",
+        `visual-${padded}`,
+        "deeply-nested-workspace"
+      );
+      store.createSession({
+        id: sessionId,
+        title: `visual resume transcript ${padded} with a long descriptive title for clipping`,
+        cwd: sessionCwd,
+        metadata: { source: "blackbox-resume-picker-visual" }
+      });
+      store.appendMessage({
+        sessionId,
+        role: "user",
+        content: `visual resume prompt ${padded}`
+      });
+      store.appendMessage({
+        sessionId,
+        role: "assistant",
+        content: `visual resume transcript ${padded}`
+      });
+    }
+  } finally {
+    store.close();
+  }
+}
+
 async function scenarioSlashResumeSearchTty() {
   return await withTempWorkspace("slash-resume-search", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4612,7 +4705,7 @@ function shouldRunInteractiveTui(env = process.env) {
   );
 }
 
-function createPromptHarness() {
+function createPromptHarness({ columns = 80 } = {}) {
   const input = new PassThrough();
   input.isTTY = true;
   input.isRaw = false;
@@ -4628,12 +4721,37 @@ function createPromptHarness() {
     }
   });
   output.isTTY = true;
-  output.columns = 80;
+  output.columns = columns;
   return {
     input,
     output,
     stdout: () => text
   };
+}
+
+function extractTerminalFrames(output, title) {
+  const lines = stripTerminalControls(output).split("\n");
+  const frames = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!lines[index]?.includes(`┌ ${title}`)) continue;
+    const frame = [];
+    for (let cursor = index; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor]?.trimEnd() ?? "";
+      if (!line) continue;
+      frame.push(line);
+      if (line.includes("└ ")) break;
+    }
+    if (frame.some((line) => line.includes("└ "))) {
+      frames.push(frame);
+    }
+  }
+  return frames;
+}
+
+function assertFrameLinesWithin(frame, width, label) {
+  for (const [index, line] of frame.entries()) {
+    assert(line.length <= width, `${label} line ${index + 1} exceeded ${width}: ${line}`);
+  }
 }
 
 function stripTerminalControls(text) {
@@ -4715,6 +4833,7 @@ async function main() {
     ["dangerous permission matrix", scenarioDangerousPermissionMatrix],
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],
+    ["resume picker visual contract", scenarioResumePickerVisualContract],
     ["slash resume search TTY", scenarioSlashResumeSearchTty],
     ["resume picker search fields TTY", scenarioResumePickerSearchFieldsTty],
     ["TUI keyboard input", scenarioTuiKeyboardInput],

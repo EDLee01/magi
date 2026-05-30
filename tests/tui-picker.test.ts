@@ -118,4 +118,28 @@ describe("TUI picker", () => {
     expect(visible).not.toContain("Dear Miss Zheng:\n\nThe Editor");
     expect(visible).not.toContain("2026-05-25T15:27:06.188Z\n/Users/ktz");
   });
+
+  it("keeps scroll position visible before clipping long detail", async () => {
+    const { input, output, chunks } = createPickerStreams();
+    output.columns = 56;
+    const picker = showTuiPicker({
+      stdin: input,
+      stdout: output,
+      title: "resume sessions",
+      items: Array.from({ length: 12 }, (_, index) => ({
+        label: `visual resume session ${index}`,
+        value: `session-${index}`,
+        description: "2 msg",
+        detail: `/Users/ktz/projects/magi-next/packages/client/${index}/deeply-nested-workspace`
+      })),
+      maxVisibleItems: 10
+    });
+
+    input.write("\r");
+
+    await expect(picker).resolves.toBe("session-0");
+    const visible = stripAnsi(chunks.join(""));
+    expect(visible).toContain("1/12");
+    expect(visible).toContain("…");
+  });
 });

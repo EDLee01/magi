@@ -22,7 +22,9 @@ Already covered by automated tests:
   bounded status/pending-approval rendering, prompt editing/history, and
   bracketed paste placeholder/restore behavior.
 - Searchable `-r` TTY resume picker, non-TTY resume session list, and
-  interactive `/resume <query>` picker search/cancel behavior.
+  interactive `/resume <query>` picker search/cancel behavior, with a bounded
+  narrow-width visual contract for session picker rows, scroll state, and
+  footer.
 - CLI `--tools`, `--allowed-tools`, and `--disallowed-tools` schema filtering
   plus execution-time denial.
 - Stream-json structured event parity for core lifecycle plus less common
@@ -41,7 +43,8 @@ Already covered by automated tests:
 
 Not yet fully covered:
 
-- Resume picker visual polish beyond the core search/no-results/cancel flow.
+- Full PTY resume picker snapshot polish beyond bounded row/scroll/footer
+  contracts.
 - Broader TUI keyboard navigation polish beyond prompt editing/history/paste.
 - Real provider-driven tool loop for non-trivial code changes.
 
@@ -242,7 +245,10 @@ Acceptance:
   provides an actionable instruction.
 
 Current status: implemented and black-box gated. In a TTY, `magi -r` opens the
-searchable session picker; in non-TTY it prints a stable session list.
+searchable session picker; in non-TTY it prints a stable session list. The
+visual contract gate opens the real TTY picker at narrow width and verifies
+bounded lines, selected-row marker, scroll position, filter prompt, footer,
+clipping, and selected session resume.
 
 ### C2. `/resume` Search
 
@@ -800,7 +806,8 @@ Highest priority gaps:
 
 1. Real provider-driven tool loop for non-trivial code changes.
 2. Broader visual regression coverage across full PTY transcripts.
-3. Resume picker visual polish beyond core search/no-results/cancel behavior.
+3. Full PTY resume picker snapshot polish beyond bounded row/scroll/footer
+   contracts.
 4. Broader TUI keyboard navigation polish beyond prompt editing/history/paste.
 
 Recommended next implementation phase:

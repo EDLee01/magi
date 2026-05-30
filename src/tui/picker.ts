@@ -80,21 +80,21 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
         const item = filtered[itemIndex]!;
         const isSelected = itemIndex === selected;
         const marker = isSelected ? "❯" : " ";
-        const label = `${labelPrefix}${inlineText(item.label)}`.padEnd(
-          Math.min(maxLabel + labelPrefix.length + 1, 26)
-        );
+        const labelText = `${labelPrefix}${inlineText(item.label)}`;
+        const labelWidth = Math.min(maxLabel + labelPrefix.length + 1, 26);
         const description = item.description ? ` ${inlineText(item.description)}` : "";
         const detail = item.detail ? ` ${DIM}${inlineText(item.detail)}${RESET}` : "";
+        const style = item.disabled ? DIM : isSelected ? CYAN : DIM;
         const scroll =
           filtered.length > maxVisibleItems
-            ? ` ${DIM}${itemIndex + 1}/${filtered.length}${RESET}`
+            ? ` ${DIM}${itemIndex + 1}/${filtered.length}${RESET}${style}`
             : "";
-        const style = item.disabled ? DIM : isSelected ? CYAN : DIM;
+        const label = scroll ? fitInlineText(labelText, labelWidth) : labelText.padEnd(labelWidth);
         const emphasisStart = isSelected && !item.disabled ? BOLD : "";
         const emphasisEnd = isSelected && !item.disabled ? BOLD_OFF : "";
         lines.push(
           clip(
-            `${style}│ ${marker} ${emphasisStart}${label}${emphasisEnd}${description}${detail}${scroll}${RESET}`,
+            `${style}│ ${marker} ${emphasisStart}${label}${emphasisEnd}${scroll}${description}${detail}${RESET}`,
             width
           )
         );
@@ -296,6 +296,20 @@ function rankPickerItem(item: TuiPickerItem, query: string): number {
 
 function inlineText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function fitInlineText(text: string, width: number): string {
+  const clean = inlineText(text);
+  if (cellWidth(clean) <= width) return clean.padEnd(width);
+  let result = "";
+  let used = 0;
+  for (const char of clean) {
+    const next = used + charWidth(char);
+    if (next > width - 1) break;
+    result += char;
+    used = next;
+  }
+  return `${result}…`.padEnd(width);
 }
 
 function firstSelectableIndex(items: TuiPickerItem[]): number {
