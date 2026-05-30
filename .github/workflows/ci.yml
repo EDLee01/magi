@@ -48,6 +48,10 @@ jobs:
       - name: Run model task benchmark
         run: npm run test:model-tasks
 
+      - name: Install Playwright Chromium
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
+        run: npx playwright install --with-deps chromium
+
       - name: Run capability eval gates
         if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         run: |
