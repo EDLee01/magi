@@ -1800,6 +1800,11 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h10ProviderRouting = readRecord(h10?.providerRouting);
   const h10RetryProviders = readStringList(h10ProviderRouting.retryProviders);
   const h10RetryErrorKinds = readStringList(h10ProviderRouting.retryErrorKinds);
+  const h10RetryAttempts = Array.isArray(h10ProviderRouting.retryAttempts)
+    ? h10ProviderRouting.retryAttempts.filter(
+        (attempt): attempt is number => typeof attempt === "number" && Number.isFinite(attempt)
+      )
+    : [];
   const h10Limits = readRecord(h10?.limitResults);
   const h10Seen = Boolean(h10);
   const normalStreamDiagnosticsTasks = [h1, h2, h3, h4, h5, h7, h8, h9];
@@ -2095,6 +2100,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h10Stream.sessionErrorSeen !== false) failures.push("H10SessionErrorSeen=true");
   if (readNumber(h10ProviderRouting.retryCount) !== 2)
     failures.push("H10ProviderRetryAuditCount != 2");
+  if (JSON.stringify(h10RetryAttempts) !== JSON.stringify([1, 2])) {
+    failures.push("H10RetryAttemptsMismatch");
+  }
   if (readNumber(h10ProviderRouting.fallbackCount) !== 1)
     failures.push("H10ProviderFallbackAuditCount != 1");
   if (!h10RetryProviders.includes("openai")) failures.push("H10RetryProviderMissing");
@@ -2330,6 +2338,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H10ProviderFallbackStream: h10Stream.providerFallbackSeen === true,
       H10SessionErrorSeen: h10Stream.sessionErrorSeen === true,
       H10ProviderRetryAuditCount: readNumber(h10ProviderRouting.retryCount),
+      H10RetryAttempts: h10RetryAttempts,
       H10ProviderFallbackAuditCount: readNumber(h10ProviderRouting.fallbackCount),
       H10RetryProviders: h10RetryProviders,
       H10RetryErrorKinds: h10RetryErrorKinds,
@@ -2388,6 +2397,33 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const resultNames = results
     .map((result) => (typeof result.name === "string" ? result.name : ""))
     .filter(Boolean);
+  const memoryResultEvidenceCount = results.filter((result) => {
+    const minResults = readNumber(result.minResults);
+    const resultCount = readNumber(result.resultCount);
+    const expectedMatched = readStringList(result.expectedMatched);
+    const expectedMissing = readStringList(result.expectedMissing);
+    const forbiddenClear = readStringList(result.forbiddenClear);
+    const forbiddenFound = readStringList(result.forbiddenFound);
+    const topResults = readRecordList(result.topResults);
+    return (
+      result.passed === true &&
+      readNumber(result.score) >= 1 &&
+      minResults > 0 &&
+      resultCount >= minResults &&
+      expectedMatched.length > 0 &&
+      expectedMissing.length === 0 &&
+      (forbiddenClear.length === 0 || forbiddenFound.length === 0) &&
+      forbiddenFound.length === 0 &&
+      topResults.length >= Math.min(resultCount, minResults) &&
+      topResults.every(
+        (topResult) =>
+          typeof topResult.title === "string" &&
+          typeof topResult.file === "string" &&
+          typeof topResult.nodeId === "string" &&
+          readNumber(topResult.score) > 0
+      )
+    );
+  }).length;
   const maintenanceRecallSeen = resultNames.includes("protected workflow survives maintenance");
   const workflowGraphRecallSeen = resultNames.includes("workflow graph recalls second-hop habit");
   const conflictGroupViewSeen = details.conflictGroupViewSeen === true;
@@ -2489,6 +2525,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (results.length < 11) failures.push(`cases=${results.length}`);
+  if (memoryResultEvidenceCount !== results.length) {
+    failures.push(`memoryResultEvidenceCount=${memoryResultEvidenceCount}`);
+  }
   if (assertions < 70) failures.push(`assertions=${assertions}`);
   if (filesVerified < 10) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
@@ -2530,6 +2569,8 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       minScore: readNumber(report.minScore),
       assertions,
       filesVerified,
+      memoryResultEvidenceCount,
+      memoryResultEvidenceTarget: results.length,
       maintenanceRecallSeen,
       workflowGraphRecallSeen,
       conflictGroupViewSeen,

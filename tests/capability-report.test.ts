@@ -269,6 +269,7 @@ describe("capability report", () => {
         multilingualProjectRecallSeen: false,
         multiNodeSupersededCleanupSeen: false,
         maintenanceConfigBoundarySeen: false,
+        resultEvidenceSeen: false,
         assertions: 4,
         filesVerified: 1
       }),
@@ -291,6 +292,7 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(output).toContain("- memory: failed");
     expect(output).toContain("thresholdPassed=false");
+    expect(output).toContain("memoryResultEvidenceCount=2");
     expect(output).toContain("assertions=4");
     expect(output).toContain("filesVerified=1");
     expect(output).toContain("maintenanceRecallSeen=false");
@@ -1119,6 +1121,7 @@ describe("capability report", () => {
         "H10AssistantMessage=false",
         "H10FallbackFromProviderMismatch",
         "H10FallbackErrorKindMismatch",
+        "H10RetryAttemptsMismatch",
         "assertions=2",
         "filesVerified=1",
         "toolCallCount=2",
@@ -1993,6 +1996,7 @@ function complexHarnessReport(
         },
         providerRouting: {
           retryCount: 2,
+          retryAttempts: [1, 2],
           fallbackCount: 1,
           retryProviders: ["openai"],
           retryErrorKinds: ["server-error"],
@@ -3377,6 +3381,7 @@ function memoryReport(input: {
   multilingualProjectRecallSeen?: boolean;
   multiNodeSupersededCleanupSeen?: boolean;
   maintenanceConfigBoundarySeen?: boolean;
+  resultEvidenceSeen?: boolean;
   assertions?: number;
   filesVerified?: number;
 }): Record<string, unknown> {
@@ -3404,7 +3409,31 @@ function memoryReport(input: {
         ])
   ];
   const total = names.length;
-  const results = [...names.map((name) => ({ name, passed: true }))];
+  const resultEvidenceSeen = input.resultEvidenceSeen !== false;
+  const results = names.map((name, index) => {
+    const resultEvidencePassed = resultEvidenceSeen || index > 0;
+    return {
+      name,
+      passed: resultEvidencePassed,
+      score: resultEvidencePassed ? 1 : 0,
+      expectedMatched: [name],
+      expectedMissing: resultEvidencePassed ? [] : ["missing expected memory"],
+      forbiddenClear: ["stale memory"],
+      forbiddenFound: resultEvidencePassed ? [] : ["stale memory"],
+      minResults: 1,
+      resultCount: resultEvidencePassed ? 1 : 0,
+      topResults: resultEvidencePassed
+        ? [
+            {
+              title: name,
+              file: `memory-${index + 1}.md`,
+              score: 1,
+              nodeId: `node-${index + 1}`
+            }
+          ]
+        : []
+    };
+  });
   return {
     version: 1,
     name: "memory business recall",
