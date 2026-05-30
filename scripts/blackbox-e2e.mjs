@@ -6,7 +6,8 @@ import { mkdir, rm } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { PassThrough, Writable } from "node:stream";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cliPath = path.join(repoRoot, "dist", "cli.js");
@@ -2522,6 +2523,75 @@ async function scenarioTuiRequiresTty() {
   });
 }
 
+async function scenarioSlashSuggestionPrompt() {
+  return await withTempWorkspace("slash-suggestion", async () => {
+    const { readTuiPrompt } = await import(
+      pathToFileURL(path.join(repoRoot, "dist", "tui", "prompt-reader.js")).href
+    );
+    const slashCommands = [
+      { name: "model", usage: "/model [alias]", description: "Switch model alias" },
+      { name: "resume", usage: "/resume [query]", description: "Search and resume a session" },
+      { name: "status", usage: "/status", description: "Show session status" }
+    ];
+
+    const filtered = createPromptHarness();
+    const filteredPrompt = readTuiPrompt({
+      input: filtered.input,
+      output: filtered.output,
+      prompt: "> ",
+      slashCommands
+    });
+    filtered.input.write("/re");
+    await sleep(10);
+    const filteredVisible = stripTerminalControls(filtered.stdout());
+    assert(
+      filteredVisible.includes("commands matching /re"),
+      "slash suggestion did not render filtered header"
+    );
+    assert(filteredVisible.includes("/resume"), "slash suggestion missed matching /resume command");
+    assert(!filteredVisible.includes("/model"), "slash suggestion did not filter nonmatching /model");
+    filtered.input.write("\r");
+    assert(
+      (await filteredPrompt) === "/resume",
+      "filtered slash suggestion did not submit /resume"
+    );
+
+    const selected = createPromptHarness();
+    const selectedPrompt = readTuiPrompt({
+      input: selected.input,
+      output: selected.output,
+      prompt: "> ",
+      slashCommands
+    });
+    selected.input.write("/");
+    await sleep(10);
+    const menuVisible = stripTerminalControls(selected.stdout());
+    assert(menuVisible.includes("commands"), "slash suggestion menu did not render for slash input");
+    assert(menuVisible.includes("Tab complete"), "slash suggestion menu missed keyboard footer");
+    selected.input.write("\x1b[B");
+    await sleep(10);
+    assert(
+      stripTerminalControls(selected.stdout()).includes("❯ /resume"),
+      "slash suggestion arrow selection did not move to /resume"
+    );
+    selected.input.write("\r");
+    assert(
+      (await selectedPrompt) === "/resume",
+      "slash suggestion arrow selection did not submit /resume"
+    );
+
+    return {
+      score: 1,
+      assertions: [
+        "slash suggestion menu rendered for slash input",
+        "slash suggestion filtered command descriptions",
+        "slash suggestion arrow selection submitted command",
+        "slash suggestion enter submitted filtered command"
+      ]
+    };
+  });
+}
+
 async function scenarioHarnessCiTuiGuard() {
   return await withTempWorkspace("ci-tui-guard", async ({ configDir, workDir }) => {
     const ciDefault = shouldRunInteractiveTui({ MAGI_BLACKBOX_TUI: "1", CI: "true" });
@@ -2566,6 +2636,36 @@ function shouldRunInteractiveTui(env = process.env) {
     env.MAGI_BLACKBOX_TUI === "1" &&
     (env.MAGI_BLACKBOX_TUI_FORCE === "1" || env.CI !== "true")
   );
+}
+
+function createPromptHarness() {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.isRaw = false;
+  input.setRawMode = (mode) => {
+    input.isRaw = mode;
+    return input;
+  };
+  let text = "";
+  const output = new Writable({
+    write(chunk, _encoding, callback) {
+      text += chunk.toString("utf8");
+      callback();
+    }
+  });
+  output.columns = 80;
+  return {
+    input,
+    output,
+    stdout: () => text
+  };
+}
+
+function stripTerminalControls(text) {
+  return text
+    .replace(/\x1b\[[0-9;?]*(?:[ -/]*[@-~])/g, "")
+    .replace(/\x1b[>=]/g, "")
+    .replace(/\r/g, "");
 }
 
 function shellQuote(value) {
@@ -2633,6 +2733,7 @@ async function main() {
     ["tool feedback ranking", scenarioToolFeedbackRanking],
     ["plan mode", scenarioPlanMode],
     ["control approval flow", scenarioControlApprovalFlow],
+    ["slash suggestion prompt", scenarioSlashSuggestionPrompt],
     ["TUI requires TTY", scenarioTuiRequiresTty],
     ["harness CI TUI guard", scenarioHarnessCiTuiGuard]
   ];

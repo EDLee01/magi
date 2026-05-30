@@ -103,7 +103,8 @@ describe("capability report", () => {
         longCycleSkillIterationSeen: false,
         harnessCiTuiGuardSeen: false,
         streamJsonProtocolSeen: false,
-        barePromptHeadlessSeen: false
+        barePromptHeadlessSeen: false,
+        slashSuggestionPromptSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -137,6 +138,7 @@ describe("capability report", () => {
         "harnessCiTuiGuardSeen=false",
         "streamJsonProtocolSeen=false",
         "barePromptHeadlessSeen=false",
+        "slashSuggestionPromptSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -864,6 +866,7 @@ function harnessReport(input: {
   harnessCiTuiGuardSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
+  slashSuggestionPromptSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -881,7 +884,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 51,
+      assertions: input.assertions ?? 55,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -913,7 +916,8 @@ function harnessReport(input: {
                   ...skillLearningAssertions(input),
                   ...harnessGuardAssertions(input),
                   ...streamJsonProtocolAssertions(input),
-                  ...barePromptHeadlessAssertions(input)
+                  ...barePromptHeadlessAssertions(input),
+                  ...slashSuggestionPromptAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -1002,6 +1006,17 @@ function barePromptHeadlessAssertions(input: { barePromptHeadlessSeen?: boolean 
         "bare prompt argument entered headless provider path",
         "bare prompt stream-json emitted valid lifecycle events",
         "bare prompt headless session completed"
+      ];
+}
+
+function slashSuggestionPromptAssertions(input: { slashSuggestionPromptSeen?: boolean }): string[] {
+  return input.slashSuggestionPromptSeen === false
+    ? []
+    : [
+        "slash suggestion menu rendered for slash input",
+        "slash suggestion filtered command descriptions",
+        "slash suggestion arrow selection submitted command",
+        "slash suggestion enter submitted filtered command"
       ];
 }
 

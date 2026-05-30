@@ -12,12 +12,13 @@ or file structure.
 
 Already covered by automated tests:
 
-- `magi --version`, `doctor`, `config`, `-p`, session creation and resume basics.
+- `magi --version`, `doctor`, `config`, `-p`, bare prompt headless execution,
+  session creation and resume basics.
 - Isolation from `~/.claude`, legacy paths, `CLAUDE_*` primary config, and `magi-agent` binary.
 - Provider routing, model aliases, fallback routing.
 - File read/search/write, shell guardrails, git summary.
 - SQLite sessions, jobs, audit, usage.
-- TUI basic startup and slash command dispatch.
+- TUI basic startup, slash command dispatch, and `/` suggestion menu behavior.
 - MCP list/call approval basics.
 - Control API pairing, auth, jobs, approvals, SSE, agents.
 - Multi-agent queue and write conflict detection.
@@ -27,10 +28,9 @@ Already covered by automated tests:
 
 Not yet fully covered:
 
-- Slash-command suggestion UI when typing `/`.
 - Searchable `/resume` and `-r` picker UI.
 - TUI keyboard navigation polish.
-- Full stream-json event protocol parity.
+- Broader stream-json parity for less common event types.
 - Tool permission modes across every tool.
 - Complex multi-step task harness with objective scoring.
 - Long-running coding task recovery after interruption.
@@ -118,7 +118,9 @@ Acceptance:
   only enters interactive mode.
 - If bare prompt runs headless, output format follows normal text rules.
 
-Current status: not implemented.
+Current status: implemented and black-box gated. Bare prompt arguments run
+through the headless prompt path and are covered by `npm run test:blackbox` plus
+the capability report.
 
 ### A3. Help Shape
 
@@ -167,7 +169,10 @@ Acceptance:
 - Esc closes the menu and keeps input intact.
 - Unknown slash commands produce a concise error.
 
-Current status: not implemented. Slash dispatch exists but no guided menu.
+Current status: implemented and black-box gated for prompt-reader behavior. The
+menu renders on `/`, filters typed prefixes, supports arrow selection, and
+submits the selected command with Enter. Full interactive TUI polish remains
+tracked separately.
 
 ### B2. Slash Command Coverage
 
@@ -317,7 +322,10 @@ Acceptance:
 - No non-JSON text mixed into stream.
 - Error event is valid JSON.
 
-Current status: not implemented; current stream-json is a single result object.
+Current status: implemented for the main headless lifecycle and black-box
+gated. The harness verifies JSONL-only output, user/assistant message events,
+tool started/completed events, preserved raw agent events, and completed status.
+Broader parity for less common event types remains future coverage.
 
 ## E. Permission and Tool Policy
 
