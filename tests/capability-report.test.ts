@@ -305,6 +305,44 @@ describe("capability report", () => {
     );
   });
 
+  it("fails blackbox alignment when provider model routing evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({
+        name: "blackbox-e2e",
+        scenarios: 9,
+        providerCalls: 118,
+        providerModelsSeen: false
+      }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        conflictExplanationSeen: true,
+        rollbackVerified: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
+    });
+
+    const blackbox = report.checks.find((check) => check.id === "blackbox");
+    expect(report.status).toBe("failed");
+    expect(blackbox?.failures).toEqual(
+      expect.arrayContaining([
+        "providerModelCoverageSeen=false",
+        "retryFallbackModelsSeen=false",
+        "tuiModelPickerModelsSeen=false"
+      ])
+    );
+  });
+
   it("fails memory alignment when recall misses the threshold", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
@@ -1333,6 +1371,7 @@ describe("capability report", () => {
 function providerSurface(input: {
   callCount: number;
   learningDraft?: boolean;
+  models?: string[];
   toolCounts?: Record<string, number>;
   broken?: boolean;
 }): Record<string, unknown> {
@@ -1343,6 +1382,7 @@ function providerSurface(input: {
     callCount: input.callCount,
     exposedToolCount: exposedTools.length,
     exposedTools,
+    ...(input.models ? { models: input.models } : {}),
     ...(input.toolCounts ? { toolCounts: input.toolCounts } : {})
   };
 }
@@ -1384,6 +1424,7 @@ function harnessReport(input: {
   toolPolicySeen?: boolean;
   dangerousPermissionMatrixSeen?: boolean;
   providerToolSurfaceSeen?: boolean;
+  providerModelsSeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
   tuiKeyboardInputSeen?: boolean;
@@ -1400,8 +1441,12 @@ function harnessReport(input: {
     failureKind: "assertion"
   }));
   const providerToolSurfaceBroken = input.providerToolSurfaceSeen === false;
+  const providerModelsBroken = input.providerModelsSeen === false;
+  const mainModels = ["mock-main"];
+  const retryModels = providerModelsBroken ? mainModels : ["mock-backup", "mock-main"];
+  const pickerModels = providerModelsBroken ? mainModels : ["mock-fast"];
   const genericProviderScenarios = Array.from(
-    { length: Math.max(0, Math.min(input.scenarios, 23) - 3) },
+    { length: Math.max(0, Math.min(input.scenarios, 23) - 5) },
     (_, index) => ({
       name: `provider tool surface ${index + 1}`,
       status: "passed",
@@ -1410,7 +1455,11 @@ function harnessReport(input: {
       failureKind: null,
       details: {
         assertions: [],
-        provider: providerSurface({ callCount: 1, broken: providerToolSurfaceBroken })
+        provider: providerSurface({
+          callCount: 1,
+          models: mainModels,
+          broken: providerToolSurfaceBroken
+        })
       }
     })
   );
@@ -1453,6 +1502,7 @@ function harnessReport(input: {
               : providerSurface({
                   callCount: 11,
                   learningDraft: true,
+                  models: mainModels,
                   broken: providerToolSurfaceBroken,
                   toolCounts: {
                     ToolSearch: 2,
@@ -1530,7 +1580,11 @@ function harnessReport(input: {
           provider:
             input.providerRetryFallbackSeen === false
               ? { callCount: 0 }
-              : providerSurface({ callCount: 4, broken: providerToolSurfaceBroken }),
+              : providerSurface({
+                  callCount: 4,
+                  models: retryModels,
+                  broken: providerToolSurfaceBroken
+                }),
           retry:
             input.providerRetryFallbackSeen === false
               ? { primaryCalls: 0, backupCalls: 0 }
@@ -1550,6 +1604,7 @@ function harnessReport(input: {
               ? { callCount: 0, toolCounts: {} }
               : providerSurface({
                   callCount: 3,
+                  models: mainModels,
                   broken: providerToolSurfaceBroken,
                   toolCounts: { Grep: 4, Glob: 4, ToolSearch: 1 }
                 }),
@@ -1559,6 +1614,36 @@ function harnessReport(input: {
               : { grepFailures: 4, globSuccesses: 4, recoveryGuidanceSeen: true },
           filesVerified:
             input.toolFeedbackRankingSeen === false ? [] : ["state/tool-usage-stats.json"]
+        }
+      },
+      {
+        name: "TUI stateful pickers",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          assertions: tuiStatefulPickersAssertions(input),
+          provider: providerSurface({
+            callCount: 2,
+            models: pickerModels,
+            broken: providerToolSurfaceBroken
+          })
+        }
+      },
+      {
+        name: "TUI picker keyboard navigation",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          assertions: tuiPickerKeyboardNavigationAssertions(input),
+          provider: providerSurface({
+            callCount: 2,
+            models: pickerModels,
+            broken: providerToolSurfaceBroken
+          })
         }
       },
       ...genericProviderScenarios

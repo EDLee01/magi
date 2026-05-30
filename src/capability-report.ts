@@ -175,13 +175,41 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const retryFallback = scenarios.find((scenario) => scenario.name === "retry fallback");
   const retryFallbackDetails = readRecord(retryFallback?.details);
   const retryFallbackProvider = readRecord(retryFallbackDetails.provider);
+  const retryFallbackModels = readStringList(retryFallbackProvider.models);
   const retryFallbackRetry = readRecord(retryFallbackDetails.retry);
+  const tuiStatefulPickers = scenarios.find((scenario) => scenario.name === "TUI stateful pickers");
+  const tuiStatefulPickersProvider = readRecord(readRecord(tuiStatefulPickers?.details).provider);
+  const tuiStatefulPickerModels = readStringList(tuiStatefulPickersProvider.models);
+  const tuiPickerKeyboardNavigation = scenarios.find(
+    (scenario) => scenario.name === "TUI picker keyboard navigation"
+  );
+  const tuiPickerKeyboardNavigationProvider = readRecord(
+    readRecord(tuiPickerKeyboardNavigation?.details).provider
+  );
+  const tuiPickerKeyboardNavigationModels = readStringList(
+    tuiPickerKeyboardNavigationProvider.models
+  );
   const toolFeedbackRanking = scenarios.find(
     (scenario) => scenario.name === "tool feedback ranking"
   );
   const toolFeedbackRankingDetails = readRecord(toolFeedbackRanking?.details);
   const toolFeedbackRankingProvider = readRecord(toolFeedbackRankingDetails.provider);
   const toolFeedback = readRecord(toolFeedbackRankingDetails.toolFeedback);
+  const providerModels = Array.from(
+    new Set(
+      scenarios.flatMap((scenario) =>
+        readStringList(readRecord(readRecord(scenario.details).provider).models)
+      )
+    )
+  ).sort();
+  const providerModelCoverageSeen = ["mock-backup", "mock-fast", "mock-main"].every((model) =>
+    providerModels.includes(model)
+  );
+  const retryFallbackModelsSeen =
+    retryFallbackModels.includes("mock-backup") && retryFallbackModels.includes("mock-main");
+  const tuiModelPickerModelsSeen =
+    tuiStatefulPickerModels.includes("mock-fast") &&
+    tuiPickerKeyboardNavigationModels.includes("mock-fast");
   const assertionList = scenarios.flatMap((scenario) =>
     readStringList(readRecord(scenario.details).assertions)
   );
@@ -459,6 +487,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!complexWorkflowLearningDraftExposed) {
     failures.push("complexWorkflowLearningDraftExposed=false");
   }
+  if (!providerModelCoverageSeen) failures.push("providerModelCoverageSeen=false");
+  if (!retryFallbackModelsSeen) failures.push("retryFallbackModelsSeen=false");
+  if (!tuiModelPickerModelsSeen) failures.push("tuiModelPickerModelsSeen=false");
   if (!complexWorkflowSeen) failures.push("complexWorkflowSeen=false");
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -523,6 +554,13 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       providerToolSurfaceTarget,
       providerToolSurfaceBadCount,
       complexWorkflowLearningDraftExposed,
+      providerModels,
+      providerModelCoverageSeen,
+      retryFallbackModels,
+      retryFallbackModelsSeen,
+      tuiStatefulPickerModels,
+      tuiPickerKeyboardNavigationModels,
+      tuiModelPickerModelsSeen,
       complexWorkflowSeen,
       complexWorkflowProviderCalls: readNumber(complexWorkflowProvider.callCount),
       complexWorkflowFilesVerified: complexWorkflowFilesVerified.length,
