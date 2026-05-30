@@ -223,6 +223,11 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("ToolSearch recovery guidance visible") &&
     assertionList.includes("ToolSearch feedback returned to model") &&
     assertionList.includes("tool feedback ranking completed three-turn provider loop");
+  const memoryGraphLinkSeen =
+    assertionList.includes("memory draft applied") &&
+    assertionList.includes("graph edge created") &&
+    assertionList.includes("linked neighbor retrieved through graph search") &&
+    assertionList.includes("memory graph sqlite persisted");
   const memoryCorrectionMaintenanceSeen =
     assertionList.includes("stale memory retrieved before correction") &&
     assertionList.includes("memory correct disputed old node") &&
@@ -346,7 +351,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 186) failures.push(`assertions=${assertions}`);
+  if (assertions < 187) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -367,6 +372,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!controlApprovalFlowSeen) failures.push("controlApprovalFlowSeen=false");
   if (!providerRetryFallbackSeen) failures.push("providerRetryFallbackSeen=false");
   if (!toolFeedbackRankingSeen) failures.push("toolFeedbackRankingSeen=false");
+  if (!memoryGraphLinkSeen) failures.push("memoryGraphLinkSeen=false");
   if (!memoryCorrectionMaintenanceSeen) {
     failures.push("memoryCorrectionMaintenanceSeen=false");
   }
@@ -422,6 +428,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       controlApprovalFlowSeen,
       providerRetryFallbackSeen,
       toolFeedbackRankingSeen,
+      memoryGraphLinkSeen,
       memoryCorrectionMaintenanceSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,

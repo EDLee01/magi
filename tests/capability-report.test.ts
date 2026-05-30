@@ -116,6 +116,7 @@ describe("capability report", () => {
         controlApprovalFlowSeen: false,
         providerRetryFallbackSeen: false,
         toolFeedbackRankingSeen: false,
+        memoryGraphLinkSeen: false,
         memoryCorrectionMaintenanceSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
@@ -176,6 +177,7 @@ describe("capability report", () => {
         "controlApprovalFlowSeen=false",
         "providerRetryFallbackSeen=false",
         "toolFeedbackRankingSeen=false",
+        "memoryGraphLinkSeen=false",
         "memoryCorrectionMaintenanceSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
@@ -1036,6 +1038,7 @@ function harnessReport(input: {
   controlApprovalFlowSeen?: boolean;
   providerRetryFallbackSeen?: boolean;
   toolFeedbackRankingSeen?: boolean;
+  memoryGraphLinkSeen?: boolean;
   memoryCorrectionMaintenanceSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
@@ -1070,7 +1073,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 186,
+      assertions: input.assertions ?? 187,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1112,6 +1115,7 @@ function harnessReport(input: {
                   ...controlApprovalFlowAssertions(input),
                   ...providerRetryFallbackAssertions(input),
                   ...toolFeedbackRankingAssertions(input),
+                  ...memoryGraphLinkAssertions(input),
                   ...memoryCorrectionMaintenanceAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
@@ -2002,6 +2006,17 @@ function toolFeedbackRankingAssertions(input: { toolFeedbackRankingSeen?: boolea
         "ToolSearch recovery guidance visible",
         "ToolSearch feedback returned to model",
         "tool feedback ranking completed three-turn provider loop"
+      ];
+}
+
+function memoryGraphLinkAssertions(input: { memoryGraphLinkSeen?: boolean }): string[] {
+  return input.memoryGraphLinkSeen === false
+    ? []
+    : [
+        "memory draft applied",
+        "graph edge created",
+        "linked neighbor retrieved through graph search",
+        "memory graph sqlite persisted"
       ];
 }
 

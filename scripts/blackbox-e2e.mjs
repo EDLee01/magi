@@ -4075,13 +4075,17 @@ async function scenarioMemoryGraphLink() {
       search.includes("Linked workflow neighbor"),
       "memory graph search missed linked neighbor"
     );
+    const graphDbPath = path.join(configDir, "state", "sessions.sqlite");
+    assert(existsSync(graphDbPath), "memory graph sqlite database was not written");
     return {
       score: 1,
       assertions: [
         "memory draft applied",
         "graph edge created",
-        "linked neighbor retrieved through graph search"
-      ]
+        "linked neighbor retrieved through graph search",
+        "memory graph sqlite persisted"
+      ],
+      filesVerified: ["state/sessions.sqlite"]
     };
   });
 }
