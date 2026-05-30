@@ -420,13 +420,46 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const ossStyleOpenSourceMigrationFileEditCalls = readNumber(
     ossStyleOpenSourceMigrationToolCounts.FileEdit
   );
+  const securityMiddlewarePolicyMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "security_middleware_policy_migration"
+  );
+  const securityMiddlewarePolicyMigrationDetails = readRecord(
+    securityMiddlewarePolicyMigration ? readRecord(securityMiddlewarePolicyMigration).details : {}
+  );
+  const securityMiddlewarePolicyMigrationToolCounts = readRecord(
+    securityMiddlewarePolicyMigrationDetails.toolCounts
+  );
+  const securityMiddlewarePolicyMigrationTaskSeen = taskClasses.has(
+    "security_middleware_policy_migration"
+  );
+  const securityMiddlewarePolicyMigrationBashCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.Bash
+  );
+  const securityMiddlewarePolicyMigrationGlobCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.Glob
+  );
+  const securityMiddlewarePolicyMigrationGrepCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.Grep
+  );
+  const securityMiddlewarePolicyMigrationFileReadCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.FileRead
+  );
+  const securityMiddlewarePolicyMigrationFilePatchCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.FilePatch
+  );
+  const securityMiddlewarePolicyMigrationFileWriteCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.FileWrite
+  );
+  const securityMiddlewarePolicyMigrationFileEditCalls = readNumber(
+    securityMiddlewarePolicyMigrationToolCounts.FileEdit
+  );
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 15) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 15) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 16) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 16) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -446,9 +479,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!ossStyleOpenSourceMigrationTaskSeen) {
     failures.push("ossStyleOpenSourceMigrationTask=false");
   }
-  if (assertions < 154) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 71) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 148) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!securityMiddlewarePolicyMigrationTaskSeen) {
+    failures.push("securityMiddlewarePolicyMigrationTask=false");
+  }
+  if (assertions < 178) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 81) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 167) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -714,6 +750,54 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (ossStyleOpenSourceMigrationDetails.ossStyleMigrationVerified !== true) {
     failures.push("ossStyleMigrationVerified=false");
   }
+  if (securityMiddlewarePolicyMigrationBashCalls !== 2) {
+    failures.push("securityMiddlewarePolicyMigrationBashCalls != 2");
+  }
+  if (securityMiddlewarePolicyMigrationGlobCalls !== 1) {
+    failures.push("securityMiddlewarePolicyMigrationGlobCalls != 1");
+  }
+  if (securityMiddlewarePolicyMigrationGrepCalls !== 1) {
+    failures.push("securityMiddlewarePolicyMigrationGrepCalls != 1");
+  }
+  if (securityMiddlewarePolicyMigrationFileReadCalls !== 10) {
+    failures.push("securityMiddlewarePolicyMigrationFileReadCalls != 10");
+  }
+  if (securityMiddlewarePolicyMigrationFilePatchCalls < 7) {
+    failures.push("securityMiddlewarePolicyMigrationFilePatchCalls < 7");
+  }
+  if (securityMiddlewarePolicyMigrationFileWriteCalls !== 0) {
+    failures.push("securityMiddlewarePolicyMigrationFileWrite used");
+  }
+  if (securityMiddlewarePolicyMigrationFileEditCalls !== 0) {
+    failures.push("securityMiddlewarePolicyMigrationFileEdit used");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.securityPolicyRepoDiscoveryVerified !== true) {
+    failures.push("securityPolicyRepoDiscoveryVerified=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.securityPolicyConfigMigrated !== true) {
+    failures.push("securityPolicyConfigMigrated=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.securityMiddlewareMigrated !== true) {
+    failures.push("securityMiddlewareMigrated=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.securityClientMigrated !== true) {
+    failures.push("securityClientMigrated=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.securityExamplesDocsChangelogMigrated !== true) {
+    failures.push("securityExamplesDocsChangelogMigrated=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.oldOwnedSecurityReferencesRemoved !== true) {
+    failures.push("oldOwnedSecurityReferencesRemoved=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.generatedSecuritySchemaUntouched !== true) {
+    failures.push("generatedSecuritySchemaUntouched=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.vendorSecurityShimUntouched !== true) {
+    failures.push("vendorSecurityShimUntouched=false");
+  }
+  if (securityMiddlewarePolicyMigrationDetails.securityMiddlewarePolicyVerified !== true) {
+    failures.push("securityMiddlewarePolicyVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -872,6 +956,32 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       ossVendorOptionsUntouched: ossStyleOpenSourceMigrationDetails.vendorOptionsUntouched === true,
       ossStyleMigrationVerified:
         ossStyleOpenSourceMigrationDetails.ossStyleMigrationVerified === true,
+      securityMiddlewarePolicyMigrationTaskSeen,
+      securityMiddlewarePolicyMigrationBashCalls,
+      securityMiddlewarePolicyMigrationGlobCalls,
+      securityMiddlewarePolicyMigrationGrepCalls,
+      securityMiddlewarePolicyMigrationFileReadCalls,
+      securityMiddlewarePolicyMigrationFilePatchCalls,
+      securityMiddlewarePolicyMigrationFileWriteCalls,
+      securityMiddlewarePolicyMigrationFileEditCalls,
+      securityPolicyRepoDiscoveryVerified:
+        securityMiddlewarePolicyMigrationDetails.securityPolicyRepoDiscoveryVerified === true,
+      securityPolicyConfigMigrated:
+        securityMiddlewarePolicyMigrationDetails.securityPolicyConfigMigrated === true,
+      securityMiddlewareMigrated:
+        securityMiddlewarePolicyMigrationDetails.securityMiddlewareMigrated === true,
+      securityClientMigrated:
+        securityMiddlewarePolicyMigrationDetails.securityClientMigrated === true,
+      securityExamplesDocsChangelogMigrated:
+        securityMiddlewarePolicyMigrationDetails.securityExamplesDocsChangelogMigrated === true,
+      oldOwnedSecurityReferencesRemoved:
+        securityMiddlewarePolicyMigrationDetails.oldOwnedSecurityReferencesRemoved === true,
+      generatedSecuritySchemaUntouched:
+        securityMiddlewarePolicyMigrationDetails.generatedSecuritySchemaUntouched === true,
+      vendorSecurityShimUntouched:
+        securityMiddlewarePolicyMigrationDetails.vendorSecurityShimUntouched === true,
+      securityMiddlewarePolicyVerified:
+        securityMiddlewarePolicyMigrationDetails.securityMiddlewarePolicyVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

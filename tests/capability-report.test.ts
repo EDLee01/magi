@@ -259,6 +259,7 @@ describe("capability report", () => {
         "largeRepoLongChainMigrationTask=false",
         "pluginApiCompatibilityMigrationTask=false",
         "ossStyleOpenSourceMigrationTask=false",
+        "securityMiddlewarePolicyMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -343,6 +344,20 @@ describe("capability report", () => {
         "ossGeneratedOptionsUntouched=false",
         "ossVendorOptionsUntouched=false",
         "ossStyleMigrationVerified=false",
+        "securityMiddlewarePolicyMigrationBashCalls != 2",
+        "securityMiddlewarePolicyMigrationGlobCalls != 1",
+        "securityMiddlewarePolicyMigrationGrepCalls != 1",
+        "securityMiddlewarePolicyMigrationFileReadCalls != 10",
+        "securityMiddlewarePolicyMigrationFilePatchCalls < 7",
+        "securityPolicyRepoDiscoveryVerified=false",
+        "securityPolicyConfigMigrated=false",
+        "securityMiddlewareMigrated=false",
+        "securityClientMigrated=false",
+        "securityExamplesDocsChangelogMigrated=false",
+        "oldOwnedSecurityReferencesRemoved=false",
+        "generatedSecuritySchemaUntouched=false",
+        "vendorSecurityShimUntouched=false",
+        "securityMiddlewarePolicyVerified=false",
         "regressions=1"
       ])
     );
@@ -1026,6 +1041,24 @@ function modelTaskReport(
       vendorOptionsUntouched: boolean;
       ossStyleMigrationVerified: boolean;
     };
+    securityMiddlewarePolicyMigration: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      securityPolicyRepoDiscoveryVerified: boolean;
+      securityPolicyConfigMigrated: boolean;
+      securityMiddlewareMigrated: boolean;
+      securityClientMigrated: boolean;
+      securityExamplesDocsChangelogMigrated: boolean;
+      oldOwnedSecurityReferencesRemoved: boolean;
+      generatedSecuritySchemaUntouched: boolean;
+      vendorSecurityShimUntouched: boolean;
+      securityMiddlewarePolicyVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -1044,6 +1077,7 @@ function modelTaskReport(
     "mixed_language_contract_migration",
     "large_repo_long_chain_migration",
     "plugin_api_compatibility_migration",
+    "security_middleware_policy_migration",
     "oss_style_open_source_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
@@ -1164,14 +1198,32 @@ function modelTaskReport(
     vendorOptionsUntouched: true,
     ossStyleMigrationVerified: true
   };
+  const securityMiddlewarePolicyMigration = overrides.securityMiddlewarePolicyMigration ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 10,
+    filePatchCalls: 7,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    securityPolicyRepoDiscoveryVerified: true,
+    securityPolicyConfigMigrated: true,
+    securityMiddlewareMigrated: true,
+    securityClientMigrated: true,
+    securityExamplesDocsChangelogMigrated: true,
+    oldOwnedSecurityReferencesRemoved: true,
+    generatedSecuritySchemaUntouched: true,
+    vendorSecurityShimUntouched: true,
+    securityMiddlewarePolicyVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 17,
-    assertions: overrides.assertions ?? 154,
-    filesVerified: overrides.filesVerified ?? 71,
-    toolCallCount: overrides.toolCallCount ?? 148,
+    assertions: overrides.assertions ?? 178,
+    filesVerified: overrides.filesVerified ?? 81,
+    toolCallCount: overrides.toolCallCount ?? 167,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1350,6 +1402,36 @@ function modelTaskReport(
               generatedOptionsUntouched: ossStyleOpenSourceMigration.generatedOptionsUntouched,
               vendorOptionsUntouched: ossStyleOpenSourceMigration.vendorOptionsUntouched,
               ossStyleMigrationVerified: ossStyleOpenSourceMigration.ossStyleMigrationVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "security_middleware_policy_migration"
+          ? {
+              toolCounts: {
+                Bash: securityMiddlewarePolicyMigration.bashCalls,
+                Glob: securityMiddlewarePolicyMigration.globCalls,
+                Grep: securityMiddlewarePolicyMigration.grepCalls,
+                FileRead: securityMiddlewarePolicyMigration.fileReadCalls,
+                FilePatch: securityMiddlewarePolicyMigration.filePatchCalls,
+                FileWrite: securityMiddlewarePolicyMigration.fileWriteCalls,
+                FileEdit: securityMiddlewarePolicyMigration.fileEditCalls
+              },
+              securityPolicyRepoDiscoveryVerified:
+                securityMiddlewarePolicyMigration.securityPolicyRepoDiscoveryVerified,
+              securityPolicyConfigMigrated:
+                securityMiddlewarePolicyMigration.securityPolicyConfigMigrated,
+              securityMiddlewareMigrated:
+                securityMiddlewarePolicyMigration.securityMiddlewareMigrated,
+              securityClientMigrated: securityMiddlewarePolicyMigration.securityClientMigrated,
+              securityExamplesDocsChangelogMigrated:
+                securityMiddlewarePolicyMigration.securityExamplesDocsChangelogMigrated,
+              oldOwnedSecurityReferencesRemoved:
+                securityMiddlewarePolicyMigration.oldOwnedSecurityReferencesRemoved,
+              generatedSecuritySchemaUntouched:
+                securityMiddlewarePolicyMigration.generatedSecuritySchemaUntouched,
+              vendorSecurityShimUntouched:
+                securityMiddlewarePolicyMigration.vendorSecurityShimUntouched,
+              securityMiddlewarePolicyVerified:
+                securityMiddlewarePolicyMigration.securityMiddlewarePolicyVerified
             }
           : {})
       }

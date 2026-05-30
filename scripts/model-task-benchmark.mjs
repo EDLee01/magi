@@ -3691,6 +3691,520 @@ async function scenarioPluginApiCompatibilityMigrationTask() {
   });
 }
 
+async function scenarioSecurityMiddlewarePolicyMigrationTask() {
+  return await withWorkspace("security-middleware-policy", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "packages", "server", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "config"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "client", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "examples", "express"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "changelog"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "packages", "server", "src", "securityPolicy.js"),
+      [
+        "export const defaultSecurityPolicy = {",
+        '  trustedOrigins: ["https://app.example"],',
+        '  frameAncestors: ["\'self\'"],',
+        "  reportOnly: false",
+        "};",
+        "",
+        "export function normalizeSecurityPolicy(options = {}) {",
+        "  return {",
+        "    trustedOrigins: options.trustedOrigins ?? defaultSecurityPolicy.trustedOrigins,",
+        "    frameAncestors: options.frameAncestors ?? defaultSecurityPolicy.frameAncestors,",
+        "    reportOnly: options.reportOnly ?? defaultSecurityPolicy.reportOnly",
+        "  };",
+        "}",
+        "",
+        "export function createSecurityHeaders(options = {}) {",
+        "  const policy = normalizeSecurityPolicy(options);",
+        "  return {",
+        '    "access-control-allow-origin": policy.trustedOrigins.join(" "),',
+        '    "content-security-policy": `frame-ancestors ${policy.frameAncestors.join(" ")}`',
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "server", "src", "middleware.js"),
+      [
+        'import { createSecurityHeaders } from "./securityPolicy.js";',
+        "",
+        "export function createSecurityMiddleware(options = {}) {",
+        '  const trustedOrigins = options.trustedOrigins ?? ["https://app.example"];',
+        "  return (request, response, next) => {",
+        "    const origin = request.origin ?? trustedOrigins[0];",
+        "    response.headers = createSecurityHeaders({ ...options, trustedOrigins: [origin] });",
+        "    next?.();",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "config", "security-defaults.json"),
+      [
+        "{",
+        '  "trustedOrigins": ["https://app.example"],',
+        '  "frameAncestors": ["\'self\'"],',
+        '  "reportOnly": false',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "client", "src", "securityClient.js"),
+      [
+        "export function summarizeSecurityPolicy(policy) {",
+        '  return `trustedOrigins: ${(policy.trustedOrigins ?? []).join(", ")}`;',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "examples", "express", "server.js"),
+      [
+        'import { createSecurityMiddleware } from "../../packages/server/src/middleware.js";',
+        "",
+        "export const securityOptions = {",
+        '  trustedOrigins: ["https://admin.example"],',
+        '  frameAncestors: ["\'self\'"]',
+        "};",
+        "",
+        "export const securityMiddleware = createSecurityMiddleware(securityOptions);",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "security.md"),
+      [
+        "# Security Policy",
+        "",
+        "Set `trustedOrigins` to configure allowed browser origins.",
+        "Middleware forwards trustedOrigins into response headers.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "changelog", "unreleased.md"),
+      [
+        "# Unreleased",
+        "",
+        "- Pending trustedOrigins security policy rename.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "{",
+      '  "$comment": "AUTO-GENERATED SECURITY SCHEMA. DO NOT EDIT.",',
+      '  "properties": {',
+      '    "trustedOrigins": { "type": "array", "items": { "type": "string" } }',
+      "  }",
+      "}",
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// third party security shim",
+      'export const legacySecurityOption = "trustedOrigins";',
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "security-schema.json"), generatedBefore, "utf8");
+    writeFileSync(path.join(workDir, "vendor", "helmet-compat.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "security-policy.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        "import {",
+        "  createSecurityHeaders,",
+        "  defaultSecurityPolicy,",
+        "  normalizeSecurityPolicy",
+        '} from "../packages/server/src/securityPolicy.js";',
+        'import { createSecurityMiddleware } from "../packages/server/src/middleware.js";',
+        'import { summarizeSecurityPolicy } from "../packages/client/src/securityClient.js";',
+        "",
+        'const defaults = JSON.parse(readFileSync("packages/config/security-defaults.json", "utf8"));',
+        'assert.deepEqual(defaultSecurityPolicy.allowedOrigins, ["https://app.example"]);',
+        'assert.equal("trustedOrigins" in defaultSecurityPolicy, false);',
+        "const normalized = normalizeSecurityPolicy({",
+        '  allowedOrigins: ["https://admin.example"],',
+        '  frameAncestors: ["\'self\'"]',
+        "});",
+        'assert.deepEqual(normalized.allowedOrigins, ["https://admin.example"]);',
+        'assert.equal("trustedOrigins" in normalized, false);',
+        "const headers = createSecurityHeaders({",
+        '  allowedOrigins: ["https://admin.example"],',
+        '  frameAncestors: ["\'self\'"]',
+        "});",
+        'assert.equal(headers["access-control-allow-origin"], "https://admin.example");',
+        'assert.match(headers["content-security-policy"], /frame-ancestors \'self\'/);',
+        "const middleware = createSecurityMiddleware({",
+        '  allowedOrigins: ["https://portal.example"]',
+        "});",
+        "const response = {};",
+        'middleware({ origin: "https://portal.example" }, response, () => {});',
+        'assert.equal(response.headers["access-control-allow-origin"], "https://portal.example");',
+        "assert.equal(",
+        '  summarizeSecurityPolicy({ allowedOrigins: ["https://admin.example"] }),',
+        '  "allowedOrigins: https://admin.example"',
+        ");",
+        'assert.deepEqual(defaults.allowedOrigins, ["https://app.example"]);',
+        "const ownedFiles = [",
+        '  "packages/server/src/securityPolicy.js",',
+        '  "packages/server/src/middleware.js",',
+        '  "packages/config/security-defaults.json",',
+        '  "packages/client/src/securityClient.js",',
+        '  "examples/express/server.js",',
+        '  "docs/security.md",',
+        '  "changelog/unreleased.md"',
+        "];",
+        "for (const file of ownedFiles) {",
+        '  const content = readFileSync(file, "utf8");',
+        "  assert.doesNotMatch(content, /trustedOrigins/);",
+        "  assert.match(content, /allowedOrigins/);",
+        "}",
+        'const generated = readFileSync("generated/security-schema.json", "utf8");',
+        'assert.match(generated, /AUTO-GENERATED SECURITY SCHEMA\\. DO NOT EDIT/);',
+        "assert.match(generated, /trustedOrigins/);",
+        'const vendor = readFileSync("vendor/helmet-compat.js", "utf8");',
+        "assert.match(vendor, /third party security shim/);",
+        "assert.match(vendor, /trustedOrigins/);",
+        'console.log("security middleware policy migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-security-policy-before", "Bash", {
+              command: "node tests/security-policy.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-security-policy-repo", "Glob", {
+              pattern: "**/*.{js,json,md,mjs}",
+              max_matches: 50
+            }),
+            toolCall("grep-trusted-origins", "Grep", {
+              pattern: "trustedOrigins",
+              path: ".",
+              output_mode: "content",
+              max_matches: 50
+            }),
+            toolCall("read-security-policy-test", "FileRead", {
+              file_path: "tests/security-policy.test.mjs"
+            }),
+            toolCall("read-security-policy-source", "FileRead", {
+              file_path: "packages/server/src/securityPolicy.js"
+            }),
+            toolCall("read-security-middleware", "FileRead", {
+              file_path: "packages/server/src/middleware.js"
+            }),
+            toolCall("read-security-defaults", "FileRead", {
+              file_path: "packages/config/security-defaults.json"
+            }),
+            toolCall("read-security-client", "FileRead", {
+              file_path: "packages/client/src/securityClient.js"
+            }),
+            toolCall("read-security-example", "FileRead", {
+              file_path: "examples/express/server.js"
+            }),
+            toolCall("read-security-docs", "FileRead", {
+              file_path: "docs/security.md"
+            }),
+            toolCall("read-security-changelog", "FileRead", {
+              file_path: "changelog/unreleased.md"
+            }),
+            toolCall("read-generated-security-schema", "FileRead", {
+              file_path: "generated/security-schema.json"
+            }),
+            toolCall("read-vendor-security-shim", "FileRead", {
+              file_path: "vendor/helmet-compat.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing security policy test missing");
+          assert(
+            transcript.includes("packages/server/src/securityPolicy.js"),
+            "security policy repo file list missing"
+          );
+          assert(transcript.includes("trustedOrigins"), "trustedOrigins search results missing");
+          assert(
+            transcript.includes("AUTO-GENERATED SECURITY SCHEMA"),
+            "generated security schema boundary missing"
+          );
+          assert(transcript.includes("third party security shim"), "vendor security boundary missing");
+          return toolResponse([
+            toolCall("patch-security-policy-source", "FilePatch", {
+              file_path: "packages/server/src/securityPolicy.js",
+              patch: [
+                "@@",
+                " export const defaultSecurityPolicy = {",
+                '-  trustedOrigins: ["https://app.example"],',
+                '+  allowedOrigins: ["https://app.example"],',
+                "   frameAncestors: [\"'self'\"],",
+                "   reportOnly: false",
+                " };",
+                "@@",
+                " export function normalizeSecurityPolicy(options = {}) {",
+                "   return {",
+                "-    trustedOrigins: options.trustedOrigins ?? defaultSecurityPolicy.trustedOrigins,",
+                "+    allowedOrigins: options.allowedOrigins ?? defaultSecurityPolicy.allowedOrigins,",
+                "     frameAncestors: options.frameAncestors ?? defaultSecurityPolicy.frameAncestors,",
+                "     reportOnly: options.reportOnly ?? defaultSecurityPolicy.reportOnly",
+                "   };",
+                " }",
+                "@@",
+                "   const policy = normalizeSecurityPolicy(options);",
+                "   return {",
+                '-    "access-control-allow-origin": policy.trustedOrigins.join(" "),',
+                '+    "access-control-allow-origin": policy.allowedOrigins.join(" "),',
+                '     "content-security-policy": `frame-ancestors ${policy.frameAncestors.join(" ")}`',
+                "   };"
+              ].join("\n")
+            }),
+            toolCall("patch-security-middleware", "FilePatch", {
+              file_path: "packages/server/src/middleware.js",
+              patch: [
+                "@@",
+                " export function createSecurityMiddleware(options = {}) {",
+                '-  const trustedOrigins = options.trustedOrigins ?? ["https://app.example"];',
+                "+  const allowedOrigins = options.allowedOrigins ?? [\"https://app.example\"];",
+                "   return (request, response, next) => {",
+                "-    const origin = request.origin ?? trustedOrigins[0];",
+                "-    response.headers = createSecurityHeaders({ ...options, trustedOrigins: [origin] });",
+                "+    const origin = request.origin ?? allowedOrigins[0];",
+                "+    response.headers = createSecurityHeaders({ ...options, allowedOrigins: [origin] });",
+                "     next?.();"
+              ].join("\n")
+            }),
+            toolCall("patch-security-defaults", "FilePatch", {
+              file_path: "packages/config/security-defaults.json",
+              patch: [
+                "@@",
+                " {",
+                '-  "trustedOrigins": ["https://app.example"],',
+                '+  "allowedOrigins": ["https://app.example"],',
+                "   \"frameAncestors\": [\"'self'\"],",
+                '   "reportOnly": false'
+              ].join("\n")
+            }),
+            toolCall("patch-security-client", "FilePatch", {
+              file_path: "packages/client/src/securityClient.js",
+              patch: [
+                "@@",
+                " export function summarizeSecurityPolicy(policy) {",
+                '-  return `trustedOrigins: ${(policy.trustedOrigins ?? []).join(", ")}`;',
+                '+  return `allowedOrigins: ${(policy.allowedOrigins ?? []).join(", ")}`;',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-security-example", "FilePatch", {
+              file_path: "examples/express/server.js",
+              patch: [
+                "@@",
+                " export const securityOptions = {",
+                '-  trustedOrigins: ["https://admin.example"],',
+                '+  allowedOrigins: ["https://admin.example"],',
+                "   frameAncestors: [\"'self'\"]",
+                " };"
+              ].join("\n")
+            }),
+            toolCall("patch-security-docs", "FilePatch", {
+              file_path: "docs/security.md",
+              patch: [
+                "@@",
+                " # Security Policy",
+                " ",
+                "-Set `trustedOrigins` to configure allowed browser origins.",
+                "-Middleware forwards trustedOrigins into response headers.",
+                "+Set `allowedOrigins` to configure allowed browser origins.",
+                "+Middleware forwards allowedOrigins into response headers."
+              ].join("\n")
+            }),
+            toolCall("patch-security-changelog", "FilePatch", {
+              file_path: "changelog/unreleased.md",
+              patch: [
+                "@@",
+                " # Unreleased",
+                " ",
+                "-- Pending trustedOrigins security policy rename.",
+                "+- Renamed the security policy option to allowedOrigins across server, config, client, examples, and docs."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched packages/server/src/securityPolicy.js"),
+            "security policy source patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/server/src/middleware.js"),
+            "security middleware patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/config/security-defaults.json"),
+            "security defaults patch result missing"
+          );
+          assert(transcript.includes("Patched docs/security.md"), "security docs patch missing");
+          return toolResponse([
+            toolCall("run-security-policy-after", "Bash", {
+              command: "node tests/security-policy.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("security middleware policy migration ok"),
+          "passing security policy migration test missing"
+        );
+        return messageText(
+          "Security middleware policy migration completed with generated schema and vendor shim preserved."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "In this security middleware repository, rename the public policy option",
+            "from trustedOrigins to allowedOrigins across server policy, middleware,",
+            "config defaults, client summary, examples, docs, and changelog.",
+            "Run the focused security policy test before editing, discover files with",
+            "Glob and Grep, inspect generated and vendor boundaries, do not modify",
+            "generated or vendor files, then rerun the focused security policy test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "security middleware policy migration task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "security policy migration task did not complete");
+      const migratedFiles = [
+        "packages/server/src/securityPolicy.js",
+        "packages/server/src/middleware.js",
+        "packages/config/security-defaults.json",
+        "packages/client/src/securityClient.js",
+        "examples/express/server.js",
+        "docs/security.md",
+        "changelog/unreleased.md"
+      ];
+      for (const file of migratedFiles) {
+        const content = readFileSync(path.join(workDir, file), "utf8");
+        assert(!content.includes("trustedOrigins"), `${file} still contains trustedOrigins`);
+        assert(content.includes("allowedOrigins"), `${file} missing allowedOrigins`);
+      }
+      const generatedAfter = readFileSync(path.join(workDir, "generated", "security-schema.json"), "utf8");
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "helmet-compat.js"), "utf8");
+      assert(generatedAfter === generatedBefore, "generated security schema was modified");
+      assert(vendorAfter === vendorBefore, "vendor security shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "security policy task should run tests before and after");
+      assert(toolCounts.Glob === 1, "security policy task should discover files with Glob");
+      assert(toolCounts.Grep === 1, "security policy task should search old option with Grep");
+      assert(toolCounts.FileRead === 10, "security policy task should inspect owned and boundary files");
+      assert(toolCounts.FilePatch === 7, "security policy task should patch seven owned files");
+      assert(!toolCounts.FileWrite, "security policy task should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "security policy task should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing security policy test ran first",
+          "security policy repo discovery ran with Glob",
+          "legacy security option search ran with Grep",
+          "server security policy inspected before patching",
+          "security middleware inspected before patching",
+          "config defaults inspected before patching",
+          "client summary inspected before patching",
+          "example docs and changelog inspected before patching",
+          "generated security schema boundary inspected",
+          "vendor security shim boundary inspected",
+          "server security policy migrated to allowedOrigins",
+          "security middleware migrated to allowedOrigins",
+          "config defaults migrated to allowedOrigins",
+          "client summary migrated to allowedOrigins",
+          "example usage migrated to allowedOrigins",
+          "security docs migrated",
+          "security changelog migrated",
+          "focused passing security policy test ran after migration",
+          "old owned trustedOrigins references removed",
+          "generated security schema stayed unchanged",
+          "vendor security shim stayed unchanged",
+          "FileWrite avoided for security policy migration",
+          "FileEdit avoided for security policy migration",
+          "final response completed"
+        ],
+        filesVerified: [
+          "packages/server/src/securityPolicy.js",
+          "packages/server/src/middleware.js",
+          "packages/config/security-defaults.json",
+          "packages/client/src/securityClient.js",
+          "examples/express/server.js",
+          "docs/security.md",
+          "changelog/unreleased.md",
+          "generated/security-schema.json",
+          "vendor/helmet-compat.js",
+          "tests/security-policy.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "security_middleware_policy_migration",
+        toolCounts,
+        securityPolicyRepoDiscoveryVerified: true,
+        securityPolicyConfigMigrated: true,
+        securityMiddlewareMigrated: true,
+        securityClientMigrated: true,
+        securityExamplesDocsChangelogMigrated: true,
+        oldOwnedSecurityReferencesRemoved: true,
+        generatedSecuritySchemaUntouched: true,
+        vendorSecurityShimUntouched: true,
+        securityMiddlewarePolicyVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioOssStyleOpenSourceMigrationTask() {
   return await withWorkspace("oss-style-open-source", async ({ root, configDir, workDir }) => {
     mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
@@ -4213,6 +4727,7 @@ async function main() {
     ["mixed language contract migration task", scenarioMixedLanguageContractMigrationTask],
     ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask],
     ["plugin API compatibility migration task", scenarioPluginApiCompatibilityMigrationTask],
+    ["security middleware policy migration task", scenarioSecurityMiddlewarePolicyMigrationTask],
     ["oss-style open source migration task", scenarioOssStyleOpenSourceMigrationTask]
   ];
   const results = [];
