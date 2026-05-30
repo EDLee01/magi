@@ -247,12 +247,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("TUI keyboard editing removed stale typed characters") &&
     assertionList.includes("TUI keyboard editing reached provider exactly once") &&
     assertionList.includes("TUI keyboard editing returned provider response and exited");
+  const tuiStatefulPickersSeen =
+    assertionList.includes("TUI model picker switched subsequent provider route") &&
+    assertionList.includes("TUI permission picker switched to plan mode") &&
+    assertionList.includes("TUI picker-selected plan mode denied write") &&
+    assertionList.includes("TUI picker flow left workspace unchanged") &&
+    assertionList.includes("TUI picker flow returned provider response and exited");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 137) failures.push(`assertions=${assertions}`);
+  if (assertions < 142) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -273,6 +279,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
   if (!tuiVisualContractSeen) failures.push("tuiVisualContractSeen=false");
   if (!tuiKeyboardInputSeen) failures.push("tuiKeyboardInputSeen=false");
+  if (!tuiStatefulPickersSeen) failures.push("tuiStatefulPickersSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -309,6 +316,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       slashSuggestionPromptSeen,
       tuiVisualContractSeen,
       tuiKeyboardInputSeen,
+      tuiStatefulPickersSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

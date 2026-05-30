@@ -121,6 +121,23 @@ function renderConfig({ port, fallbacks = false }) {
   ].join("\n");
 }
 
+function renderTuiPickerConfig({ port }) {
+  return [
+    "defaultProvider: openai",
+    "defaultModel: main",
+    "providers:",
+    "  openai:",
+    "    type: openai",
+    "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+    `    baseUrl: http://127.0.0.1:${port}/v1`,
+    "models:",
+    "  aliases:",
+    "    main: openai:mock-main",
+    "    fast: openai:mock-fast",
+    ""
+  ].join("\n");
+}
+
 async function withTempWorkspace(name, fn) {
   const root = mkdtempSync(path.join(os.tmpdir(), `magi-blackbox-${name}-`));
   const configDir = path.join(root, "config");
@@ -3023,6 +3040,89 @@ async function scenarioTuiKeyboardInput() {
   });
 }
 
+async function scenarioTuiStatefulPickers() {
+  return await withTempWorkspace("tui-stateful-pickers", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const deniedPath = path.join(workDir, "picker-plan-denied.txt");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ model, transcript }) => {
+        assert(model === "mock-fast", `TUI model picker routed to unexpected model: ${model}`);
+        turn += 1;
+        if (turn === 1) {
+          return toolResponse([
+            toolCall("picker-plan-denied", "FileWrite", {
+              file_path: "picker-plan-denied.txt",
+              content: "this should stay blocked by plan mode"
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("FileWrite is not allowed in plan mode"),
+          "TUI permission picker did not carry plan mode into the prompt"
+        );
+        return messageText("TUI picker plan mode protected workspace.");
+      }
+    });
+    try {
+      writeFileSync(
+        path.join(configDir, "config.yaml"),
+        renderTuiPickerConfig({ port: provider.port })
+      );
+      const result = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "TUI stateful pickers",
+        steps: [
+          { waitForText: "/help for commands", inputText: "/model\r" },
+          { waitForText: "models", inputText: "fast\r" },
+          {
+            waitForText: "Selected model fast: openai:mock-fast",
+            inputText: "/permissions mode\r"
+          },
+          { waitForText: "permission modes", inputText: "plan\r" },
+          {
+            waitForText: "Permission mode: plan - deny write tools",
+            inputText: "Try the picker-selected plan mode write.\r"
+          },
+          { waitForText: "TUI picker plan mode protected workspace.", inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        result.exitCode === 0,
+        `TUI stateful pickers exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(visible.includes("models"), "model picker did not render");
+      assert(visible.includes("permission modes"), "permission picker did not render");
+      assert(
+        visible.includes("TUI picker plan mode protected workspace."),
+        "TUI picker final response did not render"
+      );
+      assert(provider.calls.length === 2, "TUI picker flow should make two provider calls");
+      assert(!existsSync(deniedPath), "plan mode picker flow should not mutate workspace");
+      return {
+        score: 1,
+        assertions: [
+          "TUI model picker switched subsequent provider route",
+          "TUI permission picker switched to plan mode",
+          "TUI picker-selected plan mode denied write",
+          "TUI picker flow left workspace unchanged",
+          "TUI picker flow returned provider response and exited"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4248,6 +4348,7 @@ async function main() {
     ["resume picker TTY", scenarioResumePickerTty],
     ["slash resume search TTY", scenarioSlashResumeSearchTty],
     ["TUI keyboard input", scenarioTuiKeyboardInput],
+    ["TUI stateful pickers", scenarioTuiStatefulPickers],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],

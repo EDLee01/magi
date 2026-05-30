@@ -117,7 +117,8 @@ describe("capability report", () => {
         dangerousPermissionMatrixSeen: false,
         slashSuggestionPromptSeen: false,
         tuiVisualContractSeen: false,
-        tuiKeyboardInputSeen: false
+        tuiKeyboardInputSeen: false,
+        tuiStatefulPickersSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -163,6 +164,7 @@ describe("capability report", () => {
         "slashSuggestionPromptSeen=false",
         "tuiVisualContractSeen=false",
         "tuiKeyboardInputSeen=false",
+        "tuiStatefulPickersSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -1008,6 +1010,7 @@ function harnessReport(input: {
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
   tuiKeyboardInputSeen?: boolean;
+  tuiStatefulPickersSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -1025,7 +1028,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 140,
+      assertions: input.assertions ?? 145,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1068,7 +1071,8 @@ function harnessReport(input: {
                   ...dangerousPermissionMatrixAssertions(input),
                   ...slashSuggestionPromptAssertions(input),
                   ...tuiVisualContractAssertions(input),
-                  ...tuiKeyboardInputAssertions(input)
+                  ...tuiKeyboardInputAssertions(input),
+                  ...tuiStatefulPickersAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -1980,6 +1984,18 @@ function tuiKeyboardInputAssertions(input: { tuiKeyboardInputSeen?: boolean }): 
         "TUI keyboard editing removed stale typed characters",
         "TUI keyboard editing reached provider exactly once",
         "TUI keyboard editing returned provider response and exited"
+      ];
+}
+
+function tuiStatefulPickersAssertions(input: { tuiStatefulPickersSeen?: boolean }): string[] {
+  return input.tuiStatefulPickersSeen === false
+    ? []
+    : [
+        "TUI model picker switched subsequent provider route",
+        "TUI permission picker switched to plan mode",
+        "TUI picker-selected plan mode denied write",
+        "TUI picker flow left workspace unchanged",
+        "TUI picker flow returned provider response and exited"
       ];
 }
 
