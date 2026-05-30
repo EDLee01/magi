@@ -420,6 +420,9 @@ describe("capability report", () => {
         multiObjectiveReadBeforeWriteGuardSeen: false,
         multiObjectiveReleaseFilesUpdated: false,
         multiObjectiveExecutionVerified: false,
+        longProjectRetrospectiveContextSeen: false,
+        longProjectRetrospectiveGenerated: false,
+        longProjectRetrospectiveVerified: false,
         assertions: 3,
         filesVerified: 1,
         toolCallCount: 2,
@@ -476,7 +479,10 @@ describe("capability report", () => {
         "multiObjectiveCompatibleBranchPreserved=false",
         "multiObjectiveReadBeforeWriteGuardSeen=false",
         "multiObjectiveReleaseFilesUpdated=false",
-        "multiObjectiveExecutionVerified=false"
+        "multiObjectiveExecutionVerified=false",
+        "longProjectRetrospectiveContextSeen=false",
+        "longProjectRetrospectiveGenerated=false",
+        "longProjectRetrospectiveVerified=false"
       ])
     );
   });
@@ -1780,6 +1786,9 @@ function goalPlanReport(
     multiObjectiveReadBeforeWriteGuardSeen: boolean;
     multiObjectiveReleaseFilesUpdated: boolean;
     multiObjectiveExecutionVerified: boolean;
+    longProjectRetrospectiveContextSeen: boolean;
+    longProjectRetrospectiveGenerated: boolean;
+    longProjectRetrospectiveVerified: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
     assertions: number;
@@ -1793,9 +1802,9 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 46,
-      filesVerified: overrides.filesVerified ?? 12,
-      toolCallCount: overrides.toolCallCount ?? 31,
+      assertions: overrides.assertions ?? 50,
+      filesVerified: overrides.filesVerified ?? 13,
+      toolCallCount: overrides.toolCallCount ?? 37,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
     }),
     scenarios: [
@@ -1808,17 +1817,17 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 39 },
+            { length: overrides.assertions ?? 43 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
-            { length: overrides.filesVerified ?? 7 },
+            { length: overrides.filesVerified ?? 13 },
             (_, index) => `goal-plan-file-${index + 1}.json`
           ),
           toolCounts: {
-            FileWrite: 3,
+            FileWrite: 4,
             ExitPlanMode: 16,
-            FileRead: 8,
+            FileRead: 13,
             FilePatch: 9
           },
           activeGoalContextSeen: true,
@@ -1864,6 +1873,9 @@ function goalPlanReport(
           multiObjectiveReadBeforeWriteGuardSeen: true,
           multiObjectiveReleaseFilesUpdated: true,
           multiObjectiveExecutionVerified: true,
+          longProjectRetrospectiveContextSeen: true,
+          longProjectRetrospectiveGenerated: true,
+          longProjectRetrospectiveVerified: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

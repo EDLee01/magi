@@ -136,6 +136,7 @@ const releaseSecurityPath = "release/security.md";
 const releaseSecurityPolicyPath = "release/security-policy.md";
 const releaseDocsPath = "docs/release.md";
 const releaseTestsPath = "tests/release.test.ts";
+const releaseRetrospectivePath = "reports/release-retrospective.md";
 const releaseConfigBefore = [
   "{",
   '  "rollout": "balanced",',
@@ -174,6 +175,16 @@ const releaseTestsAfter = [
   '  expect(securityGate).toBe("MFA required");',
   "});",
   ""
+].join("\n");
+const releaseRetrospectiveContent = [
+  "# Release Plan Retrospective",
+  "",
+  "- adopted branch: compatibility",
+  "- rejected branch: performance",
+  "- compatible security branch: MFA required",
+  "- guard evidence: compatibility memo read before config patch",
+  "- execution evidence: config, docs, security policy, and tests updated",
+  "- final rollout: compatibility"
 ].join("\n");
 
 let harnessReport;
@@ -216,7 +227,10 @@ try {
     multiObjectiveCompatibleBranchPreserved: false,
     multiObjectiveReadBeforeWriteGuardSeen: false,
     multiObjectiveReleaseFilesUpdated: false,
-    multiObjectiveExecutionVerified: false
+    multiObjectiveExecutionVerified: false,
+    longProjectRetrospectiveContextSeen: false,
+    longProjectRetrospectiveGenerated: false,
+    longProjectRetrospectiveVerified: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -534,6 +548,19 @@ try {
       "provider did not execute selected multi-objective plan"
     );
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
+    const longProjectRetrospective = await runLongProjectRetrospectiveFlow();
+    assert(
+      state.longProjectRetrospectiveContextSeen,
+      "provider did not see long-project retrospective context"
+    );
+    assert(
+      state.longProjectRetrospectiveGenerated,
+      "provider did not generate long-project retrospective report"
+    );
+    assert(
+      state.longProjectRetrospectiveVerified,
+      "provider did not verify long-project retrospective report"
+    );
 
     const toolCounts = mergeToolCounts(
       provider.metrics().toolCounts,
@@ -541,7 +568,8 @@ try {
       parallelPlans.toolCounts,
       multiBranchConvergence.toolCounts,
       conflictedMerge.toolCounts,
-      multiObjectiveChoice.toolCounts
+      multiObjectiveChoice.toolCounts,
+      longProjectRetrospective.toolCounts
     );
     const assertions = [
       "active goal status visible in CLI",
@@ -589,7 +617,11 @@ try {
       "multi-objective resolved context excluded rejected performance branch",
       "multi-objective compatible security branch stayed in final plan",
       "multi-objective read-before-write guard blocked early config patch",
-      "multi-objective release plan executed selected source docs and tests"
+      "multi-objective release plan executed selected source docs and tests",
+      "long-project retrospective context included accepted rejected and compatible branches",
+      "long-project retrospective read final release artifacts before writing",
+      "long-project retrospective report captured decision and execution evidence",
+      "long-project retrospective report verified after write"
     ];
     const filesVerified = [
       "state/goals.json",
@@ -603,7 +635,8 @@ try {
       releaseConfigPath,
       releaseSecurityPolicyPath,
       releaseDocsPath,
-      releaseTestsPath
+      releaseTestsPath,
+      releaseRetrospectivePath
     ];
 
     const report = harnessReport.buildHarnessReport({
@@ -667,6 +700,9 @@ try {
               state.multiObjectiveReadBeforeWriteGuardSeen,
             multiObjectiveReleaseFilesUpdated: state.multiObjectiveReleaseFilesUpdated,
             multiObjectiveExecutionVerified: state.multiObjectiveExecutionVerified,
+            longProjectRetrospectiveContextSeen: state.longProjectRetrospectiveContextSeen,
+            longProjectRetrospectiveGenerated: state.longProjectRetrospectiveGenerated,
+            longProjectRetrospectiveVerified: state.longProjectRetrospectiveVerified,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -1335,6 +1371,71 @@ function createRouter(state) {
       state.multiObjectiveReleaseFilesUpdated = true;
       state.multiObjectiveExecutionVerified = true;
       return messageText("Multi-objective release execution complete.");
+    }
+
+    if (latestUser.includes("Write long project release retrospective")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "retrospective context missing");
+      assert(systemPrompt.includes("Status: approved"), "retrospective approved status missing");
+      assert(
+        systemPrompt.includes("Patch release/config.json to preserve legacy compatibility mode"),
+        "retrospective context missed accepted compatibility branch"
+      );
+      assert(
+        !systemPrompt.includes("Patch release/config.json to enable aggressive performance mode"),
+        "retrospective context leaked rejected performance branch"
+      );
+      assert(
+        systemPrompt.includes("Patch release/security-policy.md with required MFA gate"),
+        "retrospective context missed compatible security branch"
+      );
+      assert(toolNames.includes("FileRead"), "FileRead was not available for retrospective");
+      assert(toolNames.includes("FileWrite"), "FileWrite was not available for retrospective");
+      state.longProjectRetrospectiveContextSeen = true;
+      if (!transcript.includes(releaseConfigAfter.trim())) {
+        return toolResponse([
+          toolCall("retrospective-config-read", "FileRead", { file_path: releaseConfigPath })
+        ]);
+      }
+      if (!transcript.includes("compatibility launch note: legacy contracts preserved")) {
+        return toolResponse([
+          toolCall("retrospective-docs-read", "FileRead", { file_path: releaseDocsPath })
+        ]);
+      }
+      if (!transcript.includes("release gate: MFA required")) {
+        return toolResponse([
+          toolCall("retrospective-security-read", "FileRead", {
+            file_path: releaseSecurityPolicyPath
+          })
+        ]);
+      }
+      if (!transcript.includes('expect(securityGate).toBe("MFA required");')) {
+        return toolResponse([
+          toolCall("retrospective-tests-read", "FileRead", { file_path: releaseTestsPath })
+        ]);
+      }
+      state.longProjectRetrospectiveGenerated = true;
+      return toolResponse([
+        toolCall("retrospective-write", "FileWrite", {
+          file_path: releaseRetrospectivePath,
+          content: `${releaseRetrospectiveContent}\n`
+        })
+      ]);
+    }
+
+    if (latestUser.includes("Verify long project release retrospective")) {
+      if (!transcript.includes(releaseRetrospectiveContent)) {
+        return toolResponse([
+          toolCall("retrospective-verify-read", "FileRead", {
+            file_path: releaseRetrospectivePath
+          })
+        ]);
+      }
+      assert(
+        transcript.includes(releaseRetrospectiveContent),
+        "retrospective read result was not visible"
+      );
+      state.longProjectRetrospectiveVerified = true;
+      return messageText("Long project release retrospective verified.");
     }
 
     return messageText("OK");
@@ -2396,6 +2497,59 @@ async function runMultiObjectiveConflictChoiceFlow(executeRegisteredTool) {
     resolved: true,
     toolCounts: { ExitPlanMode: 3 }
   };
+}
+
+async function runLongProjectRetrospectiveFlow() {
+  const output = await runCli(
+    [
+      "--session-id",
+      multiObjectiveSessionId,
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Write long project release retrospective from the resolved plan and final artifacts."
+    ],
+    "long project release retrospective"
+  );
+  assert(output.includes("session.completed"), "retrospective session did not complete");
+  assert(existsSync(path.join(workDir, releaseRetrospectivePath)), "retrospective was not written");
+  const report = readFileSync(path.join(workDir, releaseRetrospectivePath), "utf8");
+  assert(
+    report === `${releaseRetrospectiveContent}\n`,
+    "retrospective content did not match expected decision and execution evidence"
+  );
+  for (const expected of [
+    "adopted branch: compatibility",
+    "rejected branch: performance",
+    "compatible security branch: MFA required",
+    "guard evidence: compatibility memo read before config patch",
+    "execution evidence: config, docs, security policy, and tests updated"
+  ]) {
+    assert(report.includes(expected), `retrospective missed evidence: ${expected}`);
+  }
+
+  const verification = await runCli(
+    [
+      "--session-id",
+      multiObjectiveSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify long project release retrospective."
+    ],
+    "long project release retrospective verification"
+  );
+  assert(
+    verification.includes("Long project release retrospective verified"),
+    "retrospective verification did not complete"
+  );
+  return { toolCounts: { FileRead: 5, FileWrite: 1 } };
 }
 
 async function approvePlanWithTool(input) {

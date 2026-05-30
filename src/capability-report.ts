@@ -1255,9 +1255,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 46) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 12) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 31) failures.push(`toolCallCount=${toolCallCount}`);
+  if (assertions < 50) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 13) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 37) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.activeGoalContextSeen !== true) failures.push("activeGoalContextSeen=false");
   if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
@@ -1354,6 +1354,15 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.multiObjectiveExecutionVerified !== true) {
     failures.push("multiObjectiveExecutionVerified=false");
   }
+  if (details.longProjectRetrospectiveContextSeen !== true) {
+    failures.push("longProjectRetrospectiveContextSeen=false");
+  }
+  if (details.longProjectRetrospectiveGenerated !== true) {
+    failures.push("longProjectRetrospectiveGenerated=false");
+  }
+  if (details.longProjectRetrospectiveVerified !== true) {
+    failures.push("longProjectRetrospectiveVerified=false");
+  }
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -1411,6 +1420,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
         details.multiObjectiveReadBeforeWriteGuardSeen === true,
       multiObjectiveReleaseFilesUpdated: details.multiObjectiveReleaseFilesUpdated === true,
       multiObjectiveExecutionVerified: details.multiObjectiveExecutionVerified === true,
+      longProjectRetrospectiveContextSeen: details.longProjectRetrospectiveContextSeen === true,
+      longProjectRetrospectiveGenerated: details.longProjectRetrospectiveGenerated === true,
+      longProjectRetrospectiveVerified: details.longProjectRetrospectiveVerified === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },
