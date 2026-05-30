@@ -157,6 +157,7 @@ describe("capability report", () => {
         userFeedbackTrendSeen: false,
         longCycleFeedbackTrendSeen: false,
         longProjectFeedbackConvergenceSeen: false,
+        longProjectLearningDraftRecallSeen: false,
         staleKnowledgeDemotionSeen: false,
         crossNodeRecommendationSeen: false,
         projectCaseRecallSeen: false,
@@ -195,6 +196,7 @@ describe("capability report", () => {
     expect(output).toContain("userFeedbackTrendSeen=false");
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
     expect(output).toContain("longProjectFeedbackConvergenceSeen=false");
+    expect(output).toContain("longProjectLearningDraftRecallSeen=false");
     expect(output).toContain("staleKnowledgeDemotionSeen=false");
     expect(output).toContain("crossNodeRecommendationSeen=false");
     expect(output).toContain("projectCaseRecallSeen=false");
@@ -1336,6 +1338,7 @@ function memoryReport(input: {
   userFeedbackTrendSeen?: boolean;
   longCycleFeedbackTrendSeen?: boolean;
   longProjectFeedbackConvergenceSeen?: boolean;
+  longProjectLearningDraftRecallSeen?: boolean;
   staleKnowledgeDemotionSeen?: boolean;
   crossNodeRecommendationSeen?: boolean;
   projectCaseRecallSeen?: boolean;
@@ -1406,6 +1409,15 @@ function memoryReport(input: {
               "long-project feedback trend ranked focused workflow",
               "long-project search ranked focused workflow before default workflow"
             ]),
+        ...(input.longProjectLearningDraftRecallSeen === false
+          ? []
+          : [
+              "long-project learning draft reviewed with evidence",
+              "long-project learning draft applied to memory graph",
+              "rejected learning draft did not enter memory recall",
+              "learned long-project workflow recalled across CLI process",
+              "learned long-project workflow feedback raised weight"
+            ]),
         ...(input.staleKnowledgeDemotionSeen === false
           ? []
           : [
@@ -1457,6 +1469,7 @@ function memoryReport(input: {
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
       longProjectFeedbackConvergenceSeen: input.longProjectFeedbackConvergenceSeen !== false,
+      longProjectLearningDraftRecallSeen: input.longProjectLearningDraftRecallSeen !== false,
       staleKnowledgeDemotionSeen: input.staleKnowledgeDemotionSeen !== false,
       crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
       projectCaseRecallSeen: input.projectCaseRecallSeen !== false,

@@ -25,6 +25,7 @@ const lifecycleEvidence = {
   dreamConflictGroupLifecycleSeen: false,
   longCycleFeedbackTrendSeen: false,
   longProjectFeedbackConvergenceSeen: false,
+  longProjectLearningDraftRecallSeen: false,
   staleKnowledgeDemotionSeen: false,
   crossNodeRecommendationSeen: false,
   projectCaseRecallSeen: false,
@@ -52,6 +53,7 @@ try {
   assertMaintenanceLifecycle();
   assertMultiProjectConflictRecall();
   assertLongProjectFeedbackConvergence();
+  assertLongProjectLearningDraftRecall();
   writeLifecycleEvidence();
   process.stdout.write(`${evalOutput.trim()}\nBusiness memory recall eval passed.\n`);
 } finally {
@@ -457,6 +459,142 @@ function assertLongProjectFeedbackConvergence() {
   recordAssertion("long-project irrelevant feedback cooled default workflow");
   recordAssertion("long-project feedback trend ranked focused workflow");
   recordAssertion("long-project search ranked focused workflow before default workflow");
+}
+
+function assertLongProjectLearningDraftRecall() {
+  const draftOutput = runCli(
+    [
+      "learning",
+      "propose",
+      "--kind",
+      "memory",
+      "--target",
+      "memory/workflows/incident-review.md",
+      "--reason",
+      "Three incident review cycles converged on the same concise rollback workflow.",
+      "--evidence",
+      "incident cycle alpha; incident cycle beta; incident cycle gamma",
+      "--confidence",
+      "0.92",
+      [
+        "## Incident review rollback workflow",
+        "For long-running incident review projects, run focused rollback validation first,",
+        "then write concise owner, impact, rollback risk, and verification notes.",
+        "",
+        "## Incident review handoff habit",
+        "Keep incident review handoffs short and link each rollback decision to verification evidence."
+      ].join("\n")
+    ],
+    "long project learning memory draft propose"
+  );
+  const draft = learningDraftId(draftOutput);
+  const review = runCli(
+    ["learning", "draft", "show", draft],
+    "long project learning memory draft show"
+  );
+  assert(
+    review.includes("Three incident review cycles converged"),
+    "learning memory draft review missed reason"
+  );
+  assert(
+    review.includes("incident cycle alpha; incident cycle beta; incident cycle gamma"),
+    "learning memory draft review missed evidence"
+  );
+
+  const rejectedOutput = runCli(
+    [
+      "learning",
+      "propose",
+      "--kind",
+      "memory",
+      "--target",
+      "memory/workflows/noisy-incident-review.md",
+      "--reason",
+      "A noisy draft should be rejected and must not enter memory recall.",
+      "--evidence",
+      "user rejected noisy draft",
+      "--confidence",
+      "0.4",
+      [
+        "## Noisy incident review workflow",
+        "Long incident review projects should paste raw terminal logs into every handoff."
+      ].join("\n")
+    ],
+    "long project noisy learning draft propose"
+  );
+  const rejectedDraft = learningDraftId(rejectedOutput);
+  const rejected = runCli(
+    ["learning", "draft", "reject", rejectedDraft],
+    "long project noisy learning draft reject"
+  );
+  assert(rejected.includes("Rejected LearningDraft:"), "learning draft reject did not run");
+
+  const applied = runCli(
+    ["learning", "draft", "apply", draft],
+    "long project learning memory draft apply"
+  );
+  assert(applied.includes("Applied LearningDraft:"), "learning memory draft apply did not run");
+
+  const recall = runCli(
+    ["memory", "search", "incident review rollback handoff verification"],
+    "long project learning memory recall"
+  );
+  assert(
+    recall.includes("Incident review rollback workflow"),
+    "learning draft memory recall missed workflow"
+  );
+  assert(
+    recall.includes("Incident review handoff habit"),
+    "learning draft memory recall missed handoff habit"
+  );
+  assert(!recall.includes("raw terminal logs"), "rejected learning draft polluted memory recall");
+
+  const workflow = nodeByTitle("Incident review rollback workflow");
+  const beforeWeight = workflow.weight;
+  const feedback = runCli(
+    [
+      "memory",
+      "feedback",
+      "--target",
+      workflow.id,
+      "--signal",
+      "useful",
+      "--reason",
+      "Fourth incident review cycle confirmed this learned workflow should stay hot."
+    ],
+    "long project learned memory useful feedback"
+  );
+  assert(feedback.includes("Memory feedback applied"), "learned memory feedback did not run");
+  assert(nodeById(workflow.id).weight > beforeWeight, "learned memory feedback did not raise weight");
+  const trends = runCli(
+    ["memory", "feedback", "trends", "--limit", "5"],
+    "long project learned memory feedback trends"
+  );
+  assert(
+    trends.includes("Incident review rollback workflow"),
+    "learned memory feedback trend missed workflow"
+  );
+  assert(trends.includes("useful=1"), "learned memory feedback trend missed useful signal");
+
+  const restartedRecall = runCli(
+    ["memory", "search", "incident rollback owner impact verification notes"],
+    "long project learned memory restart recall"
+  );
+  assert(
+    restartedRecall.includes("Incident review rollback workflow"),
+    "learned memory did not survive CLI restart"
+  );
+  assert(
+    restartedRecall.includes("Incident review handoff habit"),
+    "learned handoff habit did not survive CLI restart"
+  );
+
+  lifecycleEvidence.longProjectLearningDraftRecallSeen = true;
+  recordAssertion("long-project learning draft reviewed with evidence");
+  recordAssertion("long-project learning draft applied to memory graph");
+  recordAssertion("rejected learning draft did not enter memory recall");
+  recordAssertion("learned long-project workflow recalled across CLI process");
+  recordAssertion("learned long-project workflow feedback raised weight");
 }
 
 function assertStaleKnowledgeDemotionLifecycle() {
@@ -1639,6 +1777,12 @@ function startMemoryDecisionProvider(input) {
 function draftId(output) {
   const match = /Created Memory Draft:\s+([a-z0-9_]+)/i.exec(output);
   assert(match, `could not parse memory draft id from output:\n${output}`);
+  return match[1];
+}
+
+function learningDraftId(output) {
+  const match = /Created LearningDraft:\s+([a-z0-9_]+)/i.exec(output);
+  assert(match, `could not parse LearningDraft id from output:\n${output}`);
   return match[1];
 }
 
