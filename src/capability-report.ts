@@ -203,6 +203,14 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("write denied in plan mode") &&
     assertionList.includes("ExitPlanMode surfaced plan") &&
     assertionList.includes("plan review persisted");
+  const controlApprovalFlowSeen =
+    assertionList.includes("magi serve started from dist CLI") &&
+    assertionList.includes("phone pairing returned auth headers") &&
+    assertionList.includes("background job exposed pending approval") &&
+    assertionList.includes("SSE streamed pending and resolved approval events") &&
+    assertionList.includes("phone approval unblocked FileWrite") &&
+    assertionList.includes("control job completed and persisted audit events") &&
+    assertionList.includes("control approval flow completed two provider turns");
   const resumePickerTtySeen =
     assertionList.includes("TTY -r rendered searchable session picker") &&
     assertionList.includes("TTY -r filtered sessions by typed query") &&
@@ -332,6 +340,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     failures.push("headlessDefaultPermissionDeniedSeen=false");
   }
   if (!headlessPlanModeSeen) failures.push("headlessPlanModeSeen=false");
+  if (!controlApprovalFlowSeen) failures.push("controlApprovalFlowSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!resumePickerSearchFieldsSeen) failures.push("resumePickerSearchFieldsSeen=false");
@@ -381,6 +390,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       barePromptHeadlessSeen,
       headlessDefaultPermissionDeniedSeen,
       headlessPlanModeSeen,
+      controlApprovalFlowSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
       resumePickerSearchFieldsSeen,

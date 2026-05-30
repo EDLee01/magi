@@ -113,6 +113,7 @@ describe("capability report", () => {
         barePromptHeadlessSeen: false,
         headlessDefaultPermissionDeniedSeen: false,
         headlessPlanModeSeen: false,
+        controlApprovalFlowSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         resumePickerSearchFieldsSeen: false,
@@ -169,6 +170,7 @@ describe("capability report", () => {
         "barePromptHeadlessSeen=false",
         "headlessDefaultPermissionDeniedSeen=false",
         "headlessPlanModeSeen=false",
+        "controlApprovalFlowSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
         "resumePickerSearchFieldsSeen=false",
@@ -1025,6 +1027,7 @@ function harnessReport(input: {
   barePromptHeadlessSeen?: boolean;
   headlessDefaultPermissionDeniedSeen?: boolean;
   headlessPlanModeSeen?: boolean;
+  controlApprovalFlowSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
   resumePickerSearchFieldsSeen?: boolean;
@@ -1058,7 +1061,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 181,
+      assertions: input.assertions ?? 182,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1097,6 +1100,7 @@ function harnessReport(input: {
                   ...barePromptHeadlessAssertions(input),
                   ...headlessDefaultPermissionDeniedAssertions(input),
                   ...headlessPlanModeAssertions(input),
+                  ...controlApprovalFlowAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...resumePickerSearchFieldsAssertions(input),
@@ -1949,6 +1953,20 @@ function headlessPlanModeAssertions(input: { headlessPlanModeSeen?: boolean }): 
   return input.headlessPlanModeSeen === false
     ? []
     : ["write denied in plan mode", "ExitPlanMode surfaced plan", "plan review persisted"];
+}
+
+function controlApprovalFlowAssertions(input: { controlApprovalFlowSeen?: boolean }): string[] {
+  return input.controlApprovalFlowSeen === false
+    ? []
+    : [
+        "magi serve started from dist CLI",
+        "phone pairing returned auth headers",
+        "background job exposed pending approval",
+        "SSE streamed pending and resolved approval events",
+        "phone approval unblocked FileWrite",
+        "control job completed and persisted audit events",
+        "control approval flow completed two provider turns"
+      ];
 }
 
 function resumePickerTtyAssertions(input: { resumePickerTtySeen?: boolean }): string[] {

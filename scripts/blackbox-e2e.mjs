@@ -4647,7 +4647,8 @@ async function scenarioControlApprovalFlow() {
           "background job exposed pending approval",
           "SSE streamed pending and resolved approval events",
           "phone approval unblocked FileWrite",
-          "control job completed and persisted audit events"
+          "control job completed and persisted audit events",
+          "control approval flow completed two provider turns"
         ],
         control: {
           port: controlPort,
