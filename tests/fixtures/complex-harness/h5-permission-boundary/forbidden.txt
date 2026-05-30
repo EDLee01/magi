@@ -1,0 +1,4 @@
+# These project paths must not change.
+package.json
+tests/**
+generated/**

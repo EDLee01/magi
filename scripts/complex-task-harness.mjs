@@ -692,6 +692,100 @@ function createH4Router() {
   };
 }
 
+function createH5Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (!transcript.includes("Update the project config. Do not touch files outside this repo")) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("FileRead"), "H5 missing FileRead");
+      assert(toolNames.includes("FilePatch"), "H5 missing FilePatch");
+      assert(toolNames.includes("FileWrite"), "H5 missing FileWrite");
+      assert(toolNames.includes("Bash"), "H5 missing Bash");
+      assert(
+        transcript.includes("Do not change package.json, tests, generated files, or files outside this repo"),
+        "H5 permission boundary constraints were not visible"
+      );
+      return toolResponse([
+        toolCall("h5-read-config", "FileRead", { file_path: "src/project-config.js" }),
+        toolCall("h5-read-tests", "FileRead", { file_path: "tests/config.test.mjs" }),
+        toolCall("h5-run-baseline-test", "Bash", { command: "npm test", timeout_ms: 10_000 }),
+        toolCall("h5-attempt-outside-write", "FileWrite", {
+          file_path: "../outside-sentinel.txt",
+          content: "outside write should be rejected\n"
+        })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(transcript.includes('environment: "staging"'), "H5 original environment was not visible");
+      assert(transcript.includes("timeoutMs: 2000"), "H5 original timeout was not visible");
+      assert(transcript.includes("Command exited 1"), "H5 failing baseline test was not visible");
+      assert(
+        transcript.includes("outside allowed directories"),
+        "H5 outside write denial was not visible"
+      );
+      return toolResponse([
+        toolCall("h5-patch-project-config", "FilePatch", {
+          file_path: "src/project-config.js",
+          patch: [
+            "@@",
+            '-  environment: "staging",',
+            '+  environment: "production",',
+            "   api: {",
+            "     baseUrl: \"https://api.example.test\",",
+            "-    timeoutMs: 2000",
+            "+    timeoutMs: 5000",
+            "   },"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(
+        transcript.includes("Patched src/project-config.js"),
+        "H5 project config patch result was not visible"
+      );
+      return toolResponse([
+        toolCall("h5-run-final-test", "Bash", {
+          command: [
+            "npm test",
+            "node <<'NODE'",
+            "const { readFileSync } = require('node:fs');",
+            "const source = readFileSync('src/project-config.js', 'utf8');",
+            "if (!source.includes('environment: \"production\"')) throw new Error('environment not production');",
+            "if (!source.includes('timeoutMs: 5000')) throw new Error('timeout not updated');",
+            "if (source.includes('environment: \"staging\"') || source.includes('timeoutMs: 2000')) throw new Error('stale config remains');",
+            "console.log('permission boundary config verified');",
+            "NODE"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 4) {
+      assert(transcript.includes("Command exited 0"), "H5 passing verification command was not visible");
+      assert(
+        transcript.includes("project config tests passed"),
+        "H5 passing project config test output was missing"
+      );
+      assert(
+        transcript.includes("permission boundary config verified"),
+        "H5 config verification output was missing"
+      );
+      return messageText(
+        "Updated src/project-config.js and verified outside workspace writes were rejected."
+      );
+    }
+
+    throw new Error(`H5 exceeded expected provider turns: ${turn}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -877,6 +971,59 @@ function taskDefinitionFor(taskId) {
         assert(!validator.includes("!config.client.retryLimit"), "H4 falsy retryLimit check remains");
         assert(session.auditEventCount > 0, "H4 audit events were not persisted");
         assert(session.messageCount >= 2, "H4 session messages were not persisted");
+      }
+    };
+  }
+
+  if (taskId === "H5") {
+    return {
+      createRouter: createH5Router,
+      finalMessage:
+        "Updated src/project-config.js and verified outside workspace writes were rejected.",
+      assertions: [
+        "H5 fixture copied into isolated workspace",
+        "H5 provider saw permission boundary constraints",
+        "H5 baseline npm test reproduced config failure",
+        "H5 outside workspace write attempted by FileWrite",
+        "H5 outside workspace write was rejected",
+        "H5 outside sentinel remained unchanged",
+        "H5 rejection reason was persisted in audit metadata",
+        "H5 project config patched with FilePatch",
+        "H5 npm test passed after config update",
+        "H5 final config values verified",
+        "H5 changed exactly expected file",
+        "H5 forbidden paths unchanged",
+        "H5 checks.sh passed",
+        "H5 session and audit persisted"
+      ],
+      filesVerified: [
+        "src/project-config.js",
+        "tests/config.test.mjs",
+        "../outside-sentinel.txt",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session }) => {
+        assert((toolCounts.FileRead ?? 0) >= 2, "H5 did not read enough project evidence");
+        assert((toolCounts.FileWrite ?? 0) === 1, "H5 should attempt one outside FileWrite");
+        assert((toolCounts.FilePatch ?? 0) === 1, "H5 should patch only the project config");
+        assert((toolCounts.Bash ?? 0) === 2, "H5 should run baseline and final verification");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H5 should not use FileEdit");
+        const config = after["src/project-config.js"]?.text ?? "";
+        assert(config.includes('environment: "production"'), "H5 production environment missing");
+        assert(config.includes("timeoutMs: 5000"), "H5 timeout update missing");
+        assert(!config.includes('environment: "staging"'), "H5 stale staging environment remains");
+        assert(!config.includes("timeoutMs: 2000"), "H5 stale timeout remains");
+        assert(
+          session.failedToolReasons.some(
+            (failure) =>
+              failure.target === "FileWrite" &&
+              failure.reason.includes("outside allowed directories")
+          ),
+          "H5 outside write failure reason was not audited"
+        );
+        assert(session.auditEventCount > 0, "H5 audit events were not persisted");
+        assert(session.messageCount >= 2, "H5 session messages were not persisted");
       }
     };
   }
@@ -1095,7 +1242,25 @@ function readSessionEvidence(dbFile, sessionId) {
     const auditEventCount = db
       .prepare("select count(*) as count from audit_events where session_id = ?")
       .get(sessionId).count;
-    return { sessionId, messageCount, auditEventCount };
+    const failedToolReasons = db
+      .prepare(
+        "select target, metadata_json from audit_events where session_id = ? and action = 'agent.tool.failed'"
+      )
+      .all(sessionId)
+      .map((row) => {
+        let metadata = {};
+        try {
+          metadata = JSON.parse(row.metadata_json);
+        } catch {
+          metadata = {};
+        }
+        return {
+          target: row.target,
+          toolCallId: typeof metadata.toolCallId === "string" ? metadata.toolCallId : undefined,
+          reason: typeof metadata.reason === "string" ? metadata.reason : ""
+        };
+      });
+    return { sessionId, messageCount, auditEventCount, failedToolReasons };
   } finally {
     db.close();
   }
@@ -1209,7 +1374,8 @@ async function main() {
     "h1-single-file-bug-fix",
     "h2-multi-file-dry-run",
     "h3-refactor-behavior-preservation",
-    "h4-repository-investigation"
+    "h4-repository-investigation",
+    "h5-permission-boundary"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);

@@ -995,7 +995,10 @@ export class QueryEngine {
         jobId,
         action: event.isError ? "agent.tool.failed" : "agent.tool.completed",
         target: event.toolName,
-        metadata: { toolCallId: event.toolCallId }
+        metadata: {
+          toolCallId: event.toolCallId,
+          ...(event.isError ? { reason: event.content } : {})
+        }
       });
       const toolUse = this.toolUses.get(event.toolCallId);
       const extraEvents: AgentQueryEvent[] = [];

@@ -1,0 +1,6 @@
+{
+  "id": "H5",
+  "name": "H5 permission boundary",
+  "taskClass": "permission_boundary",
+  "expectedChangedFiles": ["src/project-config.js"]
+}

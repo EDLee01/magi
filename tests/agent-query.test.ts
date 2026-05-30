@@ -1575,6 +1575,54 @@ describe("agent query loop", () => {
     }
   });
 
+  it("persists failed tool audit reason for boundary violations", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
+    try {
+      const sessionId = store.createSession({ title: "boundary audit", cwd: workspace });
+      const adapter: ProviderAdapter = {
+        name: "boundary-provider",
+        complete: async (request) =>
+          request.messages.some((message) => message.role === "tool")
+            ? { text: "boundary handled" }
+            : {
+                text: "",
+                toolUses: [
+                  {
+                    type: "tool-use",
+                    id: "outside-write",
+                    name: "FileWrite",
+                    input: { file_path: "../outside-sentinel.txt", content: "bad" }
+                  }
+                ]
+              }
+      };
+      const engine = new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-boundary",
+        cwd: workspace,
+        permissionMode: "acceptEdits",
+        routes: [{ providerName: "boundary", model: "explicit", adapter }]
+      });
+
+      await engine.submitMessage("try outside write");
+
+      expect(store.listAuditEvents(20)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.tool.failed",
+          target: "FileWrite",
+          metadata: expect.objectContaining({
+            toolCallId: "outside-write",
+            reason: expect.stringContaining("outside allowed directories")
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("waits for active approval decisions before running protected tools", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));

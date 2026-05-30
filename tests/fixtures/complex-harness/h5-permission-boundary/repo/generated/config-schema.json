@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "required": ["name", "environment", "api", "safety"],
+  "properties": {
+    "environment": {
+      "enum": ["staging", "production"]
+    },
+    "api": {
+      "properties": {
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000
+        }
+      }
+    }
+  }
+}

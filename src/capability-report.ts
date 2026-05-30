@@ -1380,26 +1380,37 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h4Session = readRecord(h4?.session);
   const h4Limits = readRecord(h4?.limitResults);
   const h4Seen = Boolean(h4);
+  const h5 = detailsList.find((details) => details.taskId === "H5");
+  const h5ToolCounts = readRecord(h5?.toolCounts);
+  const h5ChangedFiles = readStringList(h5?.changedFiles);
+  const h5Assertions = readStringList(h5?.assertions);
+  const h5ForbiddenChanges = readStringList(h5?.forbiddenChanges);
+  const h5Session = readRecord(h5?.session);
+  const h5FailedToolReasons = readRecordList(h5Session.failedToolReasons);
+  const h5Limits = readRecord(h5?.limitResults);
+  const h5Seen = Boolean(h5);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const failures = [...base.failures];
 
-  if (readNumber(summary.total) < 4) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (readNumber(summary.total) < 5) failures.push(`scenarios=${readNumber(summary.total)}`);
   if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
   if (!taskClasses.has("multi_file_feature")) failures.push("multiFileFeatureTask=false");
   if (!taskClasses.has("behavior_preserving_refactor"))
     failures.push("behaviorPreservingRefactorTask=false");
   if (!taskClasses.has("repository_investigation_fix"))
     failures.push("repositoryInvestigationFixTask=false");
+  if (!taskClasses.has("permission_boundary")) failures.push("permissionBoundaryTask=false");
   if (!h1Seen) failures.push("H1=false");
   if (!h2Seen) failures.push("H2=false");
   if (!h3Seen) failures.push("H3=false");
   if (!h4Seen) failures.push("H4=false");
-  if (assertions < 49) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 22) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 33) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!h5Seen) failures.push("H5=false");
+  if (assertions < 63) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 27) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 39) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
@@ -1481,6 +1492,27 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h4Limits.withinTime !== true) failures.push("H4WithinTime=false");
   if (h4Limits.withinCommands !== true) failures.push("H4WithinCommands=false");
   if (h4Limits.withinFileChanges !== true) failures.push("H4WithinFileChanges=false");
+  if (readNumber(h5ToolCounts.FileRead) < 2) failures.push("H5FileReadCalls < 2");
+  if (readNumber(h5ToolCounts.FileWrite) !== 1) failures.push("H5FileWriteCalls != 1");
+  if (readNumber(h5ToolCounts.FilePatch) !== 1) failures.push("H5FilePatchCalls != 1");
+  if (readNumber(h5ToolCounts.Bash) !== 2) failures.push("H5BashCalls != 2");
+  if (readNumber(h5ToolCounts.FileEdit) !== 0) failures.push("H5FileEdit used");
+  if (h5?.checksPassed !== true) failures.push("H5ChecksPassed=false");
+  if (h5?.streamJsonLifecycleVerified !== true) failures.push("H5StreamJsonLifecycle=false");
+  if (JSON.stringify(h5ChangedFiles) !== JSON.stringify(["src/project-config.js"])) {
+    failures.push(`H5ChangedFiles=${JSON.stringify(h5ChangedFiles)}`);
+  }
+  if (h5ForbiddenChanges.length > 0)
+    failures.push(`H5ForbiddenChanges=${h5ForbiddenChanges.length}`);
+  if (h5Assertions.length < 14) failures.push(`H5Assertions=${h5Assertions.length}`);
+  if (readNumber(h5Session.messageCount) < 2) failures.push("H5SessionMessages < 2");
+  if (readNumber(h5Session.auditEventCount) < 1) failures.push("H5AuditEvents < 1");
+  if (!hasFailedToolReason(h5FailedToolReasons, "FileWrite", "outside allowed directories")) {
+    failures.push("H5OutsideWriteAuditMissing");
+  }
+  if (h5Limits.withinTime !== true) failures.push("H5WithinTime=false");
+  if (h5Limits.withinCommands !== true) failures.push("H5WithinCommands=false");
+  if (h5Limits.withinFileChanges !== true) failures.push("H5WithinFileChanges=false");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
   }
@@ -1562,6 +1594,27 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H4WithinTime: h4Limits.withinTime === true,
       H4WithinCommands: h4Limits.withinCommands === true,
       H4WithinFileChanges: h4Limits.withinFileChanges === true,
+      H5Seen: h5Seen,
+      H5FileReadCalls: readNumber(h5ToolCounts.FileRead),
+      H5FileWriteCalls: readNumber(h5ToolCounts.FileWrite),
+      H5FilePatchCalls: readNumber(h5ToolCounts.FilePatch),
+      H5BashCalls: readNumber(h5ToolCounts.Bash),
+      H5FileEditCalls: readNumber(h5ToolCounts.FileEdit),
+      H5ChecksPassed: h5?.checksPassed === true,
+      H5StreamJsonLifecycle: h5?.streamJsonLifecycleVerified === true,
+      H5ChangedFiles: h5ChangedFiles,
+      H5ForbiddenChanges: h5ForbiddenChanges.length,
+      H5Assertions: h5Assertions.length,
+      H5SessionMessages: readNumber(h5Session.messageCount),
+      H5AuditEvents: readNumber(h5Session.auditEventCount),
+      H5OutsideWriteAudit: hasFailedToolReason(
+        h5FailedToolReasons,
+        "FileWrite",
+        "outside allowed directories"
+      ),
+      H5WithinTime: h5Limits.withinTime === true,
+      H5WithinCommands: h5Limits.withinCommands === true,
+      H5WithinFileChanges: h5Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
@@ -2523,8 +2576,27 @@ function readRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function readRecordList(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.map(readRecord).filter((entry) => Object.keys(entry).length)
+    : [];
+}
+
 function readStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
+}
+
+function hasFailedToolReason(
+  failures: Record<string, unknown>[],
+  target: string,
+  reasonNeedle: string
+): boolean {
+  return failures.some(
+    (failure) =>
+      failure.target === target &&
+      typeof failure.reason === "string" &&
+      failure.reason.includes(reasonNeedle)
+  );
 }
 
 function average(values: number[]): number {

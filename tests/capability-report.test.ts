@@ -894,6 +894,7 @@ describe("capability report", () => {
         includeH2: false,
         includeH3: false,
         includeH4: false,
+        includeH5: false,
         assertions: 2,
         filesVerified: 1,
         toolCallCount: 2,
@@ -928,9 +929,11 @@ describe("capability report", () => {
         "multiFileFeatureTask=false",
         "behaviorPreservingRefactorTask=false",
         "repositoryInvestigationFixTask=false",
+        "permissionBoundaryTask=false",
         "H2=false",
         "H3=false",
         "H4=false",
+        "H5=false",
         "assertions=2",
         "filesVerified=1",
         "toolCallCount=2",
@@ -1066,6 +1069,7 @@ function complexHarnessReport(
     includeH2?: boolean;
     includeH3?: boolean;
     includeH4?: boolean;
+    includeH5?: boolean;
     assertions?: number;
     filesVerified?: number;
     toolCallCount?: number;
@@ -1091,16 +1095,20 @@ function complexHarnessReport(
   const includeH2 = overrides.includeH2 ?? true;
   const includeH3 = overrides.includeH3 ?? true;
   const includeH4 = overrides.includeH4 ?? true;
+  const includeH5 = overrides.includeH5 ?? true;
   const h1Assertions = overrides.assertions ?? 10;
   const h2Assertions = includeH2 ? 12 : 0;
   const h3Assertions = includeH3 ? 13 : 0;
   const h4Assertions = includeH4 ? 14 : 0;
-  const assertions = h1Assertions + h2Assertions + h3Assertions + h4Assertions;
+  const h5Assertions = includeH5 ? 14 : 0;
+  const assertions = h1Assertions + h2Assertions + h3Assertions + h4Assertions + h5Assertions;
   const h1FilesVerified = overrides.filesVerified ?? 4;
   const h2FilesVerified = includeH2 ? 6 : 0;
   const h3FilesVerified = includeH3 ? 6 : 0;
   const h4FilesVerified = includeH4 ? 6 : 0;
-  const filesVerified = h1FilesVerified + h2FilesVerified + h3FilesVerified + h4FilesVerified;
+  const h5FilesVerified = includeH5 ? 5 : 0;
+  const filesVerified =
+    h1FilesVerified + h2FilesVerified + h3FilesVerified + h4FilesVerified + h5FilesVerified;
   const h1ToolCounts = {
     FileRead: overrides.fileReadCalls ?? 2,
     FilePatch: overrides.filePatchCalls ?? 2,
@@ -1137,14 +1145,25 @@ function complexHarnessReport(
         FileEdit: 0
       }
     : {};
+  const h5ToolCounts = includeH5
+    ? {
+        FileRead: 2,
+        FileWrite: 1,
+        FilePatch: 1,
+        Bash: 2,
+        FileEdit: 0
+      }
+    : {};
   const toolCallCount =
     overrides.toolCallCount ??
     Object.values(h1ToolCounts).reduce((sum, count) => sum + count, 0) +
       Object.values(h2ToolCounts).reduce((sum, count) => sum + count, 0) +
       Object.values(h3ToolCounts).reduce((sum, count) => sum + count, 0) +
-      Object.values(h4ToolCounts).reduce((sum, count) => sum + count, 0);
+      Object.values(h4ToolCounts).reduce((sum, count) => sum + count, 0) +
+      Object.values(h5ToolCounts).reduce((sum, count) => sum + count, 0);
   const uniqueToolCount = overrides.uniqueToolCount ?? (includeH4 ? 6 : includeH3 ? 4 : 3);
-  const scenarioCount = 1 + (includeH2 ? 1 : 0) + (includeH3 ? 1 : 0) + (includeH4 ? 1 : 0);
+  const scenarioCount =
+    1 + (includeH2 ? 1 : 0) + (includeH3 ? 1 : 0) + (includeH4 ? 1 : 0) + (includeH5 ? 1 : 0);
   const passed = status === "passed" ? scenarioCount : 0;
   const failed = status === "passed" ? 0 : scenarioCount;
   const scenarios: Record<string, unknown>[] = [
@@ -1275,6 +1294,45 @@ function complexHarnessReport(
       }
     });
   }
+  if (includeH5) {
+    scenarios.push({
+      name: "H5 permission boundary",
+      status,
+      durationMs: 800,
+      score: overrides.score ?? (status === "passed" ? 1 : 0),
+      failureKind: status === "passed" ? null : "assertion",
+      details: {
+        taskId: "H5",
+        taskClass: "permission_boundary",
+        toolCounts: h5ToolCounts,
+        assertions: Array.from({ length: h5Assertions }, (_, index) => `H5 assertion ${index + 1}`),
+        filesVerified: Array.from(
+          { length: h5FilesVerified },
+          (_, index) => `H5 file ${index + 1}`
+        ),
+        changedFiles: ["src/project-config.js"],
+        forbiddenChanges: [],
+        checksPassed: true,
+        streamJsonLifecycleVerified: true,
+        session: {
+          messageCount: 3,
+          auditEventCount: 8,
+          failedToolReasons: [
+            {
+              target: "FileWrite",
+              toolCallId: "h5-attempt-outside-write",
+              reason: "Path ../outside-sentinel.txt is outside allowed directories"
+            }
+          ]
+        },
+        limitResults: {
+          withinTime: true,
+          withinCommands: true,
+          withinFileChanges: true
+        }
+      }
+    });
+  }
   return {
     version: 1,
     name: "complex-task-harness",
@@ -1300,7 +1358,8 @@ function complexHarnessReport(
               h1ToolCounts.FilePatch +
               (h2ToolCounts.FilePatch ?? 0) +
               (h3ToolCounts.FilePatch ?? 0) +
-              (h4ToolCounts.FilePatch ?? 0)
+              (h4ToolCounts.FilePatch ?? 0) +
+              (h5ToolCounts.FilePatch ?? 0)
           },
           {
             name: "FileRead",
@@ -1308,7 +1367,8 @@ function complexHarnessReport(
               h1ToolCounts.FileRead +
               (h2ToolCounts.FileRead ?? 0) +
               (h3ToolCounts.FileRead ?? 0) +
-              (h4ToolCounts.FileRead ?? 0)
+              (h4ToolCounts.FileRead ?? 0) +
+              (h5ToolCounts.FileRead ?? 0)
           },
           {
             name: "Bash",
@@ -1316,9 +1376,14 @@ function complexHarnessReport(
               h1ToolCounts.Bash +
               (h2ToolCounts.Bash ?? 0) +
               (h3ToolCounts.Bash ?? 0) +
-              (h4ToolCounts.Bash ?? 0)
+              (h4ToolCounts.Bash ?? 0) +
+              (h5ToolCounts.Bash ?? 0)
           },
-          { name: "FileWrite", count: h1ToolCounts.FileWrite + (h3ToolCounts.FileWrite ?? 0) },
+          {
+            name: "FileWrite",
+            count:
+              h1ToolCounts.FileWrite + (h3ToolCounts.FileWrite ?? 0) + (h5ToolCounts.FileWrite ?? 0)
+          },
           { name: "Glob", count: h4ToolCounts.Glob ?? 0 },
           { name: "Grep", count: h4ToolCounts.Grep ?? 0 }
         ]

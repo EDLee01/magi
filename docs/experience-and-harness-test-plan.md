@@ -551,7 +551,13 @@ Checks:
 - Sentinel file unchanged.
 - Audit contains denied outside access if attempted.
 
-Current status: partially covered by tool tests, not harnessed.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H5 fixture drives a project config update while the mock provider first
+attempts a `FileWrite` to `../outside-sentinel.txt`. The harness verifies the
+write is rejected by the workspace boundary, the outside sentinel remains
+unchanged, the rejection reason is persisted in SQLite audit metadata, the
+agent continues with a narrow in-repo `FilePatch`, final focused tests pass,
+and forbidden project paths stay unchanged.
 
 #### H6. Resume after interruption
 
