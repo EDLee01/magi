@@ -250,6 +250,7 @@ describe("capability report", () => {
         "monorepoGeneratedBoundaryTask=false",
         "workspacePolicyMigrationTask=false",
         "mixedLanguageContractMigrationTask=false",
+        "largeRepoLongChainMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -295,6 +296,18 @@ describe("capability report", () => {
         "mixedLanguageDocsContractMigrated=false",
         "mixedLanguageGeneratedClientUntouched=false",
         "mixedLanguageContractVerified=false",
+        "largeRepoLongChainMigrationBashCalls != 2",
+        "largeRepoLongChainMigrationGlobCalls != 1",
+        "largeRepoLongChainMigrationGrepCalls != 1",
+        "largeRepoLongChainMigrationFileReadCalls != 12",
+        "largeRepoLongChainMigrationFilePatchCalls < 9",
+        "largeRepoDiscoveryVerified=false",
+        "largeRepoSourceContractsMigrated=false",
+        "largeRepoDocsMigrated=false",
+        "largeRepoOldOwnedReferencesRemoved=false",
+        "largeRepoGeneratedClientUntouched=false",
+        "largeRepoVendorShimUntouched=false",
+        "largeRepoLongChainVerified=false",
         "regressions=1"
       ])
     );
@@ -830,6 +843,22 @@ function modelTaskReport(
       generatedClientUntouched: boolean;
       mixedLanguageContractVerified: boolean;
     };
+    largeRepoLongChainMigration: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      repoDiscoveryVerified: boolean;
+      sourceContractsMigrated: boolean;
+      docsMigrated: boolean;
+      oldOwnedReferencesRemoved: boolean;
+      generatedClientUntouched: boolean;
+      vendorShimUntouched: boolean;
+      largeRepoLongChainVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -845,7 +874,8 @@ function modelTaskReport(
     "api_migration",
     "monorepo_generated_boundary",
     "workspace_policy_migration",
-    "mixed_language_contract_migration"
+    "mixed_language_contract_migration",
+    "large_repo_long_chain_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -914,14 +944,30 @@ function modelTaskReport(
     generatedClientUntouched: true,
     mixedLanguageContractVerified: true
   };
+  const largeRepoLongChainMigration = overrides.largeRepoLongChainMigration ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 12,
+    filePatchCalls: 9,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    repoDiscoveryVerified: true,
+    sourceContractsMigrated: true,
+    docsMigrated: true,
+    oldOwnedReferencesRemoved: true,
+    generatedClientUntouched: true,
+    vendorShimUntouched: true,
+    largeRepoLongChainVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
-    providerCalls: overrides.providerCalls ?? 14,
-    assertions: overrides.assertions ?? 91,
-    filesVerified: overrides.filesVerified ?? 39,
-    toolCallCount: overrides.toolCallCount ?? 85,
+    providerCalls: overrides.providerCalls ?? 17,
+    assertions: overrides.assertions ?? 110,
+    filesVerified: overrides.filesVerified ?? 51,
+    toolCallCount: overrides.toolCallCount ?? 110,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1029,6 +1075,26 @@ function modelTaskReport(
               generatedClientUntouched: mixedLanguageContractMigration.generatedClientUntouched,
               mixedLanguageContractVerified:
                 mixedLanguageContractMigration.mixedLanguageContractVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "large_repo_long_chain_migration"
+          ? {
+              toolCounts: {
+                Bash: largeRepoLongChainMigration.bashCalls,
+                Glob: largeRepoLongChainMigration.globCalls,
+                Grep: largeRepoLongChainMigration.grepCalls,
+                FileRead: largeRepoLongChainMigration.fileReadCalls,
+                FilePatch: largeRepoLongChainMigration.filePatchCalls,
+                FileWrite: largeRepoLongChainMigration.fileWriteCalls,
+                FileEdit: largeRepoLongChainMigration.fileEditCalls
+              },
+              repoDiscoveryVerified: largeRepoLongChainMigration.repoDiscoveryVerified,
+              sourceContractsMigrated: largeRepoLongChainMigration.sourceContractsMigrated,
+              docsMigrated: largeRepoLongChainMigration.docsMigrated,
+              oldOwnedReferencesRemoved: largeRepoLongChainMigration.oldOwnedReferencesRemoved,
+              generatedClientUntouched: largeRepoLongChainMigration.generatedClientUntouched,
+              vendorShimUntouched: largeRepoLongChainMigration.vendorShimUntouched,
+              largeRepoLongChainVerified: largeRepoLongChainMigration.largeRepoLongChainVerified
             }
           : {})
       }

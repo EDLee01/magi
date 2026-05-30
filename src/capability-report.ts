@@ -318,13 +318,44 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const mixedLanguageContractMigrationFileEditCalls = readNumber(
     mixedLanguageContractMigrationToolCounts.FileEdit
   );
+  const largeRepoLongChainMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "large_repo_long_chain_migration"
+  );
+  const largeRepoLongChainMigrationDetails = readRecord(
+    largeRepoLongChainMigration ? readRecord(largeRepoLongChainMigration).details : {}
+  );
+  const largeRepoLongChainMigrationToolCounts = readRecord(
+    largeRepoLongChainMigrationDetails.toolCounts
+  );
+  const largeRepoLongChainMigrationTaskSeen = taskClasses.has("large_repo_long_chain_migration");
+  const largeRepoLongChainMigrationBashCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.Bash
+  );
+  const largeRepoLongChainMigrationGlobCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.Glob
+  );
+  const largeRepoLongChainMigrationGrepCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.Grep
+  );
+  const largeRepoLongChainMigrationFileReadCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.FileRead
+  );
+  const largeRepoLongChainMigrationFilePatchCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.FilePatch
+  );
+  const largeRepoLongChainMigrationFileWriteCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.FileWrite
+  );
+  const largeRepoLongChainMigrationFileEditCalls = readNumber(
+    largeRepoLongChainMigrationToolCounts.FileEdit
+  );
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 12) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 12) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 13) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 13) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -335,9 +366,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!mixedLanguageContractMigrationTaskSeen) {
     failures.push("mixedLanguageContractMigrationTask=false");
   }
-  if (assertions < 91) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 39) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 85) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!largeRepoLongChainMigrationTaskSeen) {
+    failures.push("largeRepoLongChainMigrationTask=false");
+  }
+  if (assertions < 110) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 51) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 110) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -468,6 +502,48 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (mixedLanguageContractMigrationDetails.mixedLanguageContractVerified !== true) {
     failures.push("mixedLanguageContractVerified=false");
   }
+  if (largeRepoLongChainMigrationBashCalls !== 2) {
+    failures.push("largeRepoLongChainMigrationBashCalls != 2");
+  }
+  if (largeRepoLongChainMigrationGlobCalls !== 1) {
+    failures.push("largeRepoLongChainMigrationGlobCalls != 1");
+  }
+  if (largeRepoLongChainMigrationGrepCalls !== 1) {
+    failures.push("largeRepoLongChainMigrationGrepCalls != 1");
+  }
+  if (largeRepoLongChainMigrationFileReadCalls !== 12) {
+    failures.push("largeRepoLongChainMigrationFileReadCalls != 12");
+  }
+  if (largeRepoLongChainMigrationFilePatchCalls < 9) {
+    failures.push("largeRepoLongChainMigrationFilePatchCalls < 9");
+  }
+  if (largeRepoLongChainMigrationFileWriteCalls !== 0) {
+    failures.push("largeRepoLongChainMigrationFileWrite used");
+  }
+  if (largeRepoLongChainMigrationFileEditCalls !== 0) {
+    failures.push("largeRepoLongChainMigrationFileEdit used");
+  }
+  if (largeRepoLongChainMigrationDetails.repoDiscoveryVerified !== true) {
+    failures.push("largeRepoDiscoveryVerified=false");
+  }
+  if (largeRepoLongChainMigrationDetails.sourceContractsMigrated !== true) {
+    failures.push("largeRepoSourceContractsMigrated=false");
+  }
+  if (largeRepoLongChainMigrationDetails.docsMigrated !== true) {
+    failures.push("largeRepoDocsMigrated=false");
+  }
+  if (largeRepoLongChainMigrationDetails.oldOwnedReferencesRemoved !== true) {
+    failures.push("largeRepoOldOwnedReferencesRemoved=false");
+  }
+  if (largeRepoLongChainMigrationDetails.generatedClientUntouched !== true) {
+    failures.push("largeRepoGeneratedClientUntouched=false");
+  }
+  if (largeRepoLongChainMigrationDetails.vendorShimUntouched !== true) {
+    failures.push("largeRepoVendorShimUntouched=false");
+  }
+  if (largeRepoLongChainMigrationDetails.largeRepoLongChainVerified !== true) {
+    failures.push("largeRepoLongChainVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -560,6 +636,25 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
         mixedLanguageContractMigrationDetails.generatedClientUntouched === true,
       mixedLanguageContractVerified:
         mixedLanguageContractMigrationDetails.mixedLanguageContractVerified === true,
+      largeRepoLongChainMigrationTaskSeen,
+      largeRepoLongChainMigrationBashCalls,
+      largeRepoLongChainMigrationGlobCalls,
+      largeRepoLongChainMigrationGrepCalls,
+      largeRepoLongChainMigrationFileReadCalls,
+      largeRepoLongChainMigrationFilePatchCalls,
+      largeRepoLongChainMigrationFileWriteCalls,
+      largeRepoLongChainMigrationFileEditCalls,
+      largeRepoDiscoveryVerified: largeRepoLongChainMigrationDetails.repoDiscoveryVerified === true,
+      largeRepoSourceContractsMigrated:
+        largeRepoLongChainMigrationDetails.sourceContractsMigrated === true,
+      largeRepoDocsMigrated: largeRepoLongChainMigrationDetails.docsMigrated === true,
+      largeRepoOldOwnedReferencesRemoved:
+        largeRepoLongChainMigrationDetails.oldOwnedReferencesRemoved === true,
+      largeRepoGeneratedClientUntouched:
+        largeRepoLongChainMigrationDetails.generatedClientUntouched === true,
+      largeRepoVendorShimUntouched: largeRepoLongChainMigrationDetails.vendorShimUntouched === true,
+      largeRepoLongChainVerified:
+        largeRepoLongChainMigrationDetails.largeRepoLongChainVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

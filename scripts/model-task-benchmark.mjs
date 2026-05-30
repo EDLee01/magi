@@ -2648,6 +2648,564 @@ async function scenarioMixedLanguageContractMigrationTask() {
   });
 }
 
+async function scenarioLargeRepoLongChainMigrationTask() {
+  return await withWorkspace("large-repo-long-chain", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "services", "api", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "services", "web", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "services", "worker", "jobs"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "shared", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "audit", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "apps", "admin", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "apps", "mobile", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated", "openapi"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor", "sdk"), { recursive: true });
+    mkdirSync(path.join(workDir, "fixtures", "workspaces"), { recursive: true });
+    mkdirSync(path.join(workDir, "scripts"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "services", "api", "src", "workspaceContext.js"),
+      [
+        "export function buildContext(user, legacyProjectId) {",
+        "  return { user, legacyProjectId };",
+        "}",
+        "",
+        "export function workspaceHeader(context) {",
+        '  return { "x-project-id": context.legacyProjectId };',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "services", "api", "src", "audit.js"),
+      [
+        "export function auditWorkspaceRead(actor, legacyProjectId) {",
+        '  return { actor, legacyProjectId, event: "project.read" };',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "shared", "src", "workspace-schema.js"),
+      [
+        'export const idField = "legacyProjectId";',
+        'export const routePrefix = "/projects";',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "services", "web", "src", "workspaceClient.ts"),
+      [
+        "export type WorkspaceRouteParams = { legacyProjectId: string };",
+        "",
+        "export function workspacePath(params: WorkspaceRouteParams): string {",
+        '  return `/projects/${params.legacyProjectId}/overview`;',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "services", "web", "src", "dashboardCopy.ts"),
+      [
+        'export const dashboardIdLabel = "legacyProjectId";',
+        'export const dashboardRouteHint = "/projects/:legacyProjectId/overview";',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "services", "worker", "jobs", "project_sync.py"),
+      [
+        'ID_FIELD = "legacyProjectId"',
+        "",
+        "def sync_project(legacy_project_id):",
+        '    return {"path": f"/projects/{legacy_project_id}/sync", "field": ID_FIELD}',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "audit", "src", "events.js"),
+      [
+        'export const workspaceReadEvent = "project.read";',
+        "",
+        "export function serializeWorkspaceEvent(legacyProjectId) {",
+        "  return { legacyProjectId, event: workspaceReadEvent };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "api-contract.md"),
+      [
+        "# API Contract",
+        "",
+        "Clients send legacyProjectId in the x-project-id header.",
+        "Workspace overview routes are under /projects/:legacyProjectId/overview.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "runbook.md"),
+      [
+        "# Runbook",
+        "",
+        "Use legacyProjectId when tracing project.read events.",
+        "Worker sync jobs call /projects/{legacyProjectId}/sync.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "// AUTO-GENERATED OPENAPI CLIENT. DO NOT EDIT.",
+      "export type GeneratedWorkspaceParams = { legacyProjectId: string };",
+      'export const generatedProjectPath = "/projects/{legacyProjectId}";',
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// third party SDK shim",
+      'export const sdkIdField = "legacyProjectId";',
+      'export const sdkRoute = "/projects/{legacyProjectId}";',
+      ""
+    ].join("\n");
+    writeFileSync(
+      path.join(workDir, "generated", "openapi", "workspace-client.ts"),
+      generatedBefore,
+      "utf8"
+    );
+    writeFileSync(path.join(workDir, "vendor", "sdk", "legacy-project.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "apps", "admin", "src", "overview.ts"),
+      'export const adminPanel = "workspace overview";\n',
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "apps", "mobile", "src", "settings.ts"),
+      'export const mobileSettingsPanel = "workspace settings";\n',
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "fixtures", "workspaces", "sample.json"),
+      '{ "workspaceId": "ws_123", "name": "Acme" }\n',
+      "utf8"
+    );
+    writeFileSync(path.join(workDir, "scripts", "README.md"), "# Scripts\n\nNo migration needed.\n", "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "workspace-contract.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        'import { buildContext, workspaceHeader } from "../services/api/src/workspaceContext.js";',
+        "",
+        'const context = buildContext("ada", "ws_123");',
+        'assert.deepEqual(context, { user: "ada", workspaceId: "ws_123" });',
+        'assert.deepEqual(workspaceHeader(context), { "x-workspace-id": "ws_123" });',
+        "",
+        "const mutableFiles = [",
+        '  "services/api/src/workspaceContext.js",',
+        '  "services/api/src/audit.js",',
+        '  "packages/shared/src/workspace-schema.js",',
+        '  "services/web/src/workspaceClient.ts",',
+        '  "services/web/src/dashboardCopy.ts",',
+        '  "services/worker/jobs/project_sync.py",',
+        '  "packages/audit/src/events.js",',
+        '  "docs/api-contract.md",',
+        '  "docs/runbook.md"',
+        "];",
+        "for (const file of mutableFiles) {",
+        '  const content = readFileSync(file, "utf8");',
+        "  assert.doesNotMatch(content, /legacyProjectId/);",
+        '  assert.doesNotMatch(content, /x-project-id/);',
+        '  assert.doesNotMatch(content, /\\/projects\\//);',
+        "  assert.match(content, /workspaceId|workspace\\.read|workspaces|x-workspace-id/);",
+        "}",
+        "",
+        'const web = readFileSync("services/web/src/workspaceClient.ts", "utf8");',
+        'assert.match(web, /WorkspaceRouteParams = \\{ workspaceId: string \\}/);',
+        'assert.match(web, /\\/workspaces\\/\\$\\{params\\.workspaceId\\}\\/overview/);',
+        'const worker = readFileSync("services/worker/jobs/project_sync.py", "utf8");',
+        'assert.match(worker, /def sync_workspace\\(workspace_id\\):/);',
+        'assert.match(worker, /\\/workspaces\\/\\{workspace_id\\}\\/sync/);',
+        'const generated = readFileSync("generated/openapi/workspace-client.ts", "utf8");',
+        'assert.match(generated, /AUTO-GENERATED OPENAPI CLIENT\\. DO NOT EDIT/);',
+        'assert.match(generated, /legacyProjectId/);',
+        'const vendor = readFileSync("vendor/sdk/legacy-project.js", "utf8");',
+        'assert.match(vendor, /third party SDK shim/);',
+        'assert.match(vendor, /legacyProjectId/);',
+        'console.log("large repo workspace migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-workspace-contract-before", "Bash", {
+              command: "node tests/workspace-contract.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-large-repo", "Glob", {
+              pattern: "**/*.{js,ts,py,md,json,mjs}",
+              max_matches: 40
+            }),
+            toolCall("grep-legacy-project-id", "Grep", {
+              pattern: "legacyProjectId",
+              path: ".",
+              output_mode: "content",
+              max_matches: 40
+            }),
+            toolCall("read-workspace-contract-test", "FileRead", {
+              file_path: "tests/workspace-contract.test.mjs"
+            }),
+            toolCall("read-api-context", "FileRead", {
+              file_path: "services/api/src/workspaceContext.js"
+            }),
+            toolCall("read-api-audit", "FileRead", {
+              file_path: "services/api/src/audit.js"
+            }),
+            toolCall("read-shared-schema", "FileRead", {
+              file_path: "packages/shared/src/workspace-schema.js"
+            }),
+            toolCall("read-web-client", "FileRead", {
+              file_path: "services/web/src/workspaceClient.ts"
+            }),
+            toolCall("read-dashboard-copy", "FileRead", {
+              file_path: "services/web/src/dashboardCopy.ts"
+            }),
+            toolCall("read-worker-sync", "FileRead", {
+              file_path: "services/worker/jobs/project_sync.py"
+            }),
+            toolCall("read-audit-events", "FileRead", {
+              file_path: "packages/audit/src/events.js"
+            }),
+            toolCall("read-api-contract-docs", "FileRead", {
+              file_path: "docs/api-contract.md"
+            }),
+            toolCall("read-runbook-docs", "FileRead", {
+              file_path: "docs/runbook.md"
+            }),
+            toolCall("read-generated-openapi-client", "FileRead", {
+              file_path: "generated/openapi/workspace-client.ts"
+            }),
+            toolCall("read-vendor-sdk", "FileRead", {
+              file_path: "vendor/sdk/legacy-project.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing workspace contract test missing");
+          assert(transcript.includes("services/api/src/workspaceContext.js"), "large repo file list missing");
+          assert(transcript.includes("legacyProjectId"), "legacy id search results missing");
+          assert(
+            transcript.includes("AUTO-GENERATED OPENAPI CLIENT"),
+            "generated OpenAPI boundary missing"
+          );
+          assert(transcript.includes("third party SDK shim"), "vendor SDK boundary missing");
+          return toolResponse([
+            toolCall("patch-api-context", "FilePatch", {
+              file_path: "services/api/src/workspaceContext.js",
+              patch: [
+                "@@",
+                "-export function buildContext(user, legacyProjectId) {",
+                "-  return { user, legacyProjectId };",
+                "+export function buildContext(user, workspaceId) {",
+                "+  return { user, workspaceId };",
+                " }",
+                " ",
+                " export function workspaceHeader(context) {",
+                '-  return { "x-project-id": context.legacyProjectId };',
+                '+  return { "x-workspace-id": context.workspaceId };',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-api-audit", "FilePatch", {
+              file_path: "services/api/src/audit.js",
+              patch: [
+                "@@",
+                "-export function auditWorkspaceRead(actor, legacyProjectId) {",
+                '-  return { actor, legacyProjectId, event: "project.read" };',
+                "+export function auditWorkspaceRead(actor, workspaceId) {",
+                '+  return { actor, workspaceId, event: "workspace.read" };',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-shared-schema", "FilePatch", {
+              file_path: "packages/shared/src/workspace-schema.js",
+              patch: [
+                "@@",
+                '-export const idField = "legacyProjectId";',
+                '-export const routePrefix = "/projects";',
+                '+export const idField = "workspaceId";',
+                '+export const routePrefix = "/workspaces";'
+              ].join("\n")
+            }),
+            toolCall("patch-web-client", "FilePatch", {
+              file_path: "services/web/src/workspaceClient.ts",
+              patch: [
+                "@@",
+                "-export type WorkspaceRouteParams = { legacyProjectId: string };",
+                "+export type WorkspaceRouteParams = { workspaceId: string };",
+                " ",
+                " export function workspacePath(params: WorkspaceRouteParams): string {",
+                "-  return `/projects/${params.legacyProjectId}/overview`;",
+                "+  return `/workspaces/${params.workspaceId}/overview`;",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-dashboard-copy", "FilePatch", {
+              file_path: "services/web/src/dashboardCopy.ts",
+              patch: [
+                "@@",
+                '-export const dashboardIdLabel = "legacyProjectId";',
+                '-export const dashboardRouteHint = "/projects/:legacyProjectId/overview";',
+                '+export const dashboardIdLabel = "workspaceId";',
+                '+export const dashboardRouteHint = "/workspaces/:workspaceId/overview";'
+              ].join("\n")
+            }),
+            toolCall("patch-worker-sync", "FilePatch", {
+              file_path: "services/worker/jobs/project_sync.py",
+              patch: [
+                "@@",
+                '-ID_FIELD = "legacyProjectId"',
+                '+ID_FIELD = "workspaceId"',
+                " ",
+                "-def sync_project(legacy_project_id):",
+                '-    return {"path": f"/projects/{legacy_project_id}/sync", "field": ID_FIELD}',
+                "+def sync_workspace(workspace_id):",
+                '+    return {"path": f"/workspaces/{workspace_id}/sync", "field": ID_FIELD}'
+              ].join("\n")
+            }),
+            toolCall("patch-audit-events", "FilePatch", {
+              file_path: "packages/audit/src/events.js",
+              patch: [
+                "@@",
+                '-export const workspaceReadEvent = "project.read";',
+                '+export const workspaceReadEvent = "workspace.read";',
+                " ",
+                "-export function serializeWorkspaceEvent(legacyProjectId) {",
+                "-  return { legacyProjectId, event: workspaceReadEvent };",
+                "+export function serializeWorkspaceEvent(workspaceId) {",
+                "+  return { workspaceId, event: workspaceReadEvent };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-api-contract-docs", "FilePatch", {
+              file_path: "docs/api-contract.md",
+              patch: [
+                "@@",
+                " # API Contract",
+                " ",
+                "-Clients send legacyProjectId in the x-project-id header.",
+                "-Workspace overview routes are under /projects/:legacyProjectId/overview.",
+                "+Clients send workspaceId in the x-workspace-id header.",
+                "+Workspace overview routes are under /workspaces/:workspaceId/overview."
+              ].join("\n")
+            }),
+            toolCall("patch-runbook-docs", "FilePatch", {
+              file_path: "docs/runbook.md",
+              patch: [
+                "@@",
+                " # Runbook",
+                " ",
+                "-Use legacyProjectId when tracing project.read events.",
+                "-Worker sync jobs call /projects/{legacyProjectId}/sync.",
+                "+Use workspaceId when tracing workspace.read events.",
+                "+Worker sync jobs call /workspaces/{workspaceId}/sync."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched services/api/src/workspaceContext.js"),
+            "api context patch result missing"
+          );
+          assert(transcript.includes("Patched services/api/src/audit.js"), "api audit patch missing");
+          assert(
+            transcript.includes("Patched packages/shared/src/workspace-schema.js"),
+            "shared schema patch missing"
+          );
+          assert(
+            transcript.includes("Patched services/web/src/workspaceClient.ts"),
+            "web client patch missing"
+          );
+          assert(
+            transcript.includes("Patched services/worker/jobs/project_sync.py"),
+            "worker sync patch missing"
+          );
+          assert(transcript.includes("Patched docs/runbook.md"), "runbook docs patch missing");
+          return toolResponse([
+            toolCall("run-workspace-contract-after", "Bash", {
+              command: "node tests/workspace-contract.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("large repo workspace migration ok"),
+          "passing large repo migration test missing"
+        );
+        return messageText(
+          "Large repo workspace contract migration completed with generated and vendor boundaries preserved."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Migrate this larger repo from legacyProjectId/project routes to workspaceId/workspace routes.",
+            "Run the focused workspace contract test before editing, discover the repo with Glob and Grep,",
+            "inspect owned files plus generated and vendor boundaries, patch source/docs across packages,",
+            "do not modify generated/openapi or vendor/sdk files, then rerun the focused contract test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "large repo long-chain migration task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "large repo migration task did not complete");
+      const mutableFiles = [
+        "services/api/src/workspaceContext.js",
+        "services/api/src/audit.js",
+        "packages/shared/src/workspace-schema.js",
+        "services/web/src/workspaceClient.ts",
+        "services/web/src/dashboardCopy.ts",
+        "services/worker/jobs/project_sync.py",
+        "packages/audit/src/events.js",
+        "docs/api-contract.md",
+        "docs/runbook.md"
+      ];
+      for (const file of mutableFiles) {
+        const content = readFileSync(path.join(workDir, file), "utf8");
+        assert(!content.includes("legacyProjectId"), `${file} still contains legacyProjectId`);
+        assert(!content.includes("x-project-id"), `${file} still contains x-project-id`);
+        assert(!content.includes("/projects/"), `${file} still contains /projects/ route`);
+      }
+      const context = readFileSync(
+        path.join(workDir, "services", "api", "src", "workspaceContext.js"),
+        "utf8"
+      );
+      const webClient = readFileSync(
+        path.join(workDir, "services", "web", "src", "workspaceClient.ts"),
+        "utf8"
+      );
+      const worker = readFileSync(
+        path.join(workDir, "services", "worker", "jobs", "project_sync.py"),
+        "utf8"
+      );
+      const docs = readFileSync(path.join(workDir, "docs", "api-contract.md"), "utf8");
+      const generatedAfter = readFileSync(
+        path.join(workDir, "generated", "openapi", "workspace-client.ts"),
+        "utf8"
+      );
+      const vendorAfter = readFileSync(
+        path.join(workDir, "vendor", "sdk", "legacy-project.js"),
+        "utf8"
+      );
+      assert(context.includes("workspaceHeader"), "workspace context missing exported header");
+      assert(context.includes('"x-workspace-id"'), "workspace header not migrated");
+      assert(webClient.includes("workspaceId: string"), "web route param not migrated");
+      assert(webClient.includes("/workspaces/${params.workspaceId}/overview"), "web route not migrated");
+      assert(worker.includes("def sync_workspace(workspace_id):"), "worker sync function not migrated");
+      assert(docs.includes("x-workspace-id"), "API contract docs not migrated");
+      assert(generatedAfter === generatedBefore, "generated OpenAPI client was modified");
+      assert(vendorAfter === vendorBefore, "vendor SDK shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "large repo task should run focused tests before and after");
+      assert(toolCounts.Glob === 1, "large repo task should discover files with Glob");
+      assert(toolCounts.Grep === 1, "large repo task should search old id with Grep");
+      assert(toolCounts.FileRead === 12, "large repo task should inspect owned and boundary files");
+      assert(toolCounts.FilePatch === 9, "large repo task should patch nine owned files");
+      assert(!toolCounts.FileWrite, "large repo task should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "large repo task should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing workspace contract test ran first",
+          "large repo file discovery ran with Glob",
+          "legacy id search ran with Grep",
+          "owned source files inspected before patching",
+          "generated OpenAPI boundary inspected",
+          "vendor SDK boundary inspected",
+          "api context migrated to workspaceId header",
+          "api audit migrated to workspace events",
+          "shared schema route prefix migrated",
+          "web route contract migrated",
+          "worker sync contract migrated",
+          "docs migrated across API contract and runbook",
+          "focused passing workspace contract test ran after migration",
+          "old owned legacy references removed",
+          "generated OpenAPI client stayed unchanged",
+          "vendor SDK shim stayed unchanged",
+          "FileWrite avoided for large repo migration",
+          "FileEdit avoided for large repo migration",
+          "final response completed"
+        ],
+        filesVerified: [
+          "services/api/src/workspaceContext.js",
+          "services/api/src/audit.js",
+          "packages/shared/src/workspace-schema.js",
+          "services/web/src/workspaceClient.ts",
+          "services/web/src/dashboardCopy.ts",
+          "services/worker/jobs/project_sync.py",
+          "packages/audit/src/events.js",
+          "docs/api-contract.md",
+          "docs/runbook.md",
+          "generated/openapi/workspace-client.ts",
+          "vendor/sdk/legacy-project.js",
+          "tests/workspace-contract.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "large_repo_long_chain_migration",
+        toolCounts,
+        repoDiscoveryVerified: true,
+        sourceContractsMigrated: true,
+        docsMigrated: true,
+        oldOwnedReferencesRemoved: true,
+        generatedClientUntouched: true,
+        vendorShimUntouched: true,
+        largeRepoLongChainVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -2704,7 +3262,8 @@ async function main() {
     ["api migration task", scenarioApiMigrationTask],
     ["monorepo generated boundary task", scenarioMonorepoGeneratedBoundaryTask],
     ["workspace policy migration task", scenarioWorkspacePolicyMigrationTask],
-    ["mixed language contract migration task", scenarioMixedLanguageContractMigrationTask]
+    ["mixed language contract migration task", scenarioMixedLanguageContractMigrationTask],
+    ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {
