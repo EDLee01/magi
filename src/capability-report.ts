@@ -476,13 +476,32 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const ossIssueRegressionFixFilePatchCalls = readNumber(ossIssueRegressionFixToolCounts.FilePatch);
   const ossIssueRegressionFixFileWriteCalls = readNumber(ossIssueRegressionFixToolCounts.FileWrite);
   const ossIssueRegressionFixFileEditCalls = readNumber(ossIssueRegressionFixToolCounts.FileEdit);
+  const ossSecurityAdvisoryFix = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "oss_security_advisory_fix"
+  );
+  const ossSecurityAdvisoryFixDetails = readRecord(
+    ossSecurityAdvisoryFix ? readRecord(ossSecurityAdvisoryFix).details : {}
+  );
+  const ossSecurityAdvisoryFixToolCounts = readRecord(ossSecurityAdvisoryFixDetails.toolCounts);
+  const ossSecurityAdvisoryFixTaskSeen = taskClasses.has("oss_security_advisory_fix");
+  const ossSecurityAdvisoryFixBashCalls = readNumber(ossSecurityAdvisoryFixToolCounts.Bash);
+  const ossSecurityAdvisoryFixGlobCalls = readNumber(ossSecurityAdvisoryFixToolCounts.Glob);
+  const ossSecurityAdvisoryFixGrepCalls = readNumber(ossSecurityAdvisoryFixToolCounts.Grep);
+  const ossSecurityAdvisoryFixFileReadCalls = readNumber(ossSecurityAdvisoryFixToolCounts.FileRead);
+  const ossSecurityAdvisoryFixFilePatchCalls = readNumber(
+    ossSecurityAdvisoryFixToolCounts.FilePatch
+  );
+  const ossSecurityAdvisoryFixFileWriteCalls = readNumber(
+    ossSecurityAdvisoryFixToolCounts.FileWrite
+  );
+  const ossSecurityAdvisoryFixFileEditCalls = readNumber(ossSecurityAdvisoryFixToolCounts.FileEdit);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 17) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 17) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 18) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 18) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -508,9 +527,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!ossIssueRegressionFixTaskSeen) {
     failures.push("ossIssueRegressionFixTask=false");
   }
-  if (assertions < 198) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 90) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 185) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!ossSecurityAdvisoryFixTaskSeen) {
+    failures.push("ossSecurityAdvisoryFixTask=false");
+  }
+  if (assertions < 218) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 99) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 204) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -872,6 +894,54 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (ossIssueRegressionFixDetails.issueRegressionVerified !== true) {
     failures.push("ossIssueRegressionVerified=false");
   }
+  if (ossSecurityAdvisoryFixBashCalls !== 2) {
+    failures.push("ossSecurityAdvisoryFixBashCalls != 2");
+  }
+  if (ossSecurityAdvisoryFixGlobCalls !== 1) {
+    failures.push("ossSecurityAdvisoryFixGlobCalls != 1");
+  }
+  if (ossSecurityAdvisoryFixGrepCalls !== 1) {
+    failures.push("ossSecurityAdvisoryFixGrepCalls != 1");
+  }
+  if (ossSecurityAdvisoryFixFileReadCalls !== 9) {
+    failures.push("ossSecurityAdvisoryFixFileReadCalls != 9");
+  }
+  if (ossSecurityAdvisoryFixFilePatchCalls < 5) {
+    failures.push("ossSecurityAdvisoryFixFilePatchCalls < 5");
+  }
+  if (ossSecurityAdvisoryFixFileWriteCalls !== 0) {
+    failures.push("ossSecurityAdvisoryFixFileWrite used");
+  }
+  if (ossSecurityAdvisoryFixFileEditCalls !== 0) {
+    failures.push("ossSecurityAdvisoryFixFileEdit used");
+  }
+  if (ossSecurityAdvisoryFixDetails.securityAdvisoryReadBeforePatch !== true) {
+    failures.push("ossSecurityAdvisoryReadBeforePatch=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.securityAdvisoryReproduced !== true) {
+    failures.push("ossSecurityAdvisoryReproduced=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.sessionCookieDefaultsHardened !== true) {
+    failures.push("ossSecuritySessionCookieDefaultsHardened=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.clientCookieSummaryUpdated !== true) {
+    failures.push("ossSecurityClientCookieSummaryUpdated=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.sessionExampleUpdated !== true) {
+    failures.push("ossSecuritySessionExampleUpdated=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.sessionSecurityDocsChangelogUpdated !== true) {
+    failures.push("ossSecurityDocsChangelogUpdated=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.generatedCookieSchemaUntouched !== true) {
+    failures.push("ossSecurityGeneratedCookieSchemaUntouched=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.vendorCookieShimUntouched !== true) {
+    failures.push("ossSecurityVendorCookieShimUntouched=false");
+  }
+  if (ossSecurityAdvisoryFixDetails.securityAdvisoryVerified !== true) {
+    failures.push("ossSecurityAdvisoryVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -1075,6 +1145,31 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
         ossIssueRegressionFixDetails.generatedOpenapiUntouched === true,
       ossIssueVendorRouteUntouched: ossIssueRegressionFixDetails.vendorRouteUntouched === true,
       ossIssueRegressionVerified: ossIssueRegressionFixDetails.issueRegressionVerified === true,
+      ossSecurityAdvisoryFixTaskSeen,
+      ossSecurityAdvisoryFixBashCalls,
+      ossSecurityAdvisoryFixGlobCalls,
+      ossSecurityAdvisoryFixGrepCalls,
+      ossSecurityAdvisoryFixFileReadCalls,
+      ossSecurityAdvisoryFixFilePatchCalls,
+      ossSecurityAdvisoryFixFileWriteCalls,
+      ossSecurityAdvisoryFixFileEditCalls,
+      ossSecurityAdvisoryReadBeforePatch:
+        ossSecurityAdvisoryFixDetails.securityAdvisoryReadBeforePatch === true,
+      ossSecurityAdvisoryReproduced:
+        ossSecurityAdvisoryFixDetails.securityAdvisoryReproduced === true,
+      ossSecuritySessionCookieDefaultsHardened:
+        ossSecurityAdvisoryFixDetails.sessionCookieDefaultsHardened === true,
+      ossSecurityClientCookieSummaryUpdated:
+        ossSecurityAdvisoryFixDetails.clientCookieSummaryUpdated === true,
+      ossSecuritySessionExampleUpdated:
+        ossSecurityAdvisoryFixDetails.sessionExampleUpdated === true,
+      ossSecurityDocsChangelogUpdated:
+        ossSecurityAdvisoryFixDetails.sessionSecurityDocsChangelogUpdated === true,
+      ossSecurityGeneratedCookieSchemaUntouched:
+        ossSecurityAdvisoryFixDetails.generatedCookieSchemaUntouched === true,
+      ossSecurityVendorCookieShimUntouched:
+        ossSecurityAdvisoryFixDetails.vendorCookieShimUntouched === true,
+      ossSecurityAdvisoryVerified: ossSecurityAdvisoryFixDetails.securityAdvisoryVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

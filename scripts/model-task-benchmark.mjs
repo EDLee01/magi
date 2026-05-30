@@ -4205,6 +4205,471 @@ async function scenarioSecurityMiddlewarePolicyMigrationTask() {
   });
 }
 
+async function scenarioOssSecurityAdvisoryFixTask() {
+  return await withWorkspace("oss-security-advisory-fix", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "advisories"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "server", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "client", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "examples", "express"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "changelog"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "advisories", "GHSA-session-cookie.md"),
+      [
+        "# GHSA-session-cookie: insecure session cookie defaults",
+        "",
+        "The public session cookie helper defaults to SameSite=None and Secure=false.",
+        "That leaves browser session cookies exposed during cross-site requests.",
+        "",
+        "Acceptance:",
+        "- reproduce with `node tests/session-cookie-security.test.mjs` before editing",
+        "- change owned source defaults to SameSite=Lax and Secure=true",
+        "- update client summary, example, docs, and changelog",
+        "- do not edit generated schema or vendored compatibility files",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "server", "src", "sessionCookie.js"),
+      [
+        "export const defaultCookieOptions = {",
+        '  sameSite: "none",',
+        "  secure: false,",
+        "  httpOnly: true",
+        "};",
+        "",
+        "export function normalizeCookieOptions(options = {}) {",
+        "  return {",
+        "    sameSite: options.sameSite ?? defaultCookieOptions.sameSite,",
+        "    secure: options.secure ?? defaultCookieOptions.secure,",
+        "    httpOnly: options.httpOnly ?? defaultCookieOptions.httpOnly",
+        "  };",
+        "}",
+        "",
+        "export function serializeSessionCookie(value, options = {}) {",
+        "  const normalized = normalizeCookieOptions(options);",
+        "  return [",
+        "    `sid=${value}`,",
+        "    `SameSite=${normalized.sameSite[0].toUpperCase()}${normalized.sameSite.slice(1)}`,",
+        '    normalized.secure ? "Secure" : "",',
+        '    normalized.httpOnly ? "HttpOnly" : ""',
+        '  ].filter(Boolean).join("; ");',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "client", "src", "sessionClient.js"),
+      [
+        "export function describeCookiePolicy(policy = {}) {",
+        '  return `Cookie policy: SameSite=${policy.sameSite ?? "none"}; secure=${policy.secure ?? false}`;',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "examples", "express", "session.js"),
+      [
+        'import { serializeSessionCookie } from "../../packages/server/src/sessionCookie.js";',
+        "",
+        "export const sessionCookieOptions = {",
+        '  sameSite: "none",',
+        "  secure: false,",
+        "  httpOnly: true",
+        "};",
+        "",
+        'export const sampleCookie = serializeSessionCookie("example", sessionCookieOptions);',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "session-security.md"),
+      [
+        "# Session Cookie Security",
+        "",
+        "Session cookies default to SameSite=None and Secure=false.",
+        "Operators should override both values in production.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "changelog", "unreleased.md"),
+      ["# Unreleased", "", "- Documented session cookie defaults.", ""].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "{",
+      '  "$comment": "AUTO-GENERATED COOKIE SCHEMA. DO NOT EDIT.",',
+      '  "properties": {',
+      '    "sameSite": { "enum": ["none", "lax", "strict"] },',
+      '    "secure": { "type": "boolean" }',
+      "  }",
+      "}",
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// vendored cookie compatibility shim",
+      'export const legacyCookieDefaults = { sameSite: "none", secure: false };',
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "cookie-schema.json"), generatedBefore, "utf8");
+    writeFileSync(path.join(workDir, "vendor", "cookie-legacy.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "session-cookie-security.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        "import {",
+        "  defaultCookieOptions,",
+        "  normalizeCookieOptions,",
+        "  serializeSessionCookie",
+        '} from "../packages/server/src/sessionCookie.js";',
+        'import { describeCookiePolicy } from "../packages/client/src/sessionClient.js";',
+        'import { sessionCookieOptions, sampleCookie } from "../examples/express/session.js";',
+        "",
+        'assert.equal(defaultCookieOptions.sameSite, "lax");',
+        "assert.equal(defaultCookieOptions.secure, true);",
+        "assert.deepEqual(normalizeCookieOptions(), {",
+        '  sameSite: "lax",',
+        "  secure: true,",
+        "  httpOnly: true",
+        "});",
+        'assert.equal(serializeSessionCookie("abc"), "sid=abc; SameSite=Lax; Secure; HttpOnly");',
+        'assert.equal(describeCookiePolicy(), "Cookie policy: SameSite=lax; secure=true");',
+        'assert.deepEqual(sessionCookieOptions, { sameSite: "lax", secure: true, httpOnly: true });',
+        "assert.match(sampleCookie, /SameSite=Lax/);",
+        "assert.match(sampleCookie, /Secure/);",
+        "",
+        "const ownedFiles = [",
+        '  "packages/server/src/sessionCookie.js",',
+        '  "packages/client/src/sessionClient.js",',
+        '  "examples/express/session.js",',
+        '  "docs/session-security.md",',
+        '  "changelog/unreleased.md"',
+        "];",
+        "for (const file of ownedFiles) {",
+        '  const content = readFileSync(file, "utf8");',
+        '  assert.doesNotMatch(content, /sameSite: "none"|SameSite=None|Secure=false|secure: false/);',
+        "  assert.match(content, /lax|Lax|Secure=true|secure: true|Secure/);",
+        "}",
+        "",
+        'const docs = readFileSync("docs/session-security.md", "utf8");',
+        "assert.match(docs, /SameSite=Lax and Secure=true/);",
+        'const changelog = readFileSync("changelog/unreleased.md", "utf8");',
+        "assert.match(changelog, /GHSA-session-cookie/);",
+        "",
+        'const generated = readFileSync("generated/cookie-schema.json", "utf8");',
+        "assert.match(generated, /AUTO-GENERATED COOKIE SCHEMA/);",
+        "assert.match(generated, /none/);",
+        'const vendor = readFileSync("vendor/cookie-legacy.js", "utf8");',
+        "assert.match(vendor, /vendored cookie compatibility shim/);",
+        'assert.match(vendor, /sameSite: "none"/);',
+        'console.log("session cookie security advisory ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-cookie-security-before", "Bash", {
+              command: "node tests/session-cookie-security.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-cookie-security-repo", "Glob", {
+              pattern: "**/*.{js,json,md,mjs}",
+              max_matches: 50
+            }),
+            toolCall("grep-cookie-same-site", "Grep", {
+              pattern: "sameSite",
+              path: ".",
+              output_mode: "content",
+              max_matches: 50
+            }),
+            toolCall("read-cookie-advisory", "FileRead", {
+              file_path: "advisories/GHSA-session-cookie.md"
+            }),
+            toolCall("read-cookie-security-test", "FileRead", {
+              file_path: "tests/session-cookie-security.test.mjs"
+            }),
+            toolCall("read-session-cookie-source", "FileRead", {
+              file_path: "packages/server/src/sessionCookie.js"
+            }),
+            toolCall("read-session-client", "FileRead", {
+              file_path: "packages/client/src/sessionClient.js"
+            }),
+            toolCall("read-session-example", "FileRead", {
+              file_path: "examples/express/session.js"
+            }),
+            toolCall("read-session-security-docs", "FileRead", {
+              file_path: "docs/session-security.md"
+            }),
+            toolCall("read-cookie-changelog", "FileRead", {
+              file_path: "changelog/unreleased.md"
+            }),
+            toolCall("read-generated-cookie-schema", "FileRead", {
+              file_path: "generated/cookie-schema.json"
+            }),
+            toolCall("read-vendor-cookie-legacy", "FileRead", {
+              file_path: "vendor/cookie-legacy.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing cookie security test missing");
+          assert(transcript.includes("GHSA-session-cookie"), "security advisory context missing");
+          assert(transcript.includes("SameSite=None"), "insecure cookie default context missing");
+          assert(
+            transcript.includes("packages/server/src/sessionCookie.js"),
+            "repo discovery missing"
+          );
+          assert(
+            transcript.includes("AUTO-GENERATED COOKIE SCHEMA"),
+            "generated cookie boundary missing"
+          );
+          assert(
+            transcript.includes("vendored cookie compatibility shim"),
+            "vendor cookie boundary missing"
+          );
+          return toolResponse([
+            toolCall("patch-session-cookie-source", "FilePatch", {
+              file_path: "packages/server/src/sessionCookie.js",
+              patch: [
+                "@@",
+                " export const defaultCookieOptions = {",
+                '-  sameSite: "none",',
+                "-  secure: false,",
+                '+  sameSite: "lax",',
+                "+  secure: true,",
+                "   httpOnly: true",
+                " };"
+              ].join("\n")
+            }),
+            toolCall("patch-session-client", "FilePatch", {
+              file_path: "packages/client/src/sessionClient.js",
+              patch: [
+                "@@",
+                " export function describeCookiePolicy(policy = {}) {",
+                '-  return `Cookie policy: SameSite=${policy.sameSite ?? "none"}; secure=${policy.secure ?? false}`;',
+                '+  return `Cookie policy: SameSite=${policy.sameSite ?? "lax"}; secure=${policy.secure ?? true}`;',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-session-example", "FilePatch", {
+              file_path: "examples/express/session.js",
+              patch: [
+                "@@",
+                " export const sessionCookieOptions = {",
+                '-  sameSite: "none",',
+                "-  secure: false,",
+                '+  sameSite: "lax",',
+                "+  secure: true,",
+                "   httpOnly: true",
+                " };"
+              ].join("\n")
+            }),
+            toolCall("patch-session-security-docs", "FilePatch", {
+              file_path: "docs/session-security.md",
+              patch: [
+                "@@",
+                " # Session Cookie Security",
+                " ",
+                "-Session cookies default to SameSite=None and Secure=false.",
+                "-Operators should override both values in production.",
+                "+Session cookies now default to SameSite=Lax and Secure=true.",
+                "+Operators can override these values, but the built-in default is safe for browser sessions."
+              ].join("\n")
+            }),
+            toolCall("patch-cookie-changelog", "FilePatch", {
+              file_path: "changelog/unreleased.md",
+              patch: [
+                "@@",
+                " # Unreleased",
+                " ",
+                "-- Documented session cookie defaults.",
+                "+- Fixed GHSA-session-cookie by defaulting session cookies to SameSite=Lax and Secure=true."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched packages/server/src/sessionCookie.js"),
+            "session cookie source patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/client/src/sessionClient.js"),
+            "session client patch result missing"
+          );
+          assert(
+            transcript.includes("Patched examples/express/session.js"),
+            "session example patch missing"
+          );
+          assert(
+            transcript.includes("Patched docs/session-security.md"),
+            "session docs patch missing"
+          );
+          assert(
+            transcript.includes("Patched changelog/unreleased.md"),
+            "session changelog patch missing"
+          );
+          return toolResponse([
+            toolCall("run-cookie-security-after", "Bash", {
+              command: "node tests/session-cookie-security.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("session cookie security advisory ok"),
+          "passing cookie security advisory test missing"
+        );
+        return messageText(
+          "OSS security advisory fixed with safer session cookie defaults and generated/vendor boundaries preserved."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Fix the OSS security advisory GHSA-session-cookie in this repository.",
+            "First reproduce the failing session cookie security test, discover files with Glob and Grep,",
+            "read the advisory, source, client, example, docs, changelog, generated schema, and vendor shim,",
+            "change owned defaults to SameSite=Lax and Secure=true, update docs and changelog,",
+            "do not modify generated or vendor files, then rerun the focused security test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "OSS security advisory fix task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "OSS security advisory fix did not complete");
+      const ownedFiles = [
+        "packages/server/src/sessionCookie.js",
+        "packages/client/src/sessionClient.js",
+        "examples/express/session.js",
+        "docs/session-security.md",
+        "changelog/unreleased.md"
+      ];
+      for (const file of ownedFiles) {
+        const content = readFileSync(path.join(workDir, file), "utf8");
+        assert(
+          !/sameSite: "none"|SameSite=None|Secure=false|secure: false/.test(content),
+          `${file} still contains insecure cookie defaults`
+        );
+        assert(
+          /lax|Lax|Secure=true|secure: true|Secure/.test(content),
+          `${file} missing secure cookie defaults`
+        );
+      }
+      const generatedAfter = readFileSync(
+        path.join(workDir, "generated", "cookie-schema.json"),
+        "utf8"
+      );
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "cookie-legacy.js"), "utf8");
+      assert(generatedAfter === generatedBefore, "generated cookie schema was modified");
+      assert(vendorAfter === vendorBefore, "vendor cookie shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "OSS security advisory should run tests before and after");
+      assert(toolCounts.Glob === 1, "OSS security advisory should discover files with Glob");
+      assert(toolCounts.Grep === 1, "OSS security advisory should search sameSite with Grep");
+      assert(
+        toolCounts.FileRead === 9,
+        "OSS security advisory should inspect advisory, source, docs, and boundaries"
+      );
+      assert(toolCounts.FilePatch === 5, "OSS security advisory should patch five owned files");
+      assert(!toolCounts.FileWrite, "OSS security advisory should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "OSS security advisory should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing session cookie security test ran first",
+          "OSS security advisory was read before editing",
+          "cookie security repo discovery ran with Glob",
+          "sameSite search ran with Grep",
+          "server session cookie source inspected before patching",
+          "client cookie summary inspected before patching",
+          "session example inspected before patching",
+          "generated cookie schema boundary inspected",
+          "vendor cookie shim boundary inspected",
+          "session cookie defaults changed to SameSite=Lax and Secure=true",
+          "client cookie summary default updated",
+          "session example default updated",
+          "session security docs updated",
+          "session security changelog updated",
+          "focused session cookie security test passed after fix",
+          "generated cookie schema stayed unchanged",
+          "vendor cookie shim stayed unchanged",
+          "FileWrite avoided for OSS security advisory fix",
+          "FileEdit avoided for OSS security advisory fix",
+          "final response completed"
+        ],
+        filesVerified: [
+          "advisories/GHSA-session-cookie.md",
+          "packages/server/src/sessionCookie.js",
+          "packages/client/src/sessionClient.js",
+          "examples/express/session.js",
+          "docs/session-security.md",
+          "changelog/unreleased.md",
+          "generated/cookie-schema.json",
+          "vendor/cookie-legacy.js",
+          "tests/session-cookie-security.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "oss_security_advisory_fix",
+        toolCounts,
+        securityAdvisoryReadBeforePatch: true,
+        securityAdvisoryReproduced: true,
+        sessionCookieDefaultsHardened: true,
+        clientCookieSummaryUpdated: true,
+        sessionExampleUpdated: true,
+        sessionSecurityDocsChangelogUpdated: true,
+        generatedCookieSchemaUntouched: true,
+        vendorCookieShimUntouched: true,
+        securityAdvisoryVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioOssStyleOpenSourceMigrationTask() {
   return await withWorkspace("oss-style-open-source", async ({ root, configDir, workDir }) => {
     mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
@@ -5139,6 +5604,7 @@ async function main() {
     ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask],
     ["plugin API compatibility migration task", scenarioPluginApiCompatibilityMigrationTask],
     ["security middleware policy migration task", scenarioSecurityMiddlewarePolicyMigrationTask],
+    ["OSS security advisory fix task", scenarioOssSecurityAdvisoryFixTask],
     ["OSS issue regression fix task", scenarioOssIssueRegressionFixTask],
     ["oss-style open source migration task", scenarioOssStyleOpenSourceMigrationTask]
   ];

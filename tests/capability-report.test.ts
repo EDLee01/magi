@@ -379,6 +379,21 @@ describe("capability report", () => {
         "ossIssueGeneratedOpenapiUntouched=false",
         "ossIssueVendorRouteUntouched=false",
         "ossIssueRegressionVerified=false",
+        "ossSecurityAdvisoryFixTask=false",
+        "ossSecurityAdvisoryFixBashCalls != 2",
+        "ossSecurityAdvisoryFixGlobCalls != 1",
+        "ossSecurityAdvisoryFixGrepCalls != 1",
+        "ossSecurityAdvisoryFixFileReadCalls != 9",
+        "ossSecurityAdvisoryFixFilePatchCalls < 5",
+        "ossSecurityAdvisoryReadBeforePatch=false",
+        "ossSecurityAdvisoryReproduced=false",
+        "ossSecuritySessionCookieDefaultsHardened=false",
+        "ossSecurityClientCookieSummaryUpdated=false",
+        "ossSecuritySessionExampleUpdated=false",
+        "ossSecurityDocsChangelogUpdated=false",
+        "ossSecurityGeneratedCookieSchemaUntouched=false",
+        "ossSecurityVendorCookieShimUntouched=false",
+        "ossSecurityAdvisoryVerified=false",
         "regressions=1"
       ])
     );
@@ -1118,6 +1133,24 @@ function modelTaskReport(
       vendorRouteUntouched: boolean;
       issueRegressionVerified: boolean;
     };
+    ossSecurityAdvisoryFix: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      securityAdvisoryReadBeforePatch: boolean;
+      securityAdvisoryReproduced: boolean;
+      sessionCookieDefaultsHardened: boolean;
+      clientCookieSummaryUpdated: boolean;
+      sessionExampleUpdated: boolean;
+      sessionSecurityDocsChangelogUpdated: boolean;
+      generatedCookieSchemaUntouched: boolean;
+      vendorCookieShimUntouched: boolean;
+      securityAdvisoryVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -1137,6 +1170,7 @@ function modelTaskReport(
     "large_repo_long_chain_migration",
     "plugin_api_compatibility_migration",
     "security_middleware_policy_migration",
+    "oss_security_advisory_fix",
     "oss_issue_regression_fix",
     "oss_style_open_source_migration"
   ];
@@ -1294,14 +1328,32 @@ function modelTaskReport(
     vendorRouteUntouched: true,
     issueRegressionVerified: true
   };
+  const ossSecurityAdvisoryFix = overrides.ossSecurityAdvisoryFix ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 9,
+    filePatchCalls: 5,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    securityAdvisoryReadBeforePatch: true,
+    securityAdvisoryReproduced: true,
+    sessionCookieDefaultsHardened: true,
+    clientCookieSummaryUpdated: true,
+    sessionExampleUpdated: true,
+    sessionSecurityDocsChangelogUpdated: true,
+    generatedCookieSchemaUntouched: true,
+    vendorCookieShimUntouched: true,
+    securityAdvisoryVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 17,
-    assertions: overrides.assertions ?? 198,
-    filesVerified: overrides.filesVerified ?? 90,
-    toolCallCount: overrides.toolCallCount ?? 185,
+    assertions: overrides.assertions ?? 218,
+    filesVerified: overrides.filesVerified ?? 99,
+    toolCallCount: overrides.toolCallCount ?? 204,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1532,6 +1584,30 @@ function modelTaskReport(
               generatedOpenapiUntouched: ossIssueRegressionFix.generatedOpenapiUntouched,
               vendorRouteUntouched: ossIssueRegressionFix.vendorRouteUntouched,
               issueRegressionVerified: ossIssueRegressionFix.issueRegressionVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "oss_security_advisory_fix"
+          ? {
+              toolCounts: {
+                Bash: ossSecurityAdvisoryFix.bashCalls,
+                Glob: ossSecurityAdvisoryFix.globCalls,
+                Grep: ossSecurityAdvisoryFix.grepCalls,
+                FileRead: ossSecurityAdvisoryFix.fileReadCalls,
+                FilePatch: ossSecurityAdvisoryFix.filePatchCalls,
+                FileWrite: ossSecurityAdvisoryFix.fileWriteCalls,
+                FileEdit: ossSecurityAdvisoryFix.fileEditCalls
+              },
+              securityAdvisoryReadBeforePatch:
+                ossSecurityAdvisoryFix.securityAdvisoryReadBeforePatch,
+              securityAdvisoryReproduced: ossSecurityAdvisoryFix.securityAdvisoryReproduced,
+              sessionCookieDefaultsHardened: ossSecurityAdvisoryFix.sessionCookieDefaultsHardened,
+              clientCookieSummaryUpdated: ossSecurityAdvisoryFix.clientCookieSummaryUpdated,
+              sessionExampleUpdated: ossSecurityAdvisoryFix.sessionExampleUpdated,
+              sessionSecurityDocsChangelogUpdated:
+                ossSecurityAdvisoryFix.sessionSecurityDocsChangelogUpdated,
+              generatedCookieSchemaUntouched: ossSecurityAdvisoryFix.generatedCookieSchemaUntouched,
+              vendorCookieShimUntouched: ossSecurityAdvisoryFix.vendorCookieShimUntouched,
+              securityAdvisoryVerified: ossSecurityAdvisoryFix.securityAdvisoryVerified
             }
           : {})
       }
