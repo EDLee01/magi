@@ -211,6 +211,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("phone approval unblocked FileWrite") &&
     assertionList.includes("control job completed and persisted audit events") &&
     assertionList.includes("control approval flow completed two provider turns");
+  const memoryCorrectionMaintenanceSeen =
+    assertionList.includes("stale memory retrieved before correction") &&
+    assertionList.includes("memory correct disputed old node") &&
+    assertionList.includes("replacement memory recalled through graph search") &&
+    assertionList.includes("disputed stale memory excluded from search results") &&
+    assertionList.includes("memory conflict audit view recommends active replacement") &&
+    assertionList.includes("memory dream suggests corrected stale graph cleanup") &&
+    assertionList.includes("memory dream apply archives corrected disputed graph node") &&
+    assertionList.includes("memory maintenance policy persisted and reused") &&
+    assertionList.includes("memory maintenance decayed stale node weights") &&
+    assertionList.includes("memory correction and maintenance audit persisted") &&
+    assertionList.includes("memory correction maintenance completed CLI lifecycle");
   const resumePickerTtySeen =
     assertionList.includes("TTY -r rendered searchable session picker") &&
     assertionList.includes("TTY -r filtered sessions by typed query") &&
@@ -322,7 +334,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 181) failures.push(`assertions=${assertions}`);
+  if (assertions < 183) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -341,6 +353,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   }
   if (!headlessPlanModeSeen) failures.push("headlessPlanModeSeen=false");
   if (!controlApprovalFlowSeen) failures.push("controlApprovalFlowSeen=false");
+  if (!memoryCorrectionMaintenanceSeen) {
+    failures.push("memoryCorrectionMaintenanceSeen=false");
+  }
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!resumePickerSearchFieldsSeen) failures.push("resumePickerSearchFieldsSeen=false");
@@ -391,6 +406,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       headlessDefaultPermissionDeniedSeen,
       headlessPlanModeSeen,
       controlApprovalFlowSeen,
+      memoryCorrectionMaintenanceSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
       resumePickerSearchFieldsSeen,

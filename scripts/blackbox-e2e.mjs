@@ -4279,8 +4279,10 @@ async function scenarioMemoryCorrection() {
         "memory dream apply archives corrected disputed graph node",
         "memory maintenance policy persisted and reused",
         "memory maintenance decayed stale node weights",
-        "memory correction and maintenance audit persisted"
-      ]
+        "memory correction and maintenance audit persisted",
+        "memory correction maintenance completed CLI lifecycle"
+      ],
+      filesVerified: ["memory/logs/audit.jsonl"]
     };
   });
 }

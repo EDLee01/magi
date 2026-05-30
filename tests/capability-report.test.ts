@@ -114,6 +114,7 @@ describe("capability report", () => {
         headlessDefaultPermissionDeniedSeen: false,
         headlessPlanModeSeen: false,
         controlApprovalFlowSeen: false,
+        memoryCorrectionMaintenanceSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         resumePickerSearchFieldsSeen: false,
@@ -171,6 +172,7 @@ describe("capability report", () => {
         "headlessDefaultPermissionDeniedSeen=false",
         "headlessPlanModeSeen=false",
         "controlApprovalFlowSeen=false",
+        "memoryCorrectionMaintenanceSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
         "resumePickerSearchFieldsSeen=false",
@@ -1028,6 +1030,7 @@ function harnessReport(input: {
   headlessDefaultPermissionDeniedSeen?: boolean;
   headlessPlanModeSeen?: boolean;
   controlApprovalFlowSeen?: boolean;
+  memoryCorrectionMaintenanceSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
   resumePickerSearchFieldsSeen?: boolean;
@@ -1061,7 +1064,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 182,
+      assertions: input.assertions ?? 183,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1101,6 +1104,7 @@ function harnessReport(input: {
                   ...headlessDefaultPermissionDeniedAssertions(input),
                   ...headlessPlanModeAssertions(input),
                   ...controlApprovalFlowAssertions(input),
+                  ...memoryCorrectionMaintenanceAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...resumePickerSearchFieldsAssertions(input),
@@ -1966,6 +1970,26 @@ function controlApprovalFlowAssertions(input: { controlApprovalFlowSeen?: boolea
         "phone approval unblocked FileWrite",
         "control job completed and persisted audit events",
         "control approval flow completed two provider turns"
+      ];
+}
+
+function memoryCorrectionMaintenanceAssertions(input: {
+  memoryCorrectionMaintenanceSeen?: boolean;
+}): string[] {
+  return input.memoryCorrectionMaintenanceSeen === false
+    ? []
+    : [
+        "stale memory retrieved before correction",
+        "memory correct disputed old node",
+        "replacement memory recalled through graph search",
+        "disputed stale memory excluded from search results",
+        "memory conflict audit view recommends active replacement",
+        "memory dream suggests corrected stale graph cleanup",
+        "memory dream apply archives corrected disputed graph node",
+        "memory maintenance policy persisted and reused",
+        "memory maintenance decayed stale node weights",
+        "memory correction and maintenance audit persisted",
+        "memory correction maintenance completed CLI lifecycle"
       ];
 }
 
