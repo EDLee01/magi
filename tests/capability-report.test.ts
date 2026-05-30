@@ -1283,6 +1283,41 @@ function harnessReport(input: {
             ...(input.skillLearningApplySeen === false ? [] : ["skills/blackbox-verify/SKILL.md"])
           ]
         }
+      },
+      {
+        name: "retry fallback",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          assertions: providerRetryFallbackAssertions(input),
+          provider: input.providerRetryFallbackSeen === false ? { callCount: 0 } : { callCount: 4 },
+          retry:
+            input.providerRetryFallbackSeen === false
+              ? { primaryCalls: 0, backupCalls: 0 }
+              : { primaryCalls: 3, backupCalls: 1 }
+        }
+      },
+      {
+        name: "tool feedback ranking",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          assertions: toolFeedbackRankingAssertions(input),
+          provider:
+            input.toolFeedbackRankingSeen === false
+              ? { callCount: 0, toolCounts: {} }
+              : { callCount: 3, toolCounts: { Grep: 4, Glob: 4, ToolSearch: 1 } },
+          toolFeedback:
+            input.toolFeedbackRankingSeen === false
+              ? { grepFailures: 0, globSuccesses: 0, recoveryGuidanceSeen: false }
+              : { grepFailures: 4, globSuccesses: 4, recoveryGuidanceSeen: true },
+          filesVerified:
+            input.toolFeedbackRankingSeen === false ? [] : ["state/tool-usage-stats.json"]
+        }
       }
     ]
   };

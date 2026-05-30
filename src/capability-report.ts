@@ -134,6 +134,16 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const complexWorkflowFilesVerified = readStringList(complexWorkflowDetails.filesVerified);
   const complexWorkflowProvider = readRecord(complexWorkflowDetails.provider);
   const complexWorkflowToolCounts = readRecord(complexWorkflowProvider.toolCounts);
+  const retryFallback = scenarios.find((scenario) => scenario.name === "retry fallback");
+  const retryFallbackDetails = readRecord(retryFallback?.details);
+  const retryFallbackProvider = readRecord(retryFallbackDetails.provider);
+  const retryFallbackRetry = readRecord(retryFallbackDetails.retry);
+  const toolFeedbackRanking = scenarios.find(
+    (scenario) => scenario.name === "tool feedback ranking"
+  );
+  const toolFeedbackRankingDetails = readRecord(toolFeedbackRanking?.details);
+  const toolFeedbackRankingProvider = readRecord(toolFeedbackRankingDetails.provider);
+  const toolFeedback = readRecord(toolFeedbackRankingDetails.toolFeedback);
   const assertionList = scenarios.flatMap((scenario) =>
     readStringList(readRecord(scenario.details).assertions)
   );
@@ -164,7 +174,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     readNumber(complexWorkflowToolCounts.TodoWrite) >= 1 &&
     readNumber(complexWorkflowToolCounts.Memorize) >= 1 &&
     readNumber(complexWorkflowToolCounts.FilePatch) >= 1 &&
-    readNumber(complexWorkflowToolCounts.LearningDraft) >= 1;
+    readNumber(complexWorkflowToolCounts.LearningDraft) >= 1 &&
+    readNumber(complexWorkflowToolCounts.WorkspaceDiagnostics) >= 1 &&
+    readNumber(complexWorkflowToolCounts.SendUserMessage) >= 1;
   const learningDraftApplySeen =
     assertionList.includes("learning draft listed") &&
     assertionList.includes("learning draft review showed evidence") &&
@@ -249,14 +261,23 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("retry attempts exhausted on primary") &&
     assertionList.includes("fallback event emitted") &&
     assertionList.includes("backup model recovered") &&
-    assertionList.includes("retry fallback used one backup provider call");
+    assertionList.includes("retry fallback used one backup provider call") &&
+    retryFallback?.status === "passed" &&
+    readNumber(retryFallbackProvider.callCount) >= 4 &&
+    readNumber(retryFallbackRetry.primaryCalls) === 3 &&
+    readNumber(retryFallbackRetry.backupCalls) === 1;
   const toolFeedbackRankingSeen =
     assertionList.includes("tool failures persisted") &&
     assertionList.includes("tool successes persisted") &&
     assertionList.includes("ToolSearch ranking used feedback") &&
     assertionList.includes("ToolSearch recovery guidance visible") &&
     assertionList.includes("ToolSearch feedback returned to model") &&
-    assertionList.includes("tool feedback ranking completed three-turn provider loop");
+    assertionList.includes("tool feedback ranking completed three-turn provider loop") &&
+    toolFeedbackRanking?.status === "passed" &&
+    readNumber(toolFeedbackRankingProvider.callCount) >= 3 &&
+    readNumber(toolFeedback.grepFailures) >= 4 &&
+    readNumber(toolFeedback.globSuccesses) >= 4 &&
+    toolFeedback.recoveryGuidanceSeen === true;
   const memoryGraphLinkSeen =
     assertionList.includes("memory draft applied") &&
     assertionList.includes("graph edge created") &&
@@ -454,6 +475,10 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       complexWorkflowSeen,
       complexWorkflowProviderCalls: readNumber(complexWorkflowProvider.callCount),
       complexWorkflowFilesVerified: complexWorkflowFilesVerified.length,
+      complexWorkflowWorkspaceDiagnosticsCalls: readNumber(
+        complexWorkflowToolCounts.WorkspaceDiagnostics
+      ),
+      complexWorkflowSendUserMessageCalls: readNumber(complexWorkflowToolCounts.SendUserMessage),
       learningDraftApplySeen,
       skillLearningApplySeen,
       skillPatchLearningSeen,
@@ -470,7 +495,12 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       headlessPlanModeSeen,
       controlApprovalFlowSeen,
       providerRetryFallbackSeen,
+      retryFallbackPrimaryCalls: readNumber(retryFallbackRetry.primaryCalls),
+      retryFallbackBackupCalls: readNumber(retryFallbackRetry.backupCalls),
       toolFeedbackRankingSeen,
+      toolFeedbackGrepFailures: readNumber(toolFeedback.grepFailures),
+      toolFeedbackGlobSuccesses: readNumber(toolFeedback.globSuccesses),
+      toolFeedbackRecoveryGuidanceSeen: toolFeedback.recoveryGuidanceSeen === true,
       memoryGraphLinkSeen,
       memoryCorrectionMaintenanceSeen,
       tuiRequiresTtySeen,
