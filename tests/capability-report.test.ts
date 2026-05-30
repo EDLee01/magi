@@ -255,6 +255,7 @@ describe("capability report", () => {
         "workspacePolicyMigrationTask=false",
         "mixedLanguageContractMigrationTask=false",
         "largeRepoLongChainMigrationTask=false",
+        "pluginApiCompatibilityMigrationTask=false",
         "ossStyleOpenSourceMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
@@ -313,6 +314,20 @@ describe("capability report", () => {
         "largeRepoGeneratedClientUntouched=false",
         "largeRepoVendorShimUntouched=false",
         "largeRepoLongChainVerified=false",
+        "pluginApiCompatibilityMigrationBashCalls != 2",
+        "pluginApiCompatibilityMigrationGlobCalls != 1",
+        "pluginApiCompatibilityMigrationGrepCalls != 1",
+        "pluginApiCompatibilityMigrationFileReadCalls != 10",
+        "pluginApiCompatibilityMigrationFilePatchCalls < 7",
+        "pluginApiRepoDiscoveryVerified=false",
+        "pluginRuntimeMigrated=false",
+        "firstPartyPluginsMigrated=false",
+        "legacyAdapterCompatibilityPreserved=false",
+        "pluginApiExamplesDocsChangelogMigrated=false",
+        "oldOwnedHookReferencesRemoved=false",
+        "generatedPluginTypesUntouched=false",
+        "vendorPluginShimUntouched=false",
+        "pluginApiCompatibilityVerified=false",
         "ossStyleOpenSourceMigrationBashCalls != 2",
         "ossStyleOpenSourceMigrationGlobCalls != 1",
         "ossStyleOpenSourceMigrationGrepCalls != 1",
@@ -942,6 +957,24 @@ function modelTaskReport(
       vendorShimUntouched: boolean;
       largeRepoLongChainVerified: boolean;
     };
+    pluginApiCompatibilityMigration: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      pluginApiRepoDiscoveryVerified: boolean;
+      pluginRuntimeMigrated: boolean;
+      firstPartyPluginsMigrated: boolean;
+      legacyAdapterCompatibilityPreserved: boolean;
+      examplesDocsChangelogMigrated: boolean;
+      oldOwnedHookReferencesRemoved: boolean;
+      generatedPluginTypesUntouched: boolean;
+      vendorPluginShimUntouched: boolean;
+      pluginApiCompatibilityVerified: boolean;
+    };
     ossStyleOpenSourceMigration: {
       bashCalls: number;
       globCalls: number;
@@ -976,6 +1009,7 @@ function modelTaskReport(
     "workspace_policy_migration",
     "mixed_language_contract_migration",
     "large_repo_long_chain_migration",
+    "plugin_api_compatibility_migration",
     "oss_style_open_source_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
@@ -1061,6 +1095,24 @@ function modelTaskReport(
     vendorShimUntouched: true,
     largeRepoLongChainVerified: true
   };
+  const pluginApiCompatibilityMigration = overrides.pluginApiCompatibilityMigration ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 10,
+    filePatchCalls: 7,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    pluginApiRepoDiscoveryVerified: true,
+    pluginRuntimeMigrated: true,
+    firstPartyPluginsMigrated: true,
+    legacyAdapterCompatibilityPreserved: true,
+    examplesDocsChangelogMigrated: true,
+    oldOwnedHookReferencesRemoved: true,
+    generatedPluginTypesUntouched: true,
+    vendorPluginShimUntouched: true,
+    pluginApiCompatibilityVerified: true
+  };
   const ossStyleOpenSourceMigration = overrides.ossStyleOpenSourceMigration ?? {
     bashCalls: 2,
     globCalls: 1,
@@ -1083,9 +1135,9 @@ function modelTaskReport(
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 17,
-    assertions: overrides.assertions ?? 132,
-    filesVerified: overrides.filesVerified ?? 61,
-    toolCallCount: overrides.toolCallCount ?? 131,
+    assertions: overrides.assertions ?? 154,
+    filesVerified: overrides.filesVerified ?? 71,
+    toolCallCount: overrides.toolCallCount ?? 148,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1213,6 +1265,34 @@ function modelTaskReport(
               generatedClientUntouched: largeRepoLongChainMigration.generatedClientUntouched,
               vendorShimUntouched: largeRepoLongChainMigration.vendorShimUntouched,
               largeRepoLongChainVerified: largeRepoLongChainMigration.largeRepoLongChainVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "plugin_api_compatibility_migration"
+          ? {
+              toolCounts: {
+                Bash: pluginApiCompatibilityMigration.bashCalls,
+                Glob: pluginApiCompatibilityMigration.globCalls,
+                Grep: pluginApiCompatibilityMigration.grepCalls,
+                FileRead: pluginApiCompatibilityMigration.fileReadCalls,
+                FilePatch: pluginApiCompatibilityMigration.filePatchCalls,
+                FileWrite: pluginApiCompatibilityMigration.fileWriteCalls,
+                FileEdit: pluginApiCompatibilityMigration.fileEditCalls
+              },
+              pluginApiRepoDiscoveryVerified:
+                pluginApiCompatibilityMigration.pluginApiRepoDiscoveryVerified,
+              pluginRuntimeMigrated: pluginApiCompatibilityMigration.pluginRuntimeMigrated,
+              firstPartyPluginsMigrated: pluginApiCompatibilityMigration.firstPartyPluginsMigrated,
+              legacyAdapterCompatibilityPreserved:
+                pluginApiCompatibilityMigration.legacyAdapterCompatibilityPreserved,
+              examplesDocsChangelogMigrated:
+                pluginApiCompatibilityMigration.examplesDocsChangelogMigrated,
+              oldOwnedHookReferencesRemoved:
+                pluginApiCompatibilityMigration.oldOwnedHookReferencesRemoved,
+              generatedPluginTypesUntouched:
+                pluginApiCompatibilityMigration.generatedPluginTypesUntouched,
+              vendorPluginShimUntouched: pluginApiCompatibilityMigration.vendorPluginShimUntouched,
+              pluginApiCompatibilityVerified:
+                pluginApiCompatibilityMigration.pluginApiCompatibilityVerified
             }
           : {}),
         ...(taskClasses[index] === "oss_style_open_source_migration"

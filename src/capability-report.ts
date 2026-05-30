@@ -356,6 +356,39 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const largeRepoLongChainMigrationFileEditCalls = readNumber(
     largeRepoLongChainMigrationToolCounts.FileEdit
   );
+  const pluginApiCompatibilityMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "plugin_api_compatibility_migration"
+  );
+  const pluginApiCompatibilityMigrationDetails = readRecord(
+    pluginApiCompatibilityMigration ? readRecord(pluginApiCompatibilityMigration).details : {}
+  );
+  const pluginApiCompatibilityMigrationToolCounts = readRecord(
+    pluginApiCompatibilityMigrationDetails.toolCounts
+  );
+  const pluginApiCompatibilityMigrationTaskSeen = taskClasses.has(
+    "plugin_api_compatibility_migration"
+  );
+  const pluginApiCompatibilityMigrationBashCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.Bash
+  );
+  const pluginApiCompatibilityMigrationGlobCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.Glob
+  );
+  const pluginApiCompatibilityMigrationGrepCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.Grep
+  );
+  const pluginApiCompatibilityMigrationFileReadCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.FileRead
+  );
+  const pluginApiCompatibilityMigrationFilePatchCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.FilePatch
+  );
+  const pluginApiCompatibilityMigrationFileWriteCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.FileWrite
+  );
+  const pluginApiCompatibilityMigrationFileEditCalls = readNumber(
+    pluginApiCompatibilityMigrationToolCounts.FileEdit
+  );
   const ossStyleOpenSourceMigration = scenarios.find(
     (scenario) => readRecord(scenario.details).taskClass === "oss_style_open_source_migration"
   );
@@ -392,8 +425,8 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 14) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 14) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 15) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 15) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -407,12 +440,15 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!largeRepoLongChainMigrationTaskSeen) {
     failures.push("largeRepoLongChainMigrationTask=false");
   }
+  if (!pluginApiCompatibilityMigrationTaskSeen) {
+    failures.push("pluginApiCompatibilityMigrationTask=false");
+  }
   if (!ossStyleOpenSourceMigrationTaskSeen) {
     failures.push("ossStyleOpenSourceMigrationTask=false");
   }
-  if (assertions < 132) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 61) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 131) failures.push(`toolCallCount=${toolCallCount}`);
+  if (assertions < 154) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 71) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 148) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -585,6 +621,54 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (largeRepoLongChainMigrationDetails.largeRepoLongChainVerified !== true) {
     failures.push("largeRepoLongChainVerified=false");
   }
+  if (pluginApiCompatibilityMigrationBashCalls !== 2) {
+    failures.push("pluginApiCompatibilityMigrationBashCalls != 2");
+  }
+  if (pluginApiCompatibilityMigrationGlobCalls !== 1) {
+    failures.push("pluginApiCompatibilityMigrationGlobCalls != 1");
+  }
+  if (pluginApiCompatibilityMigrationGrepCalls !== 1) {
+    failures.push("pluginApiCompatibilityMigrationGrepCalls != 1");
+  }
+  if (pluginApiCompatibilityMigrationFileReadCalls !== 10) {
+    failures.push("pluginApiCompatibilityMigrationFileReadCalls != 10");
+  }
+  if (pluginApiCompatibilityMigrationFilePatchCalls < 7) {
+    failures.push("pluginApiCompatibilityMigrationFilePatchCalls < 7");
+  }
+  if (pluginApiCompatibilityMigrationFileWriteCalls !== 0) {
+    failures.push("pluginApiCompatibilityMigrationFileWrite used");
+  }
+  if (pluginApiCompatibilityMigrationFileEditCalls !== 0) {
+    failures.push("pluginApiCompatibilityMigrationFileEdit used");
+  }
+  if (pluginApiCompatibilityMigrationDetails.pluginApiRepoDiscoveryVerified !== true) {
+    failures.push("pluginApiRepoDiscoveryVerified=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.pluginRuntimeMigrated !== true) {
+    failures.push("pluginRuntimeMigrated=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.firstPartyPluginsMigrated !== true) {
+    failures.push("firstPartyPluginsMigrated=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.legacyAdapterCompatibilityPreserved !== true) {
+    failures.push("legacyAdapterCompatibilityPreserved=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.examplesDocsChangelogMigrated !== true) {
+    failures.push("pluginApiExamplesDocsChangelogMigrated=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.oldOwnedHookReferencesRemoved !== true) {
+    failures.push("oldOwnedHookReferencesRemoved=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.generatedPluginTypesUntouched !== true) {
+    failures.push("generatedPluginTypesUntouched=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.vendorPluginShimUntouched !== true) {
+    failures.push("vendorPluginShimUntouched=false");
+  }
+  if (pluginApiCompatibilityMigrationDetails.pluginApiCompatibilityVerified !== true) {
+    failures.push("pluginApiCompatibilityVerified=false");
+  }
   if (ossStyleOpenSourceMigrationBashCalls !== 2) {
     failures.push("ossStyleOpenSourceMigrationBashCalls != 2");
   }
@@ -741,6 +825,31 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       largeRepoVendorShimUntouched: largeRepoLongChainMigrationDetails.vendorShimUntouched === true,
       largeRepoLongChainVerified:
         largeRepoLongChainMigrationDetails.largeRepoLongChainVerified === true,
+      pluginApiCompatibilityMigrationTaskSeen,
+      pluginApiCompatibilityMigrationBashCalls,
+      pluginApiCompatibilityMigrationGlobCalls,
+      pluginApiCompatibilityMigrationGrepCalls,
+      pluginApiCompatibilityMigrationFileReadCalls,
+      pluginApiCompatibilityMigrationFilePatchCalls,
+      pluginApiCompatibilityMigrationFileWriteCalls,
+      pluginApiCompatibilityMigrationFileEditCalls,
+      pluginApiRepoDiscoveryVerified:
+        pluginApiCompatibilityMigrationDetails.pluginApiRepoDiscoveryVerified === true,
+      pluginRuntimeMigrated: pluginApiCompatibilityMigrationDetails.pluginRuntimeMigrated === true,
+      firstPartyPluginsMigrated:
+        pluginApiCompatibilityMigrationDetails.firstPartyPluginsMigrated === true,
+      legacyAdapterCompatibilityPreserved:
+        pluginApiCompatibilityMigrationDetails.legacyAdapterCompatibilityPreserved === true,
+      pluginApiExamplesDocsChangelogMigrated:
+        pluginApiCompatibilityMigrationDetails.examplesDocsChangelogMigrated === true,
+      oldOwnedHookReferencesRemoved:
+        pluginApiCompatibilityMigrationDetails.oldOwnedHookReferencesRemoved === true,
+      generatedPluginTypesUntouched:
+        pluginApiCompatibilityMigrationDetails.generatedPluginTypesUntouched === true,
+      vendorPluginShimUntouched:
+        pluginApiCompatibilityMigrationDetails.vendorPluginShimUntouched === true,
+      pluginApiCompatibilityVerified:
+        pluginApiCompatibilityMigrationDetails.pluginApiCompatibilityVerified === true,
       ossStyleOpenSourceMigrationTaskSeen,
       ossStyleOpenSourceMigrationBashCalls,
       ossStyleOpenSourceMigrationGlobCalls,

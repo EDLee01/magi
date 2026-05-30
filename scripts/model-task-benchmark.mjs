@@ -3206,6 +3206,491 @@ async function scenarioLargeRepoLongChainMigrationTask() {
   });
 }
 
+async function scenarioPluginApiCompatibilityMigrationTask() {
+  return await withWorkspace("plugin-api-compatibility", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "plugin-auth", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "plugin-cache", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "adapter-legacy", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "examples", "express"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "changelog"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "packages", "core", "src", "pluginRuntime.js"),
+      [
+        "export function runPlugin(plugin, request) {",
+        '  if (typeof plugin.onRequest !== "function") {',
+        '    throw new Error("plugin must expose onRequest");',
+        "  }",
+        "  return plugin.onRequest(request);",
+        "}",
+        "",
+        "export function pluginHookName() {",
+        '  return "onRequest";',
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "plugin-auth", "src", "index.js"),
+      [
+        "export const authPlugin = {",
+        '  name: "auth",',
+        "  onRequest(request) {",
+        "    return { ...request, auth: true };",
+        "  }",
+        "};",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "plugin-cache", "src", "index.js"),
+      [
+        "export const cachePlugin = {",
+        '  name: "cache",',
+        "  onRequest(request) {",
+        '    return { ...request, cache: "hit" };',
+        "  }",
+        "};",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "adapter-legacy", "src", "index.js"),
+      [
+        "export function adaptLegacyPlugin(plugin) {",
+        "  return {",
+        "    name: plugin.name,",
+        "    onRequest: plugin.onRequest",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "examples", "express", "server.js"),
+      [
+        'import { runPlugin } from "../../packages/core/src/pluginRuntime.js";',
+        'import { authPlugin } from "../../packages/plugin-auth/src/index.js";',
+        "",
+        'export const pluginHook = "onRequest";',
+        'export const result = runPlugin(authPlugin, { path: "/secure" });',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "plugin-api.md"),
+      [
+        "# Plugin API",
+        "",
+        "Plugins expose `onRequest(request)`.",
+        "Use the legacy adapter for older onRequest plugins.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "changelog", "unreleased.md"),
+      [
+        "# Unreleased",
+        "",
+        "- Pending plugin onRequest migration.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "// AUTO-GENERATED PLUGIN TYPES. DO NOT EDIT.",
+      "export interface GeneratedPlugin {",
+      "  onRequest?: (request: unknown) => unknown;",
+      "}",
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// third party plugin shim",
+      'export const vendorPluginHook = "onRequest";',
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "plugin-types.d.ts"), generatedBefore, "utf8");
+    writeFileSync(path.join(workDir, "vendor", "legacy-plugin.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "plugin-api.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        'import { runPlugin, pluginHookName } from "../packages/core/src/pluginRuntime.js";',
+        'import { authPlugin } from "../packages/plugin-auth/src/index.js";',
+        'import { cachePlugin } from "../packages/plugin-cache/src/index.js";',
+        'import { adaptLegacyPlugin } from "../packages/adapter-legacy/src/index.js";',
+        'import { pluginHook, result } from "../examples/express/server.js";',
+        "",
+        'assert.equal(pluginHookName(), "handleRequest");',
+        'assert.equal(pluginHook, "handleRequest");',
+        'assert.deepEqual(result, { path: "/secure", auth: true });',
+        'assert.deepEqual(runPlugin(cachePlugin, { path: "/cached" }), {',
+        '  path: "/cached",',
+        '  cache: "hit"',
+        "});",
+        "const legacyPlugin = {",
+        '  name: "legacy",',
+        "  onRequest(request) {",
+        "    return { ...request, legacy: true };",
+        "  }",
+        "};",
+        'assert.deepEqual(runPlugin(adaptLegacyPlugin(legacyPlugin), { path: "/old" }), {',
+        '  path: "/old",',
+        "  legacy: true",
+        "});",
+        "",
+        "const migratedOwnedFiles = [",
+        '  "packages/core/src/pluginRuntime.js",',
+        '  "packages/plugin-auth/src/index.js",',
+        '  "packages/plugin-cache/src/index.js",',
+        '  "examples/express/server.js",',
+        '  "docs/plugin-api.md",',
+        '  "changelog/unreleased.md"',
+        "];",
+        "for (const file of migratedOwnedFiles) {",
+        '  const content = readFileSync(file, "utf8");',
+        '  assert.doesNotMatch(content, /onRequest/);',
+        '  assert.match(content, /handleRequest/);',
+        "}",
+        'const adapter = readFileSync("packages/adapter-legacy/src/index.js", "utf8");',
+        'assert.match(adapter, /handleRequest/);',
+        'assert.match(adapter, /onRequest/);',
+        'const generated = readFileSync("generated/plugin-types.d.ts", "utf8");',
+        'assert.match(generated, /AUTO-GENERATED PLUGIN TYPES\\. DO NOT EDIT/);',
+        'assert.match(generated, /onRequest/);',
+        'const vendor = readFileSync("vendor/legacy-plugin.js", "utf8");',
+        'assert.match(vendor, /third party plugin shim/);',
+        'assert.match(vendor, /onRequest/);',
+        'console.log("plugin api compatibility migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-plugin-api-before", "Bash", {
+              command: "node tests/plugin-api.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-plugin-api-repo", "Glob", {
+              pattern: "**/*.{js,md,ts,mjs}",
+              max_matches: 50
+            }),
+            toolCall("grep-on-request", "Grep", {
+              pattern: "onRequest",
+              path: ".",
+              output_mode: "content",
+              max_matches: 50
+            }),
+            toolCall("read-plugin-api-test", "FileRead", {
+              file_path: "tests/plugin-api.test.mjs"
+            }),
+            toolCall("read-plugin-runtime", "FileRead", {
+              file_path: "packages/core/src/pluginRuntime.js"
+            }),
+            toolCall("read-auth-plugin-api", "FileRead", {
+              file_path: "packages/plugin-auth/src/index.js"
+            }),
+            toolCall("read-cache-plugin-api", "FileRead", {
+              file_path: "packages/plugin-cache/src/index.js"
+            }),
+            toolCall("read-legacy-adapter", "FileRead", {
+              file_path: "packages/adapter-legacy/src/index.js"
+            }),
+            toolCall("read-express-example", "FileRead", {
+              file_path: "examples/express/server.js"
+            }),
+            toolCall("read-plugin-api-docs", "FileRead", {
+              file_path: "docs/plugin-api.md"
+            }),
+            toolCall("read-plugin-api-changelog", "FileRead", {
+              file_path: "changelog/unreleased.md"
+            }),
+            toolCall("read-generated-plugin-types", "FileRead", {
+              file_path: "generated/plugin-types.d.ts"
+            }),
+            toolCall("read-vendor-plugin", "FileRead", {
+              file_path: "vendor/legacy-plugin.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing plugin API test missing");
+          assert(transcript.includes("packages/core/src/pluginRuntime.js"), "plugin repo file list missing");
+          assert(transcript.includes("onRequest"), "legacy onRequest search results missing");
+          assert(transcript.includes("AUTO-GENERATED PLUGIN TYPES"), "generated plugin boundary missing");
+          assert(transcript.includes("third party plugin shim"), "vendor plugin boundary missing");
+          return toolResponse([
+            toolCall("patch-plugin-runtime", "FilePatch", {
+              file_path: "packages/core/src/pluginRuntime.js",
+              patch: [
+                "@@",
+                " export function runPlugin(plugin, request) {",
+                '-  if (typeof plugin.onRequest !== "function") {',
+                '-    throw new Error("plugin must expose onRequest");',
+                '+  if (typeof plugin.handleRequest !== "function") {',
+                '+    throw new Error("plugin must expose handleRequest");',
+                "   }",
+                "-  return plugin.onRequest(request);",
+                "+  return plugin.handleRequest(request);",
+                " }",
+                " ",
+                " export function pluginHookName() {",
+                '-  return "onRequest";',
+                '+  return "handleRequest";',
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-auth-plugin-api", "FilePatch", {
+              file_path: "packages/plugin-auth/src/index.js",
+              patch: [
+                "@@",
+                " export const authPlugin = {",
+                '   name: "auth",',
+                "-  onRequest(request) {",
+                "+  handleRequest(request) {",
+                "     return { ...request, auth: true };",
+                "   }",
+                " };"
+              ].join("\n")
+            }),
+            toolCall("patch-cache-plugin-api", "FilePatch", {
+              file_path: "packages/plugin-cache/src/index.js",
+              patch: [
+                "@@",
+                " export const cachePlugin = {",
+                '   name: "cache",',
+                "-  onRequest(request) {",
+                "+  handleRequest(request) {",
+                '     return { ...request, cache: "hit" };',
+                "   }",
+                " };"
+              ].join("\n")
+            }),
+            toolCall("patch-legacy-adapter", "FilePatch", {
+              file_path: "packages/adapter-legacy/src/index.js",
+              patch: [
+                "@@",
+                " export function adaptLegacyPlugin(plugin) {",
+                "   return {",
+                "     name: plugin.name,",
+                "-    onRequest: plugin.onRequest",
+                "+    handleRequest(request) {",
+                "+      return plugin.onRequest(request);",
+                "+    }",
+                "   };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-express-example", "FilePatch", {
+              file_path: "examples/express/server.js",
+              patch: [
+                "@@",
+                ' import { authPlugin } from "../../packages/plugin-auth/src/index.js";',
+                " ",
+                '-export const pluginHook = "onRequest";',
+                '+export const pluginHook = "handleRequest";',
+                ' export const result = runPlugin(authPlugin, { path: "/secure" });'
+              ].join("\n")
+            }),
+            toolCall("patch-plugin-api-docs", "FilePatch", {
+              file_path: "docs/plugin-api.md",
+              patch: [
+                "@@",
+                " # Plugin API",
+                " ",
+                "-Plugins expose `onRequest(request)`.",
+                "-Use the legacy adapter for older onRequest plugins.",
+                "+Plugins expose `handleRequest(request)`.",
+                "+Use the legacy adapter when wrapping older plugin hooks."
+              ].join("\n")
+            }),
+            toolCall("patch-plugin-api-changelog", "FilePatch", {
+              file_path: "changelog/unreleased.md",
+              patch: [
+                "@@",
+                " # Unreleased",
+                " ",
+                "-- Pending plugin onRequest migration.",
+                "+- Migrated the public plugin hook to handleRequest while preserving the legacy adapter."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched packages/core/src/pluginRuntime.js"),
+            "plugin runtime patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/plugin-auth/src/index.js"),
+            "auth plugin API patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/adapter-legacy/src/index.js"),
+            "legacy adapter patch result missing"
+          );
+          assert(transcript.includes("Patched docs/plugin-api.md"), "plugin docs patch missing");
+          return toolResponse([
+            toolCall("run-plugin-api-after", "Bash", {
+              command: "node tests/plugin-api.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("plugin api compatibility migration ok"),
+          "passing plugin API compatibility test missing"
+        );
+        return messageText(
+          "Plugin API compatibility migration completed while generated types and vendor shims stayed unchanged."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "In this OSS-style plugin repository, migrate the public plugin hook",
+            "from onRequest to handleRequest across core runtime, first-party plugins,",
+            "examples, docs, and changelog. Keep the legacy adapter compatible with old",
+            "onRequest plugins. Run the focused plugin API test before editing, discover",
+            "the repo with Glob and Grep, inspect generated and vendor boundaries, do not",
+            "modify generated or vendor files, then rerun the focused plugin API test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "plugin API compatibility migration task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "plugin API compatibility task did not complete");
+      const migratedFiles = [
+        "packages/core/src/pluginRuntime.js",
+        "packages/plugin-auth/src/index.js",
+        "packages/plugin-cache/src/index.js",
+        "examples/express/server.js",
+        "docs/plugin-api.md",
+        "changelog/unreleased.md"
+      ];
+      for (const file of migratedFiles) {
+        const content = readFileSync(path.join(workDir, file), "utf8");
+        assert(!content.includes("onRequest"), `${file} still contains onRequest`);
+        assert(content.includes("handleRequest"), `${file} missing handleRequest`);
+      }
+      const adapter = readFileSync(
+        path.join(workDir, "packages", "adapter-legacy", "src", "index.js"),
+        "utf8"
+      );
+      const generatedAfter = readFileSync(path.join(workDir, "generated", "plugin-types.d.ts"), "utf8");
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "legacy-plugin.js"), "utf8");
+      assert(adapter.includes("handleRequest"), "legacy adapter missing handleRequest");
+      assert(adapter.includes("onRequest"), "legacy adapter no longer wraps onRequest");
+      assert(generatedAfter === generatedBefore, "generated plugin types were modified");
+      assert(vendorAfter === vendorBefore, "vendor plugin shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "plugin API task should run tests before and after");
+      assert(toolCounts.Glob === 1, "plugin API task should discover files with Glob");
+      assert(toolCounts.Grep === 1, "plugin API task should search legacy hook with Grep");
+      assert(toolCounts.FileRead === 10, "plugin API task should inspect owned and boundary files");
+      assert(toolCounts.FilePatch === 7, "plugin API task should patch seven owned files");
+      assert(!toolCounts.FileWrite, "plugin API task should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "plugin API task should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing plugin API test ran first",
+          "plugin API repo discovery ran with Glob",
+          "legacy hook search ran with Grep",
+          "core plugin runtime inspected before patching",
+          "first-party plugins inspected before patching",
+          "legacy adapter inspected before patching",
+          "example docs and changelog inspected before patching",
+          "generated plugin types boundary inspected",
+          "vendor plugin shim boundary inspected",
+          "core plugin runtime migrated to handleRequest",
+          "first-party plugin hooks migrated",
+          "legacy adapter preserved old plugin compatibility",
+          "example plugin usage migrated",
+          "plugin API docs migrated",
+          "plugin API changelog migrated",
+          "focused passing plugin API test ran after migration",
+          "old owned onRequest references removed",
+          "generated plugin types stayed unchanged",
+          "vendor plugin shim stayed unchanged",
+          "FileWrite avoided for plugin API migration",
+          "FileEdit avoided for plugin API migration",
+          "final response completed"
+        ],
+        filesVerified: [
+          "packages/core/src/pluginRuntime.js",
+          "packages/plugin-auth/src/index.js",
+          "packages/plugin-cache/src/index.js",
+          "packages/adapter-legacy/src/index.js",
+          "examples/express/server.js",
+          "docs/plugin-api.md",
+          "changelog/unreleased.md",
+          "generated/plugin-types.d.ts",
+          "vendor/legacy-plugin.js",
+          "tests/plugin-api.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "plugin_api_compatibility_migration",
+        toolCounts,
+        pluginApiRepoDiscoveryVerified: true,
+        pluginRuntimeMigrated: true,
+        firstPartyPluginsMigrated: true,
+        legacyAdapterCompatibilityPreserved: true,
+        examplesDocsChangelogMigrated: true,
+        oldOwnedHookReferencesRemoved: true,
+        generatedPluginTypesUntouched: true,
+        vendorPluginShimUntouched: true,
+        pluginApiCompatibilityVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioOssStyleOpenSourceMigrationTask() {
   return await withWorkspace("oss-style-open-source", async ({ root, configDir, workDir }) => {
     mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
@@ -3727,6 +4212,7 @@ async function main() {
     ["workspace policy migration task", scenarioWorkspacePolicyMigrationTask],
     ["mixed language contract migration task", scenarioMixedLanguageContractMigrationTask],
     ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask],
+    ["plugin API compatibility migration task", scenarioPluginApiCompatibilityMigrationTask],
     ["oss-style open source migration task", scenarioOssStyleOpenSourceMigrationTask]
   ];
   const results = [];
