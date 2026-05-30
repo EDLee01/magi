@@ -237,7 +237,10 @@ function createH1Router() {
     }
 
     if (turn === 3) {
-      assert(transcript.includes("FilePatch failed for src/discount.ts"), "H1 patch failure was not visible");
+      assert(
+        transcript.includes("FilePatch failed for src/discount.ts"),
+        "H1 patch failure was not visible"
+      );
       assert(transcript.includes("Current file snippet:"), "H1 patch recovery snippet was missing");
       return toolResponse([
         toolCall("h1-patch-source-retry", "FilePatch", {
@@ -271,6 +274,268 @@ function createH1Router() {
 
     throw new Error(`H1 exceeded expected provider turns: ${turn}`);
   };
+}
+
+function createH2Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (!transcript.includes("Add --dry-run support to the notes CLI")) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("FileRead"), "H2 missing FileRead");
+      assert(toolNames.includes("FilePatch"), "H2 missing FilePatch");
+      assert(toolNames.includes("Bash"), "H2 missing Bash");
+      assert(
+        transcript.includes("Dry run writes no files") ||
+          transcript.includes("reports what would be saved without modifying"),
+        "H2 dry-run constraint was not visible"
+      );
+      return toolResponse([
+        toolCall("h2-read-cli", "FileRead", { file_path: "src/cli.js" }),
+        toolCall("h2-read-store", "FileRead", { file_path: "src/store.js" }),
+        toolCall("h2-read-tests", "FileRead", { file_path: "tests/cli.test.mjs" }),
+        toolCall("h2-read-readme", "FileRead", { file_path: "README.md" }),
+        toolCall("h2-run-baseline-test", "Bash", { command: "npm test", timeout_ms: 10_000 })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(transcript.includes("notes cli tests passed"), "H2 baseline test was not visible");
+      assert(
+        transcript.includes("node src/cli.js add --title <title>"),
+        "H2 help text was not visible"
+      );
+      assert(
+        transcript.includes("function addNote(title)"),
+        "H2 store implementation was not visible"
+      );
+      return toolResponse([
+        toolCall("h2-patch-store", "FilePatch", {
+          file_path: "src/store.js",
+          patch: [
+            "@@",
+            "-function addNote(title) {",
+            "+function addNote(title, options = {}) {",
+            "   const notes = readNotes();",
+            "   const note = { id: notes.length + 1, title };",
+            "+  if (options.dryRun) {",
+            "+    return note;",
+            "+  }",
+            "   notes.push(note);",
+            "   mkdirSync(path.dirname(DATA_FILE), { recursive: true });",
+            '   writeFileSync(DATA_FILE, `${JSON.stringify(notes, null, 2)}\\n`, "utf8");'
+          ].join("\n")
+        }),
+        toolCall("h2-patch-cli", "FilePatch", {
+          file_path: "src/cli.js",
+          patch: [
+            "@@",
+            '     if (value === "--title") {',
+            "       options.title = rest[index + 1];",
+            "       index += 1;",
+            "     }",
+            '+    if (value === "--dry-run") {',
+            "+      options.dryRun = true;",
+            "+    }",
+            "   }",
+            "   return { command, options };",
+            " }",
+            "@@",
+            "   return [",
+            '     "Usage:",',
+            '-    "  node src/cli.js add --title <title>",',
+            '+    "  node src/cli.js add --title <title> [--dry-run]",',
+            '     "  node src/cli.js list"',
+            '   ].join("\\n");',
+            " }",
+            "@@",
+            "-    const note = addNote(options.title);",
+            "+    const note = addNote(options.title, { dryRun: options.dryRun });",
+            "+    if (options.dryRun) {",
+            "+      console.log(`[dry-run] Would add note: ${note.title}`);",
+            "+      return 0;",
+            "+    }",
+            "     console.log(`Added note #${note.id}: ${note.title}`);",
+            "     return 0;",
+            "   }"
+          ].join("\n")
+        }),
+        toolCall("h2-patch-tests", "FilePatch", {
+          file_path: "tests/cli.test.mjs",
+          patch: [
+            "@@",
+            ' assert.equal(existsSync("data/notes.json"), true);',
+            ' assert.match(readFileSync("data/notes.json", "utf8"), /First/);',
+            " ",
+            '+const beforeDryRun = readFileSync("data/notes.json", "utf8");',
+            "+result = spawnSync(process.execPath, [",
+            '+  "src/cli.js",',
+            '+  "add",',
+            '+  "--title",',
+            '+  "Preview",',
+            '+  "--dry-run"',
+            '+], { encoding: "utf8" });',
+            "+assert.equal(result.status, 0);",
+            "+assert.match(result.stdout, /\\[dry-run\\] Would add note: Preview/);",
+            "+assert.equal(",
+            '+  readFileSync("data/notes.json", "utf8"),',
+            "+  beforeDryRun,",
+            '+  "dry-run does not write notes"',
+            "+);",
+            "+",
+            ' console.log("notes cli tests passed");'
+          ].join("\n")
+        }),
+        toolCall("h2-patch-readme", "FilePatch", {
+          file_path: "README.md",
+          patch: [
+            "@@",
+            " ```bash",
+            ' node src/cli.js add --title "Buy milk"',
+            '+node src/cli.js add --title "Preview note" --dry-run',
+            " node src/cli.js list",
+            " ```",
+            " ",
+            "-Notes are stored in `data/notes.json`.",
+            "+Notes are stored in `data/notes.json`. Use `--dry-run` to preview an add without writing the data file."
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(transcript.includes("Patched src/cli.js"), "H2 CLI patch result was not visible");
+      assert(transcript.includes("Patched src/store.js"), "H2 store patch result was not visible");
+      assert(
+        transcript.includes("Patched tests/cli.test.mjs"),
+        "H2 test patch result was not visible"
+      );
+      assert(transcript.includes("Patched README.md"), "H2 README patch result was not visible");
+      return toolResponse([
+        toolCall("h2-run-passing-test-and-dry-run", "Bash", {
+          command: [
+            "npm test",
+            "node <<'NODE'",
+            "const { mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');",
+            "const { spawnSync } = require('node:child_process');",
+            "mkdirSync('data', { recursive: true });",
+            "writeFileSync('data/notes.json', '[]\\n', 'utf8');",
+            "const result = spawnSync(process.execPath, ['src/cli.js', 'add', '--title', 'Preview', '--dry-run'], { encoding: 'utf8' });",
+            "if (result.status !== 0) throw new Error(result.stderr || result.stdout);",
+            "if (!result.stdout.includes('[dry-run] Would add note: Preview')) throw new Error('missing dry-run output');",
+            "console.log(result.stdout.trim());",
+            "if (readFileSync('data/notes.json', 'utf8').trim() !== '[]') throw new Error('dry-run wrote data');",
+            "rmSync('data', { recursive: true, force: true });",
+            "NODE"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 4) {
+      assert(
+        transcript.includes("Command exited 0"),
+        "H2 passing verification command was not visible"
+      );
+      assert(transcript.includes("notes cli tests passed"), "H2 passing tests output was missing");
+      assert(
+        transcript.includes("[dry-run] Would add note: Preview"),
+        "H2 dry-run output was missing"
+      );
+      return messageText(
+        "Added --dry-run support and verified npm test plus dry-run no-write behavior."
+      );
+    }
+
+    throw new Error(`H2 exceeded expected provider turns: ${turn}`);
+  };
+}
+
+function taskDefinitionFor(taskId) {
+  if (taskId === "H1") {
+    return {
+      createRouter: createH1Router,
+      finalMessage: "Fixed src/discount.ts and verified npm test passes.",
+      assertions: [
+        "H1 fixture copied into isolated workspace",
+        "H1 provider saw task constraints",
+        "H1 failing npm test reproduced",
+        "H1 source bug read before patch",
+        "H1 first FilePatch failure returned recovery context",
+        "H1 source patched with FilePatch retry",
+        "H1 npm test passed after patch",
+        "H1 checks.sh passed",
+        "H1 changed only expected source file",
+        "H1 forbidden paths unchanged",
+        "H1 session and audit persisted"
+      ],
+      filesVerified: [
+        "src/discount.ts",
+        "tests/discount.test.mjs",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ toolCounts, session }) => {
+        assert((toolCounts.FileRead ?? 0) >= 2, "H1 did not read enough evidence");
+        assert((toolCounts.FilePatch ?? 0) >= 2, "H1 should recover with FilePatch retry");
+        assert((toolCounts.Bash ?? 0) === 2, "H1 should run failing and passing tests");
+        assert((toolCounts.FileWrite ?? 0) === 0, "H1 should not use FileWrite");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H1 should not use FileEdit");
+        assert(session.auditEventCount > 0, "H1 audit events were not persisted");
+        assert(session.messageCount >= 2, "H1 session messages were not persisted");
+      }
+    };
+  }
+
+  if (taskId === "H2") {
+    return {
+      createRouter: createH2Router,
+      finalMessage: "Added --dry-run support and verified npm test plus dry-run no-write behavior.",
+      assertions: [
+        "H2 fixture copied into isolated workspace",
+        "H2 provider saw dry-run constraints",
+        "H2 baseline npm test reproduced",
+        "H2 CLI, store, tests, and README read before patch",
+        "H2 multi-file feature patched with FilePatch",
+        "H2 npm test passed after patch",
+        "H2 dry-run command reported preview",
+        "H2 dry-run left data file unchanged",
+        "H2 checks.sh passed",
+        "H2 changed exactly expected files",
+        "H2 forbidden paths unchanged",
+        "H2 session and audit persisted"
+      ],
+      filesVerified: [
+        "src/cli.js",
+        "src/store.js",
+        "tests/cli.test.mjs",
+        "README.md",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session }) => {
+        assert((toolCounts.FileRead ?? 0) >= 4, "H2 did not read enough project evidence");
+        assert((toolCounts.FilePatch ?? 0) >= 4, "H2 should patch all feature files");
+        assert((toolCounts.Bash ?? 0) === 2, "H2 should run baseline and final verification");
+        assert((toolCounts.FileWrite ?? 0) === 0, "H2 should not use FileWrite");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H2 should not use FileEdit");
+        assert(after["src/cli.js"]?.text.includes("--dry-run"), "H2 CLI missing --dry-run");
+        assert(after["src/store.js"]?.text.includes("options.dryRun"), "H2 store missing dryRun");
+        assert(
+          after["tests/cli.test.mjs"]?.text.includes("dry-run does not write notes"),
+          "H2 tests missing dry-run no-write assertion"
+        );
+        assert(after["README.md"]?.text.includes("--dry-run"), "H2 README missing dry-run docs");
+        assert(session.auditEventCount > 0, "H2 audit events were not persisted");
+        assert(session.messageCount >= 2, "H2 session messages were not persisted");
+      }
+    };
+  }
+
+  throw new Error(`Unknown complex harness task id: ${taskId}`);
 }
 
 async function runCommand({ command, args, cwd, configDir, label, timeoutMs = 30_000 }) {
@@ -340,6 +605,7 @@ async function runTask(taskName) {
   const taskRoot = path.join(fixturesRoot, taskName);
   const repoFixture = path.join(taskRoot, "repo");
   const expected = readJson(path.join(taskRoot, "expected.json"));
+  const taskDefinition = taskDefinitionFor(expected.id);
   const limits = readJson(path.join(taskRoot, "limits.json"));
   const forbidden = readLines(path.join(taskRoot, "forbidden.txt"));
   const root = mkdtempSync(path.join(os.tmpdir(), `magi-complex-${taskName}-`));
@@ -358,7 +624,7 @@ async function runTask(taskName) {
   const started = Date.now();
   const provider = await startProvider({
     logPath: providerLog,
-    routeRequest: createH1Router()
+    routeRequest: taskDefinition.createRouter()
   });
 
   try {
@@ -388,8 +654,8 @@ async function runTask(taskName) {
     assert(completed?.type === "session.completed", "stream-json did not complete");
     assert(completed.status === "completed", "session did not finish completed");
     assert(
-      completed.message === "Fixed src/discount.ts and verified npm test passes.",
-      "final message did not report H1 verification"
+      completed.message === taskDefinition.finalMessage,
+      `final message did not report ${expected.id} verification`
     );
 
     const checks = await runCommand({
@@ -413,24 +679,15 @@ async function runTask(taskName) {
     const sentinelUnchanged = readFileSync(sentinelPath, "utf8") === "do not touch\n";
     const elapsedMs = Date.now() - started;
     const toolCounts = countStreamTools(events);
-    const session = readSessionEvidence(path.join(configDir, "state", "sessions.sqlite"), completed.sessionId);
+    const session = readSessionEvidence(
+      path.join(configDir, "state", "sessions.sqlite"),
+      completed.sessionId
+    );
     const diffText = renderChangedFileDiffs(before, after, changedFiles);
     writeFileSync(path.join(archiveDir, "diff.txt"), diffText, "utf8");
 
     const commandCount = toolCounts.Bash ?? 0;
-    const assertions = [
-      "H1 fixture copied into isolated workspace",
-      "H1 provider saw task constraints",
-      "H1 failing npm test reproduced",
-      "H1 source bug read before patch",
-      "H1 first FilePatch failure returned recovery context",
-      "H1 source patched with FilePatch retry",
-      "H1 npm test passed after patch",
-      "H1 checks.sh passed",
-      "H1 changed only expected source file",
-      "H1 forbidden paths unchanged",
-      "H1 session and audit persisted"
-    ];
+    const assertions = taskDefinition.assertions;
     assert(
       JSON.stringify(changedFiles) === JSON.stringify(expected.expectedChangedFiles),
       `changed files ${JSON.stringify(changedFiles)} did not match expected ${JSON.stringify(expected.expectedChangedFiles)}`
@@ -443,13 +700,7 @@ async function runTask(taskName) {
       changedFiles.length <= limits.maxFileChanges,
       `file changes ${changedFiles.length} exceeded limit`
     );
-    assert((toolCounts.FileRead ?? 0) >= 2, "H1 did not read enough evidence");
-    assert((toolCounts.FilePatch ?? 0) >= 2, "H1 should recover with FilePatch retry");
-    assert((toolCounts.Bash ?? 0) === 2, "H1 should run failing and passing tests");
-    assert((toolCounts.FileWrite ?? 0) === 0, "H1 should not use FileWrite");
-    assert((toolCounts.FileEdit ?? 0) === 0, "H1 should not use FileEdit");
-    assert(session.auditEventCount > 0, "H1 audit events were not persisted");
-    assert(session.messageCount >= 2, "H1 session messages were not persisted");
+    taskDefinition.validate({ before, after, changedFiles, toolCounts, session });
 
     return {
       name: expected.name,
@@ -464,12 +715,7 @@ async function runTask(taskName) {
         provider: provider.summary(),
         toolCounts,
         assertions,
-        filesVerified: [
-          "src/discount.ts",
-          "tests/discount.test.mjs",
-          "checks.sh",
-          "state/sessions.sqlite"
-        ],
+        filesVerified: taskDefinition.filesVerified,
         changedFiles,
         forbiddenChanges,
         checksPassed: true,
@@ -613,7 +859,7 @@ async function main() {
   mkdirSync(archiveRoot, { recursive: true });
 
   const scenarios = [];
-  for (const taskName of ["h1-single-file-bug-fix"]) {
+  for (const taskName of ["h1-single-file-bug-fix", "h2-multi-file-dry-run"]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);
     try {

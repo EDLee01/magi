@@ -483,7 +483,11 @@ Checks:
 - Help text includes `--dry-run`.
 - Dry run writes no files.
 
-Current status: not implemented.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H2 fixture drives a real CLI multi-file change across CLI parsing, store
+behavior, README usage, and tests. The harness verifies baseline and final
+tests, `--dry-run` no-write behavior, exact four-file diff, forbidden path
+protection, stream-json lifecycle, and SQLite session/audit persistence.
 
 #### H3. Refactor with behavior preservation
 

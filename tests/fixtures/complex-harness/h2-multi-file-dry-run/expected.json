@@ -1,0 +1,6 @@
+{
+  "id": "H2",
+  "name": "H2 multi-file dry-run feature",
+  "taskClass": "multi_file_feature",
+  "expectedChangedFiles": ["README.md", "src/cli.js", "src/store.js", "tests/cli.test.mjs"]
+}

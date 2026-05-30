@@ -891,6 +891,7 @@ describe("capability report", () => {
         score: 0.3,
         successRate: 0,
         taskClass: "thin_demo",
+        includeH2: false,
         assertions: 2,
         filesVerified: 1,
         toolCallCount: 2,
@@ -920,7 +921,10 @@ describe("capability report", () => {
         "status=failed",
         "successRate=0",
         "score=0.3",
+        "scenarios=1",
         "singleFileBugFixTask=false",
+        "multiFileFeatureTask=false",
+        "H2=false",
         "assertions=2",
         "filesVerified=1",
         "toolCallCount=2",
@@ -1053,6 +1057,7 @@ function complexHarnessReport(
     score?: number;
     successRate?: number;
     taskClass?: string;
+    includeH2?: boolean;
     assertions?: number;
     filesVerified?: number;
     toolCallCount?: number;
@@ -1075,37 +1080,123 @@ function complexHarnessReport(
   } = {}
 ): Record<string, unknown> {
   const status = overrides.status ?? "passed";
-  const assertions = overrides.assertions ?? 10;
-  const filesVerified = overrides.filesVerified ?? 4;
-  const toolCounts = {
+  const includeH2 = overrides.includeH2 ?? true;
+  const h1Assertions = overrides.assertions ?? 10;
+  const h2Assertions = includeH2 ? 12 : 0;
+  const assertions = h1Assertions + h2Assertions;
+  const h1FilesVerified = overrides.filesVerified ?? 4;
+  const h2FilesVerified = includeH2 ? 6 : 0;
+  const filesVerified = h1FilesVerified + h2FilesVerified;
+  const h1ToolCounts = {
     FileRead: overrides.fileReadCalls ?? 2,
     FilePatch: overrides.filePatchCalls ?? 2,
     Bash: overrides.bashCalls ?? 2,
     FileWrite: overrides.fileWriteCalls ?? 0,
     FileEdit: overrides.fileEditCalls ?? 0
   };
+  const h2ToolCounts = includeH2
+    ? {
+        FileRead: 4,
+        FilePatch: 4,
+        Bash: 2,
+        FileWrite: 0,
+        FileEdit: 0
+      }
+    : {};
+  const toolCallCount =
+    overrides.toolCallCount ??
+    Object.values(h1ToolCounts).reduce((sum, count) => sum + count, 0) +
+      Object.values(h2ToolCounts).reduce((sum, count) => sum + count, 0);
+  const uniqueToolCount = overrides.uniqueToolCount ?? 3;
+  const scenarioCount = includeH2 ? 2 : 1;
+  const passed = status === "passed" ? scenarioCount : 0;
+  const failed = status === "passed" ? 0 : scenarioCount;
+  const scenarios: Record<string, unknown>[] = [
+    {
+      name: "H1 single-file bug fix",
+      status,
+      durationMs: 400,
+      score: overrides.score ?? (status === "passed" ? 1 : 0),
+      failureKind: status === "passed" ? null : "assertion",
+      details: {
+        taskId: "H1",
+        taskClass: overrides.taskClass ?? "single_file_bug_fix",
+        toolCounts: h1ToolCounts,
+        assertions: Array.from({ length: h1Assertions }, (_, index) => `H1 assertion ${index + 1}`),
+        filesVerified: Array.from(
+          { length: h1FilesVerified },
+          (_, index) => `H1 file ${index + 1}`
+        ),
+        changedFiles: overrides.changedFiles ?? ["src/discount.ts"],
+        forbiddenChanges: overrides.forbiddenChanges ?? [],
+        checksPassed: overrides.checksPassed ?? true,
+        streamJsonLifecycleVerified: overrides.streamJsonLifecycleVerified ?? true,
+        session: {
+          messageCount: overrides.sessionMessages ?? 3,
+          auditEventCount: overrides.auditEvents ?? 8
+        },
+        limitResults: {
+          withinTime: overrides.withinTime ?? true,
+          withinCommands: overrides.withinCommands ?? true,
+          withinFileChanges: overrides.withinFileChanges ?? true
+        }
+      }
+    }
+  ];
+  if (includeH2) {
+    scenarios.push({
+      name: "H2 multi-file dry-run feature",
+      status,
+      durationMs: 600,
+      score: overrides.score ?? (status === "passed" ? 1 : 0),
+      failureKind: status === "passed" ? null : "assertion",
+      details: {
+        taskId: "H2",
+        taskClass: "multi_file_feature",
+        toolCounts: h2ToolCounts,
+        assertions: Array.from({ length: h2Assertions }, (_, index) => `H2 assertion ${index + 1}`),
+        filesVerified: Array.from(
+          { length: h2FilesVerified },
+          (_, index) => `H2 file ${index + 1}`
+        ),
+        changedFiles: ["README.md", "src/cli.js", "src/store.js", "tests/cli.test.mjs"],
+        forbiddenChanges: [],
+        checksPassed: true,
+        streamJsonLifecycleVerified: true,
+        session: {
+          messageCount: 3,
+          auditEventCount: 8
+        },
+        limitResults: {
+          withinTime: true,
+          withinCommands: true,
+          withinFileChanges: true
+        }
+      }
+    });
+  }
   return {
     version: 1,
     name: "complex-task-harness",
     status,
     summary: {
-      total: 1,
-      passed: status === "passed" ? 1 : 0,
-      failed: status === "passed" ? 0 : 1,
+      total: scenarioCount,
+      passed,
+      failed,
       successRate: overrides.successRate ?? (status === "passed" ? 1 : 0),
       score: overrides.score ?? (status === "passed" ? 1 : 0),
-      providerCalls: 4,
+      providerCalls: includeH2 ? 8 : 4,
       providerCallsPerScenario: 4,
       assertions,
       filesVerified,
       toolEfficiency: {
-        toolCallCount: overrides.toolCallCount ?? 6,
-        uniqueToolCount: overrides.uniqueToolCount ?? 3,
-        toolCallsPerScenario: overrides.toolCallCount ?? 6,
+        toolCallCount,
+        uniqueToolCount,
+        toolCallsPerScenario: toolCallCount / scenarioCount,
         topTools: [
-          { name: "Bash", count: toolCounts.Bash },
-          { name: "FileRead", count: toolCounts.FileRead },
-          { name: "FilePatch", count: toolCounts.FilePatch }
+          { name: "FilePatch", count: h1ToolCounts.FilePatch + (h2ToolCounts.FilePatch ?? 0) },
+          { name: "FileRead", count: h1ToolCounts.FileRead + (h2ToolCounts.FileRead ?? 0) },
+          { name: "Bash", count: h1ToolCounts.Bash + (h2ToolCounts.Bash ?? 0) }
         ]
       },
       regressions: Array.from({ length: overrides.regressions ?? 0 }, (_, index) => ({
@@ -1113,38 +1204,7 @@ function complexHarnessReport(
         failureKind: "assertion"
       }))
     },
-    scenarios: [
-      {
-        name: "H1 single-file bug fix",
-        status,
-        durationMs: 400,
-        score: overrides.score ?? (status === "passed" ? 1 : 0),
-        failureKind: status === "passed" ? null : "assertion",
-        details: {
-          taskId: "H1",
-          taskClass: overrides.taskClass ?? "single_file_bug_fix",
-          toolCounts,
-          assertions: Array.from({ length: assertions }, (_, index) => `H1 assertion ${index + 1}`),
-          filesVerified: Array.from(
-            { length: filesVerified },
-            (_, index) => `H1 file ${index + 1}`
-          ),
-          changedFiles: overrides.changedFiles ?? ["src/discount.ts"],
-          forbiddenChanges: overrides.forbiddenChanges ?? [],
-          checksPassed: overrides.checksPassed ?? true,
-          streamJsonLifecycleVerified: overrides.streamJsonLifecycleVerified ?? true,
-          session: {
-            messageCount: overrides.sessionMessages ?? 3,
-            auditEventCount: overrides.auditEvents ?? 8
-          },
-          limitResults: {
-            withinTime: overrides.withinTime ?? true,
-            withinCommands: overrides.withinCommands ?? true,
-            withinFileChanges: overrides.withinFileChanges ?? true
-          }
-        }
-      }
-    ]
+    scenarios
   };
 }
 
