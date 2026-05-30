@@ -38,6 +38,32 @@ export interface CapabilityReport {
   sources: Record<string, string>;
 }
 
+const BASE_PROVIDER_TOOLS = [
+  "AskUserQuestion",
+  "Bash",
+  "Brief",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "FileEdit",
+  "FilePatch",
+  "FileRead",
+  "FileWrite",
+  "GitDiff",
+  "GitLog",
+  "GitShow",
+  "GitStatus",
+  "GitSummary",
+  "Glob",
+  "Grep",
+  "ListMcpResources",
+  "Memorize",
+  "MemoryCorrect",
+  "ReadMcpResource",
+  "SendUserMessage",
+  "ToolSearch",
+  "WorkspaceDiagnostics"
+];
+
 export function buildCapabilityReport(input: CapabilityReportInput): CapabilityReport {
   const checks = [
     checkBlackboxReport(input.blackbox),
@@ -134,6 +160,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const complexWorkflowFilesVerified = readStringList(complexWorkflowDetails.filesVerified);
   const complexWorkflowProvider = readRecord(complexWorkflowDetails.provider);
   const complexWorkflowToolCounts = readRecord(complexWorkflowProvider.toolCounts);
+  const complexWorkflowExposedTools = readStringList(complexWorkflowProvider.exposedTools);
+  const providerToolSurfaces = scenarios
+    .map((scenario) => readRecord(readRecord(scenario.details).provider))
+    .filter(providerHasToolSurfaceEvidence);
+  const providerToolSurfaceCount = providerToolSurfaces.filter((provider) =>
+    hasProviderToolSurface(provider)
+  ).length;
+  const providerToolSurfaceBadCount = providerToolSurfaces.length - providerToolSurfaceCount;
+  const providerToolSurfaceTarget = Math.min(readNumber(summary.total), 23);
+  const complexWorkflowLearningDraftExposed =
+    hasProviderToolSurface(complexWorkflowProvider, BASE_PROVIDER_TOOLS.length + 1) &&
+    complexWorkflowExposedTools.includes("LearningDraft");
   const retryFallback = scenarios.find((scenario) => scenario.name === "retry fallback");
   const retryFallbackDetails = readRecord(retryFallback?.details);
   const retryFallbackProvider = readRecord(retryFallbackDetails.provider);
@@ -412,6 +450,15 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
   if (assertions < 188) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
+  if (providerToolSurfaceCount < providerToolSurfaceTarget) {
+    failures.push(`providerToolSurfaceCount=${providerToolSurfaceCount}`);
+  }
+  if (providerToolSurfaceBadCount > 0) {
+    failures.push(`providerToolSurfaceBadCount=${providerToolSurfaceBadCount}`);
+  }
+  if (!complexWorkflowLearningDraftExposed) {
+    failures.push("complexWorkflowLearningDraftExposed=false");
+  }
   if (!complexWorkflowSeen) failures.push("complexWorkflowSeen=false");
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -472,6 +519,10 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       filesVerified,
       toolCallCount,
       uniqueToolCount,
+      providerToolSurfaceCount,
+      providerToolSurfaceTarget,
+      providerToolSurfaceBadCount,
+      complexWorkflowLearningDraftExposed,
       complexWorkflowSeen,
       complexWorkflowProviderCalls: readNumber(complexWorkflowProvider.callCount),
       complexWorkflowFilesVerified: complexWorkflowFilesVerified.length,
@@ -1707,6 +1758,14 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const toolEfficiency = readRecord(summary.toolEfficiency);
   const scenarios = Array.isArray(report.scenarios) ? report.scenarios.map(readRecord) : [];
   const detailsList = scenarios.map((scenario) => readRecord(scenario.details));
+  const providerToolSurfaces = detailsList.map((details) => readRecord(details.provider));
+  const providerToolSurfaceTarget = detailsList.length;
+  const providerToolSurfaceCount = providerToolSurfaces.filter((provider) =>
+    hasProviderToolSurface(provider)
+  ).length;
+  const providerToolSurfaceBadCount = providerToolSurfaces.filter(
+    (provider) => providerHasToolSurfaceEvidence(provider) && !hasProviderToolSurface(provider)
+  ).length;
   const taskClasses = new Set(
     detailsList
       .map((details) => details.taskClass)
@@ -1866,6 +1925,12 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (filesVerified < 53) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 56) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (providerToolSurfaceCount !== providerToolSurfaceTarget) {
+    failures.push(`providerToolSurfaceCount=${providerToolSurfaceCount}`);
+  }
+  if (providerToolSurfaceBadCount > 0) {
+    failures.push(`providerToolSurfaceBadCount=${providerToolSurfaceBadCount}`);
+  }
   if (normalStreamDiagnosticsCount !== normalStreamDiagnosticsTasks.length) {
     failures.push(`normalStreamDiagnosticsCount=${normalStreamDiagnosticsCount}`);
   }
@@ -2162,6 +2227,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       filesVerified,
       toolCallCount,
       uniqueToolCount,
+      providerToolSurfaceCount,
+      providerToolSurfaceTarget,
+      providerToolSurfaceBadCount,
       normalStreamDiagnosticsCount,
       normalStreamDiagnosticsTarget: normalStreamDiagnosticsTasks.length,
       H1Seen: h1Seen,
@@ -3396,6 +3464,25 @@ function readRecordList(value: unknown): Record<string, unknown>[] {
 
 function readStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
+}
+
+function providerHasToolSurfaceEvidence(provider: Record<string, unknown>): boolean {
+  return (
+    readNumber(provider.exposedToolCount) > 0 || readStringList(provider.exposedTools).length > 0
+  );
+}
+
+function hasProviderToolSurface(
+  provider: Record<string, unknown>,
+  minToolCount = BASE_PROVIDER_TOOLS.length
+): boolean {
+  const exposedTools = readStringList(provider.exposedTools);
+  const exposedToolCount = readNumber(provider.exposedToolCount);
+  return (
+    exposedToolCount >= minToolCount &&
+    exposedTools.length === exposedToolCount &&
+    BASE_PROVIDER_TOOLS.every((tool) => exposedTools.includes(tool))
+  );
 }
 
 function hasWorkerTaskEvidence(

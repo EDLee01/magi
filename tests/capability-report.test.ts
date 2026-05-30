@@ -2,6 +2,32 @@ import { describe, expect, it } from "vitest";
 
 import { buildCapabilityReport, formatCapabilityReport } from "../src/capability-report.js";
 
+const BASE_PROVIDER_TOOLS = [
+  "AskUserQuestion",
+  "Bash",
+  "Brief",
+  "EnterPlanMode",
+  "ExitPlanMode",
+  "FileEdit",
+  "FilePatch",
+  "FileRead",
+  "FileWrite",
+  "GitDiff",
+  "GitLog",
+  "GitShow",
+  "GitStatus",
+  "GitSummary",
+  "Glob",
+  "Grep",
+  "ListMcpResources",
+  "Memorize",
+  "MemoryCorrect",
+  "ReadMcpResource",
+  "SendUserMessage",
+  "ToolSearch",
+  "WorkspaceDiagnostics"
+];
+
 describe("capability report", () => {
   it("passes when all capability eval reports meet the gates", () => {
     const report = buildCapabilityReport({
@@ -239,6 +265,44 @@ describe("capability report", () => {
     expect(report.status).toBe("failed");
     expect(blackbox?.failures).toEqual(expect.arrayContaining(["complexWorkflowSeen=false"]));
     expect(blackbox?.failures).not.toContain("learningDraftApplySeen=false");
+  });
+
+  it("fails blackbox alignment when provider tool surface evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({
+        name: "blackbox-e2e",
+        scenarios: 9,
+        providerCalls: 118,
+        providerToolSurfaceSeen: false
+      }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        conflictExplanationSeen: true,
+        rollbackVerified: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
+    });
+
+    const blackbox = report.checks.find((check) => check.id === "blackbox");
+    expect(report.status).toBe("failed");
+    expect(blackbox?.failures).toEqual(
+      expect.arrayContaining([
+        "providerToolSurfaceCount=0",
+        "providerToolSurfaceBadCount=9",
+        "complexWorkflowLearningDraftExposed=false"
+      ])
+    );
   });
 
   it("fails memory alignment when recall misses the threshold", () => {
@@ -1183,6 +1247,33 @@ describe("capability report", () => {
     );
   });
 
+  it("fails complex harness alignment when provider tool surface evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport({ providerToolSurfaceSeen: false })
+    });
+
+    const complex = report.checks.find((check) => check.id === "complex-harness");
+    expect(report.status).toBe("failed");
+    expect(complex?.failures).toEqual(
+      expect.arrayContaining(["providerToolSurfaceCount=0", "providerToolSurfaceBadCount=10"])
+    );
+  });
+
   it("fails complex harness alignment when H8/H9 structured evidence is incomplete", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
@@ -1239,6 +1330,23 @@ describe("capability report", () => {
   });
 });
 
+function providerSurface(input: {
+  callCount: number;
+  learningDraft?: boolean;
+  toolCounts?: Record<string, number>;
+  broken?: boolean;
+}): Record<string, unknown> {
+  const exposedTools = input.broken
+    ? ["Bash"]
+    : [...BASE_PROVIDER_TOOLS, ...(input.learningDraft ? ["LearningDraft"] : [])];
+  return {
+    callCount: input.callCount,
+    exposedToolCount: exposedTools.length,
+    exposedTools,
+    ...(input.toolCounts ? { toolCounts: input.toolCounts } : {})
+  };
+}
+
 function harnessReport(input: {
   name: string;
   scenarios: number;
@@ -1275,6 +1383,7 @@ function harnessReport(input: {
   resumePickerVisualContractSeen?: boolean;
   toolPolicySeen?: boolean;
   dangerousPermissionMatrixSeen?: boolean;
+  providerToolSurfaceSeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
   tuiKeyboardInputSeen?: boolean;
@@ -1290,6 +1399,21 @@ function harnessReport(input: {
     scenario: `regression ${index + 1}`,
     failureKind: "assertion"
   }));
+  const providerToolSurfaceBroken = input.providerToolSurfaceSeen === false;
+  const genericProviderScenarios = Array.from(
+    { length: Math.max(0, Math.min(input.scenarios, 23) - 3) },
+    (_, index) => ({
+      name: `provider tool surface ${index + 1}`,
+      status: "passed",
+      durationMs: 300,
+      score: 1,
+      failureKind: null,
+      details: {
+        assertions: [],
+        provider: providerSurface({ callCount: 1, broken: providerToolSurfaceBroken })
+      }
+    })
+  );
   return {
     version: 1,
     name: input.name,
@@ -1326,8 +1450,10 @@ function harnessReport(input: {
           provider:
             input.complexWorkflowSeen === false
               ? { callCount: 0, toolCounts: {} }
-              : {
+              : providerSurface({
                   callCount: 11,
+                  learningDraft: true,
+                  broken: providerToolSurfaceBroken,
                   toolCounts: {
                     ToolSearch: 2,
                     WorkspaceDiagnostics: 1,
@@ -1338,7 +1464,7 @@ function harnessReport(input: {
                     LearningDraft: 1,
                     SendUserMessage: 1
                   }
-                },
+                }),
           assertions: [
             ...complexWorkflowAssertions(input),
             "learning draft listed",
@@ -1401,7 +1527,10 @@ function harnessReport(input: {
         failureKind: null,
         details: {
           assertions: providerRetryFallbackAssertions(input),
-          provider: input.providerRetryFallbackSeen === false ? { callCount: 0 } : { callCount: 4 },
+          provider:
+            input.providerRetryFallbackSeen === false
+              ? { callCount: 0 }
+              : providerSurface({ callCount: 4, broken: providerToolSurfaceBroken }),
           retry:
             input.providerRetryFallbackSeen === false
               ? { primaryCalls: 0, backupCalls: 0 }
@@ -1419,7 +1548,11 @@ function harnessReport(input: {
           provider:
             input.toolFeedbackRankingSeen === false
               ? { callCount: 0, toolCounts: {} }
-              : { callCount: 3, toolCounts: { Grep: 4, Glob: 4, ToolSearch: 1 } },
+              : providerSurface({
+                  callCount: 3,
+                  broken: providerToolSurfaceBroken,
+                  toolCounts: { Grep: 4, Glob: 4, ToolSearch: 1 }
+                }),
           toolFeedback:
             input.toolFeedbackRankingSeen === false
               ? { grepFailures: 0, globSuccesses: 0, recoveryGuidanceSeen: false }
@@ -1427,7 +1560,8 @@ function harnessReport(input: {
           filesVerified:
             input.toolFeedbackRankingSeen === false ? [] : ["state/tool-usage-stats.json"]
         }
-      }
+      },
+      ...genericProviderScenarios
     ]
   };
 }
@@ -1485,6 +1619,7 @@ function complexHarnessReport(
     h9PendingToolUseId?: string;
     h9CompletedBashToolCount?: number;
     h9CompletedToolIds?: string[];
+    providerToolSurfaceSeen?: boolean;
     changedFiles?: string[];
     forbiddenChanges?: string[];
     sessionMessages?: number;
@@ -1699,6 +1834,8 @@ function complexHarnessReport(
     completedStatus: "completed",
     eventCount
   });
+  const harnessProvider = (callCount: number) =>
+    providerSurface({ callCount, broken: overrides.providerToolSurfaceSeen === false });
   const scenarios: Record<string, unknown>[] = [
     {
       name: "H1 single-file bug fix",
@@ -1710,6 +1847,7 @@ function complexHarnessReport(
         taskId: "H1",
         taskClass: overrides.taskClass ?? "single_file_bug_fix",
         toolCounts: h1ToolCounts,
+        provider: harnessProvider(5),
         assertions: Array.from({ length: h1Assertions }, (_, index) => `H1 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h1FilesVerified },
@@ -1743,6 +1881,7 @@ function complexHarnessReport(
         taskId: "H2",
         taskClass: "multi_file_feature",
         toolCounts: h2ToolCounts,
+        provider: harnessProvider(4),
         assertions: Array.from({ length: h2Assertions }, (_, index) => `H2 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h2FilesVerified },
@@ -1776,6 +1915,7 @@ function complexHarnessReport(
         taskId: "H3",
         taskClass: "behavior_preserving_refactor",
         toolCounts: h3ToolCounts,
+        provider: harnessProvider(4),
         assertions: Array.from({ length: h3Assertions }, (_, index) => `H3 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h3FilesVerified },
@@ -1809,6 +1949,7 @@ function complexHarnessReport(
         taskId: "H4",
         taskClass: "repository_investigation_fix",
         toolCounts: h4ToolCounts,
+        provider: harnessProvider(4),
         assertions: Array.from({ length: h4Assertions }, (_, index) => `H4 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h4FilesVerified },
@@ -1842,6 +1983,7 @@ function complexHarnessReport(
         taskId: "H5",
         taskClass: "permission_boundary",
         toolCounts: h5ToolCounts,
+        provider: harnessProvider(4),
         assertions: Array.from({ length: h5Assertions }, (_, index) => `H5 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h5FilesVerified },
@@ -1882,6 +2024,7 @@ function complexHarnessReport(
         taskId: "H6",
         taskClass: "resume_after_interruption",
         toolCounts: h6ToolCounts,
+        provider: harnessProvider(7),
         assertions: Array.from({ length: h6Assertions }, (_, index) => `H6 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h6FilesVerified },
@@ -1921,6 +2064,7 @@ function complexHarnessReport(
         taskId: "H7",
         taskClass: "stream_json_automation",
         toolCounts: h7ToolCounts,
+        provider: harnessProvider(2),
         assertions: Array.from({ length: h7Assertions }, (_, index) => `H7 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h7FilesVerified },
@@ -1973,6 +2117,7 @@ function complexHarnessReport(
         taskId: "H8",
         taskClass: "multi_agent_conflict",
         toolCounts: h8ToolCounts,
+        provider: harnessProvider(3),
         assertions: Array.from({ length: h8Assertions }, (_, index) => `H8 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h8FilesVerified },
@@ -2017,6 +2162,7 @@ function complexHarnessReport(
         taskId: "H9",
         taskClass: "bash_approval_control",
         toolCounts: h9ToolCounts,
+        provider: harnessProvider(6),
         assertions: Array.from({ length: h9Assertions }, (_, index) => `H9 assertion ${index + 1}`),
         filesVerified: Array.from(
           { length: h9FilesVerified },
@@ -2068,6 +2214,7 @@ function complexHarnessReport(
         taskId: "H10",
         taskClass: "provider_retry_fallback",
         toolCounts: h10ToolCounts,
+        provider: harnessProvider(5),
         assertions: Array.from(
           { length: h10Assertions },
           (_, index) => `H10 assertion ${index + 1}`
