@@ -568,6 +568,31 @@ function assertStreamProtocol(events, { finalMessage }) {
   return completed.sessionId;
 }
 
+function assertStreamProtocolWithoutTools(events, { finalMessage }) {
+  assert(events.length > 0, "stream-json emitted no events");
+  assert(events[0].type === "session.started", "stream-json did not start with session.started");
+  assert(
+    events.some((event) => event.type === "message.created" && event.role === "user"),
+    "stream-json missed user message event"
+  );
+  assert(
+    events.some(
+      (event) =>
+        event.type === "message.created" &&
+        event.role === "assistant" &&
+        event.content === finalMessage
+    ),
+    "stream-json missed assistant message event"
+  );
+  const completed = events.at(-1);
+  assert(completed?.type === "session.completed", "stream-json did not end with session.completed");
+  assert(completed.status === "completed", "stream-json session.completed missed completed status");
+  assert(
+    completed.message === finalMessage,
+    "stream-json session.completed did not carry the final message"
+  );
+}
+
 async function seedMemoryAndGoal({ workDir, configDir }) {
   await runCli({ args: ["memory", "init"], cwd: workDir, configDir, label: "memory init" });
   const userDraft = parseDraftId(
@@ -1614,6 +1639,69 @@ async function scenarioDefaultPermissionDenied() {
   });
 }
 
+async function scenarioBarePromptHeadless() {
+  return await withTempWorkspace("bare-prompt", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        assert(
+          transcript.includes("Create a terse bare prompt status"),
+          "bare prompt argument was not sent to the provider"
+        );
+        return messageText("Bare prompt headless status ready.");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const output = await runCli({
+        args: [
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "Create",
+          "a",
+          "terse",
+          "bare",
+          "prompt",
+          "status"
+        ],
+        cwd: workDir,
+        configDir,
+        label: "bare prompt headless"
+      });
+      const events = parseStreamEvents(output);
+      assertStreamProtocolWithoutTools(events, {
+        finalMessage: "Bare prompt headless status ready."
+      });
+      const completed = events.at(-1);
+      assert(
+        typeof completed.sessionId === "string" && completed.sessionId,
+        "bare prompt headless session did not complete with a session id"
+      );
+      assert(
+        provider.calls.length === 1,
+        `bare prompt should call provider once, got ${provider.calls.length}`
+      );
+      return {
+        score: 1,
+        assertions: [
+          "bare prompt argument entered headless provider path",
+          "bare prompt stream-json emitted valid lifecycle events",
+          "bare prompt headless session completed"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -2538,6 +2626,7 @@ async function main() {
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
+    ["bare prompt headless", scenarioBarePromptHeadless],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],

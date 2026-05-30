@@ -102,7 +102,8 @@ describe("capability report", () => {
         skillCorrectionSeen: false,
         longCycleSkillIterationSeen: false,
         harnessCiTuiGuardSeen: false,
-        streamJsonProtocolSeen: false
+        streamJsonProtocolSeen: false,
+        barePromptHeadlessSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -135,6 +136,7 @@ describe("capability report", () => {
         "longCycleSkillIterationSeen=false",
         "harnessCiTuiGuardSeen=false",
         "streamJsonProtocolSeen=false",
+        "barePromptHeadlessSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -861,6 +863,7 @@ function harnessReport(input: {
   longCycleSkillIterationSeen?: boolean;
   harnessCiTuiGuardSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
+  barePromptHeadlessSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -878,7 +881,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 48,
+      assertions: input.assertions ?? 51,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -909,7 +912,8 @@ function harnessReport(input: {
                   "applied learning indexed into memory graph",
                   ...skillLearningAssertions(input),
                   ...harnessGuardAssertions(input),
-                  ...streamJsonProtocolAssertions(input)
+                  ...streamJsonProtocolAssertions(input),
+                  ...barePromptHeadlessAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -988,6 +992,16 @@ function streamJsonProtocolAssertions(input: { streamJsonProtocolSeen?: boolean 
         "stream-json emitted tool started and completed events",
         "stream-json preserved raw agent events",
         "stream-json completed with status and final message"
+      ];
+}
+
+function barePromptHeadlessAssertions(input: { barePromptHeadlessSeen?: boolean }): string[] {
+  return input.barePromptHeadlessSeen === false
+    ? []
+    : [
+        "bare prompt argument entered headless provider path",
+        "bare prompt stream-json emitted valid lifecycle events",
+        "bare prompt headless session completed"
       ];
 }
 
