@@ -2964,6 +2964,129 @@ async function scenarioSlashResumeSearchTty() {
   });
 }
 
+async function scenarioResumePickerSearchFieldsTty() {
+  return await withTempWorkspace(
+    "resume-picker-search-fields",
+    async ({ root, configDir, workDir }) => {
+      const providerLog = path.join(root, "provider-log.json");
+      const repoA = path.join(workDir, "repo-a");
+      const repoB = path.join(workDir, "repo-b");
+      mkdirSync(repoA, { recursive: true });
+      mkdirSync(repoB, { recursive: true });
+      const provider = await startProvider({
+        logPath: providerLog,
+        routeRequest: () => messageText("Resume picker search field seed response.")
+      });
+      try {
+        writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+        await runCli({
+          args: [
+            "--verbose",
+            "--model",
+            "main",
+            "--name",
+            "fix parser",
+            "-p",
+            "seed parser repo-a session"
+          ],
+          cwd: repoA,
+          configDir,
+          label: "resume search field seed repo-a parser"
+        });
+        const authOutput = await runCli({
+          args: [
+            "--verbose",
+            "--model",
+            "main",
+            "--name",
+            "review auth",
+            "-p",
+            "seed auth repo-b session"
+          ],
+          cwd: repoB,
+          configDir,
+          label: "resume search field seed repo-b auth"
+        });
+        const authSessionId = parseTextSessionId(authOutput);
+        await runCli({
+          args: [
+            "--verbose",
+            "--model",
+            "main",
+            "--name",
+            "write docs",
+            "-p",
+            "seed docs repo-a session"
+          ],
+          cwd: repoA,
+          configDir,
+          label: "resume search field seed repo-a docs"
+        });
+
+        const cwdResult = await runInteractiveCliWithTtySteps({
+          cwd: workDir,
+          configDir,
+          label: "slash resume cwd search TTY",
+          steps: [
+            { waitForText: "/help for commands", inputText: "/resume repo-a\r" },
+            { waitForText: "matching repo-a", inputText: "\x1b" },
+            { waitForText: "> ", inputText: "/exit\r" }
+          ],
+          timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+        });
+        assert(
+          cwdResult.exitCode === 0,
+          `slash resume cwd search exited ${cwdResult.exitCode}\nSTDOUT:\n${cwdResult.stdout}\nSTDERR:\n${cwdResult.stderr}`
+        );
+        const cwdVisible = stripTerminalControls(`${cwdResult.stdout}\n${cwdResult.stderr}`);
+        assert(cwdVisible.includes("matching repo-a"), "cwd search filter did not render");
+        assert(cwdVisible.includes("write docs"), "cwd search missed newest repo-a session");
+        assert(cwdVisible.includes("fix parser"), "cwd search missed older repo-a session");
+        assert(!cwdVisible.includes("review auth"), "cwd search included nonmatching repo-b session");
+
+        const idPrefix = authSessionId.slice(0, 8);
+        const idResult = await runInteractiveCliWithTtySteps({
+          cwd: workDir,
+          configDir,
+          label: "slash resume partial id search TTY",
+          steps: [
+            { waitForText: "/help for commands", inputText: `/resume ${idPrefix}\r` },
+            { waitForText: `matching ${idPrefix}`, inputText: "\r" },
+            { waitForText: `sessionId: ${authSessionId}`, inputText: "/exit\r" }
+          ],
+          timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+        });
+        assert(
+          idResult.exitCode === 0,
+          `slash resume id search exited ${idResult.exitCode}\nSTDOUT:\n${idResult.stdout}\nSTDERR:\n${idResult.stderr}`
+        );
+        const idVisible = stripTerminalControls(`${idResult.stdout}\n${idResult.stderr}`);
+        assert(idVisible.includes("review auth"), "partial id search missed target title");
+        assert(idVisible.includes("repo-b"), "partial id search missed target cwd detail");
+        assert(
+          idVisible.includes(`sessionId: ${authSessionId}`),
+          "partial id search did not resume target session"
+        );
+        return {
+          score: 1,
+          assertions: [
+            "slash /resume filtered sessions by cwd detail",
+            "slash /resume cwd search showed multiple matching sessions",
+            "slash /resume cwd search excluded nonmatching session",
+            "slash /resume partial session id resumed target"
+          ],
+          provider: provider.summary()
+        };
+      } catch (error) {
+        printProviderLog(providerLog);
+        throw error;
+      } finally {
+        await provider.close();
+      }
+    }
+  );
+}
+
 async function scenarioTuiKeyboardInput() {
   return await withTempWorkspace("tui-keyboard-input", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4418,6 +4541,7 @@ async function main() {
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],
     ["slash resume search TTY", scenarioSlashResumeSearchTty],
+    ["resume picker search fields TTY", scenarioResumePickerSearchFieldsTty],
     ["TUI keyboard input", scenarioTuiKeyboardInput],
     ["TUI stateful pickers", scenarioTuiStatefulPickers],
     ["TUI approval picker", scenarioTuiApprovalPicker],

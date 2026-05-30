@@ -113,6 +113,7 @@ describe("capability report", () => {
         barePromptHeadlessSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
+        resumePickerSearchFieldsSeen: false,
         toolPolicySeen: false,
         dangerousPermissionMatrixSeen: false,
         slashSuggestionPromptSeen: false,
@@ -160,6 +161,7 @@ describe("capability report", () => {
         "barePromptHeadlessSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
+        "resumePickerSearchFieldsSeen=false",
         "toolPolicySeen=false",
         "dangerousPermissionMatrixSeen=false",
         "slashSuggestionPromptSeen=false",
@@ -1007,6 +1009,7 @@ function harnessReport(input: {
   barePromptHeadlessSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
+  resumePickerSearchFieldsSeen?: boolean;
   toolPolicySeen?: boolean;
   dangerousPermissionMatrixSeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
@@ -1031,7 +1034,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 150,
+      assertions: input.assertions ?? 155,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1070,6 +1073,7 @@ function harnessReport(input: {
                   ...barePromptHeadlessAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
+                  ...resumePickerSearchFieldsAssertions(input),
                   ...toolPolicyAssertions(input),
                   ...dangerousPermissionMatrixAssertions(input),
                   ...slashSuggestionPromptAssertions(input),
@@ -1916,6 +1920,19 @@ function slashResumeSearchTtyAssertions(input: { slashResumeSearchTtySeen?: bool
         "slash /resume Enter resumed selected session",
         "slash /resume no-results state rendered",
         "slash /resume Escape returned without resuming"
+      ];
+}
+
+function resumePickerSearchFieldsAssertions(input: {
+  resumePickerSearchFieldsSeen?: boolean;
+}): string[] {
+  return input.resumePickerSearchFieldsSeen === false
+    ? []
+    : [
+        "slash /resume filtered sessions by cwd detail",
+        "slash /resume cwd search showed multiple matching sessions",
+        "slash /resume cwd search excluded nonmatching session",
+        "slash /resume partial session id resumed target"
       ];
 }
 

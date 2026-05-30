@@ -279,8 +279,9 @@ Acceptance:
 - Search `auth` shows B.
 - Search by partial session id works.
 
-Current status: implemented for picker item data and search fields; black-box
-coverage verifies selecting a session by typed title query.
+Current status: implemented and black-box gated for picker item data and search
+fields. Coverage verifies typed title search, cwd-detail filtering with multiple
+matches, exclusion of a nonmatching cwd session, and partial session id resume.
 
 ## D. Output Protocol
 
