@@ -20,7 +20,8 @@ Already covered by automated tests:
 - SQLite sessions, jobs, audit, usage.
 - TUI startup identity, slash command dispatch, `/` suggestion menu behavior,
   bounded status/pending-approval rendering, prompt editing/history, and
-  bracketed paste placeholder/restore behavior.
+  bracketed paste placeholder/restore behavior, plus picker Tab completion and
+  arrow-key selection for model and permission mode changes.
 - Searchable `-r` TTY resume picker, non-TTY resume session list, and
   interactive `/resume <query>` picker search/cancel behavior, with a bounded
   narrow-width visual contract for session picker rows, scroll state, and
@@ -45,7 +46,8 @@ Not yet fully covered:
 
 - Full PTY resume picker snapshot polish beyond bounded row/scroll/footer
   contracts.
-- Broader TUI keyboard navigation polish beyond prompt editing/history/paste.
+- Broader TUI keyboard navigation polish beyond prompt editing/history/paste
+  and picker Tab/arrow flows.
 - Real provider-driven tool loop for non-trivial code changes.
 
 ## Clean-room Rules for Testing
@@ -737,10 +739,12 @@ the provider. The TUI bracketed paste gate verifies that a pasted multiline
 block renders as a placeholder in the edit surface while the provider receives
 the restored full prompt. The TUI stateful picker gate exercises `/model` and
 `/permissions mode`, then verifies that the selected model alias routes the next
-provider call and the selected plan mode blocks a write. The TUI approval picker
-gate verifies a pending FileWrite approval, hotkey denial, model-visible denial
-result, and unchanged workspace. Full PTY transcript snapshots for every
-interactive state remain future coverage.
+provider call and the selected plan mode blocks a write. The TUI picker keyboard
+gate uses Tab completion for the model picker and arrow-key navigation for the
+permission picker, then verifies the routed provider call and plan-mode write
+denial. The TUI approval picker gate verifies a pending FileWrite approval,
+hotkey denial, model-visible denial result, and unchanged workspace. Full PTY
+transcript snapshots for every interactive state remain future coverage.
 
 ## H. Provider-backed Real Task Tests
 
@@ -808,7 +812,8 @@ Highest priority gaps:
 2. Broader visual regression coverage across full PTY transcripts.
 3. Full PTY resume picker snapshot polish beyond bounded row/scroll/footer
    contracts.
-4. Broader TUI keyboard navigation polish beyond prompt editing/history/paste.
+4. Broader TUI keyboard navigation polish beyond prompt editing/history/paste
+   and picker Tab/arrow flows.
 
 Recommended next implementation phase:
 

@@ -123,6 +123,7 @@ describe("capability report", () => {
         tuiPromptHistorySeen: false,
         tuiBracketedPasteSeen: false,
         tuiStatefulPickersSeen: false,
+        tuiPickerKeyboardNavigationSeen: false,
         tuiApprovalPickerSeen: false
       }),
       modelTasks: modelTaskReport(),
@@ -174,6 +175,7 @@ describe("capability report", () => {
         "tuiPromptHistorySeen=false",
         "tuiBracketedPasteSeen=false",
         "tuiStatefulPickersSeen=false",
+        "tuiPickerKeyboardNavigationSeen=false",
         "tuiApprovalPickerSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
@@ -1025,6 +1027,7 @@ function harnessReport(input: {
   tuiPromptHistorySeen?: boolean;
   tuiBracketedPasteSeen?: boolean;
   tuiStatefulPickersSeen?: boolean;
+  tuiPickerKeyboardNavigationSeen?: boolean;
   tuiApprovalPickerSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
@@ -1043,7 +1046,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 163,
+      assertions: input.assertions ?? 168,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1092,6 +1095,7 @@ function harnessReport(input: {
                   ...tuiPromptHistoryAssertions(input),
                   ...tuiBracketedPasteAssertions(input),
                   ...tuiStatefulPickersAssertions(input),
+                  ...tuiPickerKeyboardNavigationAssertions(input),
                   ...tuiApprovalPickerAssertions(input)
                 ],
           filesVerified:
@@ -2064,6 +2068,20 @@ function tuiStatefulPickersAssertions(input: { tuiStatefulPickersSeen?: boolean 
         "TUI picker-selected plan mode denied write",
         "TUI picker flow left workspace unchanged",
         "TUI picker flow returned provider response and exited"
+      ];
+}
+
+function tuiPickerKeyboardNavigationAssertions(input: {
+  tuiPickerKeyboardNavigationSeen?: boolean;
+}): string[] {
+  return input.tuiPickerKeyboardNavigationSeen === false
+    ? []
+    : [
+        "TUI picker keyboard Tab completed model filter",
+        "TUI picker keyboard arrows selected permission mode",
+        "TUI picker keyboard selected model routed provider",
+        "TUI picker keyboard selected plan mode denied write",
+        "TUI picker keyboard flow left workspace unchanged"
       ];
 }
 

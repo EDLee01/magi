@@ -3514,6 +3514,96 @@ async function scenarioTuiStatefulPickers() {
   });
 }
 
+async function scenarioTuiPickerKeyboardNavigation() {
+  return await withTempWorkspace("tui-picker-keyboard", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const deniedPath = path.join(workDir, "picker-keyboard-denied.txt");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ model, transcript }) => {
+        assert(model === "mock-fast", `TUI keyboard picker routed to unexpected model: ${model}`);
+        turn += 1;
+        if (turn === 1) {
+          return toolResponse([
+            toolCall("picker-keyboard-denied", "FileWrite", {
+              file_path: "picker-keyboard-denied.txt",
+              content: "keyboard picker plan mode should block this write"
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("FileWrite is not allowed in plan mode"),
+          "TUI keyboard picker did not carry arrow-selected plan mode into the prompt"
+        );
+        return messageText("TUI picker keyboard navigation protected workspace.");
+      }
+    });
+    try {
+      writeFileSync(
+        path.join(configDir, "config.yaml"),
+        renderTuiPickerConfig({ port: provider.port })
+      );
+      const result = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "TUI picker keyboard navigation",
+        steps: [
+          { waitForText: "/help for commands", inputText: "/model\r" },
+          { waitForText: "models", inputText: "fa\t\r" },
+          {
+            waitForText: "Selected model fast: openai:mock-fast",
+            inputText: "/permissions mode\r"
+          },
+          { waitForText: "permission modes", inputText: "\x1b[B\x1b[B\x1b[B\x1b[B\r" },
+          {
+            waitForText: "Permission mode: plan - deny write tools",
+            inputText: "Try the keyboard-selected picker write.\r"
+          },
+          {
+            waitForText: "TUI picker keyboard navigation protected workspace.",
+            inputText: "/exit\r"
+          }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        result.exitCode === 0,
+        `TUI picker keyboard navigation exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(visible.includes("matching fa"), "model picker Tab filter did not render");
+      assert(
+        visible.includes("Selected model fast"),
+        "model picker Tab completion did not select fast"
+      );
+      assert(visible.includes("❯ plan"), "permission picker arrow selection did not reach plan");
+      assert(
+        visible.includes("TUI picker keyboard navigation protected workspace."),
+        "TUI picker keyboard final response did not render"
+      );
+      assert(provider.calls.length === 2, "TUI keyboard picker flow should make two provider calls");
+      assert(!existsSync(deniedPath), "keyboard-selected plan mode should not mutate workspace");
+      return {
+        score: 1,
+        assertions: [
+          "TUI picker keyboard Tab completed model filter",
+          "TUI picker keyboard arrows selected permission mode",
+          "TUI picker keyboard selected model routed provider",
+          "TUI picker keyboard selected plan mode denied write",
+          "TUI picker keyboard flow left workspace unchanged"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioTuiApprovalPicker() {
   return await withTempWorkspace("tui-approval-picker", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4840,6 +4930,7 @@ async function main() {
     ["TUI prompt history", scenarioTuiPromptHistory],
     ["TUI bracketed paste", scenarioTuiBracketedPaste],
     ["TUI stateful pickers", scenarioTuiStatefulPickers],
+    ["TUI picker keyboard navigation", scenarioTuiPickerKeyboardNavigation],
     ["TUI approval picker", scenarioTuiApprovalPicker],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],

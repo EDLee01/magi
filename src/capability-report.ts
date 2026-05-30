@@ -275,6 +275,12 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("TUI picker-selected plan mode denied write") &&
     assertionList.includes("TUI picker flow left workspace unchanged") &&
     assertionList.includes("TUI picker flow returned provider response and exited");
+  const tuiPickerKeyboardNavigationSeen =
+    assertionList.includes("TUI picker keyboard Tab completed model filter") &&
+    assertionList.includes("TUI picker keyboard arrows selected permission mode") &&
+    assertionList.includes("TUI picker keyboard selected model routed provider") &&
+    assertionList.includes("TUI picker keyboard selected plan mode denied write") &&
+    assertionList.includes("TUI picker keyboard flow left workspace unchanged");
   const tuiApprovalPickerSeen =
     assertionList.includes("TUI approval picker rendered pending FileWrite approval") &&
     assertionList.includes("TUI approval picker hotkey denial resolved interaction") &&
@@ -286,7 +292,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 163) failures.push(`assertions=${assertions}`);
+  if (assertions < 168) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -312,6 +318,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!tuiPromptHistorySeen) failures.push("tuiPromptHistorySeen=false");
   if (!tuiBracketedPasteSeen) failures.push("tuiBracketedPasteSeen=false");
   if (!tuiStatefulPickersSeen) failures.push("tuiStatefulPickersSeen=false");
+  if (!tuiPickerKeyboardNavigationSeen) {
+    failures.push("tuiPickerKeyboardNavigationSeen=false");
+  }
   if (!tuiApprovalPickerSeen) failures.push("tuiApprovalPickerSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -354,6 +363,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       tuiPromptHistorySeen,
       tuiBracketedPasteSeen,
       tuiStatefulPickersSeen,
+      tuiPickerKeyboardNavigationSeen,
       tuiApprovalPickerSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
