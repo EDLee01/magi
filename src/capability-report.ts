@@ -287,12 +287,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("TUI approval denial returned to model") &&
     assertionList.includes("TUI approval denial left workspace unchanged") &&
     assertionList.includes("TUI approval picker flow returned provider response and exited");
+  const tuiApprovalAllowPickerSeen =
+    assertionList.includes("TUI approval allow picker rendered pending FileWrite approval") &&
+    assertionList.includes("TUI approval allow hotkey resolved interaction") &&
+    assertionList.includes("TUI approval allow returned write result to model") &&
+    assertionList.includes("TUI approval allow wrote approved file") &&
+    assertionList.includes("TUI approval allow flow returned provider response and exited");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 168) failures.push(`assertions=${assertions}`);
+  if (assertions < 174) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -322,6 +328,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     failures.push("tuiPickerKeyboardNavigationSeen=false");
   }
   if (!tuiApprovalPickerSeen) failures.push("tuiApprovalPickerSeen=false");
+  if (!tuiApprovalAllowPickerSeen) failures.push("tuiApprovalAllowPickerSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -365,6 +372,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       tuiStatefulPickersSeen,
       tuiPickerKeyboardNavigationSeen,
       tuiApprovalPickerSeen,
+      tuiApprovalAllowPickerSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

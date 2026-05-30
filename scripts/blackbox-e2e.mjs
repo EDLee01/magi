@@ -3675,6 +3675,87 @@ async function scenarioTuiApprovalPicker() {
   });
 }
 
+async function scenarioTuiApprovalAllowPicker() {
+  return await withTempWorkspace(
+    "tui-approval-allow-picker",
+    async ({ root, configDir, workDir }) => {
+      const providerLog = path.join(root, "provider-log.json");
+      const approvedPath = path.join(workDir, "tui-approval-allowed.txt");
+      let turn = 0;
+      const provider = await startProvider({
+        logPath: providerLog,
+        routeRequest: ({ transcript }) => {
+          turn += 1;
+          if (turn === 1) {
+            return toolResponse([
+              toolCall("tui-approval-allowed", "FileWrite", {
+                file_path: "tui-approval-allowed.txt",
+                content: "approved through TUI picker"
+              })
+            ]);
+          }
+          assert(
+            transcript.includes("Wrote tui-approval-allowed.txt"),
+            "TUI approval allow write result was not returned to the model"
+          );
+          return messageText("TUI approval picker allowed write.");
+        }
+      });
+      try {
+        writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+        const result = await runInteractiveCliWithTtySteps({
+          cwd: workDir,
+          configDir,
+          label: "TUI approval allow picker",
+          steps: [
+            { waitForText: "/help for commands", inputText: "Allow the approval picker write.\r" },
+            { waitForText: "Approval required", inputText: "y" },
+            { waitForText: "TUI approval picker allowed write.", inputText: "/exit\r" }
+          ],
+          timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+        });
+        assert(
+          result.exitCode === 0,
+          `TUI approval allow picker exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+        );
+        const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+        assert(visible.includes("Approval required"), "approval allow picker did not render title");
+        assert(visible.includes("Allow"), "approval allow picker did not render allow action");
+        assert(
+          visible.includes("TUI approval picker allowed write."),
+          "approval allow picker final response did not render"
+        );
+        assert(
+          provider.calls.length === 2,
+          "TUI approval allow picker should make two provider calls"
+        );
+        assert(existsSync(approvedPath), "approved TUI approval should mutate workspace");
+        assert(
+          readFileSync(approvedPath, "utf8") === "approved through TUI picker",
+          "approved TUI approval wrote wrong content"
+        );
+        return {
+          score: 1,
+          assertions: [
+            "TUI approval allow picker rendered pending FileWrite approval",
+            "TUI approval allow hotkey resolved interaction",
+            "TUI approval allow returned write result to model",
+            "TUI approval allow wrote approved file",
+            "TUI approval allow flow returned provider response and exited"
+          ],
+          provider: provider.summary(),
+          filesVerified: ["tui-approval-allowed.txt"]
+        };
+      } catch (error) {
+        printProviderLog(providerLog);
+        throw error;
+      } finally {
+        await provider.close();
+      }
+    }
+  );
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4932,6 +5013,7 @@ async function main() {
     ["TUI stateful pickers", scenarioTuiStatefulPickers],
     ["TUI picker keyboard navigation", scenarioTuiPickerKeyboardNavigation],
     ["TUI approval picker", scenarioTuiApprovalPicker],
+    ["TUI approval allow picker", scenarioTuiApprovalAllowPicker],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],
