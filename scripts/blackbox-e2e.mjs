@@ -1762,6 +1762,66 @@ async function scenarioHelpShape() {
   });
 }
 
+async function scenarioTextOutputProtocol() {
+  return await withTempWorkspace("text-output", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        if (transcript.includes("Return verbose text protocol status.")) {
+          return messageText("Verbose text protocol final.");
+        }
+        if (transcript.includes("Return plain text protocol status.")) {
+          return messageText("Plain text protocol final.");
+        }
+        return fail(500, `unexpected text-output prompt: ${transcript}`);
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const plain = await runCli({
+        args: ["--model", "main", "-p", "Return plain text protocol status."],
+        cwd: workDir,
+        configDir,
+        label: "plain text output protocol"
+      });
+      assert(plain === "Plain text protocol final.\n", "plain text output included extra metadata");
+      assert(!plain.includes("sessionId:"), "plain text output leaked sessionId");
+      assert(!plain.includes("jobId:"), "plain text output leaked jobId");
+      assert(!plain.includes("stateDb:"), "plain text output leaked stateDb");
+
+      const verbose = await runCli({
+        args: ["--verbose", "--model", "main", "-p", "Return verbose text protocol status."],
+        cwd: workDir,
+        configDir,
+        label: "verbose text output protocol"
+      });
+      assert(
+        verbose.includes("Verbose text protocol final."),
+        "verbose text output missed final message"
+      );
+      assert(verbose.includes("sessionId:"), "verbose text output missed sessionId");
+      assert(verbose.includes("jobId:"), "verbose text output missed jobId");
+      assert(verbose.includes("stateDb:"), "verbose text output missed stateDb");
+
+      return {
+        score: 1,
+        assertions: [
+          "text output default emitted final message only",
+          "text output default hid session metadata",
+          "text output verbose included session metadata"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioJsonOutputProtocol() {
   return await withTempWorkspace("json-output", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -2083,19 +2143,27 @@ async function scenarioResumePickerTty() {
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
       await runCli({
-        args: ["--model", "main", "--name", "fix parser", "-p", "seed parser session"],
+        args: ["--verbose", "--model", "main", "--name", "fix parser", "-p", "seed parser session"],
         cwd: workDir,
         configDir,
         label: "resume picker seed parser"
       });
       const targetOutput = await runCli({
-        args: ["--model", "main", "--name", "review auth target", "-p", "seed auth session"],
+        args: [
+          "--verbose",
+          "--model",
+          "main",
+          "--name",
+          "review auth target",
+          "-p",
+          "seed auth session"
+        ],
         cwd: workDir,
         configDir,
         label: "resume picker seed auth"
       });
       await runCli({
-        args: ["--model", "main", "--name", "write docs", "-p", "seed docs session"],
+        args: ["--verbose", "--model", "main", "--name", "write docs", "-p", "seed docs session"],
         cwd: workDir,
         configDir,
         label: "resume picker seed docs"
@@ -3186,6 +3254,7 @@ async function main() {
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
     ["help shape", scenarioHelpShape],
+    ["text output protocol", scenarioTextOutputProtocol],
     ["json output protocol", scenarioJsonOutputProtocol],
     ["tool policy allow deny", scenarioToolPolicyAllowDeny],
     ["bare prompt headless", scenarioBarePromptHeadless],

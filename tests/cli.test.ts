@@ -86,7 +86,24 @@ describe("CLI entrypoint", () => {
     const result = await runCli(["-p", "write a short status"], temp.env, process.cwd());
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("No provider is configured");
+    expect(result.stdout).not.toContain("sessionId:");
+    expect(result.stdout).not.toContain("jobId:");
+    expect(result.stdout).not.toContain("stateDb:");
+    expect(existsSync(getMagiPaths(temp.env).sessionDbFile)).toBe(true);
+  });
+
+  it("prints text metadata only when verbose is requested", async () => {
+    temp = makeTempRoot();
+    const result = await runCli(
+      ["--verbose", "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("No provider is configured");
     expect(result.stdout).toContain("sessionId:");
+    expect(result.stdout).toContain("jobId:");
+    expect(result.stdout).toContain("stateDb:");
     expect(existsSync(getMagiPaths(temp.env).sessionDbFile)).toBe(true);
   });
 
@@ -95,12 +112,16 @@ describe("CLI entrypoint", () => {
     const result = await runCli(["write", "a", "short", "status"], temp.env, process.cwd());
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("No provider is configured");
-    expect(result.stdout).toContain("sessionId:");
+    expect(result.stdout).not.toContain("sessionId:");
   });
 
   it("supports --print as an alias for -p", async () => {
     temp = makeTempRoot();
-    const result = await runCli(["--print", "write a short status"], temp.env, process.cwd());
+    const result = await runCli(
+      ["--verbose", "--print", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("sessionId:");
   });
@@ -348,10 +369,14 @@ describe("CLI entrypoint", () => {
 
   it("continues the most recent cwd session with -c", async () => {
     temp = makeTempRoot();
-    const first = await runCli(["-p", "write a short status"], temp.env, process.cwd());
+    const first = await runCli(
+      ["--verbose", "-p", "write a short status"],
+      temp.env,
+      process.cwd()
+    );
     const firstId = /sessionId: ([^\n]+)/.exec(first.stdout)?.[1];
     const second = await runCli(
-      ["-c", "-p", "write another short status"],
+      ["--verbose", "-c", "-p", "write another short status"],
       temp.env,
       process.cwd()
     );
@@ -362,14 +387,18 @@ describe("CLI entrypoint", () => {
   it("resumes a specific session with -r and supports session names", async () => {
     temp = makeTempRoot();
     const first = await runCli(
-      ["--name", "named run", "-p", "write a short status"],
+      ["--verbose", "--name", "named run", "-p", "write a short status"],
       temp.env,
       process.cwd()
     );
     const id = /sessionId: ([^\n]+)/.exec(first.stdout)?.[1];
     expect(id).toBeTruthy();
 
-    const second = await runCli(["-r", id!, "-p", "write again"], temp.env, process.cwd());
+    const second = await runCli(
+      ["--verbose", "-r", id!, "-p", "write again"],
+      temp.env,
+      process.cwd()
+    );
     expect(second.stdout).toContain(`sessionId: ${id}`);
 
     const resume = await runCli(["resume", id!], temp.env, process.cwd());
@@ -380,7 +409,7 @@ describe("CLI entrypoint", () => {
     temp = makeTempRoot();
     const explicitId = "11111111-1111-4111-8111-111111111111";
     const explicit = await runCli(
-      ["--session-id", explicitId, "-p", "write a short status"],
+      ["--verbose", "--session-id", explicitId, "-p", "write a short status"],
       temp.env,
       process.cwd()
     );
@@ -1707,7 +1736,7 @@ describe("CLI entrypoint", () => {
     );
 
     const first = await runCli(
-      ["-p", `${"x".repeat(200)}`],
+      ["--verbose", "-p", `${"x".repeat(200)}`],
       { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
       process.cwd()
     );
@@ -1822,6 +1851,7 @@ describe("CLI entrypoint", () => {
     expect(result.stdout).toContain("--model");
     expect(result.stdout).toContain("-c -p");
     expect(result.stdout).toContain("--output-format <text|json|stream-json>");
+    expect(result.stdout).toContain("--verbose");
     expect(result.stdout).toContain("--output-format json");
     expect(result.stdout).toContain("--tools");
     expect(result.stdout).toContain("--allowed-tools");

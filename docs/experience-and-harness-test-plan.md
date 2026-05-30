@@ -289,7 +289,10 @@ Acceptance:
 - If provider is not configured, output says exactly what is missing.
 - Includes session id only when useful or requested by verbose/json mode.
 
-Current status: needs copy and behavior cleanup.
+Current status: implemented and black-box gated. Default text output prints the
+final assistant message only; `--verbose` prints session/job/state metadata for
+automation or debugging. Missing-provider text output stays actionable without
+development-stage disclaimers.
 
 ### D2. JSON Output
 

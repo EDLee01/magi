@@ -319,6 +319,13 @@ async function runCliUnsafeWithParsed(
       if (parsed.outputFormat === "json") {
         return { exitCode: 0, stdout: formatHeadlessJson(result), stderr: "" };
       }
+      if (!parsed.verbose) {
+        return {
+          exitCode: 0,
+          stdout: ensureTrailingNewline(result.message),
+          stderr: ""
+        };
+      }
       return {
         exitCode: 0,
         stdout: [
@@ -2130,6 +2137,10 @@ function normalizeProviderUsage(usage: ProviderUsage | undefined): ProviderUsage
   };
 }
 
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
+}
+
 function formatStreamJsonAgentEvent(input: {
   event: NonNullable<Awaited<ReturnType<typeof runHeadlessPrompt>>["events"]>[number];
   sessionId: string;
@@ -2243,6 +2254,7 @@ function helpText(): string {
     "  --session-id <id>                          Create or reuse an explicit session id",
     "  --no-session-persistence                   Do not write prompt/session state",
     "  --output-format <text|json|stream-json>    Select text, JSON, or NDJSON output",
+    "  --verbose                                  Include session/job metadata in text output",
     "  --permission-mode <mode>                   default, acceptEdits, bypassPermissions, or plan",
     "  --tools <tool[,tool...]>                   Compatibility allow-list for exposed tools",
     "  --allowed-tools <rule[,rule...]>           Allow tool names or selectors like Bash(git:*)",
@@ -2763,6 +2775,7 @@ interface ParsedArgs {
   writeFiles: string[];
   runnerTimeoutMs?: number;
   approve: boolean;
+  verbose: boolean;
   permissionMode?: ToolPermissionMode;
   toolRules?: ReturnType<typeof buildToolPermissionRules>;
 }
@@ -2781,6 +2794,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const writeFiles: string[] = [];
   let runnerTimeoutMs: number | undefined;
   let approve = false;
+  let verbose = false;
   let permissionMode: ToolPermissionMode | undefined;
   const tools: string[] = [];
   const allowedTools: string[] = [];
@@ -2841,6 +2855,10 @@ function parseArgs(argv: string[]): ParsedArgs {
       // Handled at the start of runCliUnsafe; ignore here (don't push to rest).
       continue;
     }
+    if (arg === "--verbose") {
+      verbose = true;
+      continue;
+    }
     if (arg === "--approve") {
       approve = true;
       continue;
@@ -2889,6 +2907,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     writeFiles,
     runnerTimeoutMs,
     approve,
+    verbose,
     permissionMode,
     toolRules: buildToolPermissionRules({ tools, allowedTools, disallowedTools })
   };

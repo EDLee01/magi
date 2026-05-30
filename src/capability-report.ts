@@ -158,6 +158,10 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("help output documented compatibility-shaped options") &&
     assertionList.includes("help output documented command families") &&
     assertionList.includes("help output documented unsupported legacy paths");
+  const textOutputProtocolSeen =
+    assertionList.includes("text output default emitted final message only") &&
+    assertionList.includes("text output default hid session metadata") &&
+    assertionList.includes("text output verbose included session metadata");
   const streamJsonProtocolSeen =
     assertionList.includes("stream-json emitted only JSON lines") &&
     assertionList.includes("stream-json emitted user and assistant message events") &&
@@ -196,7 +200,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 72) failures.push(`assertions=${assertions}`);
+  if (assertions < 75) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -205,6 +209,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!longCycleSkillIterationSeen) failures.push("longCycleSkillIterationSeen=false");
   if (!harnessCiTuiGuardSeen) failures.push("harnessCiTuiGuardSeen=false");
   if (!helpShapeSeen) failures.push("helpShapeSeen=false");
+  if (!textOutputProtocolSeen) failures.push("textOutputProtocolSeen=false");
   if (!streamJsonProtocolSeen) failures.push("streamJsonProtocolSeen=false");
   if (!jsonOutputProtocolSeen) failures.push("jsonOutputProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
@@ -235,6 +240,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       longCycleSkillIterationSeen,
       harnessCiTuiGuardSeen,
       helpShapeSeen,
+      textOutputProtocolSeen,
       streamJsonProtocolSeen,
       jsonOutputProtocolSeen,
       barePromptHeadlessSeen,

@@ -103,6 +103,7 @@ describe("capability report", () => {
         longCycleSkillIterationSeen: false,
         harnessCiTuiGuardSeen: false,
         helpShapeSeen: false,
+        textOutputProtocolSeen: false,
         streamJsonProtocolSeen: false,
         jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
@@ -141,6 +142,7 @@ describe("capability report", () => {
         "longCycleSkillIterationSeen=false",
         "harnessCiTuiGuardSeen=false",
         "helpShapeSeen=false",
+        "textOutputProtocolSeen=false",
         "streamJsonProtocolSeen=false",
         "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
@@ -873,6 +875,7 @@ function harnessReport(input: {
   longCycleSkillIterationSeen?: boolean;
   harnessCiTuiGuardSeen?: boolean;
   helpShapeSeen?: boolean;
+  textOutputProtocolSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
   jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
@@ -896,7 +899,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 74,
+      assertions: input.assertions ?? 77,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -928,6 +931,7 @@ function harnessReport(input: {
                   ...skillLearningAssertions(input),
                   ...harnessGuardAssertions(input),
                   ...helpShapeAssertions(input),
+                  ...textOutputProtocolAssertions(input),
                   ...streamJsonProtocolAssertions(input),
                   ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
@@ -1011,6 +1015,16 @@ function helpShapeAssertions(input: { helpShapeSeen?: boolean }): string[] {
         "help output documented compatibility-shaped options",
         "help output documented command families",
         "help output documented unsupported legacy paths"
+      ];
+}
+
+function textOutputProtocolAssertions(input: { textOutputProtocolSeen?: boolean }): string[] {
+  return input.textOutputProtocolSeen === false
+    ? []
+    : [
+        "text output default emitted final message only",
+        "text output default hid session metadata",
+        "text output verbose included session metadata"
       ];
 }
 

@@ -1082,7 +1082,7 @@ describe("TUI, slash commands, and session resume", () => {
     temp = makeTempRoot();
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tui-session-"));
     const create = await runCli(
-      ["-p", 'create file "note.txt" with content "session text"'],
+      ["--verbose", "-p", 'create file "note.txt" with content "session text"'],
       temp.env,
       workspace
     );
