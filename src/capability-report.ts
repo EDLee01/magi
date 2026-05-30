@@ -128,9 +128,43 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolEfficiency = readRecord(summary.toolEfficiency);
   const failures = [...base.failures];
   const scenarios = Array.isArray(report.scenarios) ? report.scenarios.map(readRecord) : [];
+  const complexWorkflow = scenarios.find((scenario) => scenario.name === "complex workflow");
+  const complexWorkflowDetails = readRecord(complexWorkflow?.details);
+  const complexWorkflowAssertions = readStringList(complexWorkflowDetails.assertions);
+  const complexWorkflowFilesVerified = readStringList(complexWorkflowDetails.filesVerified);
+  const complexWorkflowProvider = readRecord(complexWorkflowDetails.provider);
+  const complexWorkflowToolCounts = readRecord(complexWorkflowProvider.toolCounts);
   const assertionList = scenarios.flatMap((scenario) =>
     readStringList(readRecord(scenario.details).assertions)
   );
+  const complexWorkflowSeen =
+    complexWorkflow?.status === "passed" &&
+    readNumber(complexWorkflowProvider.callCount) >= 5 &&
+    [
+      "goal context loaded",
+      "hot and relevant memory loaded",
+      "deferred tool revealed",
+      "report file written and patched",
+      "todo state persisted",
+      "memory search found learned workflow",
+      "Dream archived duplicate workflow memory",
+      "Dream redirected duplicate workflow graph edge",
+      "Dream fused duplicate workflow weight",
+      "memory merge audit listed duplicate workflow",
+      "memory recall quality eval passed"
+    ].every((assertion) => complexWorkflowAssertions.includes(assertion)) &&
+    [
+      "reports/e2e-result.md",
+      "state/todos.json",
+      "memory/workflows/focused-cli-e2e.md",
+      "skills/blackbox-verify/SKILL.md"
+    ].every((file) => complexWorkflowFilesVerified.includes(file)) &&
+    readNumber(complexWorkflowToolCounts.ToolSearch) >= 1 &&
+    readNumber(complexWorkflowToolCounts.FileWrite) >= 1 &&
+    readNumber(complexWorkflowToolCounts.TodoWrite) >= 1 &&
+    readNumber(complexWorkflowToolCounts.Memorize) >= 1 &&
+    readNumber(complexWorkflowToolCounts.FilePatch) >= 1 &&
+    readNumber(complexWorkflowToolCounts.LearningDraft) >= 1;
   const learningDraftApplySeen =
     assertionList.includes("learning draft listed") &&
     assertionList.includes("learning draft review showed evidence") &&
@@ -357,6 +391,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
   if (assertions < 188) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
+  if (!complexWorkflowSeen) failures.push("complexWorkflowSeen=false");
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
   if (!skillPatchLearningSeen) failures.push("skillPatchLearningSeen=false");
@@ -416,6 +451,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       filesVerified,
       toolCallCount,
       uniqueToolCount,
+      complexWorkflowSeen,
+      complexWorkflowProviderCalls: readNumber(complexWorkflowProvider.callCount),
+      complexWorkflowFilesVerified: complexWorkflowFilesVerified.length,
       learningDraftApplySeen,
       skillLearningApplySeen,
       skillPatchLearningSeen,

@@ -99,6 +99,7 @@ describe("capability report", () => {
         toolCallCount: 3,
         uniqueToolCount: 2,
         regressions: 1,
+        complexWorkflowSeen: false,
         learningDraftApplySeen: false,
         skillLearningApplySeen: false,
         skillPatchLearningSeen: false,
@@ -161,6 +162,7 @@ describe("capability report", () => {
       expect.arrayContaining([
         "assertions=4",
         "filesVerified=0",
+        "complexWorkflowSeen=false",
         "learningDraftApplySeen=false",
         "skillLearningApplySeen=false",
         "skillPatchLearningSeen=false",
@@ -202,6 +204,39 @@ describe("capability report", () => {
         "regressions=1"
       ])
     );
+  });
+
+  it("fails blackbox alignment when complex workflow evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({
+        name: "blackbox-e2e",
+        scenarios: 9,
+        providerCalls: 118,
+        complexWorkflowSeen: false
+      }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        conflictExplanationSeen: true,
+        rollbackVerified: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
+    });
+
+    const blackbox = report.checks.find((check) => check.id === "blackbox");
+    expect(report.status).toBe("failed");
+    expect(blackbox?.failures).toEqual(expect.arrayContaining(["complexWorkflowSeen=false"]));
+    expect(blackbox?.failures).not.toContain("learningDraftApplySeen=false");
   });
 
   it("fails memory alignment when recall misses the threshold", () => {
@@ -1023,6 +1058,7 @@ function harnessReport(input: {
   toolCallCount?: number;
   uniqueToolCount?: number;
   regressions?: number;
+  complexWorkflowSeen?: boolean;
   learningDraftApplySeen?: boolean;
   skillLearningApplySeen?: boolean;
   skillPatchLearningSeen?: boolean;
@@ -1097,64 +1133,96 @@ function harnessReport(input: {
         score: 1,
         failureKind: null,
         details: {
-          assertions:
-            input.learningDraftApplySeen === false
-              ? ["learning draft listed", ...skillLearningAssertions(input)]
+          provider:
+            input.complexWorkflowSeen === false
+              ? { callCount: 0, toolCounts: {} }
+              : {
+                  callCount: 11,
+                  toolCounts: {
+                    ToolSearch: 2,
+                    WorkspaceDiagnostics: 1,
+                    FileWrite: 1,
+                    TodoWrite: 1,
+                    Memorize: 2,
+                    FilePatch: 2,
+                    LearningDraft: 1,
+                    SendUserMessage: 1
+                  }
+                },
+          assertions: [
+            ...complexWorkflowAssertions(input),
+            "learning draft listed",
+            ...(input.learningDraftApplySeen === false
+              ? []
               : [
-                  "learning draft listed",
                   "learning draft review showed evidence",
                   "learning draft applied to memory",
-                  "applied learning indexed into memory graph",
-                  ...skillLearningAssertions(input),
-                  ...harnessGuardAssertions(input),
-                  ...helpShapeAssertions(input),
-                  ...textOutputProtocolAssertions(input),
-                  ...streamJsonProtocolAssertions(input),
-                  ...streamJsonExtendedProtocolAssertions(input),
-                  ...jsonOutputProtocolAssertions(input),
-                  ...barePromptHeadlessAssertions(input),
-                  ...headlessDefaultPermissionDeniedAssertions(input),
-                  ...headlessPlanModeAssertions(input),
-                  ...controlApprovalFlowAssertions(input),
-                  ...providerRetryFallbackAssertions(input),
-                  ...toolFeedbackRankingAssertions(input),
-                  ...memoryGraphLinkAssertions(input),
-                  ...memoryCorrectionMaintenanceAssertions(input),
-                  ...tuiRequiresTtyAssertions(input),
-                  ...resumePickerTtyAssertions(input),
-                  ...slashResumeSearchTtyAssertions(input),
-                  ...resumePickerSearchFieldsAssertions(input),
-                  ...resumePickerVisualContractAssertions(input),
-                  ...toolPolicyAssertions(input),
-                  ...dangerousPermissionMatrixAssertions(input),
-                  ...slashSuggestionPromptAssertions(input),
-                  ...tuiVisualContractAssertions(input),
-                  ...tuiKeyboardInputAssertions(input),
-                  ...tuiPromptHistoryAssertions(input),
-                  ...tuiBracketedPasteAssertions(input),
-                  ...tuiStatefulPickersAssertions(input),
-                  ...tuiPickerKeyboardNavigationAssertions(input),
-                  ...tuiApprovalPickerAssertions(input),
-                  ...tuiApprovalAllowPickerAssertions(input),
-                  ...tuiApprovalAlwaysPickerAssertions(input)
-                ],
-          filesVerified:
-            input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
-              ? ["reports/e2e-result.md", "state/todos.json"]
-              : [
-                  "reports/e2e-result.md",
-                  "state/todos.json",
-                  ...(input.learningDraftApplySeen === false
-                    ? []
-                    : ["memory/workflows/focused-cli-e2e.md"]),
-                  ...(input.skillLearningApplySeen === false
-                    ? []
-                    : ["skills/blackbox-verify/SKILL.md"])
-                ]
+                  "applied learning indexed into memory graph"
+                ]),
+            ...skillLearningAssertions(input),
+            ...harnessGuardAssertions(input),
+            ...helpShapeAssertions(input),
+            ...textOutputProtocolAssertions(input),
+            ...streamJsonProtocolAssertions(input),
+            ...streamJsonExtendedProtocolAssertions(input),
+            ...jsonOutputProtocolAssertions(input),
+            ...barePromptHeadlessAssertions(input),
+            ...headlessDefaultPermissionDeniedAssertions(input),
+            ...headlessPlanModeAssertions(input),
+            ...controlApprovalFlowAssertions(input),
+            ...providerRetryFallbackAssertions(input),
+            ...toolFeedbackRankingAssertions(input),
+            ...memoryGraphLinkAssertions(input),
+            ...memoryCorrectionMaintenanceAssertions(input),
+            ...tuiRequiresTtyAssertions(input),
+            ...resumePickerTtyAssertions(input),
+            ...slashResumeSearchTtyAssertions(input),
+            ...resumePickerSearchFieldsAssertions(input),
+            ...resumePickerVisualContractAssertions(input),
+            ...toolPolicyAssertions(input),
+            ...dangerousPermissionMatrixAssertions(input),
+            ...slashSuggestionPromptAssertions(input),
+            ...tuiVisualContractAssertions(input),
+            ...tuiKeyboardInputAssertions(input),
+            ...tuiPromptHistoryAssertions(input),
+            ...tuiBracketedPasteAssertions(input),
+            ...tuiStatefulPickersAssertions(input),
+            ...tuiPickerKeyboardNavigationAssertions(input),
+            ...tuiApprovalPickerAssertions(input),
+            ...tuiApprovalAllowPickerAssertions(input),
+            ...tuiApprovalAlwaysPickerAssertions(input)
+          ],
+          filesVerified: [
+            ...(input.complexWorkflowSeen === false
+              ? []
+              : ["reports/e2e-result.md", "state/todos.json"]),
+            ...(input.learningDraftApplySeen === false
+              ? []
+              : ["memory/workflows/focused-cli-e2e.md"]),
+            ...(input.skillLearningApplySeen === false ? [] : ["skills/blackbox-verify/SKILL.md"])
+          ]
         }
       }
     ]
   };
+}
+
+function complexWorkflowAssertions(input: { complexWorkflowSeen?: boolean }): string[] {
+  return input.complexWorkflowSeen === false
+    ? []
+    : [
+        "goal context loaded",
+        "hot and relevant memory loaded",
+        "deferred tool revealed",
+        "report file written and patched",
+        "todo state persisted",
+        "memory search found learned workflow",
+        "Dream archived duplicate workflow memory",
+        "Dream redirected duplicate workflow graph edge",
+        "Dream fused duplicate workflow weight",
+        "memory merge audit listed duplicate workflow",
+        "memory recall quality eval passed"
+      ];
 }
 
 function complexHarnessReport(
