@@ -15,6 +15,7 @@ const nodeBin = process.execPath;
 const startedAt = new Date();
 const reportPath =
   process.env.MAGI_BLACKBOX_REPORT || path.join(repoRoot, ".magi-reports", "blackbox-e2e.json");
+const INTERACTIVE_TUI_TIMEOUT_MS = 15_000;
 let harnessReport;
 
 function assert(condition, message) {
@@ -439,7 +440,7 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
       if (timedOut) {
         reject(
           new Error(
-            `${label} timed out after ${timeoutMs}ms\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
+            `${label} timed out after ${timeoutMs}ms and was terminated\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`
           )
         );
         return;
@@ -2292,30 +2293,12 @@ async function scenarioInteractiveTui() {
     writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: 9 }));
     const inputFile = path.join(workDir, "tui-input.txt");
     writeFileSync(inputFile, "/exit\r");
-    const result =
-      process.platform === "darwin"
-        ? await runCommand({
-            command: "/bin/sh",
-            args: [
-              "-c",
-              `script -q /dev/null ${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color < ${shellQuote(inputFile)}`
-            ],
-            cwd: workDir,
-            configDir,
-            label: "interactive TUI",
-            timeoutMs: 15_000
-          })
-        : await runCommand({
-            command: "/bin/sh",
-            args: [
-              "-c",
-              `script -q -e -c ${shellQuote(`${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color`)} /dev/null < ${shellQuote(inputFile)}`
-            ],
-            cwd: workDir,
-            configDir,
-            label: "interactive TUI",
-            timeoutMs: 15_000
-          });
+    const result = await runInteractiveTuiCommand({
+      inputFile,
+      cwd: workDir,
+      configDir,
+      timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+    });
 
     assert(
       result.code === 0,
@@ -2333,6 +2316,32 @@ async function scenarioInteractiveTui() {
       assertions: ["TUI banner rendered", "help hint rendered", "pseudo-TTY accepted"]
     };
   });
+}
+
+function runInteractiveTuiCommand({ inputFile, cwd, configDir, timeoutMs }) {
+  return process.platform === "darwin"
+    ? runCommand({
+        command: "/bin/sh",
+        args: [
+          "-c",
+          `script -q /dev/null ${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color < ${shellQuote(inputFile)}`
+        ],
+        cwd,
+        configDir,
+        label: "interactive TUI",
+        timeoutMs
+      })
+    : runCommand({
+        command: "/bin/sh",
+        args: [
+          "-c",
+          `script -q -e -c ${shellQuote(`${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color`)} /dev/null < ${shellQuote(inputFile)}`
+        ],
+        cwd,
+        configDir,
+        label: "interactive TUI",
+        timeoutMs
+      });
 }
 
 async function scenarioTuiRequiresTty() {
@@ -2360,6 +2369,52 @@ async function scenarioTuiRequiresTty() {
       assertions: ["non-TTY TUI exits clearly", "TTY requirement message emitted"]
     };
   });
+}
+
+async function scenarioHarnessCiTuiGuard() {
+  return await withTempWorkspace("ci-tui-guard", async ({ configDir, workDir }) => {
+    const ciDefault = shouldRunInteractiveTui({ MAGI_BLACKBOX_TUI: "1", CI: "true" });
+    const ciForced = shouldRunInteractiveTui({
+      MAGI_BLACKBOX_TUI: "1",
+      MAGI_BLACKBOX_TUI_FORCE: "1",
+      CI: "true"
+    });
+    const localEnabled = shouldRunInteractiveTui({ MAGI_BLACKBOX_TUI: "1" });
+    assert(ciDefault === false, "CI should skip interactive TUI unless forced");
+    assert(ciForced === true, "forced CI should run interactive TUI");
+    assert(localEnabled === true, "local opt-in should run interactive TUI");
+
+    const timeout = await runCommand({
+      command: nodeBin,
+      args: ["-e", "setInterval(() => {}, 1000)"],
+      cwd: workDir,
+      configDir,
+      label: "hanging child timeout guard",
+      timeoutMs: 200
+    }).then(
+      () => ({ timedOut: false, message: "" }),
+      (error) => ({ timedOut: true, message: error instanceof Error ? error.message : String(error) })
+    );
+    assert(timeout.timedOut, "hanging child command did not time out");
+    assert(timeout.message.includes("was terminated"), "timeout did not report termination");
+
+    return {
+      score: 1,
+      assertions: [
+        "CI skips interactive TUI unless forced",
+        "forced CI can opt into interactive TUI",
+        "local opt-in can run interactive TUI",
+        "hanging child commands time out and terminate"
+      ]
+    };
+  });
+}
+
+function shouldRunInteractiveTui(env = process.env) {
+  return (
+    env.MAGI_BLACKBOX_TUI === "1" &&
+    (env.MAGI_BLACKBOX_TUI_FORCE === "1" || env.CI !== "true")
+  );
 }
 
 function shellQuote(value) {
@@ -2426,17 +2481,14 @@ async function main() {
     ["tool feedback ranking", scenarioToolFeedbackRanking],
     ["plan mode", scenarioPlanMode],
     ["control approval flow", scenarioControlApprovalFlow],
-    ["TUI requires TTY", scenarioTuiRequiresTty]
+    ["TUI requires TTY", scenarioTuiRequiresTty],
+    ["harness CI TUI guard", scenarioHarnessCiTuiGuard]
   ];
-  if (
-    process.env.MAGI_BLACKBOX_TUI === "1" &&
-    process.env.MAGI_BLACKBOX_TUI_FORCE !== "1" &&
-    process.env.CI === "true"
-  ) {
+  if (process.env.MAGI_BLACKBOX_TUI === "1" && !shouldRunInteractiveTui()) {
     console.log(
       "\nSkipping interactive TUI scenario in CI; set MAGI_BLACKBOX_TUI_FORCE=1 to force it."
     );
-  } else if (process.env.MAGI_BLACKBOX_TUI === "1") {
+  } else if (shouldRunInteractiveTui()) {
     scenarios.push(["interactive TUI", scenarioInteractiveTui]);
   }
   const results = [];

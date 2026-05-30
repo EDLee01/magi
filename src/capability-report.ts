@@ -148,18 +148,24 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("iterative skill patch reviewed after correction") &&
     assertionList.includes("iterative skill patch applied latest guidance") &&
     assertionList.includes("mature skill recalled after multiple learning cycles");
+  const harnessCiTuiGuardSeen =
+    assertionList.includes("CI skips interactive TUI unless forced") &&
+    assertionList.includes("forced CI can opt into interactive TUI") &&
+    assertionList.includes("local opt-in can run interactive TUI") &&
+    assertionList.includes("hanging child commands time out and terminate");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 37) failures.push(`assertions=${assertions}`);
+  if (assertions < 41) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
   if (!skillPatchLearningSeen) failures.push("skillPatchLearningSeen=false");
   if (!skillCorrectionSeen) failures.push("skillCorrectionSeen=false");
   if (!longCycleSkillIterationSeen) failures.push("longCycleSkillIterationSeen=false");
+  if (!harnessCiTuiGuardSeen) failures.push("harnessCiTuiGuardSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -182,6 +188,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       skillPatchLearningSeen,
       skillCorrectionSeen,
       longCycleSkillIterationSeen,
+      harnessCiTuiGuardSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

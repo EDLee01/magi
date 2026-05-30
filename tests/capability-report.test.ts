@@ -100,7 +100,8 @@ describe("capability report", () => {
         skillLearningApplySeen: false,
         skillPatchLearningSeen: false,
         skillCorrectionSeen: false,
-        longCycleSkillIterationSeen: false
+        longCycleSkillIterationSeen: false,
+        harnessCiTuiGuardSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -131,6 +132,7 @@ describe("capability report", () => {
         "skillPatchLearningSeen=false",
         "skillCorrectionSeen=false",
         "longCycleSkillIterationSeen=false",
+        "harnessCiTuiGuardSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -730,6 +732,7 @@ function harnessReport(input: {
   skillPatchLearningSeen?: boolean;
   skillCorrectionSeen?: boolean;
   longCycleSkillIterationSeen?: boolean;
+  harnessCiTuiGuardSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -776,7 +779,8 @@ function harnessReport(input: {
                   "learning draft review showed evidence",
                   "learning draft applied to memory",
                   "applied learning indexed into memory graph",
-                  ...skillLearningAssertions(input)
+                  ...skillLearningAssertions(input),
+                  ...harnessGuardAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -833,6 +837,17 @@ function skillLearningAssertions(input: {
           "mature skill recalled after multiple learning cycles"
         ])
   ];
+}
+
+function harnessGuardAssertions(input: { harnessCiTuiGuardSeen?: boolean }): string[] {
+  return input.harnessCiTuiGuardSeen === false
+    ? []
+    : [
+        "CI skips interactive TUI unless forced",
+        "forced CI can opt into interactive TUI",
+        "local opt-in can run interactive TUI",
+        "hanging child commands time out and terminate"
+      ];
 }
 
 function modelTaskReport(
