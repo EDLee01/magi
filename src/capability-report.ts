@@ -1907,6 +1907,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h7Stream.startedFirst !== true) failures.push("H7StartedFirst=false");
   if (h7Stream.completedLast !== true) failures.push("H7CompletedLast=false");
   if (h7Stream.userMessageSeen !== true) failures.push("H7UserMessage=false");
+  if (h7Stream.assistantMessageSeen !== true) failures.push("H7AssistantMessage=false");
   if (h7Stream.toolStartedSeen !== true) failures.push("H7ToolStarted=false");
   if (h7Stream.toolCompletedSeen !== true) failures.push("H7ToolCompleted=false");
   if (h7Stream.rawToolUseSeen !== true) failures.push("H7RawToolUse=false");
@@ -1987,6 +1988,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h10Assertions.length < 18) failures.push(`H10Assertions=${h10Assertions.length}`);
   if (readNumber(h10Session.messageCount) < 2) failures.push("H10SessionMessages < 2");
   if (readNumber(h10Session.auditEventCount) < 1) failures.push("H10AuditEvents < 1");
+  if (h10Stream.assistantMessageSeen !== true) failures.push("H10AssistantMessage=false");
   if (readNumber(h10Stream.providerRetryCount) !== 2)
     failures.push("H10ProviderRetryStreamCount != 2");
   if (h10Stream.providerFallbackSeen !== true) failures.push("H10ProviderFallbackStream=false");
@@ -1999,6 +2001,12 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!h10RetryErrorKinds.includes("server-error")) failures.push("H10RetryErrorKindMissing");
   if (h10ProviderRouting.fallbackToProvider !== "backup")
     failures.push("H10FallbackProviderMismatch");
+  if (h10ProviderRouting.fallbackFromProvider !== "openai") {
+    failures.push("H10FallbackFromProviderMismatch");
+  }
+  if (h10ProviderRouting.fallbackErrorKind !== "server-error") {
+    failures.push("H10FallbackErrorKindMismatch");
+  }
   if (h10Limits.withinTime !== true) failures.push("H10WithinTime=false");
   if (h10Limits.withinCommands !== true) failures.push("H10WithinCommands=false");
   if (h10Limits.withinFileChanges !== true) failures.push("H10WithinFileChanges=false");
@@ -2141,6 +2149,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H7StartedFirst: h7Stream.startedFirst === true,
       H7CompletedLast: h7Stream.completedLast === true,
       H7UserMessageSeen: h7Stream.userMessageSeen === true,
+      H7AssistantMessageSeen: h7Stream.assistantMessageSeen === true,
       H7ToolStartedSeen: h7Stream.toolStartedSeen === true,
       H7ToolCompletedSeen: h7Stream.toolCompletedSeen === true,
       H7RawToolUseSeen: h7Stream.rawToolUseSeen === true,
@@ -2211,6 +2220,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H10Assertions: h10Assertions.length,
       H10SessionMessages: readNumber(h10Session.messageCount),
       H10AuditEvents: readNumber(h10Session.auditEventCount),
+      H10AssistantMessageSeen: h10Stream.assistantMessageSeen === true,
       H10ProviderRetryStreamCount: readNumber(h10Stream.providerRetryCount),
       H10ProviderFallbackStream: h10Stream.providerFallbackSeen === true,
       H10SessionErrorSeen: h10Stream.sessionErrorSeen === true,
@@ -2219,6 +2229,8 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H10RetryProviders: h10RetryProviders,
       H10RetryErrorKinds: h10RetryErrorKinds,
       H10FallbackToProvider: h10ProviderRouting.fallbackToProvider,
+      H10FallbackFromProvider: h10ProviderRouting.fallbackFromProvider,
+      H10FallbackErrorKind: h10ProviderRouting.fallbackErrorKind,
       H10WithinTime: h10Limits.withinTime === true,
       H10WithinCommands: h10Limits.withinCommands === true,
       H10WithinFileChanges: h10Limits.withinFileChanges === true,

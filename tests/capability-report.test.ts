@@ -1098,8 +1098,13 @@ describe("capability report", () => {
         "H5=false",
         "H6=false",
         "H7=false",
+        "H7AssistantMessage=false",
         "H8=false",
         "H9=false",
+        "H10=false",
+        "H10AssistantMessage=false",
+        "H10FallbackFromProviderMismatch",
+        "H10FallbackErrorKindMismatch",
         "assertions=2",
         "filesVerified=1",
         "toolCallCount=2",
@@ -1869,6 +1874,7 @@ function complexHarnessReport(
         checksPassed: true,
         streamJsonLifecycleVerified: true,
         stream: {
+          assistantMessageSeen: true,
           providerRetryCount: 2,
           providerFallbackSeen: true,
           sessionErrorSeen: false
@@ -1882,6 +1888,8 @@ function complexHarnessReport(
           fallbackCount: 1,
           retryProviders: ["openai"],
           retryErrorKinds: ["server-error"],
+          fallbackFromProvider: "openai",
+          fallbackErrorKind: "server-error",
           fallbackToProvider: "backup"
         },
         limitResults: {
