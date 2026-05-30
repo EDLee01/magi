@@ -82,6 +82,7 @@ export function advertiseMdns(record: MdnsServiceRecord): MdnsAdvertiseHandle {
 
   socket.bind(MDNS_PORT, () => {
     try {
+      socket.setMulticastLoopback(true);
       socket.addMembership(MDNS_ADDR);
       log(`bound to ${MDNS_PORT}, joined ${MDNS_ADDR}`);
       // Send unsolicited announcement (so peers discover us without querying)
@@ -119,11 +120,15 @@ export function advertiseMdns(record: MdnsServiceRecord): MdnsAdvertiseHandle {
 export function browseMdns(
   input: { onPeer?: (peer: DiscoveredPeer) => void } = {}
 ): MdnsBrowserHandle {
+  const debug = process.env.MAGI_DEBUG_MDNS === "1";
+  const log = (msg: string) => {
+    if (debug) process.stderr.write(`[mdns:browse] ${msg}\n`);
+  };
   const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
   const peers = new Map<string, DiscoveredPeer>();
 
-  socket.on("error", () => {
-    // ignore
+  socket.on("error", (err) => {
+    log(`socket error: ${err.message}`);
   });
 
   socket.on("message", (msg, rinfo) => {
@@ -133,28 +138,39 @@ export function browseMdns(
       if (!found) return;
       const key = `${found.instanceName}@${found.address}:${found.port}`;
       peers.set(key, { ...found, lastSeen: Date.now() });
+      log(`found peer ${found.instanceName} at ${found.address}:${found.port}`);
       input.onPeer?.(peers.get(key)!);
-    } catch {
-      // ignore
+    } catch (error) {
+      log(
+        `error handling response from ${rinfo.address}:${rinfo.port}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   });
 
   // Bind to a random port (0). Multicast queries still go to 224.0.0.251:5353.
   socket.bind(0, () => {
     try {
+      socket.setMulticastLoopback(true);
       // Send the PTR query to the mDNS multicast address.
       const query = buildPtrQuery(SERVICE_TYPE);
-      socket.send(query, MDNS_PORT, MDNS_ADDR);
+      const sendQuery = () => {
+        for (const address of [MDNS_ADDR, ...localMdnsProbeAddresses()]) {
+          socket.send(query, MDNS_PORT, address, (error) => {
+            if (error) log(`query send to ${address} failed: ${error.message}`);
+          });
+        }
+      };
+      sendQuery();
       // Re-send a couple of times to catch peers that were briefly busy.
       const interval = setInterval(() => {
         try {
-          socket.send(query, MDNS_PORT, MDNS_ADDR);
+          sendQuery();
         } catch {}
       }, 750);
       interval.unref?.();
       socket.once("close", () => clearInterval(interval));
-    } catch {
-      // ignore
+    } catch (error) {
+      log(`bind/query error: ${error instanceof Error ? error.message : String(error)}`);
     }
   });
 
@@ -371,6 +387,19 @@ function pickLocalIPv4(): string | undefined {
     }
   }
   return undefined;
+}
+
+function localMdnsProbeAddresses(): string[] {
+  const addresses = new Set<string>(["127.0.0.1"]);
+  const ifaces = networkInterfaces();
+  for (const list of Object.values(ifaces)) {
+    for (const iface of list ?? []) {
+      if (iface.family === "IPv4" && iface.address !== "0.0.0.0") {
+        addresses.add(iface.address);
+      }
+    }
+  }
+  return [...addresses];
 }
 
 function collectPeerFromAnswers(msg: DnsMessage, fallbackAddr: string): DiscoveredPeer | undefined {
