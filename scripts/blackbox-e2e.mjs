@@ -1853,7 +1853,8 @@ async function scenarioDefaultPermissionDenied() {
         assertions: [
           "approval request emitted",
           "permission denial returned to model",
-          "denied write did not mutate workspace"
+          "denied write did not mutate workspace",
+          "default permission denial completed two-turn provider loop"
         ],
         provider: provider.summary()
       };

@@ -111,6 +111,7 @@ describe("capability report", () => {
         streamJsonExtendedProtocolSeen: false,
         jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
+        headlessDefaultPermissionDeniedSeen: false,
         headlessPlanModeSeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
@@ -166,6 +167,7 @@ describe("capability report", () => {
         "streamJsonExtendedProtocolSeen=false",
         "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
+        "headlessDefaultPermissionDeniedSeen=false",
         "headlessPlanModeSeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
@@ -1021,6 +1023,7 @@ function harnessReport(input: {
   streamJsonExtendedProtocolSeen?: boolean;
   jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
+  headlessDefaultPermissionDeniedSeen?: boolean;
   headlessPlanModeSeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
@@ -1055,7 +1058,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 180,
+      assertions: input.assertions ?? 181,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1092,6 +1095,7 @@ function harnessReport(input: {
                   ...streamJsonExtendedProtocolAssertions(input),
                   ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
+                  ...headlessDefaultPermissionDeniedAssertions(input),
                   ...headlessPlanModeAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
@@ -1925,6 +1929,19 @@ function barePromptHeadlessAssertions(input: { barePromptHeadlessSeen?: boolean 
         "bare prompt argument entered headless provider path",
         "bare prompt stream-json emitted valid lifecycle events",
         "bare prompt headless session completed"
+      ];
+}
+
+function headlessDefaultPermissionDeniedAssertions(input: {
+  headlessDefaultPermissionDeniedSeen?: boolean;
+}): string[] {
+  return input.headlessDefaultPermissionDeniedSeen === false
+    ? []
+    : [
+        "approval request emitted",
+        "permission denial returned to model",
+        "denied write did not mutate workspace",
+        "default permission denial completed two-turn provider loop"
       ];
 }
 

@@ -194,6 +194,11 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("bare prompt argument entered headless provider path") &&
     assertionList.includes("bare prompt stream-json emitted valid lifecycle events") &&
     assertionList.includes("bare prompt headless session completed");
+  const headlessDefaultPermissionDeniedSeen =
+    assertionList.includes("approval request emitted") &&
+    assertionList.includes("permission denial returned to model") &&
+    assertionList.includes("denied write did not mutate workspace") &&
+    assertionList.includes("default permission denial completed two-turn provider loop");
   const headlessPlanModeSeen =
     assertionList.includes("write denied in plan mode") &&
     assertionList.includes("ExitPlanMode surfaced plan") &&
@@ -309,7 +314,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 180) failures.push(`assertions=${assertions}`);
+  if (assertions < 181) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -323,6 +328,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!streamJsonExtendedProtocolSeen) failures.push("streamJsonExtendedProtocolSeen=false");
   if (!jsonOutputProtocolSeen) failures.push("jsonOutputProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
+  if (!headlessDefaultPermissionDeniedSeen) {
+    failures.push("headlessDefaultPermissionDeniedSeen=false");
+  }
   if (!headlessPlanModeSeen) failures.push("headlessPlanModeSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
@@ -371,6 +379,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       streamJsonExtendedProtocolSeen,
       jsonOutputProtocolSeen,
       barePromptHeadlessSeen,
+      headlessDefaultPermissionDeniedSeen,
       headlessPlanModeSeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
