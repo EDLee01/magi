@@ -470,9 +470,16 @@ describe("capability report", () => {
         mixedIntentAgentRanked: false,
         mixedIntentSchemasRevealed: false,
         mixedIntentDynamicExpansionSeen: false,
+        crossTurnMixedIntentInitialDeferredSeen: false,
+        crossTurnMixedIntentFileEditStable: false,
+        crossTurnMixedIntentBrowserStable: false,
+        crossTurnMixedIntentMemoryRecallStable: false,
+        crossTurnMixedIntentAgentStable: false,
+        crossTurnMixedIntentSchemaIsolationSeen: false,
         crossTaskProviderCalls: 0,
         longCycleProviderCalls: 0,
         mixedIntentProviderCalls: 0,
+        crossTurnMixedIntentProviderCalls: 0,
         assertions: 5,
         filesVerified: 0,
         toolCallCount: 8,
@@ -519,9 +526,16 @@ describe("capability report", () => {
         "mixedIntentAgentRanked=false",
         "mixedIntentSchemasRevealed=false",
         "mixedIntentDynamicExpansionSeen=false",
+        "crossTurnMixedIntentInitialDeferredSeen=false",
+        "crossTurnMixedIntentFileEditStable=false",
+        "crossTurnMixedIntentBrowserStable=false",
+        "crossTurnMixedIntentMemoryRecallStable=false",
+        "crossTurnMixedIntentAgentStable=false",
+        "crossTurnMixedIntentSchemaIsolationSeen=false",
         "crossTaskProviderCalls=0",
         "longCycleProviderCalls=0",
         "mixedIntentProviderCalls=0",
+        "crossTurnMixedIntentProviderCalls=0",
         "grepFailures < 4",
         "grepIntentFailures < 4",
         "grepPathFailures < 4",
@@ -1558,9 +1572,16 @@ function toolDiscoveryReport(
     mixedIntentAgentRanked: boolean;
     mixedIntentSchemasRevealed: boolean;
     mixedIntentDynamicExpansionSeen: boolean;
+    crossTurnMixedIntentInitialDeferredSeen: boolean;
+    crossTurnMixedIntentFileEditStable: boolean;
+    crossTurnMixedIntentBrowserStable: boolean;
+    crossTurnMixedIntentMemoryRecallStable: boolean;
+    crossTurnMixedIntentAgentStable: boolean;
+    crossTurnMixedIntentSchemaIsolationSeen: boolean;
     crossTaskProviderCalls: number;
     longCycleProviderCalls: number;
     mixedIntentProviderCalls: number;
+    crossTurnMixedIntentProviderCalls: number;
     initialToolCount: number;
     revealedToolCount: number;
     grepFailures: number;
@@ -1579,10 +1600,10 @@ function toolDiscoveryReport(
     ...harnessReport({
       name: "tool-discovery-eval",
       scenarios: 1,
-      providerCalls: 4,
-      assertions: overrides.assertions ?? 22,
+      providerCalls: 5,
+      assertions: overrides.assertions ?? 28,
       filesVerified: overrides.filesVerified ?? 1,
-      toolCallCount: overrides.toolCallCount ?? 16,
+      toolCallCount: overrides.toolCallCount ?? 23,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
     }),
     scenarios: [
@@ -1593,9 +1614,9 @@ function toolDiscoveryReport(
         score: 1,
         failureKind: null,
         details: {
-          provider: { callCount: 4 },
+          provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 22 },
+            { length: overrides.assertions ?? 28 },
             (_, index) => `tool-discovery assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1603,7 +1624,7 @@ function toolDiscoveryReport(
             (_, index) => `tool-discovery-file-${index + 1}.json`
           ),
           toolCounts: {
-            ToolSearch: 8,
+            ToolSearch: 15,
             Grep: 4,
             Glob: 4
           },
@@ -1637,9 +1658,16 @@ function toolDiscoveryReport(
           mixedIntentAgentRanked: true,
           mixedIntentSchemasRevealed: true,
           mixedIntentDynamicExpansionSeen: true,
+          crossTurnMixedIntentInitialDeferredSeen: true,
+          crossTurnMixedIntentFileEditStable: true,
+          crossTurnMixedIntentBrowserStable: true,
+          crossTurnMixedIntentMemoryRecallStable: true,
+          crossTurnMixedIntentAgentStable: true,
+          crossTurnMixedIntentSchemaIsolationSeen: true,
           crossTaskProviderCalls: 2,
           longCycleProviderCalls: 2,
           mixedIntentProviderCalls: 2,
+          crossTurnMixedIntentProviderCalls: 2,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,

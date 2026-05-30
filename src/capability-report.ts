@@ -1075,9 +1075,9 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 22) failures.push(`assertions=${assertions}`);
+  if (assertions < 28) failures.push(`assertions=${assertions}`);
   if (filesVerified < 1) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 16) failures.push(`toolCallCount=${toolCallCount}`);
+  if (toolCallCount < 23) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.coreToolsExposed !== true) failures.push("coreToolsExposed=false");
   if (details.deferredToolsHidden !== true) failures.push("deferredToolsHidden=false");
@@ -1157,10 +1157,31 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.mixedIntentDynamicExpansionSeen !== true) {
     failures.push("mixedIntentDynamicExpansionSeen=false");
   }
+  if (details.crossTurnMixedIntentInitialDeferredSeen !== true) {
+    failures.push("crossTurnMixedIntentInitialDeferredSeen=false");
+  }
+  if (details.crossTurnMixedIntentFileEditStable !== true) {
+    failures.push("crossTurnMixedIntentFileEditStable=false");
+  }
+  if (details.crossTurnMixedIntentBrowserStable !== true) {
+    failures.push("crossTurnMixedIntentBrowserStable=false");
+  }
+  if (details.crossTurnMixedIntentMemoryRecallStable !== true) {
+    failures.push("crossTurnMixedIntentMemoryRecallStable=false");
+  }
+  if (details.crossTurnMixedIntentAgentStable !== true) {
+    failures.push("crossTurnMixedIntentAgentStable=false");
+  }
+  if (details.crossTurnMixedIntentSchemaIsolationSeen !== true) {
+    failures.push("crossTurnMixedIntentSchemaIsolationSeen=false");
+  }
   if (readNumber(details.crossTaskProviderCalls) <= 0) failures.push("crossTaskProviderCalls=0");
   if (readNumber(details.longCycleProviderCalls) <= 0) failures.push("longCycleProviderCalls=0");
   if (readNumber(details.mixedIntentProviderCalls) <= 0) {
     failures.push("mixedIntentProviderCalls=0");
+  }
+  if (readNumber(details.crossTurnMixedIntentProviderCalls) <= 0) {
+    failures.push("crossTurnMixedIntentProviderCalls=0");
   }
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
@@ -1213,9 +1234,19 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       mixedIntentAgentRanked: details.mixedIntentAgentRanked === true,
       mixedIntentSchemasRevealed: details.mixedIntentSchemasRevealed === true,
       mixedIntentDynamicExpansionSeen: details.mixedIntentDynamicExpansionSeen === true,
+      crossTurnMixedIntentInitialDeferredSeen:
+        details.crossTurnMixedIntentInitialDeferredSeen === true,
+      crossTurnMixedIntentFileEditStable: details.crossTurnMixedIntentFileEditStable === true,
+      crossTurnMixedIntentBrowserStable: details.crossTurnMixedIntentBrowserStable === true,
+      crossTurnMixedIntentMemoryRecallStable:
+        details.crossTurnMixedIntentMemoryRecallStable === true,
+      crossTurnMixedIntentAgentStable: details.crossTurnMixedIntentAgentStable === true,
+      crossTurnMixedIntentSchemaIsolationSeen:
+        details.crossTurnMixedIntentSchemaIsolationSeen === true,
       crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
       longCycleProviderCalls: readNumber(details.longCycleProviderCalls),
       mixedIntentProviderCalls: readNumber(details.mixedIntentProviderCalls),
+      crossTurnMixedIntentProviderCalls: readNumber(details.crossTurnMixedIntentProviderCalls),
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),

@@ -60,6 +60,13 @@ try {
     mixedIntentSchemasRevealed: false,
     mixedIntentDynamicExpansionSeen: false,
     mixedIntentProviderCalls: 0,
+    crossTurnMixedIntentInitialDeferredSeen: false,
+    crossTurnMixedIntentFileEditStable: false,
+    crossTurnMixedIntentBrowserStable: false,
+    crossTurnMixedIntentMemoryRecallStable: false,
+    crossTurnMixedIntentAgentStable: false,
+    crossTurnMixedIntentSchemaIsolationSeen: false,
+    crossTurnMixedIntentProviderCalls: 0,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -125,6 +132,7 @@ try {
     const crossTask = await runCrossTaskRecoveryEval(provider, state);
     const longCycle = await runLongCycleStrategyEval(provider, state);
     const mixedIntent = await runMixedIntentDynamicEval(provider, state);
+    const crossTurnMixedIntent = await runCrossTurnMixedIntentDriftEval(provider, state);
     const assertions = [
       "ToolSearch exposed as core tool",
       "core file/search tools exposed initially",
@@ -155,7 +163,13 @@ try {
       "mixed-intent task ranked SessionSearch for memory recall step",
       "mixed-intent task ranked Agent for parallel dispatch step",
       "mixed-intent task revealed schemas after ranking",
-      "mixed-intent task expanded visible tools dynamically"
+      "mixed-intent task expanded visible tools dynamically",
+      "cross-turn mixed-intent task restarted with deferred schemas hidden",
+      "cross-turn mixed-intent file-edit ranking stayed stable",
+      "cross-turn mixed-intent browser ranking stayed stable",
+      "cross-turn mixed-intent memory recall ranking stayed stable",
+      "cross-turn mixed-intent agent ranking stayed stable",
+      "cross-turn mixed-intent schemas revealed only after select"
     ];
     const filesVerified = ["state/tool-usage-stats.json"];
 
@@ -206,6 +220,16 @@ try {
             mixedIntentSchemasRevealed: mixedIntent.schemasRevealed,
             mixedIntentDynamicExpansionSeen: mixedIntent.dynamicExpansionSeen,
             mixedIntentProviderCalls: mixedIntent.providerCalls,
+            crossTurnMixedIntentInitialDeferredSeen:
+              crossTurnMixedIntent.initialDeferredSeen,
+            crossTurnMixedIntentFileEditStable: crossTurnMixedIntent.fileEditStable,
+            crossTurnMixedIntentBrowserStable: crossTurnMixedIntent.browserStable,
+            crossTurnMixedIntentMemoryRecallStable:
+              crossTurnMixedIntent.memoryRecallStable,
+            crossTurnMixedIntentAgentStable: crossTurnMixedIntent.agentStable,
+            crossTurnMixedIntentSchemaIsolationSeen:
+              crossTurnMixedIntent.schemaIsolationSeen,
+            crossTurnMixedIntentProviderCalls: crossTurnMixedIntent.providerCalls,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
@@ -250,6 +274,7 @@ function createRouter(state) {
   let turn = 0;
   let crossTaskTurn = 0;
   let longCycleTurn = 0;
+  let crossTurnMixedIntentTurn = 0;
   return ({ latestUser, transcript, toolNames }) => {
     if (latestUser.includes("Run long-cycle ToolSearch strategy regression checks.")) {
       longCycleTurn += 1;
@@ -352,6 +377,16 @@ function createRouter(state) {
 
     if (latestUser.includes("Run mixed-intent dynamic ToolSearch selection checks.")) {
       return routeMixedIntentDynamicSelection({ transcript, toolNames, state });
+    }
+
+    if (latestUser.includes("Run cross-turn mixed-intent ToolSearch drift checks.")) {
+      crossTurnMixedIntentTurn += 1;
+      return routeCrossTurnMixedIntentDrift({
+        transcript,
+        toolNames,
+        state,
+        turn: crossTurnMixedIntentTurn
+      });
     }
 
     if (
@@ -628,6 +663,61 @@ async function runMixedIntentDynamicEval(provider, state) {
   }
 }
 
+async function runCrossTurnMixedIntentDriftEval(provider, state) {
+  const output = await runCli([
+    "--model",
+    "main",
+    "--output-format",
+    "stream-json",
+    "-p",
+    "Run cross-turn mixed-intent ToolSearch drift checks."
+  ]);
+  const matchingCalls = providerCallsForPrompt("Run cross-turn mixed-intent ToolSearch drift");
+  assert(matchingCalls.length > 0, "cross-turn mixed-intent prompt did not call provider");
+  assert(
+    output.includes("Cross-turn mixed-intent Tool Discovery drift verified"),
+    "cross-turn mixed-intent final answer missing"
+  );
+  assert(
+    state.crossTurnMixedIntentInitialDeferredSeen,
+    "cross-turn mixed-intent initial deferred visibility was not verified"
+  );
+  assert(
+    state.crossTurnMixedIntentFileEditStable,
+    "cross-turn mixed-intent file-edit ranking was not verified"
+  );
+  assert(
+    state.crossTurnMixedIntentBrowserStable,
+    "cross-turn mixed-intent browser ranking was not verified"
+  );
+  assert(
+    state.crossTurnMixedIntentMemoryRecallStable,
+    "cross-turn mixed-intent memory-recall ranking was not verified"
+  );
+  assert(
+    state.crossTurnMixedIntentAgentStable,
+    "cross-turn mixed-intent agent ranking was not verified"
+  );
+  assert(
+    state.crossTurnMixedIntentSchemaIsolationSeen,
+    "cross-turn mixed-intent schema isolation was not verified"
+  );
+  state.crossTurnMixedIntentProviderCalls = matchingCalls.length;
+  return {
+    initialDeferredSeen: state.crossTurnMixedIntentInitialDeferredSeen,
+    fileEditStable: state.crossTurnMixedIntentFileEditStable,
+    browserStable: state.crossTurnMixedIntentBrowserStable,
+    memoryRecallStable: state.crossTurnMixedIntentMemoryRecallStable,
+    agentStable: state.crossTurnMixedIntentAgentStable,
+    schemaIsolationSeen: state.crossTurnMixedIntentSchemaIsolationSeen,
+    providerCalls: matchingCalls.length
+  };
+
+  function providerCallsForPrompt(prompt) {
+    return provider.calls.filter((call) => call.transcript.includes(prompt));
+  }
+}
+
 function routeMixedIntentDynamicSelection({ transcript, toolNames, state }) {
   const schemaRevealSeen =
     transcript.includes("Tool: FilePatch") &&
@@ -692,6 +782,87 @@ function routeMixedIntentDynamicSelection({ transcript, toolNames, state }) {
       max_results: 5
     })
   ]);
+}
+
+function routeCrossTurnMixedIntentDrift({ transcript, toolNames, state, turn }) {
+  if (turn === 1) {
+    assert(toolNames.includes("ToolSearch"), "ToolSearch was not visible in cross-turn task");
+    assert(toolNames.includes("FilePatch"), "FilePatch was not visible in cross-turn task");
+    assert(!toolNames.includes("Browser"), "Browser leaked into a fresh cross-turn tool context");
+    assert(
+      !toolNames.includes("SessionSearch"),
+      "SessionSearch leaked into a fresh cross-turn tool context"
+    );
+    assert(!toolNames.includes("Agent"), "Agent leaked into a fresh cross-turn tool context");
+    state.crossTurnMixedIntentInitialDeferredSeen = true;
+    return toolResponse([
+      toolCall("cross-turn-file-edit-search", "ToolSearch", {
+        query: "apply a multi-line patch to a file",
+        max_results: 5
+      }),
+      toolCall("cross-turn-browser-search", "ToolSearch", {
+        query: "automate browser click and screenshot",
+        max_results: 5
+      }),
+      toolCall("cross-turn-memory-recall-search", "ToolSearch", {
+        query: "search previous session memory history",
+        max_results: 5
+      }),
+      toolCall("cross-turn-agent-search", "ToolSearch", {
+        query: "dispatch parallel agent to peer machine",
+        max_results: 5
+      })
+    ]);
+  }
+
+  if (turn === 2) {
+    assert(
+      transcript.includes('ToolSearch results for "apply a multi-line patch to a file"'),
+      "cross-turn file-edit ToolSearch result was not visible"
+    );
+    assert(
+      transcript.includes('ToolSearch results for "automate browser click and screenshot"'),
+      "cross-turn browser ToolSearch result was not visible"
+    );
+    assert(
+      transcript.includes('ToolSearch results for "search previous session memory history"'),
+      "cross-turn memory-recall ToolSearch result was not visible"
+    );
+    assert(
+      transcript.includes('ToolSearch results for "dispatch parallel agent to peer machine"'),
+      "cross-turn agent ToolSearch result was not visible"
+    );
+    assert(transcript.includes("1. FilePatch"), "cross-turn FilePatch ranking missing");
+    assert(transcript.includes("1. Browser"), "cross-turn Browser ranking missing");
+    assert(transcript.includes("1. SessionSearch"), "cross-turn SessionSearch ranking missing");
+    assert(transcript.includes("1. Agent"), "cross-turn Agent ranking missing");
+    state.crossTurnMixedIntentFileEditStable = true;
+    state.crossTurnMixedIntentBrowserStable = true;
+    state.crossTurnMixedIntentMemoryRecallStable = true;
+    state.crossTurnMixedIntentAgentStable = true;
+    return toolResponse([
+      toolCall("cross-turn-select-browser", "ToolSearch", { query: "select:Browser" }),
+      toolCall("cross-turn-select-session-search", "ToolSearch", {
+        query: "select:SessionSearch"
+      }),
+      toolCall("cross-turn-select-agent", "ToolSearch", { query: "select:Agent" })
+    ]);
+  }
+
+  assert(transcript.includes("Tool: Browser"), "cross-turn Browser schema was not selected");
+  assert(
+    transcript.includes("Tool: SessionSearch"),
+    "cross-turn SessionSearch schema was not selected"
+  );
+  assert(transcript.includes("Tool: Agent"), "cross-turn Agent schema was not selected");
+  assert(toolNames.includes("Browser"), "Browser was not visible after cross-turn select");
+  assert(
+    toolNames.includes("SessionSearch"),
+    "SessionSearch was not visible after cross-turn select"
+  );
+  assert(toolNames.includes("Agent"), "Agent was not visible after cross-turn select");
+  state.crossTurnMixedIntentSchemaIsolationSeen = true;
+  return messageText("Cross-turn mixed-intent Tool Discovery drift verified.");
 }
 
 function assertLongCycleRankings(transcript, { minimumOccurrences }) {
