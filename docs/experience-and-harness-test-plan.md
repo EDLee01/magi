@@ -140,7 +140,10 @@ Acceptance:
 - Compatibility-shaped options are present, even if some are marked unsupported.
 - Forbidden options are not implemented silently.
 
-Current status: partial. Magi Next help is too minimal.
+Current status: implemented and black-box gated. Help is grouped into Usage,
+Options, Commands, and Compatibility notes; compatibility-shaped options are
+listed explicitly, and unsupported legacy paths are documented rather than
+silently enabled.
 
 ## B. Slash Command Discovery
 

@@ -1722,6 +1722,46 @@ async function scenarioDefaultPermissionDenied() {
   });
 }
 
+async function scenarioHelpShape() {
+  return await withTempWorkspace("help-shape", async ({ configDir, workDir }) => {
+    const output = await runCli({
+      args: ["--help"],
+      cwd: workDir,
+      configDir,
+      label: "help shape"
+    });
+    assert(output.includes("Usage:"), "help missed Usage group");
+    assert(output.includes("Options:"), "help missed Options group");
+    assert(output.includes("Commands:"), "help missed Commands group");
+    assert(output.includes("Compatibility notes:"), "help missed compatibility notes");
+    assert(output.includes("--output-format <text|json|stream-json>"), "help missed output formats");
+    assert(output.includes("--tools <tool[,tool...]>"), "help missed --tools compatibility option");
+    assert(output.includes("--allowed-tools <rule[,rule...]>"), "help missed --allowed-tools");
+    assert(output.includes("--disallowed-tools <rule[,rule...]>"), "help missed --disallowed-tools");
+    assert(output.includes("workspace diagnose"), "help missed workspace diagnose command");
+    assert(
+      output.includes("memory view|search|link|correct|feedback"),
+      "help missed memory command family"
+    );
+    assert(output.includes("learning list|propose|draft"), "help missed learning command family");
+    assert(
+      output.includes("Legacy-only provider/browser bridge paths"),
+      "help missed unsupported legacy path note"
+    );
+    assert(output.includes("magi-agent binary"), "help missed unsupported magi-agent binary note");
+
+    return {
+      score: 1,
+      assertions: [
+        "help output grouped Usage Options Commands",
+        "help output documented compatibility-shaped options",
+        "help output documented command families",
+        "help output documented unsupported legacy paths"
+      ]
+    };
+  });
+}
+
 async function scenarioJsonOutputProtocol() {
   return await withTempWorkspace("json-output", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -3145,6 +3185,7 @@ async function main() {
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
+    ["help shape", scenarioHelpShape],
     ["json output protocol", scenarioJsonOutputProtocol],
     ["tool policy allow deny", scenarioToolPolicyAllowDeny],
     ["bare prompt headless", scenarioBarePromptHeadless],

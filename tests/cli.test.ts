@@ -1814,15 +1814,24 @@ describe("CLI entrypoint", () => {
 
   it("includes compatibility-shaped options in help", async () => {
     const result = await runCli(["--help"], {}, process.cwd());
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Usage:");
+    expect(result.stdout).toContain("Options:");
+    expect(result.stdout).toContain("Commands:");
+    expect(result.stdout).toContain("Compatibility notes:");
     expect(result.stdout).toContain("--model");
     expect(result.stdout).toContain("-c -p");
+    expect(result.stdout).toContain("--output-format <text|json|stream-json>");
     expect(result.stdout).toContain("--output-format json");
+    expect(result.stdout).toContain("--tools");
+    expect(result.stdout).toContain("--allowed-tools");
+    expect(result.stdout).toContain("--disallowed-tools");
     expect(result.stdout).toContain("workspace diagnose");
-    expect(result.stdout).toContain("memory link --from");
-    expect(result.stdout).toContain("memory feedback --target");
-    expect(result.stdout).toContain("memory feedback trends");
-    expect(result.stdout).toContain("memory conflicts");
-    expect(result.stdout).toContain("memory maintain config");
+    expect(result.stdout).toContain("memory view|search|link|correct|feedback");
+    expect(result.stdout).toContain("memory conflicts|merges|eval|maintain");
+    expect(result.stdout).toContain("learning list|propose|draft");
+    expect(result.stdout).toContain("Legacy-only provider/browser bridge paths");
+    expect(result.stdout).toContain("magi-agent binary");
   });
 
   it("runs workspace diagnostics from the CLI", async () => {

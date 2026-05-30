@@ -102,6 +102,7 @@ describe("capability report", () => {
         skillCorrectionSeen: false,
         longCycleSkillIterationSeen: false,
         harnessCiTuiGuardSeen: false,
+        helpShapeSeen: false,
         streamJsonProtocolSeen: false,
         jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
@@ -139,6 +140,7 @@ describe("capability report", () => {
         "skillCorrectionSeen=false",
         "longCycleSkillIterationSeen=false",
         "harnessCiTuiGuardSeen=false",
+        "helpShapeSeen=false",
         "streamJsonProtocolSeen=false",
         "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
@@ -870,6 +872,7 @@ function harnessReport(input: {
   skillCorrectionSeen?: boolean;
   longCycleSkillIterationSeen?: boolean;
   harnessCiTuiGuardSeen?: boolean;
+  helpShapeSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
   jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
@@ -893,7 +896,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 70,
+      assertions: input.assertions ?? 74,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -924,6 +927,7 @@ function harnessReport(input: {
                   "applied learning indexed into memory graph",
                   ...skillLearningAssertions(input),
                   ...harnessGuardAssertions(input),
+                  ...helpShapeAssertions(input),
                   ...streamJsonProtocolAssertions(input),
                   ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
@@ -996,6 +1000,17 @@ function harnessGuardAssertions(input: { harnessCiTuiGuardSeen?: boolean }): str
         "forced CI can opt into interactive TUI",
         "local opt-in can run interactive TUI",
         "hanging child commands time out and terminate"
+      ];
+}
+
+function helpShapeAssertions(input: { helpShapeSeen?: boolean }): string[] {
+  return input.helpShapeSeen === false
+    ? []
+    : [
+        "help output grouped Usage Options Commands",
+        "help output documented compatibility-shaped options",
+        "help output documented command families",
+        "help output documented unsupported legacy paths"
       ];
 }
 
