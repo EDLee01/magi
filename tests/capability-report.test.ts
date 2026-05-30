@@ -343,6 +343,38 @@ describe("capability report", () => {
     );
   });
 
+  it("fails blackbox alignment when control stream event evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({
+        name: "blackbox-e2e",
+        scenarios: 9,
+        providerCalls: 118,
+        controlEventCount: 3
+      }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        conflictExplanationSeen: true,
+        rollbackVerified: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
+    });
+
+    const blackbox = report.checks.find((check) => check.id === "blackbox");
+    expect(report.status).toBe("failed");
+    expect(blackbox?.failures).toEqual(expect.arrayContaining(["controlApprovalEventCount=3"]));
+  });
+
   it("fails memory alignment when recall misses the threshold", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
@@ -1312,6 +1344,36 @@ describe("capability report", () => {
     );
   });
 
+  it("fails complex harness alignment when stream event and audit id evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport({
+        h5FailedToolCallId: "wrong-tool-call",
+        h10EventCount: 0
+      })
+    });
+
+    const complex = report.checks.find((check) => check.id === "complex-harness");
+    expect(report.status).toBe("failed");
+    expect(complex?.failures).toEqual(
+      expect.arrayContaining(["streamEventCountEvidenceCount=8", "H5OutsideWriteToolCallIdMissing"])
+    );
+  });
+
   it("fails complex harness alignment when H8/H9 structured evidence is incomplete", () => {
     const report = buildCapabilityReport({
       blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
@@ -1425,6 +1487,7 @@ function harnessReport(input: {
   dangerousPermissionMatrixSeen?: boolean;
   providerToolSurfaceSeen?: boolean;
   providerModelsSeen?: boolean;
+  controlEventCount?: number;
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
   tuiKeyboardInputSeen?: boolean;
@@ -1446,7 +1509,7 @@ function harnessReport(input: {
   const retryModels = providerModelsBroken ? mainModels : ["mock-backup", "mock-main"];
   const pickerModels = providerModelsBroken ? mainModels : ["mock-fast"];
   const genericProviderScenarios = Array.from(
-    { length: Math.max(0, Math.min(input.scenarios, 23) - 5) },
+    { length: Math.max(0, Math.min(input.scenarios, 23) - 6) },
     (_, index) => ({
       name: `provider tool surface ${index + 1}`,
       status: "passed",
@@ -1646,6 +1709,24 @@ function harnessReport(input: {
           })
         }
       },
+      {
+        name: "control approval flow",
+        status: "passed",
+        durationMs: 300,
+        score: 1,
+        failureKind: null,
+        details: {
+          assertions: controlApprovalFlowAssertions(input),
+          provider: providerSurface({
+            callCount: 2,
+            models: mainModels,
+            broken: providerToolSurfaceBroken
+          }),
+          control: {
+            eventCount: input.controlEventCount ?? 18
+          }
+        }
+      },
       ...genericProviderScenarios
     ]
   };
@@ -1698,12 +1779,15 @@ function complexHarnessReport(
     h7ProviderRetrySeen?: boolean;
     h7ProviderRetryCount?: number;
     h7ProviderFallbackSeen?: boolean;
+    h7EventCount?: number;
     h8TaskPrompts?: string[];
     h8Tasks?: Record<string, unknown>[];
     h8Claims?: Record<string, unknown>[];
     h9PendingToolUseId?: string;
     h9CompletedBashToolCount?: number;
     h9CompletedToolIds?: string[];
+    h5FailedToolCallId?: string;
+    h10EventCount?: number;
     providerToolSurfaceSeen?: boolean;
     changedFiles?: string[];
     forbiddenChanges?: string[];
@@ -2085,7 +2169,7 @@ function complexHarnessReport(
           failedToolReasons: [
             {
               target: "FileWrite",
-              toolCallId: "h5-attempt-outside-write",
+              toolCallId: overrides.h5FailedToolCallId ?? "h5-attempt-outside-write",
               reason: "Path ../outside-sentinel.txt is outside allowed directories"
             }
           ]
@@ -2177,7 +2261,7 @@ function complexHarnessReport(
           completedMessage: "Created output/automation-result.txt.",
           completedStatus: "completed",
           finalMessageMatched: true,
-          eventCount: 17
+          eventCount: overrides.h7EventCount ?? 22
         },
         session: {
           messageCount: 3,
@@ -2316,7 +2400,8 @@ function complexHarnessReport(
           assistantMessageSeen: true,
           providerRetryCount: 2,
           providerFallbackSeen: true,
-          sessionErrorSeen: false
+          sessionErrorSeen: false,
+          eventCount: overrides.h10EventCount ?? 32
         },
         session: {
           messageCount: 3,

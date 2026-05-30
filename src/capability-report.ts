@@ -195,6 +195,12 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolFeedbackRankingDetails = readRecord(toolFeedbackRanking?.details);
   const toolFeedbackRankingProvider = readRecord(toolFeedbackRankingDetails.provider);
   const toolFeedback = readRecord(toolFeedbackRankingDetails.toolFeedback);
+  const controlApprovalFlow = scenarios.find(
+    (scenario) => scenario.name === "control approval flow"
+  );
+  const controlApprovalFlowDetails = readRecord(controlApprovalFlow?.details);
+  const controlApproval = readRecord(controlApprovalFlowDetails.control);
+  const controlApprovalEventCount = readNumber(controlApproval.eventCount);
   const providerModels = Array.from(
     new Set(
       scenarios.flatMap((scenario) =>
@@ -490,6 +496,9 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!providerModelCoverageSeen) failures.push("providerModelCoverageSeen=false");
   if (!retryFallbackModelsSeen) failures.push("retryFallbackModelsSeen=false");
   if (!tuiModelPickerModelsSeen) failures.push("tuiModelPickerModelsSeen=false");
+  if (controlApprovalEventCount < 18) {
+    failures.push(`controlApprovalEventCount=${controlApprovalEventCount}`);
+  }
   if (!complexWorkflowSeen) failures.push("complexWorkflowSeen=false");
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -561,6 +570,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       tuiStatefulPickerModels,
       tuiPickerKeyboardNavigationModels,
       tuiModelPickerModelsSeen,
+      controlApprovalEventCount,
       complexWorkflowSeen,
       complexWorkflowProviderCalls: readNumber(complexWorkflowProvider.callCount),
       complexWorkflowFilesVerified: complexWorkflowFilesVerified.length,
@@ -1848,6 +1858,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h5ForbiddenChanges = readStringList(h5?.forbiddenChanges);
   const h5Session = readRecord(h5?.session);
   const h5FailedToolReasons = readRecordList(h5Session.failedToolReasons);
+  const h5OutsideWriteToolCallIdSeen = h5FailedToolReasons.some(
+    (failure) => failure.target === "FileWrite" && failure.toolCallId === "h5-attempt-outside-write"
+  );
   const h5Limits = readRecord(h5?.limitResults);
   const h5Seen = Boolean(h5);
   const h6 = detailsList.find((details) => details.taskId === "H6");
@@ -1929,6 +1942,11 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       stream.completedStatus === "completed"
     );
   }).length;
+  const streamEventCountTasks = [h1, h2, h3, h4, h5, h7, h8, h9, h10];
+  const streamEventCountEvidenceCount = streamEventCountTasks.filter((details) => {
+    const stream = readRecord(details?.stream);
+    return readNumber(stream.eventCount) >= 17;
+  }).length;
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
@@ -1971,6 +1989,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   }
   if (normalStreamDiagnosticsCount !== normalStreamDiagnosticsTasks.length) {
     failures.push(`normalStreamDiagnosticsCount=${normalStreamDiagnosticsCount}`);
+  }
+  if (streamEventCountEvidenceCount !== streamEventCountTasks.length) {
+    failures.push(`streamEventCountEvidenceCount=${streamEventCountEvidenceCount}`);
   }
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
@@ -2070,6 +2091,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!hasFailedToolReason(h5FailedToolReasons, "FileWrite", "outside allowed directories")) {
     failures.push("H5OutsideWriteAuditMissing");
   }
+  if (!h5OutsideWriteToolCallIdSeen) failures.push("H5OutsideWriteToolCallIdMissing");
   if (h5Limits.withinTime !== true) failures.push("H5WithinTime=false");
   if (h5Limits.withinCommands !== true) failures.push("H5WithinCommands=false");
   if (h5Limits.withinFileChanges !== true) failures.push("H5WithinFileChanges=false");
@@ -2270,6 +2292,8 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       providerToolSurfaceBadCount,
       normalStreamDiagnosticsCount,
       normalStreamDiagnosticsTarget: normalStreamDiagnosticsTasks.length,
+      streamEventCountEvidenceCount,
+      streamEventCountTarget: streamEventCountTasks.length,
       H1Seen: h1Seen,
       H1FileReadCalls: readNumber(h1ToolCounts.FileRead),
       H1FilePatchCalls: readNumber(h1ToolCounts.FilePatch),
@@ -2354,6 +2378,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
         "FileWrite",
         "outside allowed directories"
       ),
+      H5OutsideWriteToolCallIdSeen: h5OutsideWriteToolCallIdSeen,
       H5WithinTime: h5Limits.withinTime === true,
       H5WithinCommands: h5Limits.withinCommands === true,
       H5WithinFileChanges: h5Limits.withinFileChanges === true,
