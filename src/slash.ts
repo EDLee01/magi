@@ -71,6 +71,12 @@ export const SLASH_COMMANDS: SlashCommandSpec[] = [
     description: "Search and resume a session"
   },
   {
+    name: "context",
+    usage: "/context",
+    group: "Context",
+    description: "Show token budget and context categories"
+  },
+  {
     name: "model",
     usage: "/model [alias]",
     group: "Model",
@@ -83,10 +89,46 @@ export const SLASH_COMMANDS: SlashCommandSpec[] = [
     description: "Manage Memory files, drafts, and Dream runs"
   },
   {
+    name: "rules",
+    usage: "/rules",
+    group: "Memory",
+    description: "Show loaded project and user instructions"
+  },
+  {
     name: "review",
     usage: "/review [target]",
     group: "Tools",
     description: "Switch to review-oriented route"
+  },
+  {
+    name: "run",
+    usage: "/run <command>",
+    group: "Tools",
+    description: "Run commands through the local runner bridge"
+  },
+  {
+    name: "mcp",
+    usage: "/mcp [list|tools|resources]",
+    group: "Extensions",
+    description: "Inspect MCP servers"
+  },
+  {
+    name: "plugins",
+    usage: "/plugins",
+    group: "Extensions",
+    description: "List installed local plugins"
+  },
+  {
+    name: "skills",
+    usage: "/skills [name]",
+    group: "Skills",
+    description: "List installed skills"
+  },
+  {
+    name: "agents",
+    usage: "/agents",
+    group: "Agents",
+    description: "List available sub-agent types"
   },
   {
     name: "commit",
@@ -130,12 +172,19 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
   if (n === "model") return { type: "model", alias: rest[0] };
   if (n === "sessions") return { type: "sessions" };
   if (n === "resume") return { type: "resume", sessionId: rest[0] };
+  if (n === "context") return { type: "unknown", name: "context" };
   if (n === "memory") {
     const scope =
       rest[0] === "user" || rest[0] === "project" || rest[0] === "session" ? rest[0] : undefined;
     return { type: "memory", scope };
   }
+  if (n === "rules") return { type: "unknown", name: "rules" };
   if (n === "review") return { type: "review" };
+  if (n === "run") return { type: "unknown", name: "run" };
+  if (n === "mcp") return { type: "unknown", name: "mcp" };
+  if (n === "plugins") return { type: "unknown", name: "plugins" };
+  if (n === "skills" || n === "skill") return { type: "unknown", name: n };
+  if (n === "agents") return { type: "unknown", name: "agents" };
   if (n === "clear" || n === "reset" || n === "new") return { type: "clear" };
   if (n === "commit") return { type: "commit", args: rest };
   if (n === "diff") return { type: "diff", args: rest };

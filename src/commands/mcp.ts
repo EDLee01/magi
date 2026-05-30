@@ -7,7 +7,7 @@ export const command = {
   description: "List, connect, or inspect configured MCP servers",
   usage:
     "/mcp [list|tools <server>|resources <server>|prompts <server>|connect <server>|disconnect <server>|health <server>|health-all|auth <server>|logout <server>|tokens]",
-  group: "Configuration",
+  group: "Extensions",
   handler: async (args: string[], input: SlashCommandInput): Promise<string> => {
     const servers = input.config.mcp?.servers ?? {};
     const serverNames = Object.keys(servers);

@@ -200,13 +200,16 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("slash suggestion menu rendered for slash input") &&
     assertionList.includes("slash suggestion filtered command descriptions") &&
     assertionList.includes("slash suggestion arrow selection submitted command") &&
-    assertionList.includes("slash suggestion enter submitted filtered command");
+    assertionList.includes("slash suggestion enter submitted filtered command") &&
+    assertionList.includes("slash command coverage included context rules run extensions agents") &&
+    assertionList.includes("slash suggestion submitted extension command") &&
+    assertionList.includes("slash suggestion submitted command alias");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 80) failures.push(`assertions=${assertions}`);
+  if (assertions < 83) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");

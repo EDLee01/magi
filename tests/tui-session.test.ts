@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -209,6 +209,15 @@ describe("TUI, slash commands, and session resume", () => {
         })
       ).toContain("Resumed session-1");
       expect(
+        runSlashCommand({
+          command: { type: "unknown", name: "context" },
+          config,
+          store,
+          cwd: "/repo",
+          sessionId: "session-1"
+        })
+      ).toContain("estimatedTokens:");
+      expect(
         registry.dispatch("permissions", [], {
           cwd: "/repo",
           config,
@@ -328,6 +337,122 @@ describe("TUI, slash commands, and session resume", () => {
       await expect(picker).resolves.toBe("session-auth");
       expect(stripAnsi(chunks.join(""))).toContain("matching auth");
       expect(stripAnsi(chunks.join(""))).toContain("review auth target");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("discovers and runs extended slash command coverage", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const workspaceRoot = mkdtempSync(path.join(os.tmpdir(), "magi-slash-coverage-"));
+    workspace = workspaceRoot;
+    writeFileSync(path.join(workspaceRoot, "AGENTS.md"), "slash coverage rules\n", "utf8");
+    const pluginRoot = path.join(paths.pluginsRoot, "demo.plugin");
+    mkdirSync(pluginRoot, { recursive: true });
+    writeFileSync(
+      path.join(pluginRoot, "plugin.json"),
+      JSON.stringify({
+        schemaVersion: "0.1",
+        name: "demo.plugin",
+        version: "0.1.0",
+        permissions: ["files.read"]
+      }),
+      "utf8"
+    );
+    const skillRoot = path.join(paths.skillsRoot, "review-helper");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(path.join(skillRoot, "SKILL.md"), "# Review Helper\n\nUse for review.\n", "utf8");
+    const store = SessionStore.open(paths);
+    try {
+      const config: MagiConfig = {
+        version: "0.1",
+        control: { bind: "127.0.0.1", port: 8765 },
+        providers: {},
+        models: { aliases: { main: "openai:gpt-test" }, fallbacks: {} },
+        mcp: { servers: {} },
+        hooks: [],
+        context: { recentMessages: 6 },
+        memory: {
+          enabled: true,
+          autoWrite: "explicit" as const,
+          maxResults: 8,
+          scopes: ["user" as const, "project" as const, "session" as const]
+        },
+        webSearch: WEB_SEARCH_CONFIG
+      };
+
+      const required = [
+        "resume",
+        "sessions",
+        "status",
+        "model",
+        "context",
+        "compact",
+        "memory",
+        "rules",
+        "review",
+        "run",
+        "diff",
+        "mcp",
+        "plugins",
+        "skill",
+        "agents",
+        "help"
+      ];
+      for (const name of required) {
+        expect(registry.get(name), name).toBeDefined();
+      }
+      expect(registry.get("skills")?.name).toBe("skill");
+      expect(registry.get("runner")?.name).toBe("run");
+
+      const help = registry.dispatch("help", [], {
+        cwd: workspaceRoot,
+        config,
+        store,
+        paths
+      }) as string;
+      expect(help).toContain("Context:");
+      expect(help).toContain("/context");
+      expect(help).toContain("Extensions:");
+      expect(help).toContain("/plugins");
+      expect(help).toContain("Agents:");
+      expect(help).toContain("/agents");
+      expect(help).toContain("Tools:");
+      expect(help).toContain("/run");
+
+      expect(
+        registry.dispatch("rules", [], {
+          cwd: workspaceRoot,
+          config,
+          store,
+          paths
+        })
+      ).toContain("slash coverage rules");
+      expect(
+        registry.dispatch("plugins", [], {
+          cwd: workspaceRoot,
+          config,
+          store,
+          paths
+        })
+      ).toContain("demo.plugin");
+      expect(
+        registry.dispatch("skills", [], {
+          cwd: workspaceRoot,
+          config,
+          store,
+          paths
+        })
+      ).toContain("review-helper");
+      expect(
+        registry.dispatch("run", [], {
+          cwd: workspaceRoot,
+          config,
+          store,
+          paths
+        })
+      ).toContain("magi runner run");
     } finally {
       store.close();
     }

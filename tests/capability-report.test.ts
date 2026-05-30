@@ -902,7 +902,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 82,
+      assertions: input.assertions ?? 85,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1109,7 +1109,10 @@ function slashSuggestionPromptAssertions(input: { slashSuggestionPromptSeen?: bo
         "slash suggestion menu rendered for slash input",
         "slash suggestion filtered command descriptions",
         "slash suggestion arrow selection submitted command",
-        "slash suggestion enter submitted filtered command"
+        "slash suggestion enter submitted filtered command",
+        "slash command coverage included context rules run extensions agents",
+        "slash suggestion submitted extension command",
+        "slash suggestion submitted command alias"
       ];
 }
 

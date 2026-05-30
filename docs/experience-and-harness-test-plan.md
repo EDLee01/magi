@@ -200,7 +200,10 @@ Acceptance:
 - `/status` shows live configuration.
 - Commands are discoverable through `/` search.
 
-Current status: partial. Some command handlers exist; menu and coverage incomplete.
+Current status: implemented and black-box gated for the required discovery
+surface. `/help` lists the required groups, slash search exposes
+`/context`, `/rules`, `/run`, `/plugins`, `/skills`, and `/agents`, and the
+prompt reader preserves alias submissions such as `/skills`.
 
 ## C. Resume Search and Picker
 
@@ -676,13 +679,11 @@ Required artifacts:
 
 Highest priority gaps:
 
-1. Slash suggestion UI.
-2. Searchable resume picker.
-3. Stream-json event protocol.
-4. Unified tool permission policy.
-5. Complex coding task harness.
-6. Provider-backed multi-step tool loop.
-7. TUI identity and visual polish.
+1. Complex coding task harness.
+2. Unified tool permission policy.
+3. Provider-backed multi-step tool loop.
+4. TUI identity and visual polish.
+5. Visual regression coverage.
 
 Recommended next implementation phase:
 

@@ -21,6 +21,7 @@ export interface TuiPromptSlashCommand {
   name: string;
   description: string;
   usage?: string;
+  aliases?: string[];
 }
 
 interface LogicalLine {
@@ -44,6 +45,7 @@ interface DisplayRow {
 interface SlashSuggestionState {
   query: string;
   visible: TuiPromptSlashCommand[];
+  labels: string[];
   total: number;
 }
 
@@ -198,7 +200,7 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     const state = getSlashState();
     const command = state?.visible[slashSelection];
     if (!state || !command) return false;
-    text = `/${command.name}`;
+    text = `/${state.labels[slashSelection] ?? selectedSlashCommandName(command, state.query)}`;
     cursor = text.length;
     slashSelection = 0;
     return true;
@@ -208,7 +210,7 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     const state = getSlashState();
     const command = state?.visible[slashSelection];
     if (!state || !command) return false;
-    finish(`/${command.name}`);
+    finish(`/${state.labels[slashSelection] ?? selectedSlashCommandName(command, state.query)}`);
     return true;
   };
 
@@ -580,7 +582,9 @@ function formatSlashSuggestionLines(input: {
     );
     for (let index = 0; index < state.visible.length; index += 1) {
       const command = state.visible[index]!;
-      const usage = command.usage ?? `/${command.name}`;
+      const labelName = state.labels[index] ?? command.name;
+      const usage =
+        labelName === command.name ? (command.usage ?? `/${command.name}`) : `/${labelName}`;
       const label = usage.split(/\s+/)[0] ?? `/${command.name}`;
       const padded = label.padEnd(Math.min(nameWidth + 1, 19));
       const selected = index === input.selection;
@@ -623,6 +627,7 @@ function getSlashSuggestionState(input: {
   return {
     query,
     visible,
+    labels: visible.map((command) => selectedSlashCommandName(command, query)),
     total: all.length
   };
 }
@@ -646,6 +651,7 @@ function filterSlashCommands(
   const prefixMatches = commands.filter(
     (command) =>
       command.name.toLowerCase().startsWith(query) ||
+      (command.aliases ?? []).some((alias) => alias.toLowerCase().startsWith(query)) ||
       (command.usage ?? "").toLowerCase().replace(/^\//, "").startsWith(query)
   );
   if (prefixMatches.length > 0) {
@@ -654,6 +660,7 @@ function filterSlashCommands(
   return commands.filter(
     (command) =>
       command.name.toLowerCase().includes(query) ||
+      (command.aliases ?? []).some((alias) => alias.toLowerCase().includes(query)) ||
       command.description.toLowerCase().includes(query) ||
       (command.usage ?? "").toLowerCase().includes(query)
   );
@@ -662,11 +669,28 @@ function filterSlashCommands(
 function slashSuggestionRank(command: TuiPromptSlashCommand, query: string): number {
   if (!query) return 0;
   const name = command.name.toLowerCase();
+  const aliases = command.aliases ?? [];
   if (name === query) return 0;
+  if (aliases.some((alias) => alias.toLowerCase() === query)) return 0;
   if (name.startsWith(query)) return 1;
+  if (aliases.some((alias) => alias.toLowerCase().startsWith(query))) return 1;
   if ((command.usage ?? "").toLowerCase().includes(query)) return 2;
   if (name.includes(query)) return 3;
+  if (aliases.some((alias) => alias.toLowerCase().includes(query))) return 3;
   return 4;
+}
+
+function selectedSlashCommandName(command: TuiPromptSlashCommand, query: string): string {
+  const normalized = query.toLowerCase();
+  if (normalized) {
+    const alias = (command.aliases ?? []).find((value) =>
+      value.toLowerCase().startsWith(normalized)
+    );
+    if (alias) {
+      return alias;
+    }
+  }
+  return command.name;
 }
 
 function buildDisplayRows(input: {

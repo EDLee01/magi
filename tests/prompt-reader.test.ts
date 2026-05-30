@@ -271,4 +271,26 @@ describe("prompt reader display", () => {
 
     await expect(prompt).resolves.toBe("/model");
   });
+
+  it("filters and submits slash command aliases", async () => {
+    const { input, output } = createPromptStreams();
+    const prompt = readTuiPrompt({
+      input,
+      output,
+      prompt: "> ",
+      slashCommands: [
+        {
+          name: "skill",
+          aliases: ["skills"],
+          usage: "/skills [name]",
+          description: "List installed skills"
+        },
+        { name: "status", usage: "/status", description: "Show session status" }
+      ]
+    });
+
+    input.write("/ski\r");
+
+    await expect(prompt).resolves.toBe("/skills");
+  });
 });

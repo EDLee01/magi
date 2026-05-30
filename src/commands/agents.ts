@@ -28,7 +28,7 @@ export const command = {
   aliases: ["subagents"],
   description: "List sub-agent types available to the Agent tool",
   usage: "/agents",
-  group: "Help",
+  group: "Agents",
   handler: (_args: string[], _input: SlashCommandInput): string => {
     const lines = ["Sub-agent types (use as Agent({subagent_type: ...})):", ""];
     for (const t of SUBAGENT_TYPES) {

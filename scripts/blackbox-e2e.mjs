@@ -3219,6 +3219,7 @@ async function scenarioTuiRequiresTty() {
 
 async function scenarioSlashSuggestionPrompt() {
   return await withTempWorkspace("slash-suggestion", async () => {
+    const { registry } = await import(pathToFileURL(path.join(repoRoot, "dist", "slash.js")).href);
     const { readTuiPrompt } = await import(
       pathToFileURL(path.join(repoRoot, "dist", "tui", "prompt-reader.js")).href
     );
@@ -3227,6 +3228,12 @@ async function scenarioSlashSuggestionPrompt() {
       { name: "resume", usage: "/resume [query]", description: "Search and resume a session" },
       { name: "status", usage: "/status", description: "Show session status" }
     ];
+    const registrySlashCommands = registry.getAll().map((command) => ({
+      name: command.name,
+      aliases: command.aliases,
+      usage: command.usage,
+      description: command.description
+    }));
 
     const filtered = createPromptHarness();
     const filteredPrompt = readTuiPrompt({
@@ -3235,11 +3242,11 @@ async function scenarioSlashSuggestionPrompt() {
       prompt: "> ",
       slashCommands
     });
-    filtered.input.write("/re");
+    filtered.input.write("/resu");
     await sleep(10);
     const filteredVisible = stripTerminalControls(filtered.stdout());
     assert(
-      filteredVisible.includes("commands matching /re"),
+      filteredVisible.includes("commands matching /resu"),
       "slash suggestion did not render filtered header"
     );
     assert(filteredVisible.includes("/resume"), "slash suggestion missed matching /resume command");
@@ -3274,13 +3281,67 @@ async function scenarioSlashSuggestionPrompt() {
       "slash suggestion arrow selection did not submit /resume"
     );
 
+    const coverage = createPromptHarness();
+    const coveragePrompt = readTuiPrompt({
+      input: coverage.input,
+      output: coverage.output,
+      prompt: "> ",
+      slashCommands: registrySlashCommands,
+      maxSlashSuggestions: 30
+    });
+    coverage.input.write("/plug");
+    await sleep(10);
+    const coverageVisible = stripTerminalControls(coverage.stdout());
+    assert(
+      coverageVisible.includes("/plugins"),
+      "slash suggestion missed /plugins extension command"
+    );
+    assert(
+      registrySlashCommands.some((command) => command.name === "context"),
+      "slash registry missed /context command"
+    );
+    assert(
+      registrySlashCommands.some((command) => command.name === "rules"),
+      "slash registry missed /rules command"
+    );
+    assert(
+      registrySlashCommands.some((command) => command.name === "run"),
+      "slash registry missed /run"
+    );
+    assert(
+      registrySlashCommands.some((command) => command.name === "agents"),
+      "slash registry missed /agents command"
+    );
+    coverage.input.write("\r");
+    assert((await coveragePrompt) === "/plugins", "slash suggestion did not submit /plugins");
+
+    const skillAlias = createPromptHarness();
+    const skillPrompt = readTuiPrompt({
+      input: skillAlias.input,
+      output: skillAlias.output,
+      prompt: "> ",
+      slashCommands: registrySlashCommands,
+      maxSlashSuggestions: 30
+    });
+    skillAlias.input.write("/ski");
+    await sleep(10);
+    assert(
+      stripTerminalControls(skillAlias.stdout()).includes("/skills"),
+      "slash suggestion did not render /skills alias"
+    );
+    skillAlias.input.write("\r");
+    assert((await skillPrompt) === "/skills", "slash suggestion did not submit /skills alias");
+
     return {
       score: 1,
       assertions: [
         "slash suggestion menu rendered for slash input",
         "slash suggestion filtered command descriptions",
         "slash suggestion arrow selection submitted command",
-        "slash suggestion enter submitted filtered command"
+        "slash suggestion enter submitted filtered command",
+        "slash command coverage included context rules run extensions agents",
+        "slash suggestion submitted extension command",
+        "slash suggestion submitted command alias"
       ]
     };
   });

@@ -5,7 +5,7 @@ export const command = {
   name: "skill",
   aliases: ["skills"],
   description: "List installed skills or show details for one",
-  usage: "/skill [name]",
+  usage: "/skills [name]",
   group: "Skills",
   handler: (args: string[], input: SlashCommandInput): string => {
     if (!input.paths) {

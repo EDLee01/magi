@@ -228,7 +228,8 @@ export async function runInteractiveTerminal(inputConfig: {
       ...registry.getAll().map((cmd) => ({
         name: cmd.name,
         usage: cmd.usage,
-        description: cmd.description
+        description: cmd.description,
+        aliases: cmd.aliases
       })),
       ...skillItems,
       { name: "continue", usage: "/continue", description: "Continue last response" },
