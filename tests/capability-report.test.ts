@@ -113,7 +113,8 @@ describe("capability report", () => {
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         toolPolicySeen: false,
-        slashSuggestionPromptSeen: false
+        slashSuggestionPromptSeen: false,
+        tuiVisualContractSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -155,6 +156,7 @@ describe("capability report", () => {
         "slashResumeSearchTtySeen=false",
         "toolPolicySeen=false",
         "slashSuggestionPromptSeen=false",
+        "tuiVisualContractSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -996,6 +998,7 @@ function harnessReport(input: {
   slashResumeSearchTtySeen?: boolean;
   toolPolicySeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
+  tuiVisualContractSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -1013,7 +1016,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 90,
+      assertions: input.assertions ?? 120,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1052,7 +1055,8 @@ function harnessReport(input: {
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...toolPolicyAssertions(input),
-                  ...slashSuggestionPromptAssertions(input)
+                  ...slashSuggestionPromptAssertions(input),
+                  ...tuiVisualContractAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -1906,6 +1910,18 @@ function slashSuggestionPromptAssertions(input: { slashSuggestionPromptSeen?: bo
         "slash command coverage included context rules run extensions agents",
         "slash suggestion submitted extension command",
         "slash suggestion submitted command alias"
+      ];
+}
+
+function tuiVisualContractAssertions(input: { tuiVisualContractSeen?: boolean }): string[] {
+  return input.tuiVisualContractSeen === false
+    ? []
+    : [
+        "TUI startup text hat rendered",
+        "TUI startup banner width bounded",
+        "slash suggestion visual contract stable",
+        "TUI status pending approval rendered",
+        "TUI status transcript width bounded"
       ];
 }
 

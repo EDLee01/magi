@@ -213,12 +213,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("slash command coverage included context rules run extensions agents") &&
     assertionList.includes("slash suggestion submitted extension command") &&
     assertionList.includes("slash suggestion submitted command alias");
+  const tuiVisualContractSeen =
+    assertionList.includes("TUI startup text hat rendered") &&
+    assertionList.includes("TUI startup banner width bounded") &&
+    assertionList.includes("slash suggestion visual contract stable") &&
+    assertionList.includes("TUI status pending approval rendered") &&
+    assertionList.includes("TUI status transcript width bounded");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 88) failures.push(`assertions=${assertions}`);
+  if (assertions < 116) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -235,6 +241,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!toolPolicySeen) failures.push("toolPolicySeen=false");
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
+  if (!tuiVisualContractSeen) failures.push("tuiVisualContractSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -267,6 +274,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       slashResumeSearchTtySeen,
       toolPolicySeen,
       slashSuggestionPromptSeen,
+      tuiVisualContractSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

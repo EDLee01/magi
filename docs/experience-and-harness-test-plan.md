@@ -18,7 +18,8 @@ Already covered by automated tests:
 - Provider routing, model aliases, fallback routing.
 - File read/search/write, shell guardrails, git summary.
 - SQLite sessions, jobs, audit, usage.
-- TUI basic startup, slash command dispatch, and `/` suggestion menu behavior.
+- TUI startup identity, slash command dispatch, `/` suggestion menu behavior,
+  and bounded status/pending-approval rendering.
 - Searchable `-r` TTY resume picker, non-TTY resume session list, and
   interactive `/resume <query>` picker search/cancel behavior.
 - CLI `--tools`, `--allowed-tools`, and `--disallowed-tools` schema filtering
@@ -29,18 +30,17 @@ Already covered by automated tests:
 - Context budget and compaction.
 - Rust runner JSON-RPC, process run, timeout, PTY smoke, file apply audit.
 - Plugin manifest, local marketplace, skill loader, web panel endpoints.
-- Complex task harness H1: isolated single-file bug-fix fixture with
-  deterministic checks, stream-json capture, session/audit evidence, forbidden
-  path checks, and archived diffs.
+- Complex task harness H1-H10: isolated business fixtures with deterministic
+  checks, stream-json capture, SQLite session/audit evidence, forbidden path
+  checks, archived diffs, multi-agent conflict, Bash approval, and provider
+  retry/fallback coverage.
 
 Not yet fully covered:
 
 - Resume picker visual polish beyond the core search/no-results/cancel flow.
 - TUI keyboard navigation polish.
-- Broader stream-json parity for less common event types.
+- Broader stream-json parity for remaining less common event types.
 - Full dangerous-tool semantics across every permission mode.
-- Complex multi-step task harness beyond the initial H1 fixture.
-- Long-running coding task recovery after interruption.
 - Real provider-driven tool loop for non-trivial code changes.
 
 ## Clean-room Rules for Testing
@@ -423,10 +423,10 @@ Harness runner responsibilities:
 5. Score outcome.
 6. Archive logs under `~/.magi-next/logs/harness/` or test temp dir.
 
-Current implementation: `npm run test:complex-harness` runs the first harness
-task against the built CLI with an isolated `MAGI_CONFIG_DIR`, mock provider,
-stream-json capture, SQLite session/audit inspection, file-diff validation, and
-archives under `.magi-reports/harness/`.
+Current implementation: `npm run test:complex-harness` runs H1-H10 against the
+built CLI with isolated `MAGI_CONFIG_DIR` roots, mock providers, stream-json
+capture, SQLite session/audit inspection, file-diff validation, and archives
+under `.magi-reports/harness/`.
 
 ### Scoring
 
@@ -651,6 +651,29 @@ Control API, creates a background job in default permission mode, verifies
 `command`, `cwd`, and `timeout_ms` evidence, resolves the approval through the
 Control API, and checks persisted audit events plus the final report.
 
+#### H10. Provider retry and fallback
+
+Prompt:
+
+```text
+Verify provider retry and fallback resilience.
+```
+
+Checks:
+
+- Primary provider produces retryable server failures.
+- Scheduled retry diagnostics are emitted as `provider.retry`, not `session.error`.
+- Configured fallback provider recovers the task.
+- SQLite audit records retry and fallback routing evidence.
+
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H10 fixture drives the built CLI through `--output-format stream-json`
+against a mock primary provider that returns retryable server errors before the
+configured `backup/mock-backup` route recovers. The harness verifies two
+scheduled `provider.retry` diagnostics, one `provider.fallback`, no
+`session.error`, exact report-file output, and SQLite `agent.provider.retry` /
+`agent.provider.fallback` audit evidence.
+
 ## G. Visual and Interaction Quality
 
 ### G1. Text Hat Identity
@@ -670,7 +693,9 @@ Acceptance:
 - Does not appear in machine-readable JSON output.
 - Can be disabled in bare/non-interactive mode.
 
-Current status: preview only.
+Current status: implemented for startup and gated by `npm run test:blackbox`.
+The black-box TUI visual contract verifies the text hat glyphs, startup
+identity line, cwd/model/help hint, and line-width bounds after ANSI stripping.
 
 ### G2. Visual Regression
 
@@ -688,7 +713,11 @@ Acceptance:
 - Snapshots are stable after ANSI stripping.
 - Color is additive; text remains understandable without color.
 
-Current status: not implemented.
+Current status: partial and gated for the highest-risk stable surfaces. The
+black-box visual contract verifies startup, slash suggestion filtering/footer,
+and status rendering with a pending approval plus transcript line-width bounds.
+Full PTY transcript snapshots for every interactive state remain future
+coverage.
 
 ## H. Provider-backed Real Task Tests
 
@@ -752,11 +781,11 @@ Required artifacts:
 
 Highest priority gaps:
 
-1. Complex coding task harness.
-2. Unified tool permission policy.
-3. Provider-backed multi-step tool loop.
-4. TUI identity and visual polish.
-5. Visual regression coverage.
+1. Real provider-driven tool loop for non-trivial code changes.
+2. Broader visual regression coverage across full PTY transcripts.
+3. Resume picker visual polish beyond core search/no-results/cancel behavior.
+4. TUI keyboard navigation polish.
+5. More remaining stream-json event parity cases.
 
 Recommended next implementation phase:
 

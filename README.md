@@ -176,6 +176,17 @@ events, resolves a mobile approval for FileWrite, cancels a streaming background
 job, cancels an active approval, resumes a panel session, and checks durable
 audit evidence.
 
+Complex task harness behavior can be checked with:
+
+```sh
+npm run test:complex-harness
+```
+
+That harness runs isolated H1-H10 business fixtures through the built CLI and
+mock providers, then validates stream-json lifecycle, SQLite session/audit
+evidence, file diffs, forbidden paths, multi-agent write conflicts, Bash
+approval control, and provider retry/fallback routing.
+
 Live provider behavior can be checked with an opt-in smoke task:
 
 ```sh
@@ -195,8 +206,9 @@ npm run report:capability:nightly
 ```
 
 `npm run verify` runs the aggregate report last and fails if blackbox, Memory,
-Patch Engine, Goal/Plan, Tool Discovery, or Control API gates miss their
-required thresholds. The default capability trend profile is strict for CI.
+Patch Engine, Goal/Plan, Tool Discovery, Control API, model task, or complex
+harness gates miss their required thresholds. The default capability trend
+profile is strict for CI.
 `report:capability:nightly` uses the same evidence with a wider efficiency
 budget for scheduled longer benchmark runs, while still failing on score,
 regression, and excessive provider/tool call growth.

@@ -3361,6 +3361,107 @@ async function scenarioInteractiveTui() {
   });
 }
 
+async function scenarioTuiVisualContract() {
+  const { formatTuiStartupBanner } = await import(
+    pathToFileURL(path.join(repoRoot, "dist", "tui.js")).href
+  );
+  const { buildPromptDisplayForTest } = await import(
+    pathToFileURL(path.join(repoRoot, "dist", "tui", "prompt-reader.js")).href
+  );
+  const { buildTuiRenderState } = await import(
+    pathToFileURL(path.join(repoRoot, "dist", "tui", "render-state.js")).href
+  );
+  const { renderTuiState } = await import(
+    pathToFileURL(path.join(repoRoot, "dist", "tui", "renderer.js")).href
+  );
+
+  const startup = stripTerminalControls(
+    formatTuiStartupBanner({
+      cwd: "/repo",
+      modelDisplay: "openai:gpt-visual",
+      toolCount: 42,
+      version: "9.9.9"
+    })
+  );
+  assert(startup.includes("△"), "TUI startup text hat missed triangle");
+  assert(startup.includes("/✦\\"), "TUI startup text hat missed sparkle");
+  assert(startup.includes("▔▔▔"), "TUI startup text hat missed brim");
+  assert(startup.includes("Magi v9.9.9 · 42 tools"), "TUI startup identity line missing");
+  assert(startup.includes("cwd: /repo"), "TUI startup cwd missing");
+  assert(startup.includes("model: openai:gpt-visual"), "TUI startup model missing");
+  assert(startup.includes("/help for commands"), "TUI startup help hint missing");
+  assertLinesWithin(startup, 80, "TUI startup banner");
+
+  const slashCommands = [
+    { name: "model", usage: "/model [alias]", description: "Switch model alias" },
+    { name: "resume", usage: "/resume [query]", description: "Search and resume a session" },
+    { name: "status", usage: "/status", description: "Show session status" }
+  ];
+  const slashDisplay = buildPromptDisplayForTest({
+    prompt: "> ",
+    text: "/res",
+    cursor: 4,
+    safeColumns: 60,
+    maxVisibleLines: 4,
+    slashCommands,
+    maxSlashSuggestions: 5
+  });
+  const slashVisible = stripTerminalControls(slashDisplay.lines.join("\n"));
+  assert(slashVisible.includes("commands matching /res"), "slash visual header missing");
+  assert(slashVisible.includes("/resume"), "slash visual target command missing");
+  assert(!slashVisible.includes("/model"), "slash visual did not filter nonmatching command");
+  assert(slashVisible.includes("Tab complete"), "slash visual footer missing");
+  assertLinesWithin(slashVisible, 60, "slash suggestion visual");
+
+  const statusState = buildTuiRenderState({
+    sessionId: "session-visual-contract",
+    model: "main",
+    cwd: "/repo",
+    events: [
+      visualEvent({
+        id: 1,
+        action: "agent.approval.pending",
+        category: "approval",
+        status: "pending",
+        target: "Bash",
+        metadata: {
+          interactionKind: "approval",
+          toolUseId: "bash-visual",
+          reason: "Bash requires approval"
+        }
+      }),
+      visualEvent({
+        id: 2,
+        action: "tool.file.read",
+        target: "src/index.ts",
+        status: "completed"
+      })
+    ]
+  });
+  const statusVisible = stripTerminalControls(
+    renderTuiState(statusState, { color: true, width: 72, maxBlocks: 5 })
+  );
+  assert(statusVisible.includes("Magi · model main"), "status visual header missing");
+  assert(statusVisible.includes("Pending: 1"), "status visual pending count missing");
+  assert(
+    statusVisible.includes("Approval waiting for Bash"),
+    "status visual pending approval missing"
+  );
+  assert(statusVisible.includes("FileRead completed"), "status visual transcript missing");
+  assertLinesWithin(statusVisible, 72, "status visual");
+
+  return {
+    score: 1,
+    assertions: [
+      "TUI startup text hat rendered",
+      "TUI startup banner width bounded",
+      "slash suggestion visual contract stable",
+      "TUI status pending approval rendered",
+      "TUI status transcript width bounded"
+    ]
+  };
+}
+
 function runInteractiveTuiCommand({ inputFile, cwd, configDir, timeoutMs }) {
   return runPseudoTtyCliCommand({
     inputFile,
@@ -3555,6 +3656,18 @@ async function scenarioSlashSuggestionPrompt() {
   });
 }
 
+function visualEvent(input) {
+  return {
+    sessionId: "session-visual-contract",
+    jobId: "job-visual-contract",
+    eventName: input.action,
+    createdAt: "2026-05-30T00:00:00.000Z",
+    message: input.action,
+    metadata: {},
+    ...input
+  };
+}
+
 async function scenarioHarnessCiTuiGuard() {
   return await withTempWorkspace("ci-tui-guard", async ({ configDir, workDir }) => {
     const ciDefault = shouldRunInteractiveTui({ MAGI_BLACKBOX_TUI: "1", CI: "true" });
@@ -3632,6 +3745,12 @@ function stripTerminalControls(text) {
     .replace(/\r/g, "");
 }
 
+function assertLinesWithin(text, width, label) {
+  for (const [index, line] of text.split("\n").entries()) {
+    assert(line.length <= width, `${label} line ${index + 1} exceeded ${width}: ${line}`);
+  }
+}
+
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
@@ -3704,6 +3823,7 @@ async function main() {
     ["plan mode", scenarioPlanMode],
     ["control approval flow", scenarioControlApprovalFlow],
     ["slash suggestion prompt", scenarioSlashSuggestionPrompt],
+    ["TUI visual contract", scenarioTuiVisualContract],
     ["TUI requires TTY", scenarioTuiRequiresTty],
     ["harness CI TUI guard", scenarioHarnessCiTuiGuard]
   ];
