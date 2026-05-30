@@ -1364,21 +1364,32 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h2Session = readRecord(h2?.session);
   const h2Limits = readRecord(h2?.limitResults);
   const h2Seen = Boolean(h2);
+  const h3 = detailsList.find((details) => details.taskId === "H3");
+  const h3ToolCounts = readRecord(h3?.toolCounts);
+  const h3ChangedFiles = readStringList(h3?.changedFiles);
+  const h3Assertions = readStringList(h3?.assertions);
+  const h3ForbiddenChanges = readStringList(h3?.forbiddenChanges);
+  const h3Session = readRecord(h3?.session);
+  const h3Limits = readRecord(h3?.limitResults);
+  const h3Seen = Boolean(h3);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const failures = [...base.failures];
 
-  if (readNumber(summary.total) < 2) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (readNumber(summary.total) < 3) failures.push(`scenarios=${readNumber(summary.total)}`);
   if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
   if (!taskClasses.has("multi_file_feature")) failures.push("multiFileFeatureTask=false");
+  if (!taskClasses.has("behavior_preserving_refactor"))
+    failures.push("behaviorPreservingRefactorTask=false");
   if (!h1Seen) failures.push("H1=false");
   if (!h2Seen) failures.push("H2=false");
-  if (assertions < 22) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 10) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 16) failures.push(`toolCallCount=${toolCallCount}`);
-  if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (!h3Seen) failures.push("H3=false");
+  if (assertions < 35) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 16) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 24) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 4) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
   if (readNumber(h1ToolCounts.Bash) !== 2) failures.push("H1BashCalls != 2");
@@ -1418,6 +1429,27 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h2Limits.withinTime !== true) failures.push("H2WithinTime=false");
   if (h2Limits.withinCommands !== true) failures.push("H2WithinCommands=false");
   if (h2Limits.withinFileChanges !== true) failures.push("H2WithinFileChanges=false");
+  if (readNumber(h3ToolCounts.FileRead) < 3) failures.push("H3FileReadCalls < 3");
+  if (readNumber(h3ToolCounts.FilePatch) < 2) failures.push("H3FilePatchCalls < 2");
+  if (readNumber(h3ToolCounts.Bash) !== 2) failures.push("H3BashCalls != 2");
+  if (readNumber(h3ToolCounts.FileWrite) !== 1) failures.push("H3FileWriteCalls != 1");
+  if (readNumber(h3ToolCounts.FileEdit) !== 0) failures.push("H3FileEdit used");
+  if (h3?.checksPassed !== true) failures.push("H3ChecksPassed=false");
+  if (h3?.streamJsonLifecycleVerified !== true) failures.push("H3StreamJsonLifecycle=false");
+  if (
+    JSON.stringify(h3ChangedFiles) !==
+    JSON.stringify(["src/inventory.js", "src/parse.js", "src/sales.js"])
+  ) {
+    failures.push(`H3ChangedFiles=${JSON.stringify(h3ChangedFiles)}`);
+  }
+  if (h3ForbiddenChanges.length > 0)
+    failures.push(`H3ForbiddenChanges=${h3ForbiddenChanges.length}`);
+  if (h3Assertions.length < 13) failures.push(`H3Assertions=${h3Assertions.length}`);
+  if (readNumber(h3Session.messageCount) < 2) failures.push("H3SessionMessages < 2");
+  if (readNumber(h3Session.auditEventCount) < 1) failures.push("H3AuditEvents < 1");
+  if (h3Limits.withinTime !== true) failures.push("H3WithinTime=false");
+  if (h3Limits.withinCommands !== true) failures.push("H3WithinCommands=false");
+  if (h3Limits.withinFileChanges !== true) failures.push("H3WithinFileChanges=false");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
   }
@@ -1465,6 +1497,22 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H2WithinTime: h2Limits.withinTime === true,
       H2WithinCommands: h2Limits.withinCommands === true,
       H2WithinFileChanges: h2Limits.withinFileChanges === true,
+      H3Seen: h3Seen,
+      H3FileReadCalls: readNumber(h3ToolCounts.FileRead),
+      H3FilePatchCalls: readNumber(h3ToolCounts.FilePatch),
+      H3BashCalls: readNumber(h3ToolCounts.Bash),
+      H3FileWriteCalls: readNumber(h3ToolCounts.FileWrite),
+      H3FileEditCalls: readNumber(h3ToolCounts.FileEdit),
+      H3ChecksPassed: h3?.checksPassed === true,
+      H3StreamJsonLifecycle: h3?.streamJsonLifecycleVerified === true,
+      H3ChangedFiles: h3ChangedFiles,
+      H3ForbiddenChanges: h3ForbiddenChanges.length,
+      H3Assertions: h3Assertions.length,
+      H3SessionMessages: readNumber(h3Session.messageCount),
+      H3AuditEvents: readNumber(h3Session.auditEventCount),
+      H3WithinTime: h3Limits.withinTime === true,
+      H3WithinCommands: h3Limits.withinCommands === true,
+      H3WithinFileChanges: h3Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

@@ -454,6 +454,136 @@ function createH2Router() {
   };
 }
 
+function createH3Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (!transcript.includes("Refactor duplicate parsing logic while keeping behavior unchanged")) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("FileRead"), "H3 missing FileRead");
+      assert(toolNames.includes("FilePatch"), "H3 missing FilePatch");
+      assert(toolNames.includes("Bash"), "H3 missing Bash");
+      assert(transcript.includes("Preserve the public output"), "H3 output constraint was not visible");
+      return toolResponse([
+        toolCall("h3-read-sales", "FileRead", { file_path: "src/sales.js" }),
+        toolCall("h3-read-inventory", "FileRead", { file_path: "src/inventory.js" }),
+        toolCall("h3-read-tests", "FileRead", { file_path: "tests/report.test.mjs" }),
+        toolCall("h3-run-baseline-test", "Bash", { command: "npm test", timeout_ms: 10_000 })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(transcript.includes("sales total=60; count=3"), "H3 baseline sales output missing");
+      assert(
+        transcript.includes("inventory total=20; count=3"),
+        "H3 baseline inventory output missing"
+      );
+      assert(transcript.includes("report tests passed"), "H3 baseline test was not visible");
+      assert(transcript.includes("split(\",\")"), "H3 duplicate parsing evidence was not visible");
+      return toolResponse([
+        toolCall("h3-create-parse-helper", "FileWrite", {
+          file_path: "src/parse.js",
+          content: [
+            "function parseCsvNumbers(input) {",
+            "  return input",
+            '    .split(",")',
+            "    .map((value) => value.trim())",
+            "    .filter(Boolean)",
+            "    .map((value) => Number(value));",
+            "}",
+            "",
+            "module.exports = { parseCsvNumbers };",
+            ""
+          ].join("\n")
+        }),
+        toolCall("h3-patch-sales", "FilePatch", {
+          file_path: "src/sales.js",
+          patch: [
+            "@@",
+            "-function parseSalesAmounts(input) {",
+            "-  return input",
+            '-    .split(",")',
+            "-    .map((value) => value.trim())",
+            "-    .filter(Boolean)",
+            "-    .map((value) => Number(value));",
+            "-}",
+            "+const { parseCsvNumbers } = require(\"./parse\");",
+            "+",
+            "+function parseSalesAmounts(input) {",
+            "+  return parseCsvNumbers(input);",
+            "+}",
+            " ",
+            " function salesReport(input) {"
+          ].join("\n")
+        }),
+        toolCall("h3-patch-inventory", "FilePatch", {
+          file_path: "src/inventory.js",
+          patch: [
+            "@@",
+            "-function parseInventoryCounts(input) {",
+            "-  return input",
+            '-    .split(",")',
+            "-    .map((value) => value.trim())",
+            "-    .filter(Boolean)",
+            "-    .map((value) => Number(value));",
+            "-}",
+            "+const { parseCsvNumbers } = require(\"./parse\");",
+            "+",
+            "+function parseInventoryCounts(input) {",
+            "+  return parseCsvNumbers(input);",
+            "+}",
+            " ",
+            " function inventoryReport(input) {"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(transcript.includes("Wrote src/parse.js"), "H3 parse helper write result was not visible");
+      assert(transcript.includes("Patched src/sales.js"), "H3 sales patch result was not visible");
+      assert(
+        transcript.includes("Patched src/inventory.js"),
+        "H3 inventory patch result was not visible"
+      );
+      return toolResponse([
+        toolCall("h3-run-refactor-verification", "Bash", {
+          command: [
+            "npm test",
+            "node <<'NODE'",
+            "const { readFileSync } = require('node:fs');",
+            "const sales = readFileSync('src/sales.js', 'utf8');",
+            "const inventory = readFileSync('src/inventory.js', 'utf8');",
+            "const parse = readFileSync('src/parse.js', 'utf8');",
+            "if (!parse.includes('function parseCsvNumbers')) throw new Error('missing parseCsvNumbers');",
+            "if (!sales.includes('parseCsvNumbers(input)')) throw new Error('sales not delegated');",
+            "if (!inventory.includes('parseCsvNumbers(input)')) throw new Error('inventory not delegated');",
+            "if (sales.includes('split(\",\")') || inventory.includes('split(\",\")')) throw new Error('duplicate parsing remains');",
+            "console.log('refactor helper verified');",
+            "NODE"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 4) {
+      assert(transcript.includes("Command exited 0"), "H3 passing verification command was not visible");
+      assert(transcript.includes("sales total=60; count=3"), "H3 sales output changed or disappeared");
+      assert(
+        transcript.includes("inventory total=20; count=3"),
+        "H3 inventory output changed or disappeared"
+      );
+      assert(transcript.includes("refactor helper verified"), "H3 helper verification missing");
+      return messageText("Refactored duplicate parsing into src/parse.js and verified npm test preserves output.");
+    }
+
+    throw new Error(`H3 exceeded expected provider turns: ${turn}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -531,6 +661,60 @@ function taskDefinitionFor(taskId) {
         assert(after["README.md"]?.text.includes("--dry-run"), "H2 README missing dry-run docs");
         assert(session.auditEventCount > 0, "H2 audit events were not persisted");
         assert(session.messageCount >= 2, "H2 session messages were not persisted");
+      }
+    };
+  }
+
+  if (taskId === "H3") {
+    return {
+      createRouter: createH3Router,
+      finalMessage:
+        "Refactored duplicate parsing into src/parse.js and verified npm test preserves output.",
+      assertions: [
+        "H3 fixture copied into isolated workspace",
+        "H3 provider saw behavior preservation constraints",
+        "H3 baseline npm test captured public output",
+        "H3 duplicate parsing source read before patch",
+        "H3 shared parse helper created with FileWrite",
+        "H3 sales and inventory modules delegated to helper",
+        "H3 npm test passed after refactor",
+        "H3 public output preserved after refactor",
+        "H3 duplicate parsing removed from source modules",
+        "H3 checks.sh passed",
+        "H3 changed exactly expected files",
+        "H3 forbidden paths unchanged",
+        "H3 session and audit persisted"
+      ],
+      filesVerified: [
+        "src/parse.js",
+        "src/sales.js",
+        "src/inventory.js",
+        "tests/report.test.mjs",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session }) => {
+        assert((toolCounts.FileRead ?? 0) >= 3, "H3 did not read enough project evidence");
+        assert((toolCounts.FilePatch ?? 0) >= 2, "H3 should patch existing source files");
+        assert((toolCounts.Bash ?? 0) === 2, "H3 should run baseline and final verification");
+        assert((toolCounts.FileWrite ?? 0) === 1, "H3 should use FileWrite only for new helper");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H3 should not use FileEdit");
+        assert(after["src/parse.js"]?.text.includes("parseCsvNumbers"), "H3 parse helper missing");
+        assert(
+          after["src/sales.js"]?.text.includes('require("./parse")'),
+          "H3 sales missing shared helper import"
+        );
+        assert(
+          after["src/inventory.js"]?.text.includes('require("./parse")'),
+          "H3 inventory missing shared helper import"
+        );
+        assert(!after["src/sales.js"]?.text.includes('split(",")'), "H3 sales duplicate parsing remains");
+        assert(
+          !after["src/inventory.js"]?.text.includes('split(",")'),
+          "H3 inventory duplicate parsing remains"
+        );
+        assert(session.auditEventCount > 0, "H3 audit events were not persisted");
+        assert(session.messageCount >= 2, "H3 session messages were not persisted");
       }
     };
   }
@@ -859,7 +1043,11 @@ async function main() {
   mkdirSync(archiveRoot, { recursive: true });
 
   const scenarios = [];
-  for (const taskName of ["h1-single-file-bug-fix", "h2-multi-file-dry-run"]) {
+  for (const taskName of [
+    "h1-single-file-bug-fix",
+    "h2-multi-file-dry-run",
+    "h3-refactor-behavior-preservation"
+  ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);
     try {

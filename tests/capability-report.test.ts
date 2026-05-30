@@ -892,6 +892,7 @@ describe("capability report", () => {
         successRate: 0,
         taskClass: "thin_demo",
         includeH2: false,
+        includeH3: false,
         assertions: 2,
         filesVerified: 1,
         toolCallCount: 2,
@@ -924,7 +925,9 @@ describe("capability report", () => {
         "scenarios=1",
         "singleFileBugFixTask=false",
         "multiFileFeatureTask=false",
+        "behaviorPreservingRefactorTask=false",
         "H2=false",
+        "H3=false",
         "assertions=2",
         "filesVerified=1",
         "toolCallCount=2",
@@ -1058,6 +1061,7 @@ function complexHarnessReport(
     successRate?: number;
     taskClass?: string;
     includeH2?: boolean;
+    includeH3?: boolean;
     assertions?: number;
     filesVerified?: number;
     toolCallCount?: number;
@@ -1081,12 +1085,15 @@ function complexHarnessReport(
 ): Record<string, unknown> {
   const status = overrides.status ?? "passed";
   const includeH2 = overrides.includeH2 ?? true;
+  const includeH3 = overrides.includeH3 ?? true;
   const h1Assertions = overrides.assertions ?? 10;
   const h2Assertions = includeH2 ? 12 : 0;
-  const assertions = h1Assertions + h2Assertions;
+  const h3Assertions = includeH3 ? 13 : 0;
+  const assertions = h1Assertions + h2Assertions + h3Assertions;
   const h1FilesVerified = overrides.filesVerified ?? 4;
   const h2FilesVerified = includeH2 ? 6 : 0;
-  const filesVerified = h1FilesVerified + h2FilesVerified;
+  const h3FilesVerified = includeH3 ? 6 : 0;
+  const filesVerified = h1FilesVerified + h2FilesVerified + h3FilesVerified;
   const h1ToolCounts = {
     FileRead: overrides.fileReadCalls ?? 2,
     FilePatch: overrides.filePatchCalls ?? 2,
@@ -1103,12 +1110,22 @@ function complexHarnessReport(
         FileEdit: 0
       }
     : {};
+  const h3ToolCounts = includeH3
+    ? {
+        FileRead: 3,
+        FilePatch: 2,
+        Bash: 2,
+        FileWrite: 1,
+        FileEdit: 0
+      }
+    : {};
   const toolCallCount =
     overrides.toolCallCount ??
     Object.values(h1ToolCounts).reduce((sum, count) => sum + count, 0) +
-      Object.values(h2ToolCounts).reduce((sum, count) => sum + count, 0);
-  const uniqueToolCount = overrides.uniqueToolCount ?? 3;
-  const scenarioCount = includeH2 ? 2 : 1;
+      Object.values(h2ToolCounts).reduce((sum, count) => sum + count, 0) +
+      Object.values(h3ToolCounts).reduce((sum, count) => sum + count, 0);
+  const uniqueToolCount = overrides.uniqueToolCount ?? (includeH3 ? 4 : 3);
+  const scenarioCount = 1 + (includeH2 ? 1 : 0) + (includeH3 ? 1 : 0);
   const passed = status === "passed" ? scenarioCount : 0;
   const failed = status === "passed" ? 0 : scenarioCount;
   const scenarios: Record<string, unknown>[] = [
@@ -1175,6 +1192,38 @@ function complexHarnessReport(
       }
     });
   }
+  if (includeH3) {
+    scenarios.push({
+      name: "H3 refactor behavior preservation",
+      status,
+      durationMs: 700,
+      score: overrides.score ?? (status === "passed" ? 1 : 0),
+      failureKind: status === "passed" ? null : "assertion",
+      details: {
+        taskId: "H3",
+        taskClass: "behavior_preserving_refactor",
+        toolCounts: h3ToolCounts,
+        assertions: Array.from({ length: h3Assertions }, (_, index) => `H3 assertion ${index + 1}`),
+        filesVerified: Array.from(
+          { length: h3FilesVerified },
+          (_, index) => `H3 file ${index + 1}`
+        ),
+        changedFiles: ["src/inventory.js", "src/parse.js", "src/sales.js"],
+        forbiddenChanges: [],
+        checksPassed: true,
+        streamJsonLifecycleVerified: true,
+        session: {
+          messageCount: 3,
+          auditEventCount: 8
+        },
+        limitResults: {
+          withinTime: true,
+          withinCommands: true,
+          withinFileChanges: true
+        }
+      }
+    });
+  }
   return {
     version: 1,
     name: "complex-task-harness",
@@ -1185,7 +1234,7 @@ function complexHarnessReport(
       failed,
       successRate: overrides.successRate ?? (status === "passed" ? 1 : 0),
       score: overrides.score ?? (status === "passed" ? 1 : 0),
-      providerCalls: includeH2 ? 8 : 4,
+      providerCalls: 4 * scenarioCount,
       providerCallsPerScenario: 4,
       assertions,
       filesVerified,
@@ -1194,9 +1243,21 @@ function complexHarnessReport(
         uniqueToolCount,
         toolCallsPerScenario: toolCallCount / scenarioCount,
         topTools: [
-          { name: "FilePatch", count: h1ToolCounts.FilePatch + (h2ToolCounts.FilePatch ?? 0) },
-          { name: "FileRead", count: h1ToolCounts.FileRead + (h2ToolCounts.FileRead ?? 0) },
-          { name: "Bash", count: h1ToolCounts.Bash + (h2ToolCounts.Bash ?? 0) }
+          {
+            name: "FilePatch",
+            count:
+              h1ToolCounts.FilePatch + (h2ToolCounts.FilePatch ?? 0) + (h3ToolCounts.FilePatch ?? 0)
+          },
+          {
+            name: "FileRead",
+            count:
+              h1ToolCounts.FileRead + (h2ToolCounts.FileRead ?? 0) + (h3ToolCounts.FileRead ?? 0)
+          },
+          {
+            name: "Bash",
+            count: h1ToolCounts.Bash + (h2ToolCounts.Bash ?? 0) + (h3ToolCounts.Bash ?? 0)
+          },
+          { name: "FileWrite", count: h1ToolCounts.FileWrite + (h3ToolCounts.FileWrite ?? 0) }
         ]
       },
       regressions: Array.from({ length: overrides.regressions ?? 0 }, (_, index) => ({

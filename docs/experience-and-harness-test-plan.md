@@ -505,7 +505,12 @@ Checks:
 - Public output unchanged.
 - Diff under threshold.
 
-Current status: not implemented.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H3 fixture captures baseline public output, extracts duplicate CSV number
+parsing into `src/parse.js`, updates sales and inventory modules with
+`FilePatch`, reruns tests, verifies public output preservation, checks duplicate
+parsing removal, enforces the exact three-file diff, blocks forbidden paths, and
+records stream-json plus SQLite session/audit evidence.
 
 #### H4. Repository investigation
 

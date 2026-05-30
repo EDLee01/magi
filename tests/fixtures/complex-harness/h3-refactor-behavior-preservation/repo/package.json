@@ -1,0 +1,9 @@
+{
+  "name": "report-refactor-fixture",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "test": "node tests/report.test.mjs"
+  }
+}

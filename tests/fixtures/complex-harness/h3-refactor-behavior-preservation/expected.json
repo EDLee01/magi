@@ -1,0 +1,6 @@
+{
+  "id": "H3",
+  "name": "H3 refactor behavior preservation",
+  "taskClass": "behavior_preserving_refactor",
+  "expectedChangedFiles": ["src/inventory.js", "src/parse.js", "src/sales.js"]
+}
