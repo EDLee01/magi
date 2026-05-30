@@ -24,33 +24,41 @@ function getPermissionsDir(): string {
   return configDir;
 }
 
-const PERMISSIONS_FILE = path.join(getPermissionsDir(), "permissions.json");
+function getPermissionsFile(): string {
+  return path.join(getPermissionsDir(), "permissions.json");
+}
 
-let cachedRules: PermissionRule[] | undefined;
+const cachedRules = new Map<string, PermissionRule[]>();
 
 function loadRules(): PermissionRule[] {
-  if (cachedRules) return cachedRules;
-  if (!existsSync(PERMISSIONS_FILE)) {
-    cachedRules = [];
-    return cachedRules;
+  const permissionsFile = getPermissionsFile();
+  const cached = cachedRules.get(permissionsFile);
+  if (cached) return cached;
+  if (!existsSync(permissionsFile)) {
+    const rules: PermissionRule[] = [];
+    cachedRules.set(permissionsFile, rules);
+    return rules;
   }
   try {
-    const raw = readFileSync(PERMISSIONS_FILE, "utf-8");
-    cachedRules = JSON.parse(raw) as PermissionRule[];
-    return cachedRules;
+    const raw = readFileSync(permissionsFile, "utf-8");
+    const rules = JSON.parse(raw) as PermissionRule[];
+    cachedRules.set(permissionsFile, rules);
+    return rules;
   } catch {
-    cachedRules = [];
-    return cachedRules;
+    const rules: PermissionRule[] = [];
+    cachedRules.set(permissionsFile, rules);
+    return rules;
   }
 }
 
 function saveRules(rules: PermissionRule[]): void {
-  const permissionsDir = getPermissionsDir();
+  const permissionsFile = getPermissionsFile();
+  const permissionsDir = path.dirname(permissionsFile);
   if (!existsSync(permissionsDir)) {
     mkdirSync(permissionsDir, { recursive: true });
   }
-  atomicWrite(PERMISSIONS_FILE, JSON.stringify(rules, null, 2));
-  cachedRules = rules;
+  atomicWrite(permissionsFile, JSON.stringify(rules, null, 2));
+  cachedRules.set(permissionsFile, rules);
 }
 
 export function addPermissionRule(tool: string, description?: string): void {

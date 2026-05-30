@@ -125,7 +125,8 @@ describe("capability report", () => {
         tuiStatefulPickersSeen: false,
         tuiPickerKeyboardNavigationSeen: false,
         tuiApprovalPickerSeen: false,
-        tuiApprovalAllowPickerSeen: false
+        tuiApprovalAllowPickerSeen: false,
+        tuiApprovalAlwaysPickerSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -179,6 +180,7 @@ describe("capability report", () => {
         "tuiPickerKeyboardNavigationSeen=false",
         "tuiApprovalPickerSeen=false",
         "tuiApprovalAllowPickerSeen=false",
+        "tuiApprovalAlwaysPickerSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -1032,6 +1034,7 @@ function harnessReport(input: {
   tuiPickerKeyboardNavigationSeen?: boolean;
   tuiApprovalPickerSeen?: boolean;
   tuiApprovalAllowPickerSeen?: boolean;
+  tuiApprovalAlwaysPickerSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -1049,7 +1052,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 174,
+      assertions: input.assertions ?? 180,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1100,7 +1103,8 @@ function harnessReport(input: {
                   ...tuiStatefulPickersAssertions(input),
                   ...tuiPickerKeyboardNavigationAssertions(input),
                   ...tuiApprovalPickerAssertions(input),
-                  ...tuiApprovalAllowPickerAssertions(input)
+                  ...tuiApprovalAllowPickerAssertions(input),
+                  ...tuiApprovalAlwaysPickerAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -2112,6 +2116,21 @@ function tuiApprovalAllowPickerAssertions(input: {
         "TUI approval allow returned write result to model",
         "TUI approval allow wrote approved file",
         "TUI approval allow flow returned provider response and exited"
+      ];
+}
+
+function tuiApprovalAlwaysPickerAssertions(input: {
+  tuiApprovalAlwaysPickerSeen?: boolean;
+}): string[] {
+  return input.tuiApprovalAlwaysPickerSeen === false
+    ? []
+    : [
+        "TUI approval always picker rendered persistent approval action",
+        "TUI approval always hotkey persisted FileWrite rule",
+        "TUI approval always wrote initial approved file",
+        "TUI approval always reused rule without second prompt",
+        "TUI approval always returned second write result to model",
+        "TUI approval always flow returned provider response and exited"
       ];
 }
 

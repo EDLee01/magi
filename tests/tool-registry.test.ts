@@ -27,6 +27,7 @@ import {
   recordToolUsage,
   toolUsageStatsPath
 } from "../src/tool-usage-stats.js";
+import { addPermissionRule, clearPermissionRules } from "../src/permissions.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -673,6 +674,46 @@ describe("tool registry", () => {
         }
       })
     ).toMatchObject({ decision: "deny" });
+  });
+
+  it("honors persistent permission rules for default non-Bash tools", () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tool-permissions-"));
+    const previousConfigDir = process.env.MAGI_CONFIG_DIR;
+    process.env.MAGI_CONFIG_DIR = workspace;
+    try {
+      clearPermissionRules();
+      addPermissionRule("FileWrite", "Always allow FileWrite");
+      addPermissionRule("Bash", "stale Bash allow");
+      const writeCall = {
+        type: "tool-use" as const,
+        id: "write-persistent",
+        name: "FileWrite",
+        input: { file_path: "x.txt", content: "x" }
+      };
+      const bashCall = {
+        type: "tool-use" as const,
+        id: "bash-persistent",
+        name: "Bash",
+        input: { command: "npm test" }
+      };
+      expect(checkToolPermission({ toolUse: writeCall, mode: "default" })).toMatchObject({
+        decision: "allow",
+        reason: "persistent permission rule"
+      });
+      expect(checkToolPermission({ toolUse: writeCall, mode: "dontAsk" })).toMatchObject({
+        decision: "deny"
+      });
+      expect(checkToolPermission({ toolUse: bashCall, mode: "default" })).toMatchObject({
+        decision: "ask"
+      });
+    } finally {
+      clearPermissionRules();
+      if (previousConfigDir === undefined) {
+        delete process.env.MAGI_CONFIG_DIR;
+      } else {
+        process.env.MAGI_CONFIG_DIR = previousConfigDir;
+      }
+    }
   });
 
   it("allows conservative read-only Bash commands without approving mutating shell commands", () => {

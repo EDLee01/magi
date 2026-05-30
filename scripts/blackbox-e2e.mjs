@@ -546,47 +546,58 @@ async function runCliWithTtyIo({
   columns
 }) {
   console.log(`+ ${label}: runCli(${args.map((part) => JSON.stringify(part)).join(" ")})`);
-  const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
-  const harness = createPromptHarness({ columns });
-  const promise = runCliApi(
-    args,
+  return withTemporaryProcessEnv(
     {
-      ...process.env,
       MAGI_CONFIG_DIR: configDir,
       MAGI_OPENAI_API_KEY: "test-key",
       NO_COLOR: "1"
     },
-    cwd,
-    {
-      stdin: harness.input,
-      stdout: harness.output
+    async () => {
+      const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
+      const harness = createPromptHarness({ columns });
+      const promise = runCliApi(
+        args,
+        {
+          ...process.env,
+          MAGI_CONFIG_DIR: configDir,
+          MAGI_OPENAI_API_KEY: "test-key",
+          NO_COLOR: "1"
+        },
+        cwd,
+        {
+          stdin: harness.input,
+          stdout: harness.output
+        }
+      );
+      try {
+        await waitFor(
+          () => stripTerminalControls(harness.stdout()).includes(waitForText),
+          label,
+          timeoutMs
+        ).catch((error) => {
+          throw new Error(
+            `${error instanceof Error ? error.message : String(error)}\nSTDOUT:\n${harness.stdout()}`
+          );
+        });
+        harness.input.write(inputText);
+        const result = await Promise.race([
+          promise,
+          sleep(timeoutMs).then(() => {
+            throw new Error(
+              `${label} timed out waiting for completion\nSTDOUT:\n${harness.stdout()}`
+            );
+          })
+        ]);
+        return {
+          ...result,
+          stdout: `${harness.stdout()}${result.stdout}`,
+          stderr: result.stderr
+        };
+      } finally {
+        harness.input.destroy();
+      }
     }
   );
-  try {
-    await waitFor(
-      () => stripTerminalControls(harness.stdout()).includes(waitForText),
-      label,
-      timeoutMs
-    ).catch((error) => {
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\nSTDOUT:\n${harness.stdout()}`
-      );
-    });
-    harness.input.write(inputText);
-    const result = await Promise.race([
-      promise,
-      sleep(timeoutMs).then(() => {
-        throw new Error(`${label} timed out waiting for completion\nSTDOUT:\n${harness.stdout()}`);
-      })
-    ]);
-    return {
-      ...result,
-      stdout: `${harness.stdout()}${result.stdout}`,
-      stderr: result.stderr
-    };
-  } finally {
-    harness.input.destroy();
-  }
 }
 
 async function runInteractiveCliWithTtySteps({
@@ -598,48 +609,78 @@ async function runInteractiveCliWithTtySteps({
   columns
 }) {
   console.log(`+ ${label}: runInteractiveCliWithTtySteps`);
-  const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
-  const harness = createPromptHarness({ columns });
-  const promise = runCliApi(
-    ["--no-color"],
+  return withTemporaryProcessEnv(
     {
-      ...process.env,
       MAGI_CONFIG_DIR: configDir,
       MAGI_OPENAI_API_KEY: "test-key",
       NO_COLOR: "1"
     },
-    cwd,
-    {
-      stdin: harness.input,
-      stdout: harness.output
+    async () => {
+      const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
+      const harness = createPromptHarness({ columns });
+      const promise = runCliApi(
+        ["--no-color"],
+        {
+          ...process.env,
+          MAGI_CONFIG_DIR: configDir,
+          MAGI_OPENAI_API_KEY: "test-key",
+          NO_COLOR: "1"
+        },
+        cwd,
+        {
+          stdin: harness.input,
+          stdout: harness.output
+        }
+      );
+      try {
+        for (const step of steps) {
+          await waitFor(
+            () => stripTerminalControls(harness.stdout()).includes(step.waitForText),
+            `${label}: ${step.waitForText}`,
+            step.timeoutMs ?? timeoutMs
+          ).catch((error) => {
+            throw new Error(
+              `${error instanceof Error ? error.message : String(error)}\nSTDOUT:\n${harness.stdout()}`
+            );
+          });
+          harness.input.write(step.inputText);
+        }
+        const result = await Promise.race([
+          promise,
+          sleep(timeoutMs).then(() => {
+            throw new Error(
+              `${label} timed out waiting for completion\nSTDOUT:\n${harness.stdout()}`
+            );
+          })
+        ]);
+        return {
+          ...result,
+          stdout: `${harness.stdout()}${result.stdout}`,
+          stderr: result.stderr
+        };
+      } finally {
+        harness.input.destroy();
+      }
     }
   );
+}
+
+async function withTemporaryProcessEnv(env, fn) {
+  const previous = {};
+  for (const key of Object.keys(env)) {
+    previous[key] = process.env[key];
+    process.env[key] = env[key];
+  }
   try {
-    for (const step of steps) {
-      await waitFor(
-        () => stripTerminalControls(harness.stdout()).includes(step.waitForText),
-        `${label}: ${step.waitForText}`,
-        step.timeoutMs ?? timeoutMs
-      ).catch((error) => {
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)}\nSTDOUT:\n${harness.stdout()}`
-        );
-      });
-      harness.input.write(step.inputText);
-    }
-    const result = await Promise.race([
-      promise,
-      sleep(timeoutMs).then(() => {
-        throw new Error(`${label} timed out waiting for completion\nSTDOUT:\n${harness.stdout()}`);
-      })
-    ]);
-    return {
-      ...result,
-      stdout: `${harness.stdout()}${result.stdout}`,
-      stderr: result.stderr
-    };
+    return await fn();
   } finally {
-    harness.input.destroy();
+    for (const key of Object.keys(env)) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
   }
 }
 
@@ -3756,6 +3797,146 @@ async function scenarioTuiApprovalAllowPicker() {
   );
 }
 
+async function scenarioTuiApprovalAlwaysPicker() {
+  return await withTempWorkspace(
+    "tui-approval-always-picker",
+    async ({ root, configDir, workDir }) => {
+      const providerLog = path.join(root, "provider-log.json");
+      const firstPath = path.join(workDir, "tui-approval-always-first.txt");
+      const secondPath = path.join(workDir, "tui-approval-always-second.txt");
+      const permissionsPath = path.join(configDir, "permissions.json");
+      let turn = 0;
+      const provider = await startProvider({
+        logPath: providerLog,
+        routeRequest: ({ transcript }) => {
+          turn += 1;
+          if (turn === 1) {
+            return toolResponse([
+              toolCall("tui-approval-always-first", "FileWrite", {
+                file_path: "tui-approval-always-first.txt",
+                content: "approved and persisted through TUI picker"
+              })
+            ]);
+          }
+          if (turn === 2) {
+            assert(
+              transcript.includes("Wrote tui-approval-always-first.txt"),
+              "TUI always approval first write result was not returned to the model"
+            );
+            return messageText("TUI approval always rule saved.");
+          }
+          if (turn === 3) {
+            assert(
+              transcript.includes("Write again after persistent approval."),
+              "TUI always approval second prompt was not sent to the model"
+            );
+            assert(
+              existsSync(permissionsPath),
+              "TUI always approval did not write permissions file"
+            );
+            const persistedRules = JSON.parse(readFileSync(permissionsPath, "utf8"));
+            assert(
+              persistedRules.some((rule) => rule.tool === "FileWrite"),
+              "TUI always approval did not persist FileWrite before the second write"
+            );
+            return toolResponse([
+              toolCall("tui-approval-always-second", "FileWrite", {
+                file_path: "tui-approval-always-second.txt",
+                content: "written without a second approval prompt"
+              })
+            ]);
+          }
+          assert(turn === 4, `unexpected TUI always approval provider turn ${turn}`);
+          assert(
+            transcript.includes("Wrote tui-approval-always-second.txt"),
+            "TUI always approval second write result was not returned to the model"
+          );
+          return messageText("TUI approval always rule reused.");
+        }
+      });
+      try {
+        writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+        const result = await runInteractiveCliWithTtySteps({
+          cwd: workDir,
+          configDir,
+          label: "TUI approval always picker",
+          steps: [
+            {
+              waitForText: "/help for commands",
+              inputText: "Persist the approval picker write.\r"
+            },
+            { waitForText: "Approval required", inputText: "a" },
+            {
+              waitForText: "TUI approval always rule saved.",
+              inputText: "Write again after persistent approval.\r"
+            },
+            {
+              waitForText: "TUI approval always rule reused.",
+              inputText: "/exit\r"
+            }
+          ],
+          timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+        });
+        assert(
+          result.exitCode === 0,
+          `TUI approval always picker exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+        );
+        const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+        assert(visible.includes("Always allow"), "approval always action did not render");
+        assert(
+          visible.includes('Added persistent rule: always allow "FileWrite"'),
+          "approval always picker did not report persisted rule"
+        );
+        assert(
+          (visible.match(/Approval required/g) ?? []).length === 1,
+          "always-allowed second write should not render another approval prompt"
+        );
+        assert(existsSync(firstPath), "always approval first file was not written");
+        assert(existsSync(secondPath), "always approval second file was not written");
+        assert(
+          readFileSync(firstPath, "utf8") === "approved and persisted through TUI picker",
+          "always approval first file content was wrong"
+        );
+        assert(
+          readFileSync(secondPath, "utf8") === "written without a second approval prompt",
+          "always approval second file content was wrong"
+        );
+        const permissions = JSON.parse(readFileSync(permissionsPath, "utf8"));
+        assert(
+          permissions.some((rule) => rule.tool === "FileWrite"),
+          "always approval did not persist FileWrite rule in MAGI_CONFIG_DIR"
+        );
+        assert(
+          provider.calls.length === 4,
+          "TUI approval always flow should make four provider calls"
+        );
+        return {
+          score: 1,
+          assertions: [
+            "TUI approval always picker rendered persistent approval action",
+            "TUI approval always hotkey persisted FileWrite rule",
+            "TUI approval always wrote initial approved file",
+            "TUI approval always reused rule without second prompt",
+            "TUI approval always returned second write result to model",
+            "TUI approval always flow returned provider response and exited"
+          ],
+          provider: provider.summary(),
+          filesVerified: [
+            "tui-approval-always-first.txt",
+            "tui-approval-always-second.txt",
+            "permissions.json"
+          ]
+        };
+      } catch (error) {
+        printProviderLog(providerLog);
+        throw error;
+      } finally {
+        await provider.close();
+      }
+    }
+  );
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -5014,6 +5195,7 @@ async function main() {
     ["TUI picker keyboard navigation", scenarioTuiPickerKeyboardNavigation],
     ["TUI approval picker", scenarioTuiApprovalPicker],
     ["TUI approval allow picker", scenarioTuiApprovalAllowPicker],
+    ["TUI approval always picker", scenarioTuiApprovalAlwaysPicker],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],

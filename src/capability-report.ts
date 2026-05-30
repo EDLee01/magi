@@ -293,12 +293,19 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("TUI approval allow returned write result to model") &&
     assertionList.includes("TUI approval allow wrote approved file") &&
     assertionList.includes("TUI approval allow flow returned provider response and exited");
+  const tuiApprovalAlwaysPickerSeen =
+    assertionList.includes("TUI approval always picker rendered persistent approval action") &&
+    assertionList.includes("TUI approval always hotkey persisted FileWrite rule") &&
+    assertionList.includes("TUI approval always wrote initial approved file") &&
+    assertionList.includes("TUI approval always reused rule without second prompt") &&
+    assertionList.includes("TUI approval always returned second write result to model") &&
+    assertionList.includes("TUI approval always flow returned provider response and exited");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 174) failures.push(`assertions=${assertions}`);
+  if (assertions < 180) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -329,6 +336,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   }
   if (!tuiApprovalPickerSeen) failures.push("tuiApprovalPickerSeen=false");
   if (!tuiApprovalAllowPickerSeen) failures.push("tuiApprovalAllowPickerSeen=false");
+  if (!tuiApprovalAlwaysPickerSeen) failures.push("tuiApprovalAlwaysPickerSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -373,6 +381,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       tuiPickerKeyboardNavigationSeen,
       tuiApprovalPickerSeen,
       tuiApprovalAllowPickerSeen,
+      tuiApprovalAlwaysPickerSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

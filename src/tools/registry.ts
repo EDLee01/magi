@@ -209,6 +209,7 @@ import {
   skillManagePreview,
   SkillManageInputSchema
 } from "./skill-manage.js";
+import { isToolAlwaysAllowed } from "../permissions.js";
 import {
   executeLearningDraftTool,
   LearningDraftToolInputSchema,
@@ -774,6 +775,13 @@ export function checkToolPermission(input: {
   }
   if (input.mode === "plan" && !tool.isReadOnly(input.toolUse.input)) {
     return { decision: "deny", reason: `${input.toolUse.name} is not allowed in plan mode` };
+  }
+  if (
+    input.mode === "default" &&
+    input.toolUse.name !== "Bash" &&
+    isToolAlwaysAllowed(input.toolUse.name)
+  ) {
+    return { decision: "allow", reason: "persistent permission rule" };
   }
   if (input.mode === "default" && !tool.isReadOnly(input.toolUse.input)) {
     return { decision: "ask", reason: `${input.toolUse.name} requires approval` };
