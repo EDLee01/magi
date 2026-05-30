@@ -30,6 +30,7 @@ const lifecycleEvidence = {
   autonomousLearningCycleSeen: false,
   staleKnowledgeDemotionSeen: false,
   crossNodeRecommendationSeen: false,
+  correctedMemoryConversationRecallSeen: false,
   projectCaseRecallSeen: false,
   multiProjectConflictRecallSeen: false,
   multilingualProjectRecallSeen: false,
@@ -1088,9 +1089,46 @@ async function assertNaturalLanguageCorrectionLifecycle() {
       provider.calls.some((call) => call.model === "mock-fast" && call.transcript.includes("action")),
       "memory decision model was not called for natural correction"
     );
+    const recallOutput = await runCliAsync(
+      [
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "What should you remember about my verification output preference?"
+      ],
+      "corrected memory conversation recall"
+    );
+    assert(
+      recallOutput.includes("concise verification summaries with key outcomes only"),
+      "corrected memory conversation did not answer from replacement memory"
+    );
+    const recallCall = provider.calls.find(
+      (call) =>
+        call.model === "mock-main" &&
+        call.transcript.includes("verification output preference") &&
+        call.transcript.includes("concise verification summaries")
+    );
+    assert(recallCall, "corrected memory recall provider request was not found");
+    assert(
+      recallCall.transcript.includes("[Hot Memory]"),
+      "corrected memory conversation missed hot memory layer"
+    );
+    assert(
+      recallCall.transcript.includes("Natural language corrected verification preference"),
+      "corrected memory conversation missed replacement memory title"
+    );
+    assert(
+      !recallCall.transcript.includes("The user prefers full terminal logs after verification."),
+      "corrected memory conversation still injected disputed stale memory"
+    );
+    lifecycleEvidence.correctedMemoryConversationRecallSeen = true;
     recordAssertion("natural-language correction disputed stale memory");
     recordAssertion("natural-language correction recalled replacement only");
     recordAssertion("natural-language correction persisted agent audit");
+    recordAssertion("corrected memory conversation recalled replacement hot memory");
+    recordAssertion("corrected memory conversation excluded disputed stale memory");
   } finally {
     await provider.close();
     removeConfigFile();
@@ -2293,7 +2331,7 @@ function startMemoryDecisionProvider(input) {
         .join("\n");
       calls.push({ model: body.model, transcript });
       response.writeHead(200, { "content-type": "application/json" });
-      if (body.model === "mock-fast") {
+      if (body.model === "mock-fast" && transcript.includes(input.stalePhrase)) {
         response.end(
           JSON.stringify({
             choices: [
@@ -2313,6 +2351,40 @@ function startMemoryDecisionProvider(input) {
               }
             ],
             usage: { prompt_tokens: 12, completion_tokens: 9 }
+          })
+        );
+        return;
+      }
+      if (body.model === "mock-fast") {
+        response.end(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({ action: "none" }) } }],
+            usage: { prompt_tokens: 2, completion_tokens: 1 }
+          })
+        );
+        return;
+      }
+      if (transcript.includes("这个记忆不对") || transcript.includes(input.stalePhrase)) {
+        response.end(
+          JSON.stringify({
+            choices: [{ message: { content: "记忆已纠正" } }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 }
+          })
+        );
+        return;
+      }
+      if (transcript.includes("verification output preference")) {
+        response.end(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    "You prefer concise verification summaries with key outcomes only."
+                }
+              }
+            ],
+            usage: { prompt_tokens: 2, completion_tokens: 2 }
           })
         );
         return;

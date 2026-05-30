@@ -156,6 +156,7 @@ describe("capability report", () => {
         conversationIdentityRecallSeen: false,
         dreamConflictGroupLifecycleSeen: false,
         naturalLanguageCorrectionSeen: false,
+        correctedMemoryConversationRecallSeen: false,
         graphEdgeReinforcementSeen: false,
         userFeedbackTrendSeen: false,
         longCycleFeedbackTrendSeen: false,
@@ -198,6 +199,7 @@ describe("capability report", () => {
     expect(output).toContain("conversationIdentityRecallSeen=false");
     expect(output).toContain("dreamConflictGroupLifecycleSeen=false");
     expect(output).toContain("naturalLanguageCorrectionSeen=false");
+    expect(output).toContain("correctedMemoryConversationRecallSeen=false");
     expect(output).toContain("graphEdgeReinforcementSeen=false");
     expect(output).toContain("userFeedbackTrendSeen=false");
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
@@ -1703,6 +1705,7 @@ function memoryReport(input: {
   conversationIdentityRecallSeen?: boolean;
   dreamConflictGroupLifecycleSeen?: boolean;
   naturalLanguageCorrectionSeen?: boolean;
+  correctedMemoryConversationRecallSeen?: boolean;
   graphEdgeReinforcementSeen?: boolean;
   userFeedbackTrendSeen?: boolean;
   longCycleFeedbackTrendSeen?: boolean;
@@ -1762,6 +1765,12 @@ function memoryReport(input: {
               "natural-language correction disputed stale memory",
               "natural-language correction recalled replacement only",
               "natural-language correction persisted agent audit"
+            ]),
+        ...(input.correctedMemoryConversationRecallSeen === false
+          ? []
+          : [
+              "corrected memory conversation recalled replacement hot memory",
+              "corrected memory conversation excluded disputed stale memory"
             ]),
         ...(input.graphEdgeReinforcementSeen === false
           ? []
@@ -1863,7 +1872,7 @@ function memoryReport(input: {
               "maintenance config invalid values were rejected"
             ]),
         ...Array.from(
-          { length: input.assertions ?? 43 },
+          { length: input.assertions ?? 45 },
           (_, index) => `memory assertion ${index + 1}`
         )
       ],
@@ -1874,6 +1883,7 @@ function memoryReport(input: {
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
       conversationIdentityRecallSeen: input.conversationIdentityRecallSeen !== false,
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
+      correctedMemoryConversationRecallSeen: input.correctedMemoryConversationRecallSeen !== false,
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
       longProjectFeedbackConvergenceSeen: input.longProjectFeedbackConvergenceSeen !== false,
       longProjectLearningDraftRecallSeen: input.longProjectLearningDraftRecallSeen !== false,

@@ -1318,6 +1318,10 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("natural-language correction disputed stale memory") &&
     assertionList.includes("natural-language correction recalled replacement only") &&
     assertionList.includes("natural-language correction persisted agent audit");
+  const correctedMemoryConversationRecallSeen =
+    details.correctedMemoryConversationRecallSeen === true &&
+    assertionList.includes("corrected memory conversation recalled replacement hot memory") &&
+    assertionList.includes("corrected memory conversation excluded disputed stale memory");
   const graphEdgeReinforcementSeen = assertionList.includes(
     "memory graph recall reinforced traversed edges"
   );
@@ -1401,7 +1405,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (results.length < 11) failures.push(`cases=${results.length}`);
-  if (assertions < 68) failures.push(`assertions=${assertions}`);
+  if (assertions < 70) failures.push(`assertions=${assertions}`);
   if (filesVerified < 10) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
@@ -1409,6 +1413,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!conversationIdentityRecallSeen) failures.push("conversationIdentityRecallSeen=false");
   if (!dreamConflictGroupLifecycleSeen) failures.push("dreamConflictGroupLifecycleSeen=false");
   if (!naturalLanguageCorrectionSeen) failures.push("naturalLanguageCorrectionSeen=false");
+  if (!correctedMemoryConversationRecallSeen) {
+    failures.push("correctedMemoryConversationRecallSeen=false");
+  }
   if (!graphEdgeReinforcementSeen) failures.push("graphEdgeReinforcementSeen=false");
   if (!userFeedbackTrendSeen) failures.push("userFeedbackTrendSeen=false");
   if (!longCycleFeedbackTrendSeen) failures.push("longCycleFeedbackTrendSeen=false");
@@ -1445,6 +1452,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       conversationIdentityRecallSeen,
       dreamConflictGroupLifecycleSeen,
       naturalLanguageCorrectionSeen,
+      correctedMemoryConversationRecallSeen,
       graphEdgeReinforcementSeen,
       userFeedbackTrendSeen,
       longCycleFeedbackTrendSeen,
