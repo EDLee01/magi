@@ -101,7 +101,8 @@ describe("capability report", () => {
         skillPatchLearningSeen: false,
         skillCorrectionSeen: false,
         longCycleSkillIterationSeen: false,
-        harnessCiTuiGuardSeen: false
+        harnessCiTuiGuardSeen: false,
+        streamJsonProtocolSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -133,6 +134,7 @@ describe("capability report", () => {
         "skillCorrectionSeen=false",
         "longCycleSkillIterationSeen=false",
         "harnessCiTuiGuardSeen=false",
+        "streamJsonProtocolSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -822,6 +824,7 @@ function harnessReport(input: {
   skillCorrectionSeen?: boolean;
   longCycleSkillIterationSeen?: boolean;
   harnessCiTuiGuardSeen?: boolean;
+  streamJsonProtocolSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -869,7 +872,8 @@ function harnessReport(input: {
                   "learning draft applied to memory",
                   "applied learning indexed into memory graph",
                   ...skillLearningAssertions(input),
-                  ...harnessGuardAssertions(input)
+                  ...harnessGuardAssertions(input),
+                  ...streamJsonProtocolAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -936,6 +940,18 @@ function harnessGuardAssertions(input: { harnessCiTuiGuardSeen?: boolean }): str
         "forced CI can opt into interactive TUI",
         "local opt-in can run interactive TUI",
         "hanging child commands time out and terminate"
+      ];
+}
+
+function streamJsonProtocolAssertions(input: { streamJsonProtocolSeen?: boolean }): string[] {
+  return input.streamJsonProtocolSeen === false
+    ? []
+    : [
+        "stream-json emitted only JSON lines",
+        "stream-json emitted user and assistant message events",
+        "stream-json emitted tool started and completed events",
+        "stream-json preserved raw agent events",
+        "stream-json completed with status and final message"
       ];
 }
 

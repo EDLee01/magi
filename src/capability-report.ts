@@ -153,12 +153,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("forced CI can opt into interactive TUI") &&
     assertionList.includes("local opt-in can run interactive TUI") &&
     assertionList.includes("hanging child commands time out and terminate");
+  const streamJsonProtocolSeen =
+    assertionList.includes("stream-json emitted only JSON lines") &&
+    assertionList.includes("stream-json emitted user and assistant message events") &&
+    assertionList.includes("stream-json emitted tool started and completed events") &&
+    assertionList.includes("stream-json preserved raw agent events") &&
+    assertionList.includes("stream-json completed with status and final message");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 41) failures.push(`assertions=${assertions}`);
+  if (assertions < 46) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -166,6 +172,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!skillCorrectionSeen) failures.push("skillCorrectionSeen=false");
   if (!longCycleSkillIterationSeen) failures.push("longCycleSkillIterationSeen=false");
   if (!harnessCiTuiGuardSeen) failures.push("harnessCiTuiGuardSeen=false");
+  if (!streamJsonProtocolSeen) failures.push("streamJsonProtocolSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -189,6 +196,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       skillCorrectionSeen,
       longCycleSkillIterationSeen,
       harnessCiTuiGuardSeen,
+      streamJsonProtocolSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },

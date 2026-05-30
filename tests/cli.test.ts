@@ -1190,8 +1190,124 @@ describe("CLI entrypoint", () => {
       .split("\n")
       .map((line) => JSON.parse(line) as { type: string; jobId?: string });
     expect(lines[0]).toMatchObject({ type: "session.started" });
-    expect(lines.at(-1)).toMatchObject({ type: "session.completed" });
+    expect(lines[1]).toMatchObject({ type: "message.created", role: "user" });
+    expect(lines.at(-2)).toMatchObject({ type: "message.created", role: "assistant" });
+    expect(lines.at(-1)).toMatchObject({ type: "session.completed", status: "completed" });
     expect(lines.at(-1)?.jobId).toBeTruthy();
+  });
+
+  it("emits stable stream-json tool lifecycle events", async () => {
+    temp = makeTempRoot();
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as { messages: Array<{ content: unknown }> };
+      const transcript = body.messages.map((message) => JSON.stringify(message.content)).join("\n");
+      response.writeHead(200, { "content-type": "application/json" });
+      if (!transcript.includes("Wrote stream-lifecycle.txt")) {
+        response.end(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  tool_calls: [
+                    {
+                      id: "write-stream-lifecycle",
+                      type: "function",
+                      function: {
+                        name: "FileWrite",
+                        arguments: JSON.stringify({
+                          file_path: "stream-lifecycle.txt",
+                          content: "ok"
+                        })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: "tool_calls"
+              }
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1 }
+          })
+        );
+        return;
+      }
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "Tool wrote stream lifecycle." } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n")
+    );
+
+    const result = await runCli(
+      [
+        "--permission-mode",
+        "acceptEdits",
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "Write stream lifecycle file."
+      ],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      temp.path
+    );
+
+    expect(result.exitCode).toBe(0);
+    const events = result.stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        "session.started",
+        "message.created",
+        "tool.started",
+        "tool.completed",
+        "agent.tool_use",
+        "agent.tool_result",
+        "session.completed"
+      ])
+    );
+    expect(events.find((event) => event.type === "tool.started")).toMatchObject({
+      tool: "FileWrite",
+      toolUseId: "write-stream-lifecycle",
+      input: { file_path: "stream-lifecycle.txt", content: "ok" }
+    });
+    expect(events.find((event) => event.type === "tool.completed")).toMatchObject({
+      tool: "FileWrite",
+      toolUseId: "write-stream-lifecycle"
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "session.completed",
+      status: "completed",
+      message: "Tool wrote stream lifecycle."
+    });
+    expect(readFileSync(path.join(temp.path, "stream-lifecycle.txt"), "utf8")).toBe("ok");
   });
 
   it("recalls workflow graph neighbors across sessions from the CLI", async () => {

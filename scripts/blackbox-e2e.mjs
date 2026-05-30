@@ -500,18 +500,72 @@ function parseDreamId(output) {
 }
 
 function parseStreamSessionId(output) {
+  const sessionId = parseStreamEvents(output).find(
+    (event) => event.type === "session.completed" && typeof event.sessionId === "string"
+  )?.sessionId;
+  if (!sessionId) {
+    throw new Error(`could not parse stream session id from output:\n${output}`);
+  }
+  return sessionId;
+}
+
+function parseStreamEvents(output) {
+  const events = [];
   for (const line of output.split(/\r?\n/)) {
     if (!line.trim()) continue;
     try {
       const event = JSON.parse(line);
-      if (event.type === "session.completed" && typeof event.sessionId === "string") {
-        return event.sessionId;
-      }
+      events.push(event);
     } catch {
-      // Ignore non-JSON noise around stream-json output.
+      throw new Error(`stream-json output contained non-JSON line: ${line}\nFull output:\n${output}`);
     }
   }
-  throw new Error(`could not parse stream session id from output:\n${output}`);
+  return events;
+}
+
+function assertStreamProtocol(events, { finalMessage }) {
+  assert(events.length > 0, "stream-json emitted no events");
+  assert(events[0].type === "session.started", "stream-json did not start with session.started");
+  assert(
+    events.some((event) => event.type === "message.created" && event.role === "user"),
+    "stream-json missed user message event"
+  );
+  assert(
+    events.some((event) => event.type === "message.created" && event.role === "assistant"),
+    "stream-json missed assistant message event"
+  );
+  assert(
+    events.some((event) => event.type === "tool.started" && event.tool === "FileWrite"),
+    "stream-json missed FileWrite tool.started"
+  );
+  assert(
+    events.some((event) => event.type === "tool.completed" && event.tool === "FileWrite"),
+    "stream-json missed FileWrite tool.completed"
+  );
+  assert(
+    events.some((event) => event.type === "tool.started" && event.tool === "FilePatch"),
+    "stream-json missed FilePatch tool.started"
+  );
+  assert(
+    events.some((event) => event.type === "tool.completed" && event.tool === "FilePatch"),
+    "stream-json missed FilePatch tool.completed"
+  );
+  assert(
+    events.some((event) => event.type === "agent.tool_use"),
+    "stream-json missed raw agent tool_use event"
+  );
+  const completed = events.at(-1);
+  assert(completed?.type === "session.completed", "stream-json did not end with session.completed");
+  assert(completed.status === "completed", "stream-json session.completed missed completed status");
+  assert(
+    completed.message === finalMessage,
+    "stream-json session.completed did not carry the final message"
+  );
+  assert(
+    typeof completed.sessionId === "string" && completed.sessionId,
+    "stream-json session.completed missed sessionId"
+  );
+  return completed.sessionId;
 }
 
 async function seedMemoryAndGoal({ workDir, configDir }) {
@@ -852,7 +906,11 @@ async function scenarioComplexWorkflow() {
           complexOutput.includes("Complex black-box E2E completed"),
         "complex headless prompt did not complete"
       );
-      const complexSessionId = parseStreamSessionId(complexOutput);
+      const complexEvents = parseStreamEvents(complexOutput);
+      const complexSessionId = assertStreamProtocol(complexEvents, {
+        finalMessage:
+          "Complex black-box E2E completed with real CLI, memory, goal, tools, and learning draft."
+      });
 
       const reportPath = path.join(workDir, "reports", "e2e-result.md");
       assert(existsSync(reportPath), "complex task did not create report file");
@@ -1466,7 +1524,12 @@ async function scenarioComplexWorkflow() {
           "corrected skill recalled without stale guidance",
           "iterative skill patch reviewed after correction",
           "iterative skill patch applied latest guidance",
-          "mature skill recalled after multiple learning cycles"
+          "mature skill recalled after multiple learning cycles",
+          "stream-json emitted only JSON lines",
+          "stream-json emitted user and assistant message events",
+          "stream-json emitted tool started and completed events",
+          "stream-json preserved raw agent events",
+          "stream-json completed with status and final message"
         ],
         filesVerified: [
           "reports/e2e-result.md",

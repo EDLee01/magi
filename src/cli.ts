@@ -1986,17 +1986,130 @@ function formatStreamJson(result: Awaited<ReturnType<typeof runHeadlessPrompt>>)
       provider: result.provider,
       model: result.model
     }),
-    ...(result.events ?? []).map((event) => JSON.stringify({ type: `agent.${event.type}`, event })),
+    JSON.stringify({
+      type: "message.created",
+      sessionId: result.sessionId,
+      jobId: result.jobId,
+      role: "user"
+    }),
+    ...(result.events ?? []).flatMap((event) =>
+      formatStreamJsonAgentEvent({
+        event,
+        sessionId: result.sessionId,
+        jobId: result.jobId
+      })
+    ),
+    JSON.stringify({
+      type: "message.created",
+      sessionId: result.sessionId,
+      jobId: result.jobId,
+      role: "assistant",
+      content: result.message
+    }),
     JSON.stringify({
       type: "session.completed",
       sessionId: result.sessionId,
       jobId: result.jobId,
+      status: "completed",
       message: result.message,
       provider: result.provider,
       model: result.model
     })
   ];
   return `${lines.join("\n")}\n`;
+}
+
+function formatStreamJsonAgentEvent(input: {
+  event: NonNullable<Awaited<ReturnType<typeof runHeadlessPrompt>>["events"]>[number];
+  sessionId: string;
+  jobId: string;
+}): string[] {
+  const { event, sessionId, jobId } = input;
+  const raw = JSON.stringify({ type: `agent.${event.type}`, sessionId, jobId, event });
+  if (event.type === "tool_use") {
+    return [
+      JSON.stringify({
+        type: "tool.started",
+        sessionId,
+        jobId,
+        toolUseId: event.toolUse.id,
+        tool: event.toolUse.name,
+        input: event.toolUse.input
+      }),
+      raw
+    ];
+  }
+  if (event.type === "tool_result") {
+    return [
+      JSON.stringify({
+        type: event.isError ? "tool.failed" : "tool.completed",
+        sessionId,
+        jobId,
+        toolUseId: event.toolCallId,
+        tool: event.toolName,
+        result: event.content,
+        retryable: event.retryable === true
+      }),
+      raw
+    ];
+  }
+  if (event.type === "assistant_message") {
+    return [
+      JSON.stringify({
+        type: "message.created",
+        sessionId,
+        jobId,
+        role: "assistant",
+        content: streamMessageText(event.message)
+      }),
+      raw
+    ];
+  }
+  if (event.type === "user_message") {
+    return [
+      JSON.stringify({
+        type: "message.created",
+        sessionId,
+        jobId,
+        role: "user",
+        content: event.message.message
+      }),
+      raw
+    ];
+  }
+  if (event.type === "error") {
+    return [
+      JSON.stringify({
+        type: "session.error",
+        sessionId,
+        jobId,
+        error: event.error,
+        retryable: event.retryable,
+        provider: event.providerName,
+        model: event.model,
+        errorKind: event.errorKind
+      }),
+      raw
+    ];
+  }
+  return [raw];
+}
+
+function streamMessageText(
+  message: Extract<
+    NonNullable<Awaited<ReturnType<typeof runHeadlessPrompt>>["events"]>[number],
+    { type: "assistant_message" }
+  >["message"]
+): string {
+  return message.content
+    .map((part) => {
+      if (part.type === "text") return part.text;
+      if (part.type === "tool-use") return `[tool:${part.name}]`;
+      if (part.type === "tool-result") return `[tool-result:${part.toolCallId}]`;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
 }
 
 function helpText(): string {
