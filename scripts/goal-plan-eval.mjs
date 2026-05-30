@@ -201,6 +201,7 @@ try {
     completedGoalSuppressed: false,
     blockedGoalSuppressed: false,
     writeDeniedInPlanMode: false,
+    planReviewPreviewShown: false,
     planSubmittedToModel: false,
     inheritedPlanContextSeen: false,
     inheritedPlanReadBeforeWrite: false,
@@ -422,6 +423,7 @@ try {
     const planReviewPersisted = assertPlanStoreSubmitted();
     const crossSessionPlanReviewListed = true;
     const planRevision = await runPlanRevisionApprovalFlow(tools.executeRegisteredTool);
+    state.planReviewPreviewShown = planRevision.planReviewPreviewShown;
     const planRevisionPersisted = assertPlanStoreRevisionPersisted(planRevision.revisionPlanId);
     const secondPlanRevisionPersisted = assertPlanStoreSecondRevisionPersisted(
       planRevision.secondRevisionPlanId
@@ -507,6 +509,7 @@ try {
     assert(state.completedGoalSuppressed, "provider still saw completed goal context");
     assert(state.blockedGoalSuppressed, "provider still saw blocked goal context");
     assert(state.writeDeniedInPlanMode, "provider did not observe plan-mode write denial");
+    assert(state.planReviewPreviewShown, "user approval question did not include full plan preview");
     assert(state.planSubmittedToModel, "provider did not observe submitted plan feedback");
     assert(state.inheritedPlanContextSeen, "provider did not see inherited plan context");
     assert(state.repeatedPlanDeviationBlocked, "provider did not hit repeated plan guard blocks");
@@ -575,6 +578,7 @@ try {
       "active goal status visible in CLI",
       "active goal injected into model context",
       "plan mode denied FileWrite mutation",
+      "plan approval question showed full submitted plan before choice",
       "submitted plan feedback returned to model",
       "plan review persisted in state",
       "scoped plan list isolated second session",
@@ -658,6 +662,7 @@ try {
             completedGoalSuppressed: state.completedGoalSuppressed,
             blockedGoalSuppressed: state.blockedGoalSuppressed,
             writeDeniedInPlanMode: state.writeDeniedInPlanMode,
+            planReviewPreviewShown: state.planReviewPreviewShown,
             planSubmittedToModel: state.planSubmittedToModel,
             planReviewPersisted,
             crossSessionPlanReviewListed,
@@ -1601,15 +1606,18 @@ async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
       name: "ExitPlanMode",
       input: { plan: firstRevisionPlanText }
     },
-    userQuestionResolver: ({ question }) => ({
-      answers: [
-        {
-          question: question.questions[0].question,
-          selectedLabels: ["No, revise: inspect migration source before writing"],
-          selectedOptions: [question.questions[0].options[1]]
-        }
-      ]
-    })
+    userQuestionResolver: ({ question }) => {
+      assertPlanReviewPreview(question, firstRevisionPlanText);
+      return {
+        answers: [
+          {
+            question: question.questions[0].question,
+            selectedLabels: ["No, revise: inspect migration source before writing"],
+            selectedOptions: [question.questions[0].options[1]]
+          }
+        ]
+      };
+    }
   });
   assert(!firstRevision.isError, `first revision plan tool errored: ${firstRevision.content}`);
   assert(
@@ -1632,15 +1640,18 @@ async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
       name: "ExitPlanMode",
       input: { plan: secondRevisionPlanText }
     },
-    userQuestionResolver: ({ question }) => ({
-      answers: [
-        {
-          question: question.questions[0].question,
-          selectedLabels: ["No, revise: include re-read verification after patch"],
-          selectedOptions: [question.questions[0].options[1]]
-        }
-      ]
-    })
+    userQuestionResolver: ({ question }) => {
+      assertPlanReviewPreview(question, secondRevisionPlanText);
+      return {
+        answers: [
+          {
+            question: question.questions[0].question,
+            selectedLabels: ["No, revise: include re-read verification after patch"],
+            selectedOptions: [question.questions[0].options[1]]
+          }
+        ]
+      };
+    }
   });
   assert(!secondRevision.isError, `second revision plan tool errored: ${secondRevision.content}`);
   assert(
@@ -1663,15 +1674,18 @@ async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
       name: "ExitPlanMode",
       input: { plan: approvedPlanText }
     },
-    userQuestionResolver: ({ question }) => ({
-      answers: [
-        {
-          question: question.questions[0].question,
-          selectedLabels: ["Yes, proceed"],
-          selectedOptions: [question.questions[0].options[0]]
-        }
-      ]
-    })
+    userQuestionResolver: ({ question }) => {
+      assertPlanReviewPreview(question, approvedPlanText);
+      return {
+        answers: [
+          {
+            question: question.questions[0].question,
+            selectedLabels: ["Yes, proceed"],
+            selectedOptions: [question.questions[0].options[0]]
+          }
+        ]
+      };
+    }
   });
   assert(!approved.isError, `approved plan tool errored: ${approved.content}`);
   assert(approved.content.includes("Plan approved."), "approval feedback was not visible");
@@ -1682,11 +1696,25 @@ async function runPlanRevisionApprovalFlow(executeRegisteredTool) {
     revisionFeedbackSeen: true,
     multiRoundPlanFeedbackSeen: true,
     approvalSeen: true,
+    planReviewPreviewShown: true,
     revisionPlanId,
     secondRevisionPlanId,
     approvedPlanId,
     toolCounts
   };
+}
+
+function assertPlanReviewPreview(question, expectedPlan) {
+  const reviewQuestion = question.questions[0];
+  assert(reviewQuestion.header === "Plan review", "plan review question header was not shown");
+  assert(
+    reviewQuestion.preview?.includes("Implementation plan:"),
+    "plan review question missed the implementation plan label"
+  );
+  assert(
+    reviewQuestion.preview.includes(expectedPlan),
+    "plan review question missed the full submitted plan text"
+  );
 }
 
 function assertPlanStoreRevisionPersisted(planId) {

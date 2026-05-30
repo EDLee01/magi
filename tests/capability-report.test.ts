@@ -433,6 +433,7 @@ describe("capability report", () => {
       goalPlan: goalPlanReport({
         completedGoalSuppressed: false,
         blockedGoalPersisted: false,
+        planReviewPreviewShown: false,
         planReviewPersisted: false,
         crossSessionPlanReviewListed: false,
         planRevisionFeedbackSeen: false,
@@ -493,6 +494,7 @@ describe("capability report", () => {
         "uniqueToolCount=1",
         "completedGoalSuppressed=false",
         "blockedGoalPersisted=false",
+        "planReviewPreviewShown=false",
         "planReviewPersisted=false",
         "crossSessionPlanReviewListed=false",
         "planRevisionFeedbackSeen=false",
@@ -2019,6 +2021,7 @@ function goalPlanReport(
     completedGoalSuppressed: boolean;
     blockedGoalSuppressed: boolean;
     writeDeniedInPlanMode: boolean;
+    planReviewPreviewShown: boolean;
     planSubmittedToModel: boolean;
     planReviewPersisted: boolean;
     crossSessionPlanReviewListed: boolean;
@@ -2074,7 +2077,7 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 50,
+      assertions: overrides.assertions ?? 51,
       filesVerified: overrides.filesVerified ?? 13,
       toolCallCount: overrides.toolCallCount ?? 37,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -2089,7 +2092,7 @@ function goalPlanReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 43 },
+            { length: overrides.assertions ?? 44 },
             (_, index) => `goal-plan assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -2106,6 +2109,7 @@ function goalPlanReport(
           completedGoalSuppressed: true,
           blockedGoalSuppressed: true,
           writeDeniedInPlanMode: true,
+          planReviewPreviewShown: true,
           planSubmittedToModel: true,
           planReviewPersisted: true,
           crossSessionPlanReviewListed: true,

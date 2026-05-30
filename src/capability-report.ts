@@ -1548,7 +1548,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 50) failures.push(`assertions=${assertions}`);
+  if (assertions < 51) failures.push(`assertions=${assertions}`);
   if (filesVerified < 13) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 37) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -1556,6 +1556,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
   if (details.blockedGoalSuppressed !== true) failures.push("blockedGoalSuppressed=false");
   if (details.writeDeniedInPlanMode !== true) failures.push("writeDeniedInPlanMode=false");
+  if (details.planReviewPreviewShown !== true) failures.push("planReviewPreviewShown=false");
   if (details.planSubmittedToModel !== true) failures.push("planSubmittedToModel=false");
   if (details.planReviewPersisted !== true) failures.push("planReviewPersisted=false");
   if (details.crossSessionPlanReviewListed !== true) {
@@ -1672,6 +1673,7 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       completedGoalSuppressed: details.completedGoalSuppressed === true,
       blockedGoalSuppressed: details.blockedGoalSuppressed === true,
       writeDeniedInPlanMode: details.writeDeniedInPlanMode === true,
+      planReviewPreviewShown: details.planReviewPreviewShown === true,
       planSubmittedToModel: details.planSubmittedToModel === true,
       planReviewPersisted: details.planReviewPersisted === true,
       crossSessionPlanReviewListed: details.crossSessionPlanReviewListed === true,
