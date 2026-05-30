@@ -349,13 +349,44 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const largeRepoLongChainMigrationFileEditCalls = readNumber(
     largeRepoLongChainMigrationToolCounts.FileEdit
   );
+  const ossStyleOpenSourceMigration = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "oss_style_open_source_migration"
+  );
+  const ossStyleOpenSourceMigrationDetails = readRecord(
+    ossStyleOpenSourceMigration ? readRecord(ossStyleOpenSourceMigration).details : {}
+  );
+  const ossStyleOpenSourceMigrationToolCounts = readRecord(
+    ossStyleOpenSourceMigrationDetails.toolCounts
+  );
+  const ossStyleOpenSourceMigrationTaskSeen = taskClasses.has("oss_style_open_source_migration");
+  const ossStyleOpenSourceMigrationBashCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.Bash
+  );
+  const ossStyleOpenSourceMigrationGlobCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.Glob
+  );
+  const ossStyleOpenSourceMigrationGrepCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.Grep
+  );
+  const ossStyleOpenSourceMigrationFileReadCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.FileRead
+  );
+  const ossStyleOpenSourceMigrationFilePatchCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.FilePatch
+  );
+  const ossStyleOpenSourceMigrationFileWriteCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.FileWrite
+  );
+  const ossStyleOpenSourceMigrationFileEditCalls = readNumber(
+    ossStyleOpenSourceMigrationToolCounts.FileEdit
+  );
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 13) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 13) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 14) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 14) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -369,9 +400,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!largeRepoLongChainMigrationTaskSeen) {
     failures.push("largeRepoLongChainMigrationTask=false");
   }
-  if (assertions < 110) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 51) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 110) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!ossStyleOpenSourceMigrationTaskSeen) {
+    failures.push("ossStyleOpenSourceMigrationTask=false");
+  }
+  if (assertions < 132) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 61) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 131) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -544,6 +578,51 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (largeRepoLongChainMigrationDetails.largeRepoLongChainVerified !== true) {
     failures.push("largeRepoLongChainVerified=false");
   }
+  if (ossStyleOpenSourceMigrationBashCalls !== 2) {
+    failures.push("ossStyleOpenSourceMigrationBashCalls != 2");
+  }
+  if (ossStyleOpenSourceMigrationGlobCalls !== 1) {
+    failures.push("ossStyleOpenSourceMigrationGlobCalls != 1");
+  }
+  if (ossStyleOpenSourceMigrationGrepCalls !== 1) {
+    failures.push("ossStyleOpenSourceMigrationGrepCalls != 1");
+  }
+  if (ossStyleOpenSourceMigrationFileReadCalls !== 10) {
+    failures.push("ossStyleOpenSourceMigrationFileReadCalls != 10");
+  }
+  if (ossStyleOpenSourceMigrationFilePatchCalls < 7) {
+    failures.push("ossStyleOpenSourceMigrationFilePatchCalls < 7");
+  }
+  if (ossStyleOpenSourceMigrationFileWriteCalls !== 0) {
+    failures.push("ossStyleOpenSourceMigrationFileWrite used");
+  }
+  if (ossStyleOpenSourceMigrationFileEditCalls !== 0) {
+    failures.push("ossStyleOpenSourceMigrationFileEdit used");
+  }
+  if (ossStyleOpenSourceMigrationDetails.ossRepoDiscoveryVerified !== true) {
+    failures.push("ossRepoDiscoveryVerified=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.coreContractsMigrated !== true) {
+    failures.push("ossCoreContractsMigrated=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.pluginContractsMigrated !== true) {
+    failures.push("ossPluginContractsMigrated=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.examplesDocsChangelogMigrated !== true) {
+    failures.push("ossExamplesDocsChangelogMigrated=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.oldOwnedOptionReferencesRemoved !== true) {
+    failures.push("ossOldOwnedOptionReferencesRemoved=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.generatedOptionsUntouched !== true) {
+    failures.push("ossGeneratedOptionsUntouched=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.vendorOptionsUntouched !== true) {
+    failures.push("ossVendorOptionsUntouched=false");
+  }
+  if (ossStyleOpenSourceMigrationDetails.ossStyleMigrationVerified !== true) {
+    failures.push("ossStyleMigrationVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -655,6 +734,28 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       largeRepoVendorShimUntouched: largeRepoLongChainMigrationDetails.vendorShimUntouched === true,
       largeRepoLongChainVerified:
         largeRepoLongChainMigrationDetails.largeRepoLongChainVerified === true,
+      ossStyleOpenSourceMigrationTaskSeen,
+      ossStyleOpenSourceMigrationBashCalls,
+      ossStyleOpenSourceMigrationGlobCalls,
+      ossStyleOpenSourceMigrationGrepCalls,
+      ossStyleOpenSourceMigrationFileReadCalls,
+      ossStyleOpenSourceMigrationFilePatchCalls,
+      ossStyleOpenSourceMigrationFileWriteCalls,
+      ossStyleOpenSourceMigrationFileEditCalls,
+      ossRepoDiscoveryVerified:
+        ossStyleOpenSourceMigrationDetails.ossRepoDiscoveryVerified === true,
+      ossCoreContractsMigrated: ossStyleOpenSourceMigrationDetails.coreContractsMigrated === true,
+      ossPluginContractsMigrated:
+        ossStyleOpenSourceMigrationDetails.pluginContractsMigrated === true,
+      ossExamplesDocsChangelogMigrated:
+        ossStyleOpenSourceMigrationDetails.examplesDocsChangelogMigrated === true,
+      ossOldOwnedOptionReferencesRemoved:
+        ossStyleOpenSourceMigrationDetails.oldOwnedOptionReferencesRemoved === true,
+      ossGeneratedOptionsUntouched:
+        ossStyleOpenSourceMigrationDetails.generatedOptionsUntouched === true,
+      ossVendorOptionsUntouched: ossStyleOpenSourceMigrationDetails.vendorOptionsUntouched === true,
+      ossStyleMigrationVerified:
+        ossStyleOpenSourceMigrationDetails.ossStyleMigrationVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

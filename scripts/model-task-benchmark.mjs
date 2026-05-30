@@ -3206,6 +3206,469 @@ async function scenarioLargeRepoLongChainMigrationTask() {
   });
 }
 
+async function scenarioOssStyleOpenSourceMigrationTask() {
+  return await withWorkspace("oss-style-open-source", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "plugin-auth", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "plugin-telemetry", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "examples", "node"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "changelog"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, "packages", "core", "src", "options.js"),
+      [
+        "export const defaultOptions = {",
+        '  cacheTTL: 60,',
+        '  retryLimit: 2',
+        "};",
+        "",
+        "export function normalizeOptions(options = {}) {",
+        "  return {",
+        "    cacheTTL: options.cacheTTL ?? defaultOptions.cacheTTL,",
+        "    retryLimit: options.retryLimit ?? defaultOptions.retryLimit",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "core", "src", "client.js"),
+      [
+        'import { normalizeOptions } from "./options.js";',
+        "",
+        "export function createClient(options = {}) {",
+        "  const normalized = normalizeOptions(options);",
+        "  return {",
+        "    cacheTTL: normalized.cacheTTL,",
+        "    retryLimit: normalized.retryLimit",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "plugin-auth", "src", "index.js"),
+      [
+        "export function authPlugin(options = {}) {",
+        "  return {",
+        '    name: "auth",',
+        "    cacheTTL: options.cacheTTL ?? 60",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "plugin-telemetry", "src", "index.js"),
+      [
+        "export function telemetryPlugin(options = {}) {",
+        "  return {",
+        '    name: "telemetry",',
+        "    cacheTTL: options.cacheTTL ?? 60",
+        "  };",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "examples", "node", "basic.js"),
+      [
+        'import { createClient } from "../../packages/core/src/client.js";',
+        "",
+        "export const client = createClient({ cacheTTL: 60 });",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "configuration.md"),
+      [
+        "# Configuration",
+        "",
+        "`cacheTTL` controls cache expiry in seconds.",
+        "Plugins accept the same `cacheTTL` option.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "changelog", "unreleased.md"),
+      [
+        "# Unreleased",
+        "",
+        "- Documented cacheTTL for core and plugins.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "// AUTO-GENERATED OPTIONS. DO NOT EDIT.",
+      "export interface GeneratedClientOptions {",
+      "  cacheTTL?: number;",
+      "}",
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// vendored compatibility shim",
+      "export const vendorOptionName = \"cacheTTL\";",
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "options.d.ts"), generatedBefore, "utf8");
+    writeFileSync(path.join(workDir, "vendor", "legacy-options.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "oss-options.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        'import { createClient } from "../packages/core/src/client.js";',
+        'import { authPlugin } from "../packages/plugin-auth/src/index.js";',
+        'import { telemetryPlugin } from "../packages/plugin-telemetry/src/index.js";',
+        "",
+        "assert.deepEqual(createClient(), {",
+        "  cacheTtlSeconds: 60,",
+        "  retryLimit: 2",
+        "});",
+        "assert.deepEqual(createClient({ cacheTtlSeconds: 90 }), {",
+        "  cacheTtlSeconds: 90,",
+        "  retryLimit: 2",
+        "});",
+        'assert.equal(authPlugin().cacheTtlSeconds, 60);',
+        'assert.equal(telemetryPlugin({ cacheTtlSeconds: 45 }).cacheTtlSeconds, 45);',
+        "",
+        "const ownedFiles = [",
+        '  "packages/core/src/options.js",',
+        '  "packages/core/src/client.js",',
+        '  "packages/plugin-auth/src/index.js",',
+        '  "packages/plugin-telemetry/src/index.js",',
+        '  "examples/node/basic.js",',
+        '  "docs/configuration.md",',
+        '  "changelog/unreleased.md"',
+        "];",
+        "for (const file of ownedFiles) {",
+        '  const content = readFileSync(file, "utf8");',
+        '  assert.doesNotMatch(content, /cacheTTL/);',
+        '  assert.match(content, /cacheTtlSeconds/);',
+        "}",
+        "",
+        'const generated = readFileSync("generated/options.d.ts", "utf8");',
+        'assert.match(generated, /AUTO-GENERATED OPTIONS\\. DO NOT EDIT/);',
+        'assert.match(generated, /cacheTTL\\?: number/);',
+        'const vendor = readFileSync("vendor/legacy-options.js", "utf8");',
+        'assert.match(vendor, /vendored compatibility shim/);',
+        'assert.match(vendor, /cacheTTL/);',
+        'console.log("oss options migration ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-oss-options-before", "Bash", {
+              command: "node tests/oss-options.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-oss-repo", "Glob", {
+              pattern: "**/*.{js,md,ts,mjs}",
+              max_matches: 40
+            }),
+            toolCall("grep-cache-ttl", "Grep", {
+              pattern: "cacheTTL",
+              path: ".",
+              output_mode: "content",
+              max_matches: 40
+            }),
+            toolCall("read-oss-test", "FileRead", {
+              file_path: "tests/oss-options.test.mjs"
+            }),
+            toolCall("read-core-options", "FileRead", {
+              file_path: "packages/core/src/options.js"
+            }),
+            toolCall("read-core-client", "FileRead", {
+              file_path: "packages/core/src/client.js"
+            }),
+            toolCall("read-auth-plugin", "FileRead", {
+              file_path: "packages/plugin-auth/src/index.js"
+            }),
+            toolCall("read-telemetry-plugin", "FileRead", {
+              file_path: "packages/plugin-telemetry/src/index.js"
+            }),
+            toolCall("read-node-example", "FileRead", {
+              file_path: "examples/node/basic.js"
+            }),
+            toolCall("read-config-docs", "FileRead", {
+              file_path: "docs/configuration.md"
+            }),
+            toolCall("read-changelog", "FileRead", {
+              file_path: "changelog/unreleased.md"
+            }),
+            toolCall("read-generated-options", "FileRead", {
+              file_path: "generated/options.d.ts"
+            }),
+            toolCall("read-vendor-options", "FileRead", {
+              file_path: "vendor/legacy-options.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing OSS options test missing");
+          assert(transcript.includes("packages/core/src/options.js"), "OSS repo file list missing");
+          assert(transcript.includes("cacheTTL"), "legacy cacheTTL search results missing");
+          assert(transcript.includes("AUTO-GENERATED OPTIONS"), "generated options boundary missing");
+          assert(transcript.includes("vendored compatibility shim"), "vendor boundary missing");
+          return toolResponse([
+            toolCall("patch-core-options", "FilePatch", {
+              file_path: "packages/core/src/options.js",
+              patch: [
+                "@@",
+                " export const defaultOptions = {",
+                "-  cacheTTL: 60,",
+                "+  cacheTtlSeconds: 60,",
+                "   retryLimit: 2",
+                " };",
+                " ",
+                " export function normalizeOptions(options = {}) {",
+                "   return {",
+                "-    cacheTTL: options.cacheTTL ?? defaultOptions.cacheTTL,",
+                "+    cacheTtlSeconds: options.cacheTtlSeconds ?? defaultOptions.cacheTtlSeconds,",
+                "     retryLimit: options.retryLimit ?? defaultOptions.retryLimit",
+                "   };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-core-client", "FilePatch", {
+              file_path: "packages/core/src/client.js",
+              patch: [
+                "@@",
+                " export function createClient(options = {}) {",
+                "   const normalized = normalizeOptions(options);",
+                "   return {",
+                "-    cacheTTL: normalized.cacheTTL,",
+                "+    cacheTtlSeconds: normalized.cacheTtlSeconds,",
+                "     retryLimit: normalized.retryLimit",
+                "   };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-auth-plugin", "FilePatch", {
+              file_path: "packages/plugin-auth/src/index.js",
+              patch: [
+                "@@",
+                " export function authPlugin(options = {}) {",
+                "   return {",
+                '     name: "auth",',
+                "-    cacheTTL: options.cacheTTL ?? 60",
+                "+    cacheTtlSeconds: options.cacheTtlSeconds ?? 60",
+                "   };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-telemetry-plugin", "FilePatch", {
+              file_path: "packages/plugin-telemetry/src/index.js",
+              patch: [
+                "@@",
+                " export function telemetryPlugin(options = {}) {",
+                "   return {",
+                '     name: "telemetry",',
+                "-    cacheTTL: options.cacheTTL ?? 60",
+                "+    cacheTtlSeconds: options.cacheTtlSeconds ?? 60",
+                "   };",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-node-example", "FilePatch", {
+              file_path: "examples/node/basic.js",
+              patch: [
+                "@@",
+                ' import { createClient } from "../../packages/core/src/client.js";',
+                " ",
+                "-export const client = createClient({ cacheTTL: 60 });",
+                "+export const client = createClient({ cacheTtlSeconds: 60 });"
+              ].join("\n")
+            }),
+            toolCall("patch-config-docs", "FilePatch", {
+              file_path: "docs/configuration.md",
+              patch: [
+                "@@",
+                " # Configuration",
+                " ",
+                "-`cacheTTL` controls cache expiry in seconds.",
+                "-Plugins accept the same `cacheTTL` option.",
+                "+`cacheTtlSeconds` controls cache expiry in seconds.",
+                "+Plugins accept the same `cacheTtlSeconds` option."
+              ].join("\n")
+            }),
+            toolCall("patch-changelog", "FilePatch", {
+              file_path: "changelog/unreleased.md",
+              patch: [
+                "@@",
+                " # Unreleased",
+                " ",
+                "-- Documented cacheTTL for core and plugins.",
+                "+- Renamed the cache option to cacheTtlSeconds across core, plugins, examples, and docs."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched packages/core/src/options.js"),
+            "core options patch result missing"
+          );
+          assert(
+            transcript.includes("Patched packages/plugin-auth/src/index.js"),
+            "auth plugin patch result missing"
+          );
+          assert(
+            transcript.includes("Patched examples/node/basic.js"),
+            "example patch result missing"
+          );
+          assert(transcript.includes("Patched changelog/unreleased.md"), "changelog patch missing");
+          return toolResponse([
+            toolCall("run-oss-options-after", "Bash", {
+              command: "node tests/oss-options.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(transcript.includes("oss options migration ok"), "passing OSS options test missing");
+        return messageText(
+          "OSS-style cache option migration completed with generated and vendor boundaries preserved."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "In this OSS-style multi-package repository, rename the public option cacheTTL",
+            "to cacheTtlSeconds across owned source, plugins, examples, docs, and changelog.",
+            "Run the focused options test before editing, discover files with Glob and Grep,",
+            "inspect generated and vendor boundaries, do not modify generated or vendor files,",
+            "then rerun the focused options test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "oss-style open source migration task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "OSS-style migration task did not complete");
+      const ownedFiles = [
+        "packages/core/src/options.js",
+        "packages/core/src/client.js",
+        "packages/plugin-auth/src/index.js",
+        "packages/plugin-telemetry/src/index.js",
+        "examples/node/basic.js",
+        "docs/configuration.md",
+        "changelog/unreleased.md"
+      ];
+      for (const file of ownedFiles) {
+        const content = readFileSync(path.join(workDir, file), "utf8");
+        assert(!content.includes("cacheTTL"), `${file} still contains cacheTTL`);
+        assert(content.includes("cacheTtlSeconds"), `${file} missing cacheTtlSeconds`);
+      }
+      const generatedAfter = readFileSync(path.join(workDir, "generated", "options.d.ts"), "utf8");
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "legacy-options.js"), "utf8");
+      assert(generatedAfter === generatedBefore, "generated options file was modified");
+      assert(vendorAfter === vendorBefore, "vendor options shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "OSS-style migration should run tests before and after");
+      assert(toolCounts.Glob === 1, "OSS-style migration should discover files with Glob");
+      assert(toolCounts.Grep === 1, "OSS-style migration should search old option with Grep");
+      assert(toolCounts.FileRead === 10, "OSS-style migration should inspect owned and boundary files");
+      assert(toolCounts.FilePatch === 7, "OSS-style migration should patch seven owned files");
+      assert(!toolCounts.FileWrite, "OSS-style migration should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "OSS-style migration should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing OSS options test ran first",
+          "OSS-style repo discovery ran with Glob",
+          "legacy option search ran with Grep",
+          "core source inspected before patching",
+          "plugin source inspected before patching",
+          "example docs and changelog inspected before patching",
+          "generated options boundary inspected",
+          "vendor compatibility boundary inspected",
+          "core option normalization migrated",
+          "core client output migrated",
+          "auth plugin option migrated",
+          "telemetry plugin option migrated",
+          "example usage migrated",
+          "configuration docs migrated",
+          "changelog migrated",
+          "focused passing OSS options test ran after migration",
+          "old owned cacheTTL references removed",
+          "generated options file stayed unchanged",
+          "vendor options shim stayed unchanged",
+          "FileWrite avoided for OSS-style migration",
+          "FileEdit avoided for OSS-style migration",
+          "final response completed"
+        ],
+        filesVerified: [
+          "packages/core/src/options.js",
+          "packages/core/src/client.js",
+          "packages/plugin-auth/src/index.js",
+          "packages/plugin-telemetry/src/index.js",
+          "examples/node/basic.js",
+          "docs/configuration.md",
+          "changelog/unreleased.md",
+          "generated/options.d.ts",
+          "vendor/legacy-options.js",
+          "tests/oss-options.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "oss_style_open_source_migration",
+        toolCounts,
+        ossRepoDiscoveryVerified: true,
+        coreContractsMigrated: true,
+        pluginContractsMigrated: true,
+        examplesDocsChangelogMigrated: true,
+        oldOwnedOptionReferencesRemoved: true,
+        generatedOptionsUntouched: true,
+        vendorOptionsUntouched: true,
+        ossStyleMigrationVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function runScenario(name, fn) {
   const startedAt = Date.now();
   console.log(`\n=== ${name} ===`);
@@ -3263,7 +3726,8 @@ async function main() {
     ["monorepo generated boundary task", scenarioMonorepoGeneratedBoundaryTask],
     ["workspace policy migration task", scenarioWorkspacePolicyMigrationTask],
     ["mixed language contract migration task", scenarioMixedLanguageContractMigrationTask],
-    ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask]
+    ["large repo long-chain migration task", scenarioLargeRepoLongChainMigrationTask],
+    ["oss-style open source migration task", scenarioOssStyleOpenSourceMigrationTask]
   ];
   const results = [];
   for (const [name, fn] of scenarios) {

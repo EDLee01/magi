@@ -251,6 +251,7 @@ describe("capability report", () => {
         "workspacePolicyMigrationTask=false",
         "mixedLanguageContractMigrationTask=false",
         "largeRepoLongChainMigrationTask=false",
+        "ossStyleOpenSourceMigrationTask=false",
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
@@ -308,6 +309,19 @@ describe("capability report", () => {
         "largeRepoGeneratedClientUntouched=false",
         "largeRepoVendorShimUntouched=false",
         "largeRepoLongChainVerified=false",
+        "ossStyleOpenSourceMigrationBashCalls != 2",
+        "ossStyleOpenSourceMigrationGlobCalls != 1",
+        "ossStyleOpenSourceMigrationGrepCalls != 1",
+        "ossStyleOpenSourceMigrationFileReadCalls != 10",
+        "ossStyleOpenSourceMigrationFilePatchCalls < 7",
+        "ossRepoDiscoveryVerified=false",
+        "ossCoreContractsMigrated=false",
+        "ossPluginContractsMigrated=false",
+        "ossExamplesDocsChangelogMigrated=false",
+        "ossOldOwnedOptionReferencesRemoved=false",
+        "ossGeneratedOptionsUntouched=false",
+        "ossVendorOptionsUntouched=false",
+        "ossStyleMigrationVerified=false",
         "regressions=1"
       ])
     );
@@ -899,6 +913,23 @@ function modelTaskReport(
       vendorShimUntouched: boolean;
       largeRepoLongChainVerified: boolean;
     };
+    ossStyleOpenSourceMigration: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      ossRepoDiscoveryVerified: boolean;
+      coreContractsMigrated: boolean;
+      pluginContractsMigrated: boolean;
+      examplesDocsChangelogMigrated: boolean;
+      oldOwnedOptionReferencesRemoved: boolean;
+      generatedOptionsUntouched: boolean;
+      vendorOptionsUntouched: boolean;
+      ossStyleMigrationVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -915,7 +946,8 @@ function modelTaskReport(
     "monorepo_generated_boundary",
     "workspace_policy_migration",
     "mixed_language_contract_migration",
-    "large_repo_long_chain_migration"
+    "large_repo_long_chain_migration",
+    "oss_style_open_source_migration"
   ];
   const patchStrategy = overrides.patchStrategy ?? {
     filePatchCalls: 1,
@@ -1000,14 +1032,31 @@ function modelTaskReport(
     vendorShimUntouched: true,
     largeRepoLongChainVerified: true
   };
+  const ossStyleOpenSourceMigration = overrides.ossStyleOpenSourceMigration ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 10,
+    filePatchCalls: 7,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    ossRepoDiscoveryVerified: true,
+    coreContractsMigrated: true,
+    pluginContractsMigrated: true,
+    examplesDocsChangelogMigrated: true,
+    oldOwnedOptionReferencesRemoved: true,
+    generatedOptionsUntouched: true,
+    vendorOptionsUntouched: true,
+    ossStyleMigrationVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 17,
-    assertions: overrides.assertions ?? 110,
-    filesVerified: overrides.filesVerified ?? 51,
-    toolCallCount: overrides.toolCallCount ?? 110,
+    assertions: overrides.assertions ?? 132,
+    filesVerified: overrides.filesVerified ?? 61,
+    toolCallCount: overrides.toolCallCount ?? 131,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1135,6 +1184,29 @@ function modelTaskReport(
               generatedClientUntouched: largeRepoLongChainMigration.generatedClientUntouched,
               vendorShimUntouched: largeRepoLongChainMigration.vendorShimUntouched,
               largeRepoLongChainVerified: largeRepoLongChainMigration.largeRepoLongChainVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "oss_style_open_source_migration"
+          ? {
+              toolCounts: {
+                Bash: ossStyleOpenSourceMigration.bashCalls,
+                Glob: ossStyleOpenSourceMigration.globCalls,
+                Grep: ossStyleOpenSourceMigration.grepCalls,
+                FileRead: ossStyleOpenSourceMigration.fileReadCalls,
+                FilePatch: ossStyleOpenSourceMigration.filePatchCalls,
+                FileWrite: ossStyleOpenSourceMigration.fileWriteCalls,
+                FileEdit: ossStyleOpenSourceMigration.fileEditCalls
+              },
+              ossRepoDiscoveryVerified: ossStyleOpenSourceMigration.ossRepoDiscoveryVerified,
+              coreContractsMigrated: ossStyleOpenSourceMigration.coreContractsMigrated,
+              pluginContractsMigrated: ossStyleOpenSourceMigration.pluginContractsMigrated,
+              examplesDocsChangelogMigrated:
+                ossStyleOpenSourceMigration.examplesDocsChangelogMigrated,
+              oldOwnedOptionReferencesRemoved:
+                ossStyleOpenSourceMigration.oldOwnedOptionReferencesRemoved,
+              generatedOptionsUntouched: ossStyleOpenSourceMigration.generatedOptionsUntouched,
+              vendorOptionsUntouched: ossStyleOpenSourceMigration.vendorOptionsUntouched,
+              ossStyleMigrationVerified: ossStyleOpenSourceMigration.ossStyleMigrationVerified
             }
           : {})
       }
