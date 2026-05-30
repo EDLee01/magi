@@ -3123,6 +3123,77 @@ async function scenarioTuiStatefulPickers() {
   });
 }
 
+async function scenarioTuiApprovalPicker() {
+  return await withTempWorkspace("tui-approval-picker", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const deniedPath = path.join(workDir, "tui-approval-denied.txt");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        turn += 1;
+        if (turn === 1) {
+          return toolResponse([
+            toolCall("tui-approval-denied", "FileWrite", {
+              file_path: "tui-approval-denied.txt",
+              content: "approval picker should deny this write"
+            })
+          ]);
+        }
+        assert(
+          transcript.includes("Permission ask: FileWrite requires approval"),
+          "TUI approval picker denial was not returned to the model"
+        );
+        return messageText("TUI approval picker denied write.");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const result = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "TUI approval picker",
+        steps: [
+          { waitForText: "/help for commands", inputText: "Try the approval picker write.\r" },
+          { waitForText: "Approval required", inputText: "n" },
+          { waitForText: "TUI approval picker denied write.", inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        result.exitCode === 0,
+        `TUI approval picker exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(visible.includes("Approval required"), "approval picker did not render title");
+      assert(visible.includes("Allow"), "approval picker did not render allow action");
+      assert(visible.includes("Deny"), "approval picker did not render deny action");
+      assert(
+        visible.includes("TUI approval picker denied write."),
+        "approval picker final response did not render"
+      );
+      assert(provider.calls.length === 2, "TUI approval picker should make two provider calls");
+      assert(!existsSync(deniedPath), "denied TUI approval should not mutate workspace");
+      return {
+        score: 1,
+        assertions: [
+          "TUI approval picker rendered pending FileWrite approval",
+          "TUI approval picker hotkey denial resolved interaction",
+          "TUI approval denial returned to model",
+          "TUI approval denial left workspace unchanged",
+          "TUI approval picker flow returned provider response and exited"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4349,6 +4420,7 @@ async function main() {
     ["slash resume search TTY", scenarioSlashResumeSearchTty],
     ["TUI keyboard input", scenarioTuiKeyboardInput],
     ["TUI stateful pickers", scenarioTuiStatefulPickers],
+    ["TUI approval picker", scenarioTuiApprovalPicker],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],

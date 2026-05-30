@@ -725,8 +725,10 @@ The black-box TUI keyboard input gate also drives the real interactive prompt
 path with Home/Delete/End/Left/LF/Enter editing and verifies that the provider
 receives the corrected multiline prompt. The TUI stateful picker gate exercises
 `/model` and `/permissions mode`, then verifies that the selected model alias
-routes the next provider call and the selected plan mode blocks a write. Full
-PTY transcript snapshots for every interactive state remain future coverage.
+routes the next provider call and the selected plan mode blocks a write. The
+TUI approval picker gate verifies a pending FileWrite approval, hotkey denial,
+model-visible denial result, and unchanged workspace. Full PTY transcript
+snapshots for every interactive state remain future coverage.
 
 ## H. Provider-backed Real Task Tests
 
