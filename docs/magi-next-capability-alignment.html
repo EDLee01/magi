@@ -230,7 +230,7 @@
           <tr>
             <td>Memory Graph</td>
             <td>记忆节点、wiki chunk、edge、权重、冲突和替代关系共同决定召回。</td>
-            <td><span class="tag done">进行中</span> edge-aware retrieval、召回路径 edge 使用次数和权重增强、用户反馈趋势、趋势榜和权重调整、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、冲突审计视图、冲突分组视图、merge 审计视图、recall quality eval、项目级 recall eval case set、重启召回业务验证、Dream apply/reject 生命周期验证、可持久配置的长期未用节点降权维护，以及 Dream graph 清理候选、纠错后 superseded/disputed 节点审核归档、重复 graph 记忆 merge 候选、节点合并后的 edge 重定向、merge 后权重融合和 edge 冲突消解、冲突分组 Dream 批量审核、批量归档/保留审核闭环、工作流/习惯/技能类节点的维护保留策略、跨节点 workflow 邻域召回、维护后召回业务验证、跨 CLI 进程的用户反馈趋势累积、反馈趋势驱动的 workflow neighborhood 召回、旧知识降权后重复有用反馈让当前 workflow 优先召回、真实项目级 recall case、多节点 superseded/disputed 清理、维护策略配置边界门禁，以及多项目长期协作下共享用户偏好和项目规则冲突的 wiki+SQLite graph 召回门禁已实现；memory eval 报告会输出业务断言、验证文件、冲突分组、Dream lifecycle、edge reinforcement、user feedback trend、long-cycle feedback trend、stale knowledge demotion、cross-node recommendation、project-level recall、multi-project conflict recall、multi-node cleanup 和 maintenance config boundary 证据，并由 capability report 门禁检查证据厚度。</td>
+            <td><span class="tag done">进行中</span> edge-aware retrieval、召回路径 edge 使用次数和权重增强、用户反馈趋势、趋势榜和权重调整、standalone node search、CLI graph link、MemoryCorrect 纠错闭环、冲突审计视图、冲突分组视图、merge 审计视图、recall quality eval、项目级 recall eval case set、重启召回业务验证、Dream apply/reject 生命周期验证、可持久配置的长期未用节点降权维护，以及 Dream graph 清理候选、纠错后 superseded/disputed 节点审核归档、重复 graph 记忆 merge 候选、节点合并后的 edge 重定向、merge 后权重融合和 edge 冲突消解、冲突分组 Dream 批量审核、批量归档/保留审核闭环、工作流/习惯/技能类节点的维护保留策略、跨节点 workflow 邻域召回、维护后召回业务验证、跨 CLI 进程的用户反馈趋势累积、反馈趋势驱动的 workflow neighborhood 召回、长项目周期中重复有用反馈让冷门 focused workflow 升温并压过相似默认旧流程、旧知识降权后重复有用反馈让当前 workflow 优先召回、真实项目级 recall case、多节点 superseded/disputed 清理、维护策略配置边界门禁，以及多项目长期协作下共享用户偏好和项目规则冲突的 wiki+SQLite graph 召回门禁已实现；memory eval 报告会输出业务断言、验证文件、冲突分组、Dream lifecycle、edge reinforcement、user feedback trend、long-cycle feedback trend、long-project feedback convergence、stale knowledge demotion、cross-node recommendation、project-level recall、multi-project conflict recall、multi-node cleanup 和 maintenance config boundary 证据，并由 capability report 门禁检查证据厚度。</td>
             <td><code>tests/memory-node-store.test.ts</code>、<code>tests/rules-memory.test.ts</code>、<code>tests/cli.test.ts</code>、<code>tests/tool-registry.test.ts</code>、<code>scripts/blackbox-e2e.mjs</code>、<code>npm run test:memory-eval</code>、<code>magi memory eval --min-score --report</code></td>
           </tr>
           <tr>
@@ -272,7 +272,7 @@
       <div class="panel">
         <h3>v0.1.0-alpha.3</h3>
         <ul>
-          <li>Memory Graph v2 已把用户反馈趋势、过期知识降权、当前 workflow 反馈变热、LearningDraft 审核应用到 Memory graph、真实项目级 recall、多节点 superseded/disputed 清理、维护策略配置边界，以及多项目共享偏好/项目规则冲突接入业务级门禁；下一步扩展更长真实项目周期中的主动学习反馈。</li>
+          <li>Memory Graph v2 已把用户反馈趋势、跨 CLI 反馈累积、长项目周期反馈收敛、过期知识降权、当前 workflow 反馈变热、LearningDraft 审核应用到 Memory graph、真实项目级 recall、多节点 superseded/disputed 清理、维护策略配置边界，以及多项目共享偏好/项目规则冲突接入业务级门禁；下一步扩展更多真实项目周期中的主动学习反馈。</li>
           <li>真实 learning 业务测试已覆盖主动学习处理和技能沉淀：LearningDraft 可从 CLI 提议 skill_create/skill_patch，审核后应用到 Skills，支持 replacement 纠正错误技能，并在纠正后的二次 skill_patch 迭代中通过 Relevant Skills 召回最新技能；下一步扩大到更长真实项目周期中的主动学习反馈。</li>
           <li>推进 Patch Engine v1：连续 patch 失败后的策略恢复、误改恢复、最终 diff 质量、无关文件保护、TypeScript/Python/docs 混合语言 contract 迁移、大型仓库长链路 workspace contract 迁移，以及 OSS-style 开源仓库 public option rename 已进入独立门禁；下一步扩大到更多真实开源仓库抽样。</li>
         </ul>

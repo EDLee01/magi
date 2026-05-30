@@ -154,6 +154,7 @@ describe("capability report", () => {
         graphEdgeReinforcementSeen: false,
         userFeedbackTrendSeen: false,
         longCycleFeedbackTrendSeen: false,
+        longProjectFeedbackConvergenceSeen: false,
         staleKnowledgeDemotionSeen: false,
         crossNodeRecommendationSeen: false,
         projectCaseRecallSeen: false,
@@ -191,6 +192,7 @@ describe("capability report", () => {
     expect(output).toContain("graphEdgeReinforcementSeen=false");
     expect(output).toContain("userFeedbackTrendSeen=false");
     expect(output).toContain("longCycleFeedbackTrendSeen=false");
+    expect(output).toContain("longProjectFeedbackConvergenceSeen=false");
     expect(output).toContain("staleKnowledgeDemotionSeen=false");
     expect(output).toContain("crossNodeRecommendationSeen=false");
     expect(output).toContain("projectCaseRecallSeen=false");
@@ -1226,6 +1228,7 @@ function memoryReport(input: {
   graphEdgeReinforcementSeen?: boolean;
   userFeedbackTrendSeen?: boolean;
   longCycleFeedbackTrendSeen?: boolean;
+  longProjectFeedbackConvergenceSeen?: boolean;
   staleKnowledgeDemotionSeen?: boolean;
   crossNodeRecommendationSeen?: boolean;
   projectCaseRecallSeen?: boolean;
@@ -1288,6 +1291,14 @@ function memoryReport(input: {
               "long-cycle feedback trend persisted across CLI process",
               "long-cycle feedback trend recalled hot workflow"
             ]),
+        ...(input.longProjectFeedbackConvergenceSeen === false
+          ? []
+          : [
+              "long-project repeated useful feedback accumulated on focused workflow",
+              "long-project irrelevant feedback cooled default workflow",
+              "long-project feedback trend ranked focused workflow",
+              "long-project search ranked focused workflow before default workflow"
+            ]),
         ...(input.staleKnowledgeDemotionSeen === false
           ? []
           : [
@@ -1338,6 +1349,7 @@ function memoryReport(input: {
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
+      longProjectFeedbackConvergenceSeen: input.longProjectFeedbackConvergenceSeen !== false,
       staleKnowledgeDemotionSeen: input.staleKnowledgeDemotionSeen !== false,
       crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
       projectCaseRecallSeen: input.projectCaseRecallSeen !== false,

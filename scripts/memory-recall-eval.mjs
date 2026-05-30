@@ -24,6 +24,7 @@ const lifecycleEvidence = {
   conflictGroupViewSeen: false,
   dreamConflictGroupLifecycleSeen: false,
   longCycleFeedbackTrendSeen: false,
+  longProjectFeedbackConvergenceSeen: false,
   staleKnowledgeDemotionSeen: false,
   crossNodeRecommendationSeen: false,
   projectCaseRecallSeen: false,
@@ -50,6 +51,7 @@ try {
   assertDreamReviewLifecycle();
   assertMaintenanceLifecycle();
   assertMultiProjectConflictRecall();
+  assertLongProjectFeedbackConvergence();
   writeLifecycleEvidence();
   process.stdout.write(`${evalOutput.trim()}\nBusiness memory recall eval passed.\n`);
 } finally {
@@ -353,6 +355,108 @@ function assertLongCycleFeedbackTrendRecall() {
   recordAssertion("long-cycle feedback trend persisted across CLI process");
   recordAssertion("long-cycle feedback trend recalled hot workflow");
   recordAssertion("cross-node workflow recommendation surfaced related habit");
+}
+
+function assertLongProjectFeedbackConvergence() {
+  const defaultWorkflow = seedTypedGraphNode({
+    type: "workflow",
+    title: "Default broad release workflow",
+    summary: "Release workflow for long project cycles.",
+    body: "Release workflow uses broad verification across all packages before project handoff.",
+    weight: 0.72
+  });
+  const projectWorkflow = seedTypedGraphNode({
+    type: "workflow",
+    title: "Long project focused handoff workflow",
+    summary: "Release workflow for long project cycles.",
+    body: "Release workflow uses focused package checks, then concise project handoff notes.",
+    weight: 0.38
+  });
+
+  const defaultFeedback = runCli(
+    [
+      "memory",
+      "feedback",
+      "--target",
+      defaultWorkflow.id,
+      "--signal",
+      "irrelevant",
+      "--reason",
+      "A long project cycle rejected the broad default release workflow."
+    ],
+    "long project default workflow feedback"
+  );
+  assert(
+    defaultFeedback.includes("signal: irrelevant"),
+    "long project default workflow did not record irrelevant feedback"
+  );
+
+  const projectCycleReasons = [
+    "Project cycle 1 used focused package checks and concise handoff notes.",
+    "Project cycle 2 reused focused package checks for a similar release.",
+    "Project cycle 3 confirmed focused checks before handoff should stay hot."
+  ];
+  for (const [index, reason] of projectCycleReasons.entries()) {
+    const feedback = runCli(
+      [
+        "memory",
+        "feedback",
+        "--target",
+        projectWorkflow.id,
+        "--signal",
+        "useful",
+        "--reason",
+        reason
+      ],
+      `long project focused workflow feedback ${index + 1}`
+    );
+    assert(
+      feedback.includes("Memory feedback applied"),
+      "long project focused workflow feedback did not run"
+    );
+    assert(feedback.includes("signal: useful"), "long project feedback did not record useful");
+  }
+
+  const projectTrend = feedbackTrendByNodeId(projectWorkflow.id);
+  const defaultTrend = feedbackTrendByNodeId(defaultWorkflow.id);
+  assert(projectTrend.useful >= 3, "long project workflow did not accumulate three useful signals");
+  assert(
+    defaultTrend.irrelevant >= 1,
+    "long project default workflow did not accumulate irrelevant feedback"
+  );
+  assert(
+    nodeById(projectWorkflow.id).weight > nodeById(defaultWorkflow.id).weight,
+    "long project useful workflow did not outrank default workflow by weight"
+  );
+
+  const trends = runCli(
+    ["memory", "feedback", "trends", "--limit", "5", "--min-events", "3"],
+    "long project feedback trend list"
+  );
+  assert(
+    trends.includes("Long project focused handoff workflow"),
+    "long project feedback trends missed focused workflow"
+  );
+  assert(trends.includes("useful=3"), "long project feedback trends missed useful=3");
+
+  const search = runCli(
+    ["memory", "search", "release workflow project handoff notes"],
+    "long project feedback convergence search"
+  );
+  const focusedIndex = search.indexOf("Long project focused handoff workflow");
+  const defaultIndex = search.indexOf("Default broad release workflow");
+  assert(focusedIndex >= 0, "long project search missed focused workflow");
+  assert(defaultIndex >= 0, "long project search missed default workflow for comparison");
+  assert(
+    focusedIndex < defaultIndex,
+    "long project feedback did not rank focused workflow before default workflow"
+  );
+
+  lifecycleEvidence.longProjectFeedbackConvergenceSeen = true;
+  recordAssertion("long-project repeated useful feedback accumulated on focused workflow");
+  recordAssertion("long-project irrelevant feedback cooled default workflow");
+  recordAssertion("long-project feedback trend ranked focused workflow");
+  recordAssertion("long-project search ranked focused workflow before default workflow");
 }
 
 function assertStaleKnowledgeDemotionLifecycle() {

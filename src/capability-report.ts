@@ -825,6 +825,14 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     details.longCycleFeedbackTrendSeen === true &&
     assertionList.includes("long-cycle feedback trend persisted across CLI process") &&
     assertionList.includes("long-cycle feedback trend recalled hot workflow");
+  const longProjectFeedbackConvergenceSeen =
+    details.longProjectFeedbackConvergenceSeen === true &&
+    assertionList.includes(
+      "long-project repeated useful feedback accumulated on focused workflow"
+    ) &&
+    assertionList.includes("long-project irrelevant feedback cooled default workflow") &&
+    assertionList.includes("long-project feedback trend ranked focused workflow") &&
+    assertionList.includes("long-project search ranked focused workflow before default workflow");
   const staleKnowledgeDemotionSeen =
     details.staleKnowledgeDemotionSeen === true &&
     assertionList.includes("stale knowledge maintenance lowered old workflow weight") &&
@@ -862,7 +870,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (results.length < 8) failures.push(`cases=${results.length}`);
-  if (assertions < 43) failures.push(`assertions=${assertions}`);
+  if (assertions < 47) failures.push(`assertions=${assertions}`);
   if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
@@ -872,6 +880,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!graphEdgeReinforcementSeen) failures.push("graphEdgeReinforcementSeen=false");
   if (!userFeedbackTrendSeen) failures.push("userFeedbackTrendSeen=false");
   if (!longCycleFeedbackTrendSeen) failures.push("longCycleFeedbackTrendSeen=false");
+  if (!longProjectFeedbackConvergenceSeen) {
+    failures.push("longProjectFeedbackConvergenceSeen=false");
+  }
   if (!staleKnowledgeDemotionSeen) failures.push("staleKnowledgeDemotionSeen=false");
   if (!crossNodeRecommendationSeen) failures.push("crossNodeRecommendationSeen=false");
   if (!projectCaseRecallSeen) failures.push("projectCaseRecallSeen=false");
@@ -899,6 +910,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       graphEdgeReinforcementSeen,
       userFeedbackTrendSeen,
       longCycleFeedbackTrendSeen,
+      longProjectFeedbackConvergenceSeen,
       staleKnowledgeDemotionSeen,
       crossNodeRecommendationSeen,
       projectCaseRecallSeen,
