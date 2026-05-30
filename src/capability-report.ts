@@ -172,6 +172,18 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("stream-json emitted tool started and completed events") &&
     assertionList.includes("stream-json preserved raw agent events") &&
     assertionList.includes("stream-json completed with status and final message");
+  const streamJsonExtendedProtocolSeen =
+    assertionList.includes("stream-json emitted structured request started event") &&
+    assertionList.includes("stream-json emitted structured usage event") &&
+    assertionList.includes("stream-json emitted structured message delta event") &&
+    assertionList.includes("stream-json emitted structured user message event") &&
+    assertionList.includes("stream-json emitted structured approval request event") &&
+    assertionList.includes("stream-json emitted structured hook completed event") &&
+    assertionList.includes("stream-json emitted structured query done event") &&
+    assertionList.includes("stream-json preserved raw extended agent events") &&
+    assertionList.includes(
+      "stream-json extended protocol kept denied write from mutating workspace"
+    );
   const jsonOutputProtocolSeen =
     assertionList.includes("json output emitted single object") &&
     assertionList.includes("json output included session job status message") &&
@@ -224,7 +236,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 116) failures.push(`assertions=${assertions}`);
+  if (assertions < 125) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -235,6 +247,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!helpShapeSeen) failures.push("helpShapeSeen=false");
   if (!textOutputProtocolSeen) failures.push("textOutputProtocolSeen=false");
   if (!streamJsonProtocolSeen) failures.push("streamJsonProtocolSeen=false");
+  if (!streamJsonExtendedProtocolSeen) failures.push("streamJsonExtendedProtocolSeen=false");
   if (!jsonOutputProtocolSeen) failures.push("jsonOutputProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
@@ -268,6 +281,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       helpShapeSeen,
       textOutputProtocolSeen,
       streamJsonProtocolSeen,
+      streamJsonExtendedProtocolSeen,
       jsonOutputProtocolSeen,
       barePromptHeadlessSeen,
       resumePickerTtySeen,

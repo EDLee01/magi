@@ -108,6 +108,7 @@ describe("capability report", () => {
         helpShapeSeen: false,
         textOutputProtocolSeen: false,
         streamJsonProtocolSeen: false,
+        streamJsonExtendedProtocolSeen: false,
         jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
         resumePickerTtySeen: false,
@@ -150,6 +151,7 @@ describe("capability report", () => {
         "helpShapeSeen=false",
         "textOutputProtocolSeen=false",
         "streamJsonProtocolSeen=false",
+        "streamJsonExtendedProtocolSeen=false",
         "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
         "resumePickerTtySeen=false",
@@ -992,6 +994,7 @@ function harnessReport(input: {
   helpShapeSeen?: boolean;
   textOutputProtocolSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
+  streamJsonExtendedProtocolSeen?: boolean;
   jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
   resumePickerTtySeen?: boolean;
@@ -1016,7 +1019,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 120,
+      assertions: input.assertions ?? 130,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1050,6 +1053,7 @@ function harnessReport(input: {
                   ...helpShapeAssertions(input),
                   ...textOutputProtocolAssertions(input),
                   ...streamJsonProtocolAssertions(input),
+                  ...streamJsonExtendedProtocolAssertions(input),
                   ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
                   ...resumePickerTtyAssertions(input),
@@ -1833,6 +1837,24 @@ function streamJsonProtocolAssertions(input: { streamJsonProtocolSeen?: boolean 
         "stream-json emitted tool started and completed events",
         "stream-json preserved raw agent events",
         "stream-json completed with status and final message"
+      ];
+}
+
+function streamJsonExtendedProtocolAssertions(input: {
+  streamJsonExtendedProtocolSeen?: boolean;
+}): string[] {
+  return input.streamJsonExtendedProtocolSeen === false
+    ? []
+    : [
+        "stream-json emitted structured request started event",
+        "stream-json emitted structured usage event",
+        "stream-json emitted structured message delta event",
+        "stream-json emitted structured user message event",
+        "stream-json emitted structured approval request event",
+        "stream-json emitted structured hook completed event",
+        "stream-json emitted structured query done event",
+        "stream-json preserved raw extended agent events",
+        "stream-json extended protocol kept denied write from mutating workspace"
       ];
 }
 

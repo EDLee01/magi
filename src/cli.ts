@@ -2150,6 +2150,43 @@ function formatStreamJsonAgentEvent(input: {
 }): string[] {
   const { event, sessionId, jobId } = input;
   const raw = JSON.stringify({ type: `agent.${event.type}`, sessionId, jobId, event });
+  if (event.type === "request_start") {
+    return [
+      JSON.stringify({
+        type: "request.started",
+        sessionId,
+        jobId
+      }),
+      raw
+    ];
+  }
+  if (event.type === "tool_context") {
+    return [
+      JSON.stringify({
+        type: "tool.context",
+        sessionId,
+        jobId,
+        toolCount: event.toolCount,
+        deferredToolCount: event.deferredToolCount,
+        schemaChars: event.schemaChars,
+        estimatedSchemaTokens: event.estimatedSchemaTokens,
+        toolNames: event.toolNames
+      }),
+      raw
+    ];
+  }
+  if (event.type === "text_delta") {
+    return [
+      JSON.stringify({
+        type: "message.delta",
+        sessionId,
+        jobId,
+        role: "assistant",
+        content: event.text
+      }),
+      raw
+    ];
+  }
   if (event.type === "tool_use") {
     return [
       JSON.stringify({
@@ -2177,6 +2214,91 @@ function formatStreamJsonAgentEvent(input: {
       raw
     ];
   }
+  if (event.type === "hook_result") {
+    return [
+      JSON.stringify({
+        type: "hook.completed",
+        sessionId,
+        jobId,
+        event: event.event,
+        toolUseId: event.toolCallId,
+        tool: event.toolName,
+        output: event.result.output,
+        exitCode: event.result.exitCode,
+        blocked: event.result.blocked,
+        timedOut: event.result.timedOut === true,
+        error: event.result.error,
+        status: event.result.status
+      }),
+      raw
+    ];
+  }
+  if (event.type === "compact_boundary") {
+    return [
+      JSON.stringify({
+        type: "context.compacted",
+        sessionId,
+        jobId,
+        summaryId: event.summaryId,
+        sourceMessageCount: event.sourceMessageCount,
+        estimatedTokensBefore: event.estimatedTokensBefore
+      }),
+      raw
+    ];
+  }
+  if (event.type === "approval_request") {
+    return [
+      JSON.stringify({
+        type: "approval.requested",
+        sessionId,
+        jobId,
+        toolUseId: event.toolUse.id,
+        tool: event.toolUse.name,
+        input: event.toolUse.input,
+        reason: event.reason
+      }),
+      raw
+    ];
+  }
+  if (event.type === "user_question") {
+    return [
+      JSON.stringify({
+        type: "user_question.answered",
+        sessionId,
+        jobId,
+        toolUseId: event.toolUse.id,
+        tool: event.toolUse.name,
+        question: event.question,
+        answer: event.answer
+      }),
+      raw
+    ];
+  }
+  if (event.type === "user_message") {
+    return [
+      JSON.stringify({
+        type: "user_message.sent",
+        sessionId,
+        jobId,
+        toolUseId: event.toolUse.id,
+        tool: event.toolUse.name,
+        message: event.message,
+        result: event.result
+      }),
+      raw
+    ];
+  }
+  if (event.type === "usage") {
+    return [
+      JSON.stringify({
+        type: "usage.reported",
+        sessionId,
+        jobId,
+        usage: normalizeProviderUsage(event.usage)
+      }),
+      raw
+    ];
+  }
   if (event.type === "assistant_message") {
     return [
       JSON.stringify({
@@ -2185,18 +2307,6 @@ function formatStreamJsonAgentEvent(input: {
         jobId,
         role: "assistant",
         content: streamMessageText(event.message)
-      }),
-      raw
-    ];
-  }
-  if (event.type === "user_message") {
-    return [
-      JSON.stringify({
-        type: "message.created",
-        sessionId,
-        jobId,
-        role: "user",
-        content: event.message.message
       }),
       raw
     ];
@@ -2244,6 +2354,39 @@ function formatStreamJsonAgentEvent(input: {
         provider: event.providerName,
         model: event.model,
         errorKind: event.errorKind
+      }),
+      raw
+    ];
+  }
+  if (event.type === "cancelled") {
+    return [
+      JSON.stringify({
+        type: "query.cancelled",
+        sessionId,
+        jobId,
+        reason: event.reason
+      }),
+      raw
+    ];
+  }
+  if (event.type === "max_turns_reached") {
+    return [
+      JSON.stringify({
+        type: "query.max_turns",
+        sessionId,
+        jobId
+      }),
+      raw
+    ];
+  }
+  if (event.type === "done") {
+    return [
+      JSON.stringify({
+        type: "query.done",
+        sessionId,
+        jobId,
+        message: event.text,
+        messageCount: event.messages.length
       }),
       raw
     ];

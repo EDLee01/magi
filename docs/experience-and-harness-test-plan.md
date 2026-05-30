@@ -24,6 +24,9 @@ Already covered by automated tests:
   interactive `/resume <query>` picker search/cancel behavior.
 - CLI `--tools`, `--allowed-tools`, and `--disallowed-tools` schema filtering
   plus execution-time denial.
+- Stream-json structured event parity for core lifecycle plus less common
+  request, usage, message delta, approval, user-message, hook, and query-done
+  events.
 - MCP list/call approval basics.
 - Control API pairing, auth, jobs, approvals, SSE, agents.
 - Multi-agent queue and write conflict detection.
@@ -39,7 +42,6 @@ Not yet fully covered:
 
 - Resume picker visual polish beyond the core search/no-results/cancel flow.
 - TUI keyboard navigation polish.
-- Broader stream-json parity for remaining less common event types.
 - Full dangerous-tool semantics across every permission mode.
 - Real provider-driven tool loop for non-trivial code changes.
 
@@ -345,10 +347,11 @@ Acceptance:
 - No non-JSON text mixed into stream.
 - Error event is valid JSON.
 
-Current status: implemented for the main headless lifecycle and black-box
-gated. The harness verifies JSONL-only output, user/assistant message events,
-tool started/completed events, preserved raw agent events, and completed status.
-Broader parity for less common event types remains future coverage.
+Current status: implemented and black-box gated. The harness verifies
+JSONL-only output, user/assistant message events, tool started/completed
+events, preserved raw agent events, completed status, and structured extended
+events for request start, usage, message delta, approval request, user message,
+hooks, and query done.
 
 ## E. Permission and Tool Policy
 
@@ -785,13 +788,12 @@ Highest priority gaps:
 2. Broader visual regression coverage across full PTY transcripts.
 3. Resume picker visual polish beyond core search/no-results/cancel behavior.
 4. TUI keyboard navigation polish.
-5. More remaining stream-json event parity cases.
+5. Full dangerous-tool semantics across every permission mode.
 
 Recommended next implementation phase:
 
-- H323-H328: PTY driver and snapshot test infrastructure.
-- H329-H336: Slash suggestion menu and tests.
-- H337-H344: Searchable session picker and tests.
-- H345-H352: Stream-json event protocol.
-- H353-H364: Tool permission policy.
-- H365-H378: Complex task harness fixtures and scorer.
+- Expand full PTY transcript snapshot coverage.
+- Tighten TUI keyboard navigation contracts.
+- Extend dangerous-tool permission matrix coverage.
+- Keep real-provider tool-loop checks opt-in until credentials and upstream
+  variability can be isolated from default CI.

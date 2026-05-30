@@ -1796,6 +1796,142 @@ async function scenarioDefaultPermissionDenied() {
   });
 }
 
+async function scenarioStreamJsonExtendedEvents() {
+  return await withTempWorkspace("stream-json-extended", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        if (!transcript.includes("Exercise the extended stream-json event protocol")) {
+          return messageText("OK");
+        }
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("SendUserMessage"), "extended stream missing SendUserMessage");
+          assert(toolNames.includes("FileWrite"), "extended stream missing FileWrite");
+          return toolResponse([
+            toolCall("stream-user-message", "SendUserMessage", {
+              message: "Checking extended stream-json automation events.",
+              status: "normal",
+              attachments: ["reports/stream-json-events.md"]
+            }),
+            toolCall("stream-denied-write", "FileWrite", {
+              file_path: "denied-stream-json.txt",
+              content: "should not be written"
+            })
+          ]);
+        }
+        assert(transcript.includes("User message delivered"), "user message result was not visible");
+        assert(
+          transcript.includes("Permission ask: FileWrite requires approval"),
+          "approval denial result was not visible"
+        );
+        return messageText("Extended stream-json protocol observed.");
+      }
+    });
+    try {
+      writeFileSync(
+        path.join(configDir, "config.yaml"),
+        [
+          renderConfig({ port: provider.port }),
+          "hooks:",
+          "  - event: session_start",
+          "    type: command",
+          "    command: printf stream-session-start",
+          "  - event: post_tool_use_failure",
+          "    type: command",
+          "    command: printf stream-tool-failure",
+          "  - event: session_end",
+          "    type: command",
+          "    command: printf stream-session-end",
+          ""
+        ].join("\n")
+      );
+      const output = await runCli({
+        args: [
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Exercise the extended stream-json event protocol with a user message and denied write."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "extended stream-json events"
+      });
+      const events = parseStreamEvents(output);
+      const eventTypes = events.map((event) => event.type);
+      assert(eventTypes.includes("request.started"), "stream-json missed request.started");
+      assert(eventTypes.includes("usage.reported"), "stream-json missed usage.reported");
+      assert(eventTypes.includes("message.delta"), "stream-json missed message.delta");
+      assert(eventTypes.includes("user_message.sent"), "stream-json missed user_message.sent");
+      assert(eventTypes.includes("approval.requested"), "stream-json missed approval.requested");
+      assert(eventTypes.includes("hook.completed"), "stream-json missed hook.completed");
+      assert(eventTypes.includes("query.done"), "stream-json missed query.done");
+      assert(eventTypes.includes("agent.user_message"), "stream-json missed raw user_message");
+      assert(eventTypes.includes("agent.approval_request"), "stream-json missed raw approval");
+      assert(eventTypes.includes("agent.hook_result"), "stream-json missed raw hook_result");
+      const approval = events.find((event) => event.type === "approval.requested");
+      assert(approval?.tool === "FileWrite", "approval.requested missed tool name");
+      assert(
+        approval?.toolUseId === "stream-denied-write",
+        "approval.requested missed tool use id"
+      );
+      assert(
+        approval?.reason === "FileWrite requires approval",
+        "approval.requested missed reason"
+      );
+      const userMessage = events.find((event) => event.type === "user_message.sent");
+      assert(
+        userMessage?.message?.message === "Checking extended stream-json automation events.",
+        "user_message.sent missed message body"
+      );
+      assert(userMessage?.result?.channel === "agent-event", "user_message.sent missed channel");
+      const hookOutputs = events
+        .filter((event) => event.type === "hook.completed")
+        .map((event) => event.output);
+      assert(hookOutputs.includes("stream-session-start"), "hook.completed missed session_start");
+      assert(hookOutputs.includes("stream-tool-failure"), "hook.completed missed failure hook");
+      assert(hookOutputs.includes("stream-session-end"), "hook.completed missed session_end");
+      const usage = events.find((event) => event.type === "usage.reported");
+      assert(usage?.usage?.inputTokens === 1, "usage.reported missed input tokens");
+      assert(usage?.usage?.outputTokens === 1, "usage.reported missed output tokens");
+      const done = events.find((event) => event.type === "query.done");
+      assert(
+        done?.message === "Extended stream-json protocol observed.",
+        "query.done missed final message"
+      );
+      assert(
+        !existsSync(path.join(workDir, "denied-stream-json.txt")),
+        "denied stream-json write mutated workspace"
+      );
+      assert(turn === 2, "extended stream-json scenario should complete in two provider turns");
+      return {
+        score: 1,
+        assertions: [
+          "stream-json emitted structured request started event",
+          "stream-json emitted structured usage event",
+          "stream-json emitted structured message delta event",
+          "stream-json emitted structured user message event",
+          "stream-json emitted structured approval request event",
+          "stream-json emitted structured hook completed event",
+          "stream-json emitted structured query done event",
+          "stream-json preserved raw extended agent events",
+          "stream-json extended protocol kept denied write from mutating workspace"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioHelpShape() {
   return await withTempWorkspace("help-shape", async ({ configDir, workDir }) => {
     const output = await runCli({
@@ -3809,6 +3945,7 @@ async function main() {
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
+    ["stream-json extended events", scenarioStreamJsonExtendedEvents],
     ["help shape", scenarioHelpShape],
     ["text output protocol", scenarioTextOutputProtocol],
     ["json output protocol", scenarioJsonOutputProtocol],
