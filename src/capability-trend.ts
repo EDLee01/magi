@@ -34,6 +34,18 @@ export interface CapabilityTrendDelta {
   regressions: number;
 }
 
+export interface CapabilityTrendEfficiencyBudget {
+  providerCalls: EfficiencyDeltaBudget;
+  toolCallCount: EfficiencyDeltaBudget;
+  checkProviderCalls: EfficiencyDeltaBudget;
+  checkToolCallCount: EfficiencyDeltaBudget;
+}
+
+export interface EfficiencyDeltaBudget {
+  absolute: number;
+  relative: number;
+}
+
 export interface CapabilityTrendReport {
   version: 1;
   name: "capability-trend";
@@ -42,18 +54,28 @@ export interface CapabilityTrendReport {
   current: CapabilityTrendSample;
   previous?: CapabilityTrendSample;
   delta?: CapabilityTrendDelta;
+  efficiencyBudget: CapabilityTrendEfficiencyBudget;
   failures: string[];
   observations: string[];
   historyCount: number;
 }
 
+export const DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET: CapabilityTrendEfficiencyBudget = {
+  providerCalls: { absolute: 20, relative: 0.35 },
+  toolCallCount: { absolute: 100, relative: 0.35 },
+  checkProviderCalls: { absolute: 10, relative: 0.5 },
+  checkToolCallCount: { absolute: 60, relative: 0.5 }
+};
+
 export function buildCapabilityTrendReport(input: {
   current: CapabilityReport;
   history?: CapabilityTrendSample[];
   generatedAt?: Date;
+  efficiencyBudget?: PartialCapabilityTrendEfficiencyBudget;
 }): CapabilityTrendReport {
   const current = sampleFromCapabilityReport(input.current);
   const previous = latestSample(input.history ?? []);
+  const efficiencyBudget = normalizeEfficiencyBudget(input.efficiencyBudget);
   const failures: string[] = [];
   const observations: string[] = [];
   let delta: CapabilityTrendDelta | undefined;
@@ -76,6 +98,14 @@ export function buildCapabilityTrendReport(input: {
     if (delta.toolCallCount !== 0) {
       observations.push(`toolCallCountDelta=${formatSigned(delta.toolCallCount)}`);
     }
+    failures.push(
+      ...checkEfficiencyBudget({
+        current,
+        previous,
+        delta,
+        budget: efficiencyBudget
+      })
+    );
   }
   if (current.status !== "passed") failures.push(`status=${current.status}`);
   if (current.regressions > 0) failures.push(`regressions=${current.regressions}`);
@@ -87,6 +117,7 @@ export function buildCapabilityTrendReport(input: {
     current,
     previous,
     delta,
+    efficiencyBudget,
     failures,
     observations,
     historyCount: input.history?.length ?? 0
@@ -231,8 +262,108 @@ function latestSample(samples: CapabilityTrendSample[]): CapabilityTrendSample |
   return samples.at(-1);
 }
 
+type PartialCapabilityTrendEfficiencyBudget = Partial<{
+  [K in keyof CapabilityTrendEfficiencyBudget]: Partial<EfficiencyDeltaBudget>;
+}>;
+
+function normalizeEfficiencyBudget(
+  input?: PartialCapabilityTrendEfficiencyBudget
+): CapabilityTrendEfficiencyBudget {
+  return {
+    providerCalls: normalizeDeltaBudget(
+      input?.providerCalls,
+      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.providerCalls
+    ),
+    toolCallCount: normalizeDeltaBudget(
+      input?.toolCallCount,
+      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.toolCallCount
+    ),
+    checkProviderCalls: normalizeDeltaBudget(
+      input?.checkProviderCalls,
+      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.checkProviderCalls
+    ),
+    checkToolCallCount: normalizeDeltaBudget(
+      input?.checkToolCallCount,
+      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.checkToolCallCount
+    )
+  };
+}
+
+function normalizeDeltaBudget(
+  input: Partial<EfficiencyDeltaBudget> | undefined,
+  fallback: EfficiencyDeltaBudget
+): EfficiencyDeltaBudget {
+  return {
+    absolute: readPositiveNumber(input?.absolute, fallback.absolute),
+    relative: readNonNegativeNumber(input?.relative, fallback.relative)
+  };
+}
+
+function checkEfficiencyBudget(input: {
+  current: CapabilityTrendSample;
+  previous: CapabilityTrendSample;
+  delta: CapabilityTrendDelta;
+  budget: CapabilityTrendEfficiencyBudget;
+}): string[] {
+  const failures: string[] = [];
+  pushBudgetFailure(
+    failures,
+    "providerCallsBudget",
+    input.delta.providerCalls,
+    allowedDelta(input.previous.providerCalls, input.budget.providerCalls)
+  );
+  pushBudgetFailure(
+    failures,
+    "toolCallCountBudget",
+    input.delta.toolCallCount,
+    allowedDelta(input.previous.toolCallCount, input.budget.toolCallCount)
+  );
+
+  const previousChecks = new Map(input.previous.checks.map((check) => [check.id, check]));
+  for (const currentCheck of input.current.checks) {
+    const previousCheck = previousChecks.get(currentCheck.id);
+    if (!previousCheck) continue;
+    pushBudgetFailure(
+      failures,
+      `${currentCheck.id}.providerCallsBudget`,
+      currentCheck.providerCalls - previousCheck.providerCalls,
+      allowedDelta(previousCheck.providerCalls, input.budget.checkProviderCalls)
+    );
+    pushBudgetFailure(
+      failures,
+      `${currentCheck.id}.toolCallCountBudget`,
+      currentCheck.toolCallCount - previousCheck.toolCallCount,
+      allowedDelta(previousCheck.toolCallCount, input.budget.checkToolCallCount)
+    );
+  }
+  return failures;
+}
+
+function pushBudgetFailure(
+  failures: string[],
+  label: string,
+  delta: number,
+  allowed: number
+): void {
+  if (delta > allowed) {
+    failures.push(`${label}=${formatSigned(delta)}>+${allowed}`);
+  }
+}
+
+function allowedDelta(previous: number, budget: EfficiencyDeltaBudget): number {
+  return Math.max(budget.absolute, Math.ceil(previous * budget.relative));
+}
+
 function readNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function readPositiveNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function readNonNegativeNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function formatSigned(value: number): string {

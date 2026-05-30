@@ -78,7 +78,7 @@ describe("capability trend report", () => {
   it("fails on new regressions but keeps provider and tool deltas as observations", () => {
     const report = buildCapabilityTrendReport({
       current: capabilityReport({
-        providerCalls: [18, 10],
+        providerCalls: [16, 10],
         toolCallCount: [25, 15],
         regressions: [1, 0]
       }),
@@ -90,8 +90,71 @@ describe("capability trend report", () => {
       expect.arrayContaining(["regressionsDelta=+1", "regressions=1"])
     );
     expect(report.observations).toEqual(
-      expect.arrayContaining(["providerCallsDelta=+18", "toolCallCountDelta=+26"])
+      expect.arrayContaining(["providerCallsDelta=+16", "toolCallCountDelta=+26"])
     );
+  });
+
+  it("fails when capability efficiency regresses beyond the trend budget", () => {
+    const report = buildCapabilityTrendReport({
+      current: capabilityReport({
+        providerCalls: [26, 7],
+        toolCallCount: [90, 35]
+      }),
+      history: [
+        sample({
+          providerCalls: 10,
+          toolCallCount: 14,
+          checks: [
+            sampleCheck({ id: "blackbox", providerCalls: 6, toolCallCount: 8 }),
+            sampleCheck({ id: "memory", providerCalls: 4, toolCallCount: 6 })
+          ]
+        })
+      ]
+    });
+
+    expect(report.status).toBe("failed");
+    expect(report.failures).toEqual(
+      expect.arrayContaining([
+        "providerCallsBudget=+23>+20",
+        "toolCallCountBudget=+111>+100",
+        "blackbox.providerCallsBudget=+20>+10",
+        "blackbox.toolCallCountBudget=+82>+60"
+      ])
+    );
+    expect(report.efficiencyBudget).toMatchObject({
+      providerCalls: { absolute: 20, relative: 0.35 },
+      toolCallCount: { absolute: 100, relative: 0.35 },
+      checkProviderCalls: { absolute: 10, relative: 0.5 },
+      checkToolCallCount: { absolute: 60, relative: 0.5 }
+    });
+  });
+
+  it("accepts custom efficiency budgets for intentionally larger benchmark profiles", () => {
+    const report = buildCapabilityTrendReport({
+      current: capabilityReport({
+        providerCalls: [26, 7],
+        toolCallCount: [90, 35]
+      }),
+      history: [
+        sample({
+          providerCalls: 10,
+          toolCallCount: 14,
+          checks: [
+            sampleCheck({ id: "blackbox", providerCalls: 6, toolCallCount: 8 }),
+            sampleCheck({ id: "memory", providerCalls: 4, toolCallCount: 6 })
+          ]
+        })
+      ],
+      efficiencyBudget: {
+        providerCalls: { absolute: 30 },
+        toolCallCount: { absolute: 120 },
+        checkProviderCalls: { absolute: 25 },
+        checkToolCallCount: { absolute: 90 }
+      }
+    });
+
+    expect(report.status).toBe("passed");
+    expect(report.failures).toEqual([]);
   });
 
   it("reads, writes, and trims history samples", () => {
@@ -173,6 +236,14 @@ function sample(
     providerCalls: number;
     toolCallCount: number;
     regressions: number;
+    checks: Array<{
+      id: string;
+      status: string;
+      score: number;
+      providerCalls: number;
+      toolCallCount: number;
+      regressions: number;
+    }>;
   }> = {}
 ) {
   return {
@@ -185,6 +256,27 @@ function sample(
     providerCalls: overrides.providerCalls ?? 10,
     toolCallCount: overrides.toolCallCount ?? 14,
     regressions: overrides.regressions ?? 0,
-    checks: []
+    checks: overrides.checks ?? [
+      sampleCheck({ id: "blackbox", providerCalls: 6, toolCallCount: 8 }),
+      sampleCheck({ id: "memory", providerCalls: 4, toolCallCount: 6 })
+    ]
+  };
+}
+
+function sampleCheck(input: {
+  id: string;
+  status?: string;
+  score?: number;
+  providerCalls: number;
+  toolCallCount: number;
+  regressions?: number;
+}) {
+  return {
+    id: input.id,
+    status: input.status ?? "passed",
+    score: input.score ?? 1,
+    providerCalls: input.providerCalls,
+    toolCallCount: input.toolCallCount,
+    regressions: input.regressions ?? 0
   };
 }
