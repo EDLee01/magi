@@ -1426,13 +1426,25 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h9Approval = readRecord(h9?.approval);
   const h9Limits = readRecord(h9?.limitResults);
   const h9Seen = Boolean(h9);
+  const h10 = detailsList.find((details) => details.taskId === "H10");
+  const h10ToolCounts = readRecord(h10?.toolCounts);
+  const h10ChangedFiles = readStringList(h10?.changedFiles);
+  const h10Assertions = readStringList(h10?.assertions);
+  const h10ForbiddenChanges = readStringList(h10?.forbiddenChanges);
+  const h10Session = readRecord(h10?.session);
+  const h10Stream = readRecord(h10?.stream);
+  const h10ProviderRouting = readRecord(h10?.providerRouting);
+  const h10RetryProviders = readStringList(h10ProviderRouting.retryProviders);
+  const h10RetryErrorKinds = readStringList(h10ProviderRouting.retryErrorKinds);
+  const h10Limits = readRecord(h10?.limitResults);
+  const h10Seen = Boolean(h10);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const failures = [...base.failures];
 
-  if (readNumber(summary.total) < 9) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (readNumber(summary.total) < 10) failures.push(`scenarios=${readNumber(summary.total)}`);
   if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
   if (!taskClasses.has("multi_file_feature")) failures.push("multiFileFeatureTask=false");
   if (!taskClasses.has("behavior_preserving_refactor"))
@@ -1445,6 +1457,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!taskClasses.has("stream_json_automation")) failures.push("streamJsonAutomationTask=false");
   if (!taskClasses.has("multi_agent_conflict")) failures.push("multiAgentConflictTask=false");
   if (!taskClasses.has("bash_approval_control")) failures.push("bashApprovalControlTask=false");
+  if (!taskClasses.has("provider_retry_fallback")) failures.push("providerRetryFallbackTask=false");
   if (!h1Seen) failures.push("H1=false");
   if (!h2Seen) failures.push("H2=false");
   if (!h3Seen) failures.push("H3=false");
@@ -1454,9 +1467,10 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!h7Seen) failures.push("H7=false");
   if (!h8Seen) failures.push("H8=false");
   if (!h9Seen) failures.push("H9=false");
-  if (assertions < 127) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 48) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 54) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!h10Seen) failures.push("H10=false");
+  if (assertions < 145) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 53) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 56) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
@@ -1673,6 +1687,36 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h9Limits.withinTime !== true) failures.push("H9WithinTime=false");
   if (h9Limits.withinCommands !== true) failures.push("H9WithinCommands=false");
   if (h9Limits.withinFileChanges !== true) failures.push("H9WithinFileChanges=false");
+  if (readNumber(h10ToolCounts.FileRead) !== 1) failures.push("H10FileReadCalls != 1");
+  if (readNumber(h10ToolCounts.FileWrite) !== 1) failures.push("H10FileWriteCalls != 1");
+  if (readNumber(h10ToolCounts.Bash) !== 0) failures.push("H10Bash used");
+  if (readNumber(h10ToolCounts.FilePatch) !== 0) failures.push("H10FilePatch used");
+  if (readNumber(h10ToolCounts.FileEdit) !== 0) failures.push("H10FileEdit used");
+  if (h10?.checksPassed !== true) failures.push("H10ChecksPassed=false");
+  if (h10?.streamJsonLifecycleVerified !== true) failures.push("H10StreamJsonLifecycle=false");
+  if (JSON.stringify(h10ChangedFiles) !== JSON.stringify(["reports/provider-retry-report.md"])) {
+    failures.push(`H10ChangedFiles=${JSON.stringify(h10ChangedFiles)}`);
+  }
+  if (h10ForbiddenChanges.length > 0)
+    failures.push(`H10ForbiddenChanges=${h10ForbiddenChanges.length}`);
+  if (h10Assertions.length < 18) failures.push(`H10Assertions=${h10Assertions.length}`);
+  if (readNumber(h10Session.messageCount) < 2) failures.push("H10SessionMessages < 2");
+  if (readNumber(h10Session.auditEventCount) < 1) failures.push("H10AuditEvents < 1");
+  if (readNumber(h10Stream.providerRetryCount) !== 2)
+    failures.push("H10ProviderRetryStreamCount != 2");
+  if (h10Stream.providerFallbackSeen !== true) failures.push("H10ProviderFallbackStream=false");
+  if (h10Stream.sessionErrorSeen !== false) failures.push("H10SessionErrorSeen=true");
+  if (readNumber(h10ProviderRouting.retryCount) !== 2)
+    failures.push("H10ProviderRetryAuditCount != 2");
+  if (readNumber(h10ProviderRouting.fallbackCount) !== 1)
+    failures.push("H10ProviderFallbackAuditCount != 1");
+  if (!h10RetryProviders.includes("openai")) failures.push("H10RetryProviderMissing");
+  if (!h10RetryErrorKinds.includes("server-error")) failures.push("H10RetryErrorKindMissing");
+  if (h10ProviderRouting.fallbackToProvider !== "backup")
+    failures.push("H10FallbackProviderMismatch");
+  if (h10Limits.withinTime !== true) failures.push("H10WithinTime=false");
+  if (h10Limits.withinCommands !== true) failures.push("H10WithinCommands=false");
+  if (h10Limits.withinFileChanges !== true) failures.push("H10WithinFileChanges=false");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
   }
@@ -1869,6 +1913,30 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H9WithinTime: h9Limits.withinTime === true,
       H9WithinCommands: h9Limits.withinCommands === true,
       H9WithinFileChanges: h9Limits.withinFileChanges === true,
+      H10Seen: h10Seen,
+      H10FileReadCalls: readNumber(h10ToolCounts.FileRead),
+      H10FileWriteCalls: readNumber(h10ToolCounts.FileWrite),
+      H10BashCalls: readNumber(h10ToolCounts.Bash),
+      H10FilePatchCalls: readNumber(h10ToolCounts.FilePatch),
+      H10FileEditCalls: readNumber(h10ToolCounts.FileEdit),
+      H10ChecksPassed: h10?.checksPassed === true,
+      H10StreamJsonLifecycle: h10?.streamJsonLifecycleVerified === true,
+      H10ChangedFiles: h10ChangedFiles,
+      H10ForbiddenChanges: h10ForbiddenChanges.length,
+      H10Assertions: h10Assertions.length,
+      H10SessionMessages: readNumber(h10Session.messageCount),
+      H10AuditEvents: readNumber(h10Session.auditEventCount),
+      H10ProviderRetryStreamCount: readNumber(h10Stream.providerRetryCount),
+      H10ProviderFallbackStream: h10Stream.providerFallbackSeen === true,
+      H10SessionErrorSeen: h10Stream.sessionErrorSeen === true,
+      H10ProviderRetryAuditCount: readNumber(h10ProviderRouting.retryCount),
+      H10ProviderFallbackAuditCount: readNumber(h10ProviderRouting.fallbackCount),
+      H10RetryProviders: h10RetryProviders,
+      H10RetryErrorKinds: h10RetryErrorKinds,
+      H10FallbackToProvider: h10ProviderRouting.fallbackToProvider,
+      H10WithinTime: h10Limits.withinTime === true,
+      H10WithinCommands: h10Limits.withinCommands === true,
+      H10WithinFileChanges: h10Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

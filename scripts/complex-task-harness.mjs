@@ -94,7 +94,7 @@ function fail(status, message) {
   };
 }
 
-function renderConfig(port) {
+function renderConfig(port, { fallbacks = false } = {}) {
   return [
     "defaultProvider: openai",
     "defaultModel: main",
@@ -103,10 +103,16 @@ function renderConfig(port) {
     "    type: openai",
     "    apiKeyEnv: MAGI_OPENAI_API_KEY",
     `    baseUrl: http://127.0.0.1:${port}/v1`,
+    "  backup:",
+    "    type: openai",
+    "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+    `    baseUrl: http://127.0.0.1:${port}/v1`,
     "models:",
     "  aliases:",
     "    main: openai:mock-main",
-    "  fallbacks: {}",
+    "    backup: backup:mock-backup",
+    "  fallbacks:",
+    fallbacks ? "    main:\n      - backup:mock-backup" : "    {}",
     ""
   ].join("\n");
 }
@@ -1312,6 +1318,69 @@ function createH9Router() {
   };
 }
 
+function createH10Router() {
+  let primaryCalls = 0;
+  let backupTurn = 0;
+  return ({ body, transcript, toolNames }) => {
+    if (!transcript.includes("Verify provider retry and fallback")) {
+      return messageText("OK", body.model ?? "mock-main");
+    }
+
+    if (body.model === "mock-main") {
+      primaryCalls += 1;
+      if (primaryCalls <= 3) {
+        return fail(500, "primary transient provider failure");
+      }
+      return fail(500, "primary should have fallen back before another attempt");
+    }
+
+    if (body.model === "mock-backup") {
+      backupTurn += 1;
+      if (backupTurn === 1) {
+        assert(primaryCalls === 3, `H10 expected 3 primary retry attempts, saw ${primaryCalls}`);
+        assert(toolNames.includes("FileRead"), "H10 backup route missing FileRead");
+        assert(toolNames.includes("FileWrite"), "H10 backup route missing FileWrite");
+        return toolResponse(
+          [
+            toolCall("h10-read-policy", "FileRead", {
+              file_path: "docs/provider-retry.md"
+            }),
+            toolCall("h10-write-report", "FileWrite", {
+              file_path: "reports/provider-retry-report.md",
+              content: [
+                "# Provider Retry Report",
+                "",
+                "- Primary provider produced three retryable server failures.",
+                "- Retry diagnostics used provider.retry events instead of session.error.",
+                "- Fallback switched to backup/mock-backup and recovered the task.",
+                "- TUI live output suppresses provider retry diagnostics by default.",
+                ""
+              ].join("\n")
+            })
+          ],
+          "mock-backup"
+        );
+      }
+
+      if (backupTurn === 2) {
+        assert(transcript.includes("Provider Retry Policy"), "H10 policy document was not read");
+        assert(
+          transcript.includes("Wrote reports/provider-retry-report.md"),
+          "H10 report write result was not visible"
+        );
+        return messageText(
+          "Verified provider retry fallback and wrote reports/provider-retry-report.md.",
+          "mock-backup"
+        );
+      }
+
+      throw new Error(`H10 backup exceeded expected provider turns: ${backupTurn}`);
+    }
+
+    return fail(400, `unexpected H10 model ${body.model}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -1818,6 +1887,85 @@ function taskDefinitionFor(taskId) {
     };
   }
 
+  if (taskId === "H10") {
+    return {
+      createRouter: createH10Router,
+      fallbacks: true,
+      finalMessage: "Verified provider retry fallback and wrote reports/provider-retry-report.md.",
+      assertions: [
+        "H10 fixture copied into isolated workspace",
+        "H10 fallback config enabled",
+        "H10 primary provider failed with retryable server errors",
+        "H10 primary attempted exactly three times before fallback",
+        "H10 stream emitted provider.retry diagnostics for scheduled retries",
+        "H10 stream did not emit session.error for retry diagnostics",
+        "H10 stream emitted provider fallback event",
+        "H10 backup provider recovered the task",
+        "H10 policy document read on backup route",
+        "H10 retry report written",
+        "H10 changed exactly expected report",
+        "H10 forbidden paths unchanged",
+        "H10 SQLite retry audit persisted",
+        "H10 SQLite fallback audit persisted",
+        "H10 retry audit captured provider",
+        "H10 retry audit captured attempt count",
+        "H10 fallback audit captured backup provider",
+        "H10 session and audit persisted"
+      ],
+      filesVerified: [
+        "docs/provider-retry.md",
+        "reports/provider-retry-report.md",
+        "stdout.jsonl",
+        "stderr.txt",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session, stream, providerRouting }) => {
+        assert((toolCounts.FileRead ?? 0) === 1, "H10 should read provider retry policy once");
+        assert((toolCounts.FileWrite ?? 0) === 1, "H10 should write one report");
+        assert((toolCounts.Bash ?? 0) === 0, "H10 should not use Bash");
+        assert((toolCounts.FilePatch ?? 0) === 0, "H10 should not patch files");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H10 should not use FileEdit");
+        const report = after["reports/provider-retry-report.md"]?.text ?? "";
+        assert(
+          report.includes("three retryable server failures"),
+          "H10 report missed retry evidence"
+        );
+        assert(
+          report.includes("provider.retry events instead of session.error"),
+          "H10 report missed retry event evidence"
+        );
+        assert(
+          report.includes("backup/mock-backup"),
+          "H10 report missed fallback provider evidence"
+        );
+        assert(
+          stream.providerRetryCount === 2,
+          `H10 expected 2 provider.retry events, saw ${stream.providerRetryCount}`
+        );
+        assert(stream.providerFallbackSeen === true, "H10 provider fallback stream event missing");
+        assert(
+          stream.sessionErrorSeen === false,
+          "H10 retry diagnostics should not emit session.error"
+        );
+        assert(
+          providerRouting.retryCount === 2,
+          `H10 expected 2 retry audit events, saw ${providerRouting.retryCount}`
+        );
+        assert(
+          providerRouting.fallbackCount === 1,
+          `H10 expected one fallback audit event, saw ${providerRouting.fallbackCount}`
+        );
+        assert(
+          providerRouting.retryProviders.includes("openai"),
+          "H10 retry audit provider missing"
+        );
+        assert(providerRouting.fallbackToProvider === "backup", "H10 fallback target mismatch");
+        assert(session.auditEventCount > 0, "H10 session audit events were not persisted");
+        assert(session.messageCount >= 2, "H10 session messages were not persisted");
+      }
+    };
+  }
+
   throw new Error(`Unknown complex harness task id: ${taskId}`);
 }
 
@@ -1912,7 +2060,11 @@ async function runTask(taskName) {
   });
 
   try {
-    writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig(provider.port, { fallbacks: taskDefinition.fallbacks === true }),
+      "utf8"
+    );
     const taskPrompt = readFileSync(path.join(taskRoot, "task.md"), "utf8");
     const result = await runCli({
       args: [
@@ -1973,6 +2125,7 @@ async function runTask(taskName) {
     const session = readSessionEvidence(sessionDbFile, completed.sessionId);
     const agentQueue = readAgentQueueEvidence(sessionDbFile);
     const approval = readBashApprovalEvidence(sessionDbFile);
+    const providerRouting = readProviderRoutingEvidence(sessionDbFile);
     const diffText = renderChangedFileDiffs(before, after, changedFiles);
     writeFileSync(path.join(archiveDir, "diff.txt"), diffText, "utf8");
 
@@ -1998,7 +2151,8 @@ async function runTask(taskName) {
       session,
       stream,
       agentQueue,
-      approval
+      approval,
+      providerRouting
     });
 
     return {
@@ -2026,6 +2180,10 @@ async function runTask(taskName) {
           agentQueue.taskCount > 0 || agentQueue.writeClaimCount > 0 ? agentQueue : undefined,
         approval:
           approval.pendingCount > 0 || approval.completedBashToolCount > 0 ? approval : undefined,
+        providerRouting:
+          providerRouting.retryCount > 0 || providerRouting.fallbackCount > 0
+            ? providerRouting
+            : undefined,
         limits,
         limitResults: {
           withinTime: elapsedMs <= limits.maxTimeMs,
@@ -2070,7 +2228,11 @@ async function runResumeTask(taskName) {
   });
 
   try {
-    writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderConfig(provider.port, { fallbacks: taskDefinition.fallbacks === true }),
+      "utf8"
+    );
     const firstPrompt = readFileSync(path.join(taskRoot, "task.md"), "utf8");
     const first = await runCli({
       args: [
@@ -2386,6 +2548,58 @@ function readBashApprovalEvidence(dbFile) {
   }
 }
 
+function readProviderRoutingEvidence(dbFile) {
+  assert(existsSync(dbFile), "sessions.sqlite was not created");
+  const db = new Database(dbFile, { readonly: true });
+  try {
+    const rows = db
+      .prepare("select action, target, metadata_json from audit_events order by id asc")
+      .all()
+      .map((row) => {
+        let metadata = {};
+        try {
+          metadata = JSON.parse(row.metadata_json);
+        } catch {
+          metadata = {};
+        }
+        return {
+          action: row.action,
+          target: row.target,
+          metadata
+        };
+      });
+    const retries = rows.filter((row) => row.action === "agent.provider.retry");
+    const fallbacks = rows.filter((row) => row.action === "agent.provider.fallback");
+    const fallback = fallbacks[0]?.metadata ?? {};
+    return {
+      retryCount: retries.length,
+      fallbackCount: fallbacks.length,
+      retryProviders: Array.from(
+        new Set(
+          retries
+            .map((row) => readNestedString(row.metadata, ["providerName"]) ?? row.target)
+            .filter((value) => typeof value === "string")
+        )
+      ).sort(),
+      retryErrorKinds: Array.from(
+        new Set(
+          retries
+            .map((row) => readNestedString(row.metadata, ["errorKind"]))
+            .filter((value) => typeof value === "string")
+        )
+      ).sort(),
+      retryAttempts: retries
+        .map((row) => readNestedNumber(row.metadata, ["attempt"]))
+        .filter((value) => typeof value === "number"),
+      fallbackFromProvider: readNestedString(fallback, ["fromProvider"]),
+      fallbackToProvider: readNestedString(fallback, ["toProvider"]),
+      fallbackErrorKind: readNestedString(fallback, ["errorKind"])
+    };
+  } finally {
+    db.close();
+  }
+}
+
 function readNestedRecord(value, pathSegments) {
   let current = value;
   for (const segment of pathSegments) {
@@ -2470,6 +2684,14 @@ function summarizeStreamProtocol({ output, stderr, events, finalMessage }) {
     toolCompletedSeen: events.some((event) => event.type === "tool.completed"),
     rawToolUseSeen: events.some((event) => event.type === "agent.tool_use"),
     rawToolResultSeen: events.some((event) => event.type === "agent.tool_result"),
+    providerRetrySeen: events.some(
+      (event) => event.type === "provider.retry" || event.type === "agent.provider_retry"
+    ),
+    providerRetryCount: events.filter((event) => event.type === "provider.retry").length,
+    providerFallbackSeen: events.some(
+      (event) => event.type === "provider.fallback" || event.type === "agent.fallback_switched"
+    ),
+    sessionErrorSeen: events.some((event) => event.type === "session.error"),
     completedMessage: typeof completed?.message === "string" ? completed.message : undefined,
     completedStatus: typeof completed?.status === "string" ? completed.status : undefined,
     finalMessageMatched: completed?.message === finalMessage,
@@ -2586,7 +2808,8 @@ async function main() {
     "h6-resume-after-interruption",
     "h7-stream-json-automation",
     "h8-multi-agent-conflict",
-    "h9-bash-approval-control"
+    "h9-bash-approval-control",
+    "h10-provider-retry-fallback"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);

@@ -1104,6 +1104,16 @@ export class QueryEngine {
         notificationType: "provider_fallback"
       });
     }
+    if (event.type === "provider_retry") {
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.provider.retry",
+        target: event.providerName,
+        metadata: event
+      });
+      return [];
+    }
     if (event.type === "approval_request") {
       this.input.store.recordAudit({
         sessionId: this.input.sessionId,

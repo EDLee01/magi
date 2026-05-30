@@ -174,6 +174,14 @@ export function formatEventMessage(event: StoredAuditRecord): string {
       typeof metadata.toProvider === "string" ? metadata.toProvider : (event.target ?? "unknown");
     return `provider fallback ${from} -> ${to}`;
   }
+  if (event.action === "agent.provider.retry") {
+    const provider = typeof metadata.providerName === "string" ? metadata.providerName : "unknown";
+    const attempt = typeof metadata.attempt === "number" ? metadata.attempt : undefined;
+    const maxAttempts = typeof metadata.maxAttempts === "number" ? metadata.maxAttempts : undefined;
+    const suffix =
+      attempt !== undefined && maxAttempts !== undefined ? ` ${attempt}/${maxAttempts}` : "";
+    return `provider retry ${provider}${suffix}`;
+  }
   if (event.action === "agent.approval.requested") {
     return "approval requested";
   }

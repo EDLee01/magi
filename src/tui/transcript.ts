@@ -194,6 +194,25 @@ export function formatTuiTranscriptEntry(event: MagiEventView): TuiTranscriptEnt
       errorKind ? `error: ${errorKind}` : undefined
     );
   }
+  if (event.action === "agent.provider.retry") {
+    const provider = readString(event.metadata.providerName) ?? event.target ?? "unknown";
+    const model = readString(event.metadata.model);
+    const errorKind = readString(event.metadata.errorKind);
+    const attempt = readNumber(event.metadata.attempt);
+    const maxAttempts = readNumber(event.metadata.maxAttempts);
+    const delayMs = readNumber(event.metadata.nextRetryDelayMs);
+    const route = model ? `${provider}/${model}` : provider;
+    const detail = [
+      attempt !== undefined && maxAttempts !== undefined
+        ? `attempt ${attempt}/${maxAttempts}`
+        : undefined,
+      delayMs !== undefined ? `next ${delayMs}ms` : undefined,
+      errorKind ? `error: ${errorKind}` : undefined
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join(", ");
+    return transcriptEntry(event, "fallback", `retry ${route}`, detail || undefined);
+  }
   if (event.action === "agent.context.compacted") {
     return transcriptEntry(event, "context", "compacted", event.target);
   }
@@ -312,6 +331,9 @@ export function formatTuiLiveEvent(
 
 function isNoisyLiveEvent(event: MagiEventView): boolean {
   if (event.action === "agent.assistant.message") {
+    return true;
+  }
+  if (event.action === "agent.provider.retry") {
     return true;
   }
   if (event.action === "agent.tool.use" || event.action === "agent.tool.completed") {

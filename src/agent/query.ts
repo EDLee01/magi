@@ -103,6 +103,17 @@ export type AgentQueryEvent =
       toModel: string;
       errorKind?: string;
     }
+  | {
+      type: "provider_retry";
+      error: string;
+      retryable: true;
+      providerName: string;
+      model: string;
+      errorKind?: string;
+      attempt: number;
+      maxAttempts: number;
+      nextRetryDelayMs: number;
+    }
   | { type: "cancelled"; reason?: string }
   | {
       type: "error";
@@ -583,11 +594,11 @@ function formatProviderRetryEvent(input: {
   maxAttempts: number;
   delayMs: number;
   messageSuffix?: string;
-}): Extract<AgentQueryEvent, { type: "error" }> {
+}): Extract<AgentQueryEvent, { type: "provider_retry" }> {
   const errorKind = input.error instanceof ProviderError ? input.error.kind : "unknown";
   const suffix = input.messageSuffix ? ` — ${input.messageSuffix}, retrying` : " — retrying";
   return {
-    type: "error",
+    type: "provider_retry",
     error: `${errorMessage(input.error)}${suffix} in ${formatRetryDelay(input.delayMs)} (attempt ${input.attempt}/${input.maxAttempts}, kind ${errorKind})`,
     retryable: true,
     providerName: input.route.providerName,

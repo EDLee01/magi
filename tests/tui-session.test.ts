@@ -529,6 +529,20 @@ describe("TUI, slash commands, and session resume", () => {
         target: "backup",
         metadata: { fromProvider: "main", toProvider: "backup" }
       });
+      const retry = store.recordAudit({
+        sessionId,
+        jobId: "job-live-format",
+        action: "agent.provider.retry",
+        target: "main",
+        metadata: {
+          providerName: "main",
+          model: "mock-main",
+          errorKind: "server-error",
+          attempt: 1,
+          maxAttempts: 3,
+          nextRetryDelayMs: 1000
+        }
+      });
       const toolContext = store.recordAudit({
         sessionId,
         jobId: "job-live-format",
@@ -560,6 +574,10 @@ describe("TUI, slash commands, and session resume", () => {
       );
       expect(stripAnsi(formatTuiLiveEvent(toEventView(fallback)))).toBe(
         "· [fallback] main -> backup"
+      );
+      expect(formatTuiLiveEvent(toEventView(retry))).toBeUndefined();
+      expect(stripAnsi(formatTuiLiveEvent(toEventView(retry), { showToolTrace: true }))).toBe(
+        "· [fallback] retry main/mock-main - attempt 1/3, next 1000ms, error: server-error"
       );
       expect(stripAnsi(formatTuiLiveEvent(toEventView(toolContext)))).toBe(
         "· [tools] 18 exposed - ~2100 schema tokens, 64 deferred"

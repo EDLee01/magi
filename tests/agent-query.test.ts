@@ -606,7 +606,7 @@ describe("agent query loop", () => {
     ]);
     expect(result.events).toContainEqual(
       expect.objectContaining({
-        type: "error",
+        type: "provider_retry",
         retryable: true,
         providerName: "shaky",
         model: "m",
@@ -649,7 +649,7 @@ describe("agent query loop", () => {
     ]);
     expect(result.events).toContainEqual(
       expect.objectContaining({
-        type: "error",
+        type: "provider_retry",
         retryable: true,
         providerName: "shaky",
         model: "m",
@@ -691,7 +691,7 @@ describe("agent query loop", () => {
     ]);
     expect(result.events).toContainEqual(
       expect.objectContaining({
-        type: "error",
+        type: "provider_retry",
         retryable: true,
         providerName: "network-shaky",
         model: "m",
@@ -734,7 +734,7 @@ describe("agent query loop", () => {
     );
     expect(events).not.toContainEqual(
       expect.objectContaining({
-        type: "error",
+        type: "provider_retry",
         nextRetryDelayMs: expect.any(Number)
       })
     );

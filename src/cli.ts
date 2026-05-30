@@ -2201,6 +2201,38 @@ function formatStreamJsonAgentEvent(input: {
       raw
     ];
   }
+  if (event.type === "provider_retry") {
+    return [
+      JSON.stringify({
+        type: "provider.retry",
+        sessionId,
+        jobId,
+        provider: event.providerName,
+        model: event.model,
+        error: event.error,
+        errorKind: event.errorKind,
+        attempt: event.attempt,
+        maxAttempts: event.maxAttempts,
+        nextRetryDelayMs: event.nextRetryDelayMs
+      }),
+      raw
+    ];
+  }
+  if (event.type === "fallback_switched") {
+    return [
+      JSON.stringify({
+        type: "provider.fallback",
+        sessionId,
+        jobId,
+        fromProvider: event.fromProvider,
+        fromModel: event.fromModel,
+        toProvider: event.toProvider,
+        toModel: event.toModel,
+        errorKind: event.errorKind
+      }),
+      raw
+    ];
+  }
   if (event.type === "error") {
     return [
       JSON.stringify({

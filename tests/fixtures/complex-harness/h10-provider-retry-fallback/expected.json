@@ -1,0 +1,6 @@
+{
+  "id": "H10",
+  "name": "H10 provider retry fallback",
+  "taskClass": "provider_retry_fallback",
+  "expectedChangedFiles": ["reports/provider-retry-report.md"]
+}
