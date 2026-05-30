@@ -64,6 +64,11 @@ try {
     sseReconnectCompletionSeen: false,
     sseReconnectNoDuplicateReplay: false,
     sseReconnectAuditPersisted: false,
+    sseJitterMultipleDisconnectsSimulated: false,
+    sseJitterRepeatedAfterCursorUsed: false,
+    sseJitterCompletionSeen: false,
+    sseJitterNoDuplicateReplay: false,
+    sseJitterAuditPersisted: false,
     mobileBrowserViewportSeen: false,
     mobileBrowserTokenStored: false,
     mobileBrowserTokenUrlCleaned: false,
@@ -139,6 +144,7 @@ try {
     await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
     await exerciseSseReconnectFlow({ serve, headers, state });
+    await exerciseSseJitterRecoveryFlow({ serve, headers, state });
     await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
     const lanSmoke = await exerciseLanDeviceSmoke({ controlPort, pairing, state });
     const peerDispatch = await exercisePeerDispatchFlow({ provider, state });
@@ -174,6 +180,11 @@ try {
       "SSE reconnect observed job completion",
       "SSE reconnect avoided duplicate replay",
       "SSE reconnect completion persisted in audit",
+      "SSE jitter simulated repeated disconnects",
+      "SSE jitter reused after cursor on repeated reconnect",
+      "SSE jitter observed long job completion",
+      "SSE jitter avoided duplicate replay",
+      "SSE jitter completion persisted in audit",
       "mobile viewport rendered panel",
       "mobile pairing token stored and URL cleaned",
       "mobile browser sent message",
@@ -625,6 +636,92 @@ async function exerciseSseReconnectFlow({ serve, headers, state }) {
   );
 }
 
+async function exerciseSseJitterRecoveryFlow({ serve, headers, state }) {
+  const started = await postJson(
+    `${serve.url}/jobs`,
+    {
+      prompt: "Panel jitter reconnect stream: keep token maple-92.",
+      model: "main",
+      background: true
+    },
+    headers,
+    202
+  );
+  assert(started.jobId, "SSE jitter reconnect job did not start");
+
+  const firstConnect = await readSseUntilAndCancel(
+    `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}&limit=50`,
+    headers,
+    (text) => text.includes("event: ready") && text.includes("agent.query.started")
+  );
+  assert(firstConnect.lastEventId, "first SSE jitter disconnect did not capture a cursor");
+
+  const secondConnectUrl =
+    `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}` +
+    `&limit=50&after=${encodeURIComponent(String(firstConnect.lastEventId))}`;
+  const secondConnect = await readSseUntilAndCancel(
+    secondConnectUrl,
+    headers,
+    (text) => text.includes("agent.text.delta")
+  );
+  assert(secondConnect.lastEventId, "second SSE jitter disconnect did not capture a cursor");
+  assert(
+    Number(secondConnect.lastEventId) >= Number(firstConnect.lastEventId),
+    "second SSE jitter cursor moved backwards"
+  );
+
+  await waitFor(
+    async () => {
+      const response = await getJson(
+        `${serve.url}/jobs/${encodeURIComponent(started.jobId)}`,
+        headers
+      );
+      return response.job?.status === "completed";
+    },
+    "SSE jitter reconnect job completion",
+    10_000
+  );
+
+  const finalReconnectUrl =
+    `${serve.url}/events?jobId=${encodeURIComponent(started.jobId)}` +
+    `&limit=50&after=${encodeURIComponent(String(secondConnect.lastEventId))}`;
+  const finalConnect = await readSseUntil(
+    finalReconnectUrl,
+    headers,
+    (text) =>
+      text.includes("agent.query.completed") &&
+      text.includes("JITTER ") &&
+      text.includes("DONE")
+  );
+  const combinedReconnectText = `${secondConnect.text}\n${finalConnect}`;
+
+  state.sseJitterMultipleDisconnectsSimulated =
+    firstConnect.cancelled === true &&
+    secondConnect.cancelled === true &&
+    firstConnect.text.includes("agent.query.started") &&
+    secondConnect.text.includes("agent.text.delta");
+  state.sseJitterRepeatedAfterCursorUsed =
+    secondConnectUrl.includes("after=") && finalReconnectUrl.includes("after=");
+  state.sseJitterCompletionSeen =
+    finalConnect.includes("agent.query.completed") &&
+    combinedReconnectText.includes("CONTROL ") &&
+    combinedReconnectText.includes("JITTER ") &&
+    combinedReconnectText.includes("DONE");
+  state.sseJitterNoDuplicateReplay =
+    !secondConnect.text.includes("agent.query.started") &&
+    !finalConnect.includes("agent.query.started");
+
+  const events = await getJson(
+    `${serve.url}/jobs/${encodeURIComponent(started.jobId)}/events?limit=100`,
+    headers
+  );
+  state.sseJitterAuditPersisted = (events.events ?? []).some(
+    (event) =>
+      event.action === "agent.query.completed" &&
+      Number(event.id) > Number(secondConnect.lastEventId)
+  );
+}
+
 async function exerciseMdnsDiscovery({ controlPort, state }) {
   const mdns = await import("../dist/control/mdns.js");
   const instanceName = `magi-control-eval-${process.pid}`;
@@ -1032,6 +1129,9 @@ function createRouter(state) {
     }
     if (latestUser.includes("Panel reconnect stream")) {
       return completedStreamTextResponse(["CONTROL ", "RECONNECT ", "DONE"]);
+    }
+    if (latestUser.includes("Panel jitter reconnect stream")) {
+      return completedStreamTextResponse(["CONTROL ", "JITTER ", "DONE"], 150);
     }
     if (latestUser.includes("Panel mobile browser flow")) {
       return completedStreamTextResponse(["MOBILE ", "PANEL ", "OK"]);

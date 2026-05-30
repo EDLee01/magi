@@ -1213,7 +1213,7 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 53) failures.push(`assertions=${assertions}`);
+  if (assertions < 58) failures.push(`assertions=${assertions}`);
   if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 4) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -1251,6 +1251,11 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "sseReconnectCompletionSeen",
     "sseReconnectNoDuplicateReplay",
     "sseReconnectAuditPersisted",
+    "sseJitterMultipleDisconnectsSimulated",
+    "sseJitterRepeatedAfterCursorUsed",
+    "sseJitterCompletionSeen",
+    "sseJitterNoDuplicateReplay",
+    "sseJitterAuditPersisted",
     "mobileBrowserViewportSeen",
     "mobileBrowserTokenStored",
     "mobileBrowserTokenUrlCleaned",
@@ -1336,6 +1341,11 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       sseReconnectCompletionSeen: details.sseReconnectCompletionSeen === true,
       sseReconnectNoDuplicateReplay: details.sseReconnectNoDuplicateReplay === true,
       sseReconnectAuditPersisted: details.sseReconnectAuditPersisted === true,
+      sseJitterMultipleDisconnectsSimulated: details.sseJitterMultipleDisconnectsSimulated === true,
+      sseJitterRepeatedAfterCursorUsed: details.sseJitterRepeatedAfterCursorUsed === true,
+      sseJitterCompletionSeen: details.sseJitterCompletionSeen === true,
+      sseJitterNoDuplicateReplay: details.sseJitterNoDuplicateReplay === true,
+      sseJitterAuditPersisted: details.sseJitterAuditPersisted === true,
       mobileBrowserViewportSeen: details.mobileBrowserViewportSeen === true,
       mobileBrowserTokenStored: details.mobileBrowserTokenStored === true,
       mobileBrowserTokenUrlCleaned: details.mobileBrowserTokenUrlCleaned === true,

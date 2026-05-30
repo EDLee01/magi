@@ -548,6 +548,11 @@ describe("capability report", () => {
         sseReconnectCompletionSeen: false,
         sseReconnectNoDuplicateReplay: false,
         sseReconnectAuditPersisted: false,
+        sseJitterMultipleDisconnectsSimulated: false,
+        sseJitterRepeatedAfterCursorUsed: false,
+        sseJitterCompletionSeen: false,
+        sseJitterNoDuplicateReplay: false,
+        sseJitterAuditPersisted: false,
         mobileBrowserViewportSeen: false,
         mobileBrowserStreamRendered: false,
         mobileBrowserCancelRendered: false,
@@ -611,6 +616,11 @@ describe("capability report", () => {
         "sseReconnectCompletionSeen=false",
         "sseReconnectNoDuplicateReplay=false",
         "sseReconnectAuditPersisted=false",
+        "sseJitterMultipleDisconnectsSimulated=false",
+        "sseJitterRepeatedAfterCursorUsed=false",
+        "sseJitterCompletionSeen=false",
+        "sseJitterNoDuplicateReplay=false",
+        "sseJitterAuditPersisted=false",
         "mobileBrowserViewportSeen=false",
         "mobileBrowserStreamRendered=false",
         "mobileBrowserCancelRendered=false",
@@ -1648,6 +1658,11 @@ function controlApiReport(
     sseReconnectCompletionSeen: boolean;
     sseReconnectNoDuplicateReplay: boolean;
     sseReconnectAuditPersisted: boolean;
+    sseJitterMultipleDisconnectsSimulated: boolean;
+    sseJitterRepeatedAfterCursorUsed: boolean;
+    sseJitterCompletionSeen: boolean;
+    sseJitterNoDuplicateReplay: boolean;
+    sseJitterAuditPersisted: boolean;
     mobileBrowserViewportSeen: boolean;
     mobileBrowserTokenStored: boolean;
     mobileBrowserTokenUrlCleaned: boolean;
@@ -1695,7 +1710,7 @@ function controlApiReport(
       name: "control-api-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 56,
+      assertions: overrides.assertions ?? 61,
       filesVerified: overrides.filesVerified ?? 7,
       toolCallCount: overrides.toolCallCount ?? 4,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1755,6 +1770,11 @@ function controlApiReport(
           sseReconnectCompletionSeen: true,
           sseReconnectNoDuplicateReplay: true,
           sseReconnectAuditPersisted: true,
+          sseJitterMultipleDisconnectsSimulated: true,
+          sseJitterRepeatedAfterCursorUsed: true,
+          sseJitterCompletionSeen: true,
+          sseJitterNoDuplicateReplay: true,
+          sseJitterAuditPersisted: true,
           mobileBrowserViewportSeen: true,
           mobileBrowserTokenStored: true,
           mobileBrowserTokenUrlCleaned: true,
