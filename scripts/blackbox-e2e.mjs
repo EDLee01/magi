@@ -3254,6 +3254,90 @@ async function scenarioTuiPromptHistory() {
   });
 }
 
+async function scenarioTuiBracketedPaste() {
+  return await withTempWorkspace("tui-bracketed-paste", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const pastedBody = [
+      "Release notes",
+      "- customer-visible retry fallback",
+      "- approval picker denial remains auditable",
+      "Summary ends here."
+    ].join("\n");
+    const expectedPrompt = `Start audit: ${pastedBody}`;
+    const latestPrompts = [];
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ body }) => {
+        const latestPrompt = latestUserPromptFromBody(body);
+        latestPrompts.push(latestPrompt);
+        assert(
+          latestPrompt.includes(expectedPrompt),
+          `TUI bracketed paste submitted unexpected prompt:\n${latestPrompt}`
+        );
+        assert(
+          !latestPrompt.includes("[paste #"),
+          `TUI bracketed paste leaked placeholder into provider prompt:\n${latestPrompt}`
+        );
+        return messageText("TUI bracketed paste accepted.");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const pasteSequence = [
+        "Start audit: ",
+        "\x1b[200~",
+        pastedBody,
+        "\x1b[201~",
+        "\r"
+      ].join("");
+      const result = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "TUI bracketed paste",
+        steps: [
+          { waitForText: "/help for commands", inputText: pasteSequence },
+          { waitForText: "TUI bracketed paste accepted.", inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        result.exitCode === 0,
+        `TUI bracketed paste exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(visible.includes("[paste #1:"), "bracketed paste placeholder did not render");
+      assert(
+        !visible.includes("- customer-visible retry fallback"),
+        "raw pasted body should not render in the edit surface"
+      );
+      assert(
+        visible.includes("TUI bracketed paste accepted."),
+        "bracketed paste response did not render"
+      );
+      assert(provider.calls.length === 1, "TUI bracketed paste should make one provider call");
+      assert(
+        latestPrompts[0]?.includes(expectedPrompt),
+        "provider prompt missed restored multiline paste body"
+      );
+      return {
+        score: 1,
+        assertions: [
+          "TUI bracketed paste rendered paste placeholder",
+          "TUI bracketed paste restored full multiline prompt",
+          "TUI bracketed paste hid raw pasted body from edit surface",
+          "TUI bracketed paste reached provider once and exited"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioTuiStatefulPickers() {
   return await withTempWorkspace("tui-stateful-pickers", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4635,6 +4719,7 @@ async function main() {
     ["resume picker search fields TTY", scenarioResumePickerSearchFieldsTty],
     ["TUI keyboard input", scenarioTuiKeyboardInput],
     ["TUI prompt history", scenarioTuiPromptHistory],
+    ["TUI bracketed paste", scenarioTuiBracketedPaste],
     ["TUI stateful pickers", scenarioTuiStatefulPickers],
     ["TUI approval picker", scenarioTuiApprovalPicker],
     ["retry fallback", scenarioRetryAndFallback],

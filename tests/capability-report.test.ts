@@ -120,6 +120,7 @@ describe("capability report", () => {
         tuiVisualContractSeen: false,
         tuiKeyboardInputSeen: false,
         tuiPromptHistorySeen: false,
+        tuiBracketedPasteSeen: false,
         tuiStatefulPickersSeen: false,
         tuiApprovalPickerSeen: false
       }),
@@ -169,6 +170,7 @@ describe("capability report", () => {
         "tuiVisualContractSeen=false",
         "tuiKeyboardInputSeen=false",
         "tuiPromptHistorySeen=false",
+        "tuiBracketedPasteSeen=false",
         "tuiStatefulPickersSeen=false",
         "tuiApprovalPickerSeen=false",
         "toolCallCount=3",
@@ -1018,6 +1020,7 @@ function harnessReport(input: {
   tuiVisualContractSeen?: boolean;
   tuiKeyboardInputSeen?: boolean;
   tuiPromptHistorySeen?: boolean;
+  tuiBracketedPasteSeen?: boolean;
   tuiStatefulPickersSeen?: boolean;
   tuiApprovalPickerSeen?: boolean;
 }): Record<string, unknown> {
@@ -1037,7 +1040,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 155,
+      assertions: input.assertions ?? 159,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1083,6 +1086,7 @@ function harnessReport(input: {
                   ...tuiVisualContractAssertions(input),
                   ...tuiKeyboardInputAssertions(input),
                   ...tuiPromptHistoryAssertions(input),
+                  ...tuiBracketedPasteAssertions(input),
                   ...tuiStatefulPickersAssertions(input),
                   ...tuiApprovalPickerAssertions(input)
                 ],
@@ -2020,6 +2024,17 @@ function tuiPromptHistoryAssertions(input: { tuiPromptHistorySeen?: boolean }): 
         "TUI prompt history edit submitted revised prompt",
         "TUI prompt history reached provider twice",
         "TUI prompt history rendered both provider responses"
+      ];
+}
+
+function tuiBracketedPasteAssertions(input: { tuiBracketedPasteSeen?: boolean }): string[] {
+  return input.tuiBracketedPasteSeen === false
+    ? []
+    : [
+        "TUI bracketed paste rendered paste placeholder",
+        "TUI bracketed paste restored full multiline prompt",
+        "TUI bracketed paste hid raw pasted body from edit surface",
+        "TUI bracketed paste reached provider once and exited"
       ];
 }
 

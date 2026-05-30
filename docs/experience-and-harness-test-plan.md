@@ -19,7 +19,8 @@ Already covered by automated tests:
 - File read/search/write, shell guardrails, git summary.
 - SQLite sessions, jobs, audit, usage.
 - TUI startup identity, slash command dispatch, `/` suggestion menu behavior,
-  and bounded status/pending-approval rendering.
+  bounded status/pending-approval rendering, prompt editing/history, and
+  bracketed paste placeholder/restore behavior.
 - Searchable `-r` TTY resume picker, non-TTY resume session list, and
   interactive `/resume <query>` picker search/cancel behavior.
 - CLI `--tools`, `--allowed-tools`, and `--disallowed-tools` schema filtering
@@ -41,7 +42,7 @@ Already covered by automated tests:
 Not yet fully covered:
 
 - Resume picker visual polish beyond the core search/no-results/cancel flow.
-- TUI keyboard navigation polish.
+- Broader TUI keyboard navigation polish beyond prompt editing/history/paste.
 - Real provider-driven tool loop for non-trivial code changes.
 
 ## Clean-room Rules for Testing
@@ -726,7 +727,9 @@ The black-box TUI keyboard input gate also drives the real interactive prompt
 path with Home/Delete/End/Left/LF/Enter editing and verifies that the provider
 receives the corrected multiline prompt. The TUI prompt history gate recalls a
 previous prompt with Up, edits it, and verifies that the revised prompt reaches
-the provider. The TUI stateful picker gate exercises `/model` and
+the provider. The TUI bracketed paste gate verifies that a pasted multiline
+block renders as a placeholder in the edit surface while the provider receives
+the restored full prompt. The TUI stateful picker gate exercises `/model` and
 `/permissions mode`, then verifies that the selected model alias routes the next
 provider call and the selected plan mode blocks a write. The TUI approval picker
 gate verifies a pending FileWrite approval, hotkey denial, model-visible denial
@@ -798,11 +801,11 @@ Highest priority gaps:
 1. Real provider-driven tool loop for non-trivial code changes.
 2. Broader visual regression coverage across full PTY transcripts.
 3. Resume picker visual polish beyond core search/no-results/cancel behavior.
-4. TUI keyboard navigation polish.
+4. Broader TUI keyboard navigation polish beyond prompt editing/history/paste.
 
 Recommended next implementation phase:
 
 - Expand full PTY transcript snapshot coverage.
-- Tighten TUI keyboard navigation contracts.
+- Tighten remaining TUI keyboard navigation contracts.
 - Keep real-provider tool-loop checks opt-in until credentials and upstream
   variability can be isolated from default CI.
