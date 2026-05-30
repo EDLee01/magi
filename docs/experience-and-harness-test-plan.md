@@ -528,7 +528,13 @@ Checks:
 - No broad rewrites.
 - Session includes search/read evidence.
 
-Current status: not implemented.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H4 fixture uses a medium config-loader repo with a hidden zero-value
+validation bug. The harness requires file discovery with `Glob`, validation
+error search with `Grep`, loader/validator/test/doc reads before editing,
+baseline failure reproduction, a single-file validator patch, final focused
+tests, exact one-file diff enforcement, forbidden path protection, and SQLite
+session/audit evidence.
 
 #### H5. Permission boundary
 

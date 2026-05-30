@@ -584,6 +584,114 @@ function createH3Router() {
   };
 }
 
+function createH4Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (!transcript.includes("Find why the config loader rejects a valid config and fix it")) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("Glob"), "H4 missing Glob");
+      assert(toolNames.includes("Grep"), "H4 missing Grep");
+      assert(toolNames.includes("FileRead"), "H4 missing FileRead");
+      assert(toolNames.includes("FilePatch"), "H4 missing FilePatch");
+      assert(toolNames.includes("Bash"), "H4 missing Bash");
+      assert(
+        transcript.includes("discover relevant files") &&
+          transcript.includes("search for the validation error"),
+        "H4 investigation constraints were not visible"
+      );
+      return toolResponse([
+        toolCall("h4-glob-config-files", "Glob", { pattern: "src/**/*.js", max_matches: 20 }),
+        toolCall("h4-grep-port-error", "Grep", {
+          pattern: "server.port is required",
+          path: ".",
+          line_numbers: true
+        }),
+        toolCall("h4-read-loader", "FileRead", { file_path: "src/config/load.js" }),
+        toolCall("h4-read-validator", "FileRead", { file_path: "src/config/validate.js" }),
+        toolCall("h4-read-tests", "FileRead", { file_path: "tests/config.test.mjs" }),
+        toolCall("h4-read-docs", "FileRead", { file_path: "docs/config.md" }),
+        toolCall("h4-run-baseline-test", "Bash", { command: "npm test", timeout_ms: 10_000 })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(transcript.includes("src/config/load.js"), "H4 file discovery did not find loader");
+      assert(
+        transcript.includes("src/config/validate.js"),
+        "H4 file discovery did not find validator"
+      );
+      assert(
+        transcript.includes("server.port is required"),
+        "H4 validation error search result was not visible"
+      );
+      assert(transcript.includes("client.retryLimit is required"), "H4 retryLimit check was not read");
+      assert(transcript.includes("server.port, 0"), "H4 failing zero-port test was not visible");
+      assert(transcript.includes("retryLimit, 0"), "H4 failing zero-retry test was not visible");
+      assert(transcript.includes("Command exited 1"), "H4 failing baseline test was not visible");
+      return toolResponse([
+        toolCall("h4-patch-validator", "FilePatch", {
+          file_path: "src/config/validate.js",
+          patch: [
+            "@@",
+            "-    if (!config.server.port) {",
+            "+    if (config.server.port === undefined) {",
+            '       errors.push("server.port is required");',
+            "     }",
+            "@@",
+            "-    if (!config.client.retryLimit) {",
+            "+    if (config.client.retryLimit === undefined) {",
+            '       errors.push("client.retryLimit is required");',
+            "     }"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(
+        transcript.includes("Patched src/config/validate.js"),
+        "H4 validator patch result was not visible"
+      );
+      return toolResponse([
+        toolCall("h4-run-final-test", "Bash", {
+          command: [
+            "npm test",
+            "node <<'NODE'",
+            "const { readFileSync } = require('node:fs');",
+            "const source = readFileSync('src/config/validate.js', 'utf8');",
+            "if (!source.includes('config.server.port === undefined')) throw new Error('port check not fixed');",
+            "if (!source.includes('config.client.retryLimit === undefined')) throw new Error('retry check not fixed');",
+            "if (source.includes('!config.server.port') || source.includes('!config.client.retryLimit')) throw new Error('falsy check remains');",
+            "console.log('config validation investigation fix verified');",
+            "NODE"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 4) {
+      assert(transcript.includes("Command exited 0"), "H4 passing verification command was not visible");
+      assert(
+        transcript.includes("config loader tests passed"),
+        "H4 passing config loader test output was missing"
+      );
+      assert(
+        transcript.includes("config validation investigation fix verified"),
+        "H4 source verification output was missing"
+      );
+      return messageText(
+        "Fixed src/config/validate.js and verified npm test preserves valid zero config handling."
+      );
+    }
+
+    throw new Error(`H4 exceeded expected provider turns: ${turn}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -715,6 +823,60 @@ function taskDefinitionFor(taskId) {
         );
         assert(session.auditEventCount > 0, "H3 audit events were not persisted");
         assert(session.messageCount >= 2, "H3 session messages were not persisted");
+      }
+    };
+  }
+
+  if (taskId === "H4") {
+    return {
+      createRouter: createH4Router,
+      finalMessage:
+        "Fixed src/config/validate.js and verified npm test preserves valid zero config handling.",
+      assertions: [
+        "H4 fixture copied into isolated workspace",
+        "H4 provider saw investigation constraints",
+        "H4 relevant files discovered with Glob",
+        "H4 validation error found with Grep",
+        "H4 loader, validator, tests, and docs read before edit",
+        "H4 baseline npm test reproduced zero-value config failure",
+        "H4 validator fixed with a narrow FilePatch",
+        "H4 npm test passed after fix",
+        "H4 valid port 0 and retryLimit 0 preserved",
+        "H4 invalid range checks preserved",
+        "H4 changed exactly expected file",
+        "H4 forbidden paths unchanged",
+        "H4 checks.sh passed",
+        "H4 session and audit persisted"
+      ],
+      filesVerified: [
+        "src/config/validate.js",
+        "src/config/load.js",
+        "tests/config.test.mjs",
+        "docs/config.md",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session }) => {
+        assert((toolCounts.Glob ?? 0) >= 1, "H4 should discover files with Glob");
+        assert((toolCounts.Grep ?? 0) >= 1, "H4 should search for the validation error with Grep");
+        assert((toolCounts.FileRead ?? 0) >= 4, "H4 did not read enough investigation evidence");
+        assert((toolCounts.FilePatch ?? 0) === 1, "H4 should patch only the validator");
+        assert((toolCounts.Bash ?? 0) === 2, "H4 should run baseline and final verification");
+        assert((toolCounts.FileWrite ?? 0) === 0, "H4 should not use FileWrite");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H4 should not use FileEdit");
+        const validator = after["src/config/validate.js"]?.text ?? "";
+        assert(
+          validator.includes("config.server.port === undefined"),
+          "H4 server.port undefined check missing"
+        );
+        assert(
+          validator.includes("config.client.retryLimit === undefined"),
+          "H4 retryLimit undefined check missing"
+        );
+        assert(!validator.includes("!config.server.port"), "H4 falsy port check remains");
+        assert(!validator.includes("!config.client.retryLimit"), "H4 falsy retryLimit check remains");
+        assert(session.auditEventCount > 0, "H4 audit events were not persisted");
+        assert(session.messageCount >= 2, "H4 session messages were not persisted");
       }
     };
   }
@@ -1046,7 +1208,8 @@ async function main() {
   for (const taskName of [
     "h1-single-file-bug-fix",
     "h2-multi-file-dry-run",
-    "h3-refactor-behavior-preservation"
+    "h3-refactor-behavior-preservation",
+    "h4-repository-investigation"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);

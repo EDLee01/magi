@@ -1,0 +1,6 @@
+{
+  "id": "H4",
+  "name": "H4 repository investigation",
+  "taskClass": "repository_investigation_fix",
+  "expectedChangedFiles": ["src/config/validate.js"]
+}

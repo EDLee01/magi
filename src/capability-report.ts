@@ -1372,24 +1372,35 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h3Session = readRecord(h3?.session);
   const h3Limits = readRecord(h3?.limitResults);
   const h3Seen = Boolean(h3);
+  const h4 = detailsList.find((details) => details.taskId === "H4");
+  const h4ToolCounts = readRecord(h4?.toolCounts);
+  const h4ChangedFiles = readStringList(h4?.changedFiles);
+  const h4Assertions = readStringList(h4?.assertions);
+  const h4ForbiddenChanges = readStringList(h4?.forbiddenChanges);
+  const h4Session = readRecord(h4?.session);
+  const h4Limits = readRecord(h4?.limitResults);
+  const h4Seen = Boolean(h4);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const failures = [...base.failures];
 
-  if (readNumber(summary.total) < 3) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (readNumber(summary.total) < 4) failures.push(`scenarios=${readNumber(summary.total)}`);
   if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
   if (!taskClasses.has("multi_file_feature")) failures.push("multiFileFeatureTask=false");
   if (!taskClasses.has("behavior_preserving_refactor"))
     failures.push("behaviorPreservingRefactorTask=false");
+  if (!taskClasses.has("repository_investigation_fix"))
+    failures.push("repositoryInvestigationFixTask=false");
   if (!h1Seen) failures.push("H1=false");
   if (!h2Seen) failures.push("H2=false");
   if (!h3Seen) failures.push("H3=false");
-  if (assertions < 35) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 16) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 24) failures.push(`toolCallCount=${toolCallCount}`);
-  if (uniqueToolCount < 4) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (!h4Seen) failures.push("H4=false");
+  if (assertions < 49) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 22) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 33) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
   if (readNumber(h1ToolCounts.Bash) !== 2) failures.push("H1BashCalls != 2");
@@ -1450,6 +1461,26 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h3Limits.withinTime !== true) failures.push("H3WithinTime=false");
   if (h3Limits.withinCommands !== true) failures.push("H3WithinCommands=false");
   if (h3Limits.withinFileChanges !== true) failures.push("H3WithinFileChanges=false");
+  if (readNumber(h4ToolCounts.Glob) < 1) failures.push("H4GlobCalls < 1");
+  if (readNumber(h4ToolCounts.Grep) < 1) failures.push("H4GrepCalls < 1");
+  if (readNumber(h4ToolCounts.FileRead) < 4) failures.push("H4FileReadCalls < 4");
+  if (readNumber(h4ToolCounts.FilePatch) !== 1) failures.push("H4FilePatchCalls != 1");
+  if (readNumber(h4ToolCounts.Bash) !== 2) failures.push("H4BashCalls != 2");
+  if (readNumber(h4ToolCounts.FileWrite) !== 0) failures.push("H4FileWrite used");
+  if (readNumber(h4ToolCounts.FileEdit) !== 0) failures.push("H4FileEdit used");
+  if (h4?.checksPassed !== true) failures.push("H4ChecksPassed=false");
+  if (h4?.streamJsonLifecycleVerified !== true) failures.push("H4StreamJsonLifecycle=false");
+  if (JSON.stringify(h4ChangedFiles) !== JSON.stringify(["src/config/validate.js"])) {
+    failures.push(`H4ChangedFiles=${JSON.stringify(h4ChangedFiles)}`);
+  }
+  if (h4ForbiddenChanges.length > 0)
+    failures.push(`H4ForbiddenChanges=${h4ForbiddenChanges.length}`);
+  if (h4Assertions.length < 14) failures.push(`H4Assertions=${h4Assertions.length}`);
+  if (readNumber(h4Session.messageCount) < 2) failures.push("H4SessionMessages < 2");
+  if (readNumber(h4Session.auditEventCount) < 1) failures.push("H4AuditEvents < 1");
+  if (h4Limits.withinTime !== true) failures.push("H4WithinTime=false");
+  if (h4Limits.withinCommands !== true) failures.push("H4WithinCommands=false");
+  if (h4Limits.withinFileChanges !== true) failures.push("H4WithinFileChanges=false");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
   }
@@ -1513,6 +1544,24 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H3WithinTime: h3Limits.withinTime === true,
       H3WithinCommands: h3Limits.withinCommands === true,
       H3WithinFileChanges: h3Limits.withinFileChanges === true,
+      H4Seen: h4Seen,
+      H4GlobCalls: readNumber(h4ToolCounts.Glob),
+      H4GrepCalls: readNumber(h4ToolCounts.Grep),
+      H4FileReadCalls: readNumber(h4ToolCounts.FileRead),
+      H4FilePatchCalls: readNumber(h4ToolCounts.FilePatch),
+      H4BashCalls: readNumber(h4ToolCounts.Bash),
+      H4FileWriteCalls: readNumber(h4ToolCounts.FileWrite),
+      H4FileEditCalls: readNumber(h4ToolCounts.FileEdit),
+      H4ChecksPassed: h4?.checksPassed === true,
+      H4StreamJsonLifecycle: h4?.streamJsonLifecycleVerified === true,
+      H4ChangedFiles: h4ChangedFiles,
+      H4ForbiddenChanges: h4ForbiddenChanges.length,
+      H4Assertions: h4Assertions.length,
+      H4SessionMessages: readNumber(h4Session.messageCount),
+      H4AuditEvents: readNumber(h4Session.auditEventCount),
+      H4WithinTime: h4Limits.withinTime === true,
+      H4WithinCommands: h4Limits.withinCommands === true,
+      H4WithinFileChanges: h4Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

@@ -1,0 +1,8 @@
+{
+  "name": "config-loader-fixture",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node tests/config.test.mjs"
+  }
+}
