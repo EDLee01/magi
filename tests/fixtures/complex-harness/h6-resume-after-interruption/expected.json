@@ -1,0 +1,6 @@
+{
+  "id": "H6",
+  "name": "H6 resume after interruption",
+  "taskClass": "resume_after_interruption",
+  "expectedChangedFiles": ["reports/invoice-investigation.md", "src/invoice.js"]
+}

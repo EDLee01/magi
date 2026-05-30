@@ -895,6 +895,7 @@ describe("capability report", () => {
         includeH3: false,
         includeH4: false,
         includeH5: false,
+        includeH6: false,
         assertions: 2,
         filesVerified: 1,
         toolCallCount: 2,
@@ -930,10 +931,12 @@ describe("capability report", () => {
         "behaviorPreservingRefactorTask=false",
         "repositoryInvestigationFixTask=false",
         "permissionBoundaryTask=false",
+        "resumeAfterInterruptionTask=false",
         "H2=false",
         "H3=false",
         "H4=false",
         "H5=false",
+        "H6=false",
         "assertions=2",
         "filesVerified=1",
         "toolCallCount=2",
@@ -1070,6 +1073,7 @@ function complexHarnessReport(
     includeH3?: boolean;
     includeH4?: boolean;
     includeH5?: boolean;
+    includeH6?: boolean;
     assertions?: number;
     filesVerified?: number;
     toolCallCount?: number;
@@ -1096,19 +1100,28 @@ function complexHarnessReport(
   const includeH3 = overrides.includeH3 ?? true;
   const includeH4 = overrides.includeH4 ?? true;
   const includeH5 = overrides.includeH5 ?? true;
+  const includeH6 = overrides.includeH6 ?? true;
   const h1Assertions = overrides.assertions ?? 10;
   const h2Assertions = includeH2 ? 12 : 0;
   const h3Assertions = includeH3 ? 13 : 0;
   const h4Assertions = includeH4 ? 14 : 0;
   const h5Assertions = includeH5 ? 14 : 0;
-  const assertions = h1Assertions + h2Assertions + h3Assertions + h4Assertions + h5Assertions;
+  const h6Assertions = includeH6 ? 15 : 0;
+  const assertions =
+    h1Assertions + h2Assertions + h3Assertions + h4Assertions + h5Assertions + h6Assertions;
   const h1FilesVerified = overrides.filesVerified ?? 4;
   const h2FilesVerified = includeH2 ? 6 : 0;
   const h3FilesVerified = includeH3 ? 6 : 0;
   const h4FilesVerified = includeH4 ? 6 : 0;
   const h5FilesVerified = includeH5 ? 5 : 0;
+  const h6FilesVerified = includeH6 ? 5 : 0;
   const filesVerified =
-    h1FilesVerified + h2FilesVerified + h3FilesVerified + h4FilesVerified + h5FilesVerified;
+    h1FilesVerified +
+    h2FilesVerified +
+    h3FilesVerified +
+    h4FilesVerified +
+    h5FilesVerified +
+    h6FilesVerified;
   const h1ToolCounts = {
     FileRead: overrides.fileReadCalls ?? 2,
     FilePatch: overrides.filePatchCalls ?? 2,
@@ -1154,16 +1167,31 @@ function complexHarnessReport(
         FileEdit: 0
       }
     : {};
+  const h6ToolCounts = includeH6
+    ? {
+        FileRead: 4,
+        FileWrite: 1,
+        FilePatch: 1,
+        Bash: 2,
+        FileEdit: 0
+      }
+    : {};
   const toolCallCount =
     overrides.toolCallCount ??
     Object.values(h1ToolCounts).reduce((sum, count) => sum + count, 0) +
       Object.values(h2ToolCounts).reduce((sum, count) => sum + count, 0) +
       Object.values(h3ToolCounts).reduce((sum, count) => sum + count, 0) +
       Object.values(h4ToolCounts).reduce((sum, count) => sum + count, 0) +
-      Object.values(h5ToolCounts).reduce((sum, count) => sum + count, 0);
+      Object.values(h5ToolCounts).reduce((sum, count) => sum + count, 0) +
+      Object.values(h6ToolCounts).reduce((sum, count) => sum + count, 0);
   const uniqueToolCount = overrides.uniqueToolCount ?? (includeH4 ? 6 : includeH3 ? 4 : 3);
   const scenarioCount =
-    1 + (includeH2 ? 1 : 0) + (includeH3 ? 1 : 0) + (includeH4 ? 1 : 0) + (includeH5 ? 1 : 0);
+    1 +
+    (includeH2 ? 1 : 0) +
+    (includeH3 ? 1 : 0) +
+    (includeH4 ? 1 : 0) +
+    (includeH5 ? 1 : 0) +
+    (includeH6 ? 1 : 0);
   const passed = status === "passed" ? scenarioCount : 0;
   const failed = status === "passed" ? 0 : scenarioCount;
   const scenarios: Record<string, unknown>[] = [
@@ -1333,6 +1361,45 @@ function complexHarnessReport(
       }
     });
   }
+  if (includeH6) {
+    scenarios.push({
+      name: "H6 resume after interruption",
+      status,
+      durationMs: 1000,
+      score: overrides.score ?? (status === "passed" ? 1 : 0),
+      failureKind: status === "passed" ? null : "assertion",
+      details: {
+        taskId: "H6",
+        taskClass: "resume_after_interruption",
+        toolCounts: h6ToolCounts,
+        assertions: Array.from({ length: h6Assertions }, (_, index) => `H6 assertion ${index + 1}`),
+        filesVerified: Array.from(
+          { length: h6FilesVerified },
+          (_, index) => `H6 file ${index + 1}`
+        ),
+        changedFiles: ["reports/invoice-investigation.md", "src/invoice.js"],
+        forbiddenChanges: [],
+        checksPassed: true,
+        streamJsonLifecycleVerified: true,
+        session: {
+          messageCount: 6,
+          auditEventCount: 12
+        },
+        resume: {
+          firstSessionId: "h6-session",
+          resumedSessionId: "h6-session",
+          sameSession: true,
+          firstJobId: "h6-first",
+          resumedJobId: "h6-resumed"
+        },
+        limitResults: {
+          withinTime: true,
+          withinCommands: true,
+          withinFileChanges: true
+        }
+      }
+    });
+  }
   return {
     version: 1,
     name: "complex-task-harness",
@@ -1359,7 +1426,8 @@ function complexHarnessReport(
               (h2ToolCounts.FilePatch ?? 0) +
               (h3ToolCounts.FilePatch ?? 0) +
               (h4ToolCounts.FilePatch ?? 0) +
-              (h5ToolCounts.FilePatch ?? 0)
+              (h5ToolCounts.FilePatch ?? 0) +
+              (h6ToolCounts.FilePatch ?? 0)
           },
           {
             name: "FileRead",
@@ -1368,7 +1436,8 @@ function complexHarnessReport(
               (h2ToolCounts.FileRead ?? 0) +
               (h3ToolCounts.FileRead ?? 0) +
               (h4ToolCounts.FileRead ?? 0) +
-              (h5ToolCounts.FileRead ?? 0)
+              (h5ToolCounts.FileRead ?? 0) +
+              (h6ToolCounts.FileRead ?? 0)
           },
           {
             name: "Bash",
@@ -1377,12 +1446,16 @@ function complexHarnessReport(
               (h2ToolCounts.Bash ?? 0) +
               (h3ToolCounts.Bash ?? 0) +
               (h4ToolCounts.Bash ?? 0) +
-              (h5ToolCounts.Bash ?? 0)
+              (h5ToolCounts.Bash ?? 0) +
+              (h6ToolCounts.Bash ?? 0)
           },
           {
             name: "FileWrite",
             count:
-              h1ToolCounts.FileWrite + (h3ToolCounts.FileWrite ?? 0) + (h5ToolCounts.FileWrite ?? 0)
+              h1ToolCounts.FileWrite +
+              (h3ToolCounts.FileWrite ?? 0) +
+              (h5ToolCounts.FileWrite ?? 0) +
+              (h6ToolCounts.FileWrite ?? 0)
           },
           { name: "Glob", count: h4ToolCounts.Glob ?? 0 },
           { name: "Grep", count: h4ToolCounts.Grep ?? 0 }

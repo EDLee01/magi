@@ -576,7 +576,14 @@ Checks:
 - Context summary preserves required facts.
 - Final checks pass.
 
-Current status: not implemented.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H6 fixture runs a two-pass invoice task in one isolated workspace. The
+first pass reproduces the failing test, reads source/tests, writes an
+investigation report, and stops before patching source. The second pass uses
+`-c` to continue the most recent cwd session, verifies the same session id is
+reused, reads the prior investigation report, patches the source, reruns the
+focused test, and checks final diff/forbidden paths plus SQLite session/audit
+evidence.
 
 #### H7. Stream-json automation
 

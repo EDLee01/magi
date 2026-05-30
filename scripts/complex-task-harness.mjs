@@ -466,7 +466,10 @@ function createH3Router() {
       assert(toolNames.includes("FileRead"), "H3 missing FileRead");
       assert(toolNames.includes("FilePatch"), "H3 missing FilePatch");
       assert(toolNames.includes("Bash"), "H3 missing Bash");
-      assert(transcript.includes("Preserve the public output"), "H3 output constraint was not visible");
+      assert(
+        transcript.includes("Preserve the public output"),
+        "H3 output constraint was not visible"
+      );
       return toolResponse([
         toolCall("h3-read-sales", "FileRead", { file_path: "src/sales.js" }),
         toolCall("h3-read-inventory", "FileRead", { file_path: "src/inventory.js" }),
@@ -482,7 +485,7 @@ function createH3Router() {
         "H3 baseline inventory output missing"
       );
       assert(transcript.includes("report tests passed"), "H3 baseline test was not visible");
-      assert(transcript.includes("split(\",\")"), "H3 duplicate parsing evidence was not visible");
+      assert(transcript.includes('split(",")'), "H3 duplicate parsing evidence was not visible");
       return toolResponse([
         toolCall("h3-create-parse-helper", "FileWrite", {
           file_path: "src/parse.js",
@@ -510,7 +513,7 @@ function createH3Router() {
             "-    .filter(Boolean)",
             "-    .map((value) => Number(value));",
             "-}",
-            "+const { parseCsvNumbers } = require(\"./parse\");",
+            '+const { parseCsvNumbers } = require("./parse");',
             "+",
             "+function parseSalesAmounts(input) {",
             "+  return parseCsvNumbers(input);",
@@ -530,7 +533,7 @@ function createH3Router() {
             "-    .filter(Boolean)",
             "-    .map((value) => Number(value));",
             "-}",
-            "+const { parseCsvNumbers } = require(\"./parse\");",
+            '+const { parseCsvNumbers } = require("./parse");',
             "+",
             "+function parseInventoryCounts(input) {",
             "+  return parseCsvNumbers(input);",
@@ -543,7 +546,10 @@ function createH3Router() {
     }
 
     if (turn === 3) {
-      assert(transcript.includes("Wrote src/parse.js"), "H3 parse helper write result was not visible");
+      assert(
+        transcript.includes("Wrote src/parse.js"),
+        "H3 parse helper write result was not visible"
+      );
       assert(transcript.includes("Patched src/sales.js"), "H3 sales patch result was not visible");
       assert(
         transcript.includes("Patched src/inventory.js"),
@@ -570,14 +576,22 @@ function createH3Router() {
     }
 
     if (turn === 4) {
-      assert(transcript.includes("Command exited 0"), "H3 passing verification command was not visible");
-      assert(transcript.includes("sales total=60; count=3"), "H3 sales output changed or disappeared");
+      assert(
+        transcript.includes("Command exited 0"),
+        "H3 passing verification command was not visible"
+      );
+      assert(
+        transcript.includes("sales total=60; count=3"),
+        "H3 sales output changed or disappeared"
+      );
       assert(
         transcript.includes("inventory total=20; count=3"),
         "H3 inventory output changed or disappeared"
       );
       assert(transcript.includes("refactor helper verified"), "H3 helper verification missing");
-      return messageText("Refactored duplicate parsing into src/parse.js and verified npm test preserves output.");
+      return messageText(
+        "Refactored duplicate parsing into src/parse.js and verified npm test preserves output."
+      );
     }
 
     throw new Error(`H3 exceeded expected provider turns: ${turn}`);
@@ -628,7 +642,10 @@ function createH4Router() {
         transcript.includes("server.port is required"),
         "H4 validation error search result was not visible"
       );
-      assert(transcript.includes("client.retryLimit is required"), "H4 retryLimit check was not read");
+      assert(
+        transcript.includes("client.retryLimit is required"),
+        "H4 retryLimit check was not read"
+      );
       assert(transcript.includes("server.port, 0"), "H4 failing zero-port test was not visible");
       assert(transcript.includes("retryLimit, 0"), "H4 failing zero-retry test was not visible");
       assert(transcript.includes("Command exited 1"), "H4 failing baseline test was not visible");
@@ -674,7 +691,10 @@ function createH4Router() {
     }
 
     if (turn === 4) {
-      assert(transcript.includes("Command exited 0"), "H4 passing verification command was not visible");
+      assert(
+        transcript.includes("Command exited 0"),
+        "H4 passing verification command was not visible"
+      );
       assert(
         transcript.includes("config loader tests passed"),
         "H4 passing config loader test output was missing"
@@ -706,7 +726,9 @@ function createH5Router() {
       assert(toolNames.includes("FileWrite"), "H5 missing FileWrite");
       assert(toolNames.includes("Bash"), "H5 missing Bash");
       assert(
-        transcript.includes("Do not change package.json, tests, generated files, or files outside this repo"),
+        transcript.includes(
+          "Do not change package.json, tests, generated files, or files outside this repo"
+        ),
         "H5 permission boundary constraints were not visible"
       );
       return toolResponse([
@@ -721,7 +743,10 @@ function createH5Router() {
     }
 
     if (turn === 2) {
-      assert(transcript.includes('environment: "staging"'), "H5 original environment was not visible");
+      assert(
+        transcript.includes('environment: "staging"'),
+        "H5 original environment was not visible"
+      );
       assert(transcript.includes("timeoutMs: 2000"), "H5 original timeout was not visible");
       assert(transcript.includes("Command exited 1"), "H5 failing baseline test was not visible");
       assert(
@@ -736,7 +761,7 @@ function createH5Router() {
             '-  environment: "staging",',
             '+  environment: "production",',
             "   api: {",
-            "     baseUrl: \"https://api.example.test\",",
+            '     baseUrl: "https://api.example.test",',
             "-    timeoutMs: 2000",
             "+    timeoutMs: 5000",
             "   },"
@@ -768,7 +793,10 @@ function createH5Router() {
     }
 
     if (turn === 4) {
-      assert(transcript.includes("Command exited 0"), "H5 passing verification command was not visible");
+      assert(
+        transcript.includes("Command exited 0"),
+        "H5 passing verification command was not visible"
+      );
       assert(
         transcript.includes("project config tests passed"),
         "H5 passing project config test output was missing"
@@ -783,6 +811,135 @@ function createH5Router() {
     }
 
     throw new Error(`H5 exceeded expected provider turns: ${turn}`);
+  };
+}
+
+function createH6Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (
+      !transcript.includes("Investigate the invoice summary bug") &&
+      !transcript.includes("Continue the interrupted invoice summary task")
+    ) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("FileRead"), "H6 first pass missing FileRead");
+      assert(toolNames.includes("FileWrite"), "H6 first pass missing FileWrite");
+      assert(toolNames.includes("Bash"), "H6 first pass missing Bash");
+      assert(
+        transcript.includes("Stop after the investigation report"),
+        "H6 first-pass stop constraint was not visible"
+      );
+      return toolResponse([
+        toolCall("h6-read-invoice-source", "FileRead", { file_path: "src/invoice.js" }),
+        toolCall("h6-read-invoice-tests", "FileRead", { file_path: "tests/invoice.test.mjs" }),
+        toolCall("h6-run-failing-test", "Bash", { command: "npm test", timeout_ms: 10_000 })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(
+        transcript.includes("total + line.unitPrice"),
+        "H6 first pass source evidence was not visible"
+      );
+      assert(transcript.includes("40"), "H6 expected invoice total was not visible");
+      assert(transcript.includes("25"), "H6 failing invoice total was not visible");
+      assert(transcript.includes("Command exited 1"), "H6 failing baseline test was not visible");
+      return toolResponse([
+        toolCall("h6-write-investigation", "FileWrite", {
+          file_path: "reports/invoice-investigation.md",
+          content: [
+            "# Invoice Investigation",
+            "",
+            "- Failing case: expected 40 but received 25.",
+            "- Root cause: quantity is ignored in invoiceTotal; only unitPrice is added.",
+            "- Intended fix: add line.quantity * line.unitPrice for each line.",
+            ""
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(
+        transcript.includes("Wrote reports/invoice-investigation.md"),
+        "H6 investigation write result was not visible"
+      );
+      return messageText("Investigation report written; ready to resume for the source fix.");
+    }
+
+    if (turn === 4) {
+      assert(toolNames.includes("FileRead"), "H6 resume missing FileRead");
+      assert(toolNames.includes("FilePatch"), "H6 resume missing FilePatch");
+      assert(toolNames.includes("Bash"), "H6 resume missing Bash");
+      assert(
+        transcript.includes("Investigation report written; ready to resume") ||
+          transcript.includes("quantity is ignored in invoiceTotal"),
+        "H6 resume context did not include prior investigation"
+      );
+      assert(
+        transcript.includes("Continue the interrupted invoice summary task"),
+        "H6 resume prompt was not visible"
+      );
+      return toolResponse([
+        toolCall("h6-reread-investigation", "FileRead", {
+          file_path: "reports/invoice-investigation.md"
+        }),
+        toolCall("h6-reread-invoice-source", "FileRead", { file_path: "src/invoice.js" })
+      ]);
+    }
+
+    if (turn === 5) {
+      assert(
+        transcript.includes("quantity is ignored"),
+        "H6 resume did not read investigation report"
+      );
+      assert(
+        transcript.includes("total + line.unitPrice"),
+        "H6 resume did not re-read invoice source"
+      );
+      return toolResponse([
+        toolCall("h6-patch-invoice-total", "FilePatch", {
+          file_path: "src/invoice.js",
+          patch: [
+            "@@",
+            " function invoiceTotal(lines) {",
+            "-  return lines.reduce((total, line) => total + line.unitPrice, 0);",
+            "+  return lines.reduce((total, line) => total + line.quantity * line.unitPrice, 0);",
+            " }"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 6) {
+      assert(
+        transcript.includes("Patched src/invoice.js"),
+        "H6 invoice patch result was not visible"
+      );
+      return toolResponse([
+        toolCall("h6-run-final-test", "Bash", { command: "npm test", timeout_ms: 10_000 })
+      ]);
+    }
+
+    if (turn === 7) {
+      assert(
+        transcript.includes("Command exited 0"),
+        "H6 passing verification command was not visible"
+      );
+      assert(
+        transcript.includes("invoice tests passed"),
+        "H6 passing invoice tests output was missing"
+      );
+      return messageText(
+        "Resumed the invoice task, fixed src/invoice.js, and verified npm test passes."
+      );
+    }
+
+    throw new Error(`H6 exceeded expected provider turns: ${turn}`);
   };
 }
 
@@ -910,7 +1067,10 @@ function taskDefinitionFor(taskId) {
           after["src/inventory.js"]?.text.includes('require("./parse")'),
           "H3 inventory missing shared helper import"
         );
-        assert(!after["src/sales.js"]?.text.includes('split(",")'), "H3 sales duplicate parsing remains");
+        assert(
+          !after["src/sales.js"]?.text.includes('split(",")'),
+          "H3 sales duplicate parsing remains"
+        );
         assert(
           !after["src/inventory.js"]?.text.includes('split(",")'),
           "H3 inventory duplicate parsing remains"
@@ -968,7 +1128,10 @@ function taskDefinitionFor(taskId) {
           "H4 retryLimit undefined check missing"
         );
         assert(!validator.includes("!config.server.port"), "H4 falsy port check remains");
-        assert(!validator.includes("!config.client.retryLimit"), "H4 falsy retryLimit check remains");
+        assert(
+          !validator.includes("!config.client.retryLimit"),
+          "H4 falsy retryLimit check remains"
+        );
         assert(session.auditEventCount > 0, "H4 audit events were not persisted");
         assert(session.messageCount >= 2, "H4 session messages were not persisted");
       }
@@ -1024,6 +1187,63 @@ function taskDefinitionFor(taskId) {
         );
         assert(session.auditEventCount > 0, "H5 audit events were not persisted");
         assert(session.messageCount >= 2, "H5 session messages were not persisted");
+      }
+    };
+  }
+
+  if (taskId === "H6") {
+    return {
+      createRouter: createH6Router,
+      finalMessage: "Resumed the invoice task, fixed src/invoice.js, and verified npm test passes.",
+      firstPassFinalMessage: "Investigation report written; ready to resume for the source fix.",
+      assertions: [
+        "H6 fixture copied into isolated workspace",
+        "H6 first pass read source and tests",
+        "H6 first pass reproduced failing test",
+        "H6 first pass wrote investigation report",
+        "H6 first pass stopped before source patch",
+        "H6 resume used -c latest cwd session",
+        "H6 resume reused the same session id",
+        "H6 resume context preserved prior investigation",
+        "H6 resume read investigation report",
+        "H6 resume patched invoice source",
+        "H6 npm test passed after resume",
+        "H6 changed exactly expected files",
+        "H6 forbidden paths unchanged",
+        "H6 checks.sh passed",
+        "H6 session and audit persisted"
+      ],
+      filesVerified: [
+        "reports/invoice-investigation.md",
+        "src/invoice.js",
+        "tests/invoice.test.mjs",
+        "checks.sh",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session, resume }) => {
+        assert((toolCounts.FileRead ?? 0) >= 4, "H6 did not read enough resume evidence");
+        assert((toolCounts.FileWrite ?? 0) === 1, "H6 should write one investigation report");
+        assert((toolCounts.FilePatch ?? 0) === 1, "H6 should patch invoice source once");
+        assert((toolCounts.Bash ?? 0) === 2, "H6 should run baseline and final verification");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H6 should not use FileEdit");
+        const report = after["reports/invoice-investigation.md"]?.text ?? "";
+        const source = after["src/invoice.js"]?.text ?? "";
+        assert(
+          report.includes("quantity is ignored"),
+          "H6 investigation report missing root cause"
+        );
+        assert(
+          report.includes("expected 40 but received 25"),
+          "H6 investigation report missing failure"
+        );
+        assert(
+          source.includes("line.quantity * line.unitPrice"),
+          "H6 invoice source was not fixed"
+        );
+        assert(!source.includes("total + line.unitPrice;"), "H6 stale invoice bug remains");
+        assert(resume?.sameSession === true, "H6 resume did not reuse the same session");
+        assert(session.auditEventCount > 0, "H6 audit events were not persisted");
+        assert(session.messageCount >= 4, "H6 session messages did not include both passes");
       }
     };
   }
@@ -1232,6 +1452,196 @@ async function runTask(taskName) {
   }
 }
 
+async function runResumeTask(taskName) {
+  const taskRoot = path.join(fixturesRoot, taskName);
+  const repoFixture = path.join(taskRoot, "repo");
+  const expected = readJson(path.join(taskRoot, "expected.json"));
+  const taskDefinition = taskDefinitionFor(expected.id);
+  const limits = readJson(path.join(taskRoot, "limits.json"));
+  const forbidden = readLines(path.join(taskRoot, "forbidden.txt"));
+  const root = mkdtempSync(path.join(os.tmpdir(), `magi-complex-${taskName}-`));
+  const configDir = path.join(root, "config");
+  const workDir = path.join(root, "repo");
+  const archiveDir = path.join(archiveRoot, taskName);
+  const providerLog = path.join(archiveDir, "provider-log.json");
+  const sentinelPath = path.join(root, "outside-sentinel.txt");
+  mkdirSync(configDir, { recursive: true });
+  mkdirSync(workDir, { recursive: true });
+  mkdirSync(archiveDir, { recursive: true });
+  cpSync(repoFixture, workDir, { recursive: true });
+  writeFileSync(sentinelPath, "do not touch\n", "utf8");
+
+  const before = snapshotFiles(workDir);
+  const started = Date.now();
+  const provider = await startProvider({
+    logPath: providerLog,
+    routeRequest: taskDefinition.createRouter()
+  });
+
+  try {
+    writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+    const firstPrompt = readFileSync(path.join(taskRoot, "task.md"), "utf8");
+    const first = await runCli({
+      args: [
+        "--permission-mode",
+        "acceptEdits",
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        firstPrompt
+      ],
+      cwd: workDir,
+      configDir,
+      label: `${taskName} first pass`,
+      timeoutMs: limits.maxTimeMs
+    });
+    writeFileSync(path.join(archiveDir, "first.stdout.jsonl"), first.stdout, "utf8");
+    writeFileSync(path.join(archiveDir, "first.stderr.txt"), first.stderr, "utf8");
+    const firstEvents = parseStreamEvents(first.stdout);
+    const firstCompleted = firstEvents.at(-1);
+    assert(firstCompleted?.type === "session.completed", "H6 first pass did not complete");
+    assert(firstCompleted.status === "completed", "H6 first pass status was not completed");
+    assert(
+      firstCompleted.message === taskDefinition.firstPassFinalMessage,
+      "H6 first pass final message did not stop at investigation"
+    );
+
+    const resumePrompt = readFileSync(path.join(taskRoot, "resume-task.md"), "utf8");
+    const resumed = await runCli({
+      args: [
+        "--permission-mode",
+        "acceptEdits",
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-c",
+        "-p",
+        resumePrompt
+      ],
+      cwd: workDir,
+      configDir,
+      label: `${taskName} resume pass`,
+      timeoutMs: limits.maxTimeMs
+    });
+    writeFileSync(path.join(archiveDir, "resume.stdout.jsonl"), resumed.stdout, "utf8");
+    writeFileSync(path.join(archiveDir, "resume.stderr.txt"), resumed.stderr, "utf8");
+    const resumeEvents = parseStreamEvents(resumed.stdout);
+    const completed = resumeEvents.at(-1);
+    assert(completed?.type === "session.completed", "H6 resume stream-json did not complete");
+    assert(completed.status === "completed", "H6 resume session did not finish completed");
+    assert(
+      completed.sessionId === firstCompleted.sessionId,
+      "H6 resume did not use same session id"
+    );
+    assert(
+      completed.message === taskDefinition.finalMessage,
+      `final message did not report ${expected.id} verification`
+    );
+
+    const checks = await runCommand({
+      command: "bash",
+      args: [path.join(taskRoot, "checks.sh")],
+      cwd: workDir,
+      configDir,
+      label: `${taskName} checks`,
+      timeoutMs: 15_000
+    });
+    writeFileSync(path.join(archiveDir, "checks.stdout.txt"), checks.stdout, "utf8");
+    writeFileSync(path.join(archiveDir, "checks.stderr.txt"), checks.stderr, "utf8");
+    assert(
+      checks.code === 0,
+      `checks.sh failed with exit ${checks.code ?? checks.signal}\nSTDOUT:\n${checks.stdout}\nSTDERR:\n${checks.stderr}`
+    );
+
+    const after = snapshotFiles(workDir);
+    const changedFiles = diffSnapshots(before, after);
+    const forbiddenChanges = changedFiles.filter((file) => matchesForbidden(file, forbidden));
+    const sentinelUnchanged = readFileSync(sentinelPath, "utf8") === "do not touch\n";
+    const elapsedMs = Date.now() - started;
+    const firstToolCounts = countStreamTools(firstEvents);
+    const resumeToolCounts = countStreamTools(resumeEvents);
+    const toolCounts = mergeToolCounts(firstToolCounts, resumeToolCounts);
+    const session = readSessionEvidence(
+      path.join(configDir, "state", "sessions.sqlite"),
+      completed.sessionId
+    );
+    const diffText = renderChangedFileDiffs(before, after, changedFiles);
+    writeFileSync(path.join(archiveDir, "diff.txt"), diffText, "utf8");
+
+    const commandCount = toolCounts.Bash ?? 0;
+    const assertions = taskDefinition.assertions;
+    assert(
+      JSON.stringify(changedFiles) === JSON.stringify(expected.expectedChangedFiles),
+      `changed files ${JSON.stringify(changedFiles)} did not match expected ${JSON.stringify(expected.expectedChangedFiles)}`
+    );
+    assert(forbiddenChanges.length === 0, `forbidden changes: ${forbiddenChanges.join(", ")}`);
+    assert(sentinelUnchanged, "outside sentinel changed");
+    assert(elapsedMs <= limits.maxTimeMs, `elapsed ${elapsedMs}ms exceeded limit`);
+    assert(commandCount <= limits.maxCommandCount, `command count ${commandCount} exceeded limit`);
+    assert(
+      changedFiles.length <= limits.maxFileChanges,
+      `file changes ${changedFiles.length} exceeded limit`
+    );
+    taskDefinition.validate({
+      before,
+      after,
+      changedFiles,
+      toolCounts,
+      session,
+      resume: {
+        firstSessionId: firstCompleted.sessionId,
+        resumedSessionId: completed.sessionId,
+        sameSession: firstCompleted.sessionId === completed.sessionId
+      }
+    });
+
+    return {
+      name: expected.name,
+      status: "passed",
+      durationMs: elapsedMs,
+      score: 1,
+      failureKind: null,
+      details: {
+        taskId: expected.id,
+        taskClass: expected.taskClass,
+        fixture: taskName,
+        provider: provider.summary(),
+        toolCounts,
+        assertions,
+        filesVerified: taskDefinition.filesVerified,
+        changedFiles,
+        forbiddenChanges,
+        checksPassed: true,
+        checksExitCode: checks.code,
+        streamJsonLifecycleVerified: true,
+        session,
+        resume: {
+          firstSessionId: firstCompleted.sessionId,
+          resumedSessionId: completed.sessionId,
+          sameSession: firstCompleted.sessionId === completed.sessionId,
+          firstJobId: firstCompleted.jobId,
+          resumedJobId: completed.jobId
+        },
+        limits,
+        limitResults: {
+          withinTime: elapsedMs <= limits.maxTimeMs,
+          withinCommands: commandCount <= limits.maxCommandCount,
+          withinFileChanges: changedFiles.length <= limits.maxFileChanges
+        },
+        archive: path.relative(repoRoot, archiveDir)
+      }
+    };
+  } finally {
+    await provider.close();
+    if (!process.env.MAGI_KEEP_COMPLEX_HARNESS_TMP) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+}
+
 function readSessionEvidence(dbFile, sessionId) {
   assert(existsSync(dbFile), "sessions.sqlite was not created");
   const db = new Database(dbFile, { readonly: true });
@@ -1288,6 +1698,16 @@ function countStreamTools(events) {
     }
   }
   return counts;
+}
+
+function mergeToolCounts(...countsList) {
+  const merged = {};
+  for (const counts of countsList) {
+    for (const [tool, count] of Object.entries(counts)) {
+      merged[tool] = (merged[tool] ?? 0) + count;
+    }
+  }
+  return merged;
 }
 
 function readJson(file) {
@@ -1375,12 +1795,16 @@ async function main() {
     "h2-multi-file-dry-run",
     "h3-refactor-behavior-preservation",
     "h4-repository-investigation",
-    "h5-permission-boundary"
+    "h5-permission-boundary",
+    "h6-resume-after-interruption"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);
     try {
-      const result = await runTask(taskName);
+      const result =
+        taskName === "h6-resume-after-interruption"
+          ? await runResumeTask(taskName)
+          : await runTask(taskName);
       console.log(`✓ ${taskName} (${result.durationMs}ms)`);
       scenarios.push(result);
     } catch (error) {
