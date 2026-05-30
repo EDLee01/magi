@@ -721,8 +721,10 @@ Acceptance:
 Current status: partial and gated for the highest-risk stable surfaces. The
 black-box visual contract verifies startup, slash suggestion filtering/footer,
 and status rendering with a pending approval plus transcript line-width bounds.
-Full PTY transcript snapshots for every interactive state remain future
-coverage.
+The black-box TUI keyboard input gate also drives the real interactive prompt
+path with Home/Delete/End/Left/LF/Enter editing and verifies that the provider
+receives the corrected multiline prompt. Full PTY transcript snapshots for every
+interactive state remain future coverage.
 
 ## H. Provider-backed Real Task Tests
 

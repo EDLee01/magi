@@ -116,7 +116,8 @@ describe("capability report", () => {
         toolPolicySeen: false,
         dangerousPermissionMatrixSeen: false,
         slashSuggestionPromptSeen: false,
-        tuiVisualContractSeen: false
+        tuiVisualContractSeen: false,
+        tuiKeyboardInputSeen: false
       }),
       modelTasks: modelTaskReport(),
       memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
@@ -161,6 +162,7 @@ describe("capability report", () => {
         "dangerousPermissionMatrixSeen=false",
         "slashSuggestionPromptSeen=false",
         "tuiVisualContractSeen=false",
+        "tuiKeyboardInputSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
         "regressions=1"
@@ -1005,6 +1007,7 @@ function harnessReport(input: {
   dangerousPermissionMatrixSeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
+  tuiKeyboardInputSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
     scenario: `regression ${index + 1}`,
@@ -1064,7 +1067,8 @@ function harnessReport(input: {
                   ...toolPolicyAssertions(input),
                   ...dangerousPermissionMatrixAssertions(input),
                   ...slashSuggestionPromptAssertions(input),
-                  ...tuiVisualContractAssertions(input)
+                  ...tuiVisualContractAssertions(input),
+                  ...tuiKeyboardInputAssertions(input)
                 ],
           filesVerified:
             input.learningDraftApplySeen === false && input.skillLearningApplySeen === false
@@ -1965,6 +1969,17 @@ function tuiVisualContractAssertions(input: { tuiVisualContractSeen?: boolean })
         "slash suggestion visual contract stable",
         "TUI status pending approval rendered",
         "TUI status transcript width bounded"
+      ];
+}
+
+function tuiKeyboardInputAssertions(input: { tuiKeyboardInputSeen?: boolean }): string[] {
+  return input.tuiKeyboardInputSeen === false
+    ? []
+    : [
+        "TUI keyboard editing submitted corrected multiline prompt",
+        "TUI keyboard editing removed stale typed characters",
+        "TUI keyboard editing reached provider exactly once",
+        "TUI keyboard editing returned provider response and exited"
       ];
 }
 

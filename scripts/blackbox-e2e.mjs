@@ -2947,6 +2947,82 @@ async function scenarioSlashResumeSearchTty() {
   });
 }
 
+async function scenarioTuiKeyboardInput() {
+  return await withTempWorkspace("tui-keyboard-input", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const expectedPrompt = "Audit release plan\ninclude rollback";
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        assert(
+          transcript.includes(expectedPrompt),
+          `TUI keyboard edit submitted unexpected prompt:\n${transcript}`
+        );
+        assert(
+          !transcript.includes("xxxAudit") && !transcript.includes("relese"),
+          `TUI keyboard edit left stale typed text:\n${transcript}`
+        );
+        return messageText("TUI keyboard prompt accepted.");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const editSequence = [
+        "xxxAudit relese plan",
+        "\x1b[H",
+        "\x1b[3~",
+        "\x1b[3~",
+        "\x1b[3~",
+        "\x1b[F",
+        "\x1b[D".repeat(7),
+        "a",
+        "\x1b[F",
+        "\ninclude rollback",
+        "\r"
+      ].join("");
+      const result = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "TUI keyboard input",
+        steps: [
+          { waitForText: "/help for commands", inputText: editSequence },
+          { waitForText: "TUI keyboard prompt accepted.", inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        result.exitCode === 0,
+        `TUI keyboard input exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(visible.includes("TUI keyboard prompt accepted."), "TUI response did not render");
+      assert(
+        provider.calls.length === 1,
+        "TUI keyboard input should make exactly one provider call"
+      );
+      assert(
+        provider.calls[0]?.transcript.includes(expectedPrompt),
+        "provider transcript missed corrected multiline prompt"
+      );
+      return {
+        score: 1,
+        assertions: [
+          "TUI keyboard editing submitted corrected multiline prompt",
+          "TUI keyboard editing removed stale typed characters",
+          "TUI keyboard editing reached provider exactly once",
+          "TUI keyboard editing returned provider response and exited"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4171,6 +4247,7 @@ async function main() {
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],
     ["slash resume search TTY", scenarioSlashResumeSearchTty],
+    ["TUI keyboard input", scenarioTuiKeyboardInput],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],
