@@ -724,12 +724,14 @@ black-box visual contract verifies startup, slash suggestion filtering/footer,
 and status rendering with a pending approval plus transcript line-width bounds.
 The black-box TUI keyboard input gate also drives the real interactive prompt
 path with Home/Delete/End/Left/LF/Enter editing and verifies that the provider
-receives the corrected multiline prompt. The TUI stateful picker gate exercises
-`/model` and `/permissions mode`, then verifies that the selected model alias
-routes the next provider call and the selected plan mode blocks a write. The
-TUI approval picker gate verifies a pending FileWrite approval, hotkey denial,
-model-visible denial result, and unchanged workspace. Full PTY transcript
-snapshots for every interactive state remain future coverage.
+receives the corrected multiline prompt. The TUI prompt history gate recalls a
+previous prompt with Up, edits it, and verifies that the revised prompt reaches
+the provider. The TUI stateful picker gate exercises `/model` and
+`/permissions mode`, then verifies that the selected model alias routes the next
+provider call and the selected plan mode blocks a write. The TUI approval picker
+gate verifies a pending FileWrite approval, hotkey denial, model-visible denial
+result, and unchanged workspace. Full PTY transcript snapshots for every
+interactive state remain future coverage.
 
 ## H. Provider-backed Real Task Tests
 

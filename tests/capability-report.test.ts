@@ -119,6 +119,7 @@ describe("capability report", () => {
         slashSuggestionPromptSeen: false,
         tuiVisualContractSeen: false,
         tuiKeyboardInputSeen: false,
+        tuiPromptHistorySeen: false,
         tuiStatefulPickersSeen: false,
         tuiApprovalPickerSeen: false
       }),
@@ -167,6 +168,7 @@ describe("capability report", () => {
         "slashSuggestionPromptSeen=false",
         "tuiVisualContractSeen=false",
         "tuiKeyboardInputSeen=false",
+        "tuiPromptHistorySeen=false",
         "tuiStatefulPickersSeen=false",
         "tuiApprovalPickerSeen=false",
         "toolCallCount=3",
@@ -1015,6 +1017,7 @@ function harnessReport(input: {
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
   tuiKeyboardInputSeen?: boolean;
+  tuiPromptHistorySeen?: boolean;
   tuiStatefulPickersSeen?: boolean;
   tuiApprovalPickerSeen?: boolean;
 }): Record<string, unknown> {
@@ -1079,6 +1082,7 @@ function harnessReport(input: {
                   ...slashSuggestionPromptAssertions(input),
                   ...tuiVisualContractAssertions(input),
                   ...tuiKeyboardInputAssertions(input),
+                  ...tuiPromptHistoryAssertions(input),
                   ...tuiStatefulPickersAssertions(input),
                   ...tuiApprovalPickerAssertions(input)
                 ],
@@ -2005,6 +2009,17 @@ function tuiKeyboardInputAssertions(input: { tuiKeyboardInputSeen?: boolean }): 
         "TUI keyboard editing removed stale typed characters",
         "TUI keyboard editing reached provider exactly once",
         "TUI keyboard editing returned provider response and exited"
+      ];
+}
+
+function tuiPromptHistoryAssertions(input: { tuiPromptHistorySeen?: boolean }): string[] {
+  return input.tuiPromptHistorySeen === false
+    ? []
+    : [
+        "TUI prompt history recalled previous prompt",
+        "TUI prompt history edit submitted revised prompt",
+        "TUI prompt history reached provider twice",
+        "TUI prompt history rendered both provider responses"
       ];
 }
 

@@ -44,6 +44,16 @@ function transcriptFromBody(body) {
   return (body.messages ?? []).map(textFromMessage).join("\n");
 }
 
+function latestUserPromptFromBody(body) {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      return textFromMessage(messages[index]);
+    }
+  }
+  return "";
+}
+
 function messageText(text, model = "mock-main") {
   return {
     id: "msg_" + Math.random().toString(36).slice(2),
@@ -3163,6 +3173,87 @@ async function scenarioTuiKeyboardInput() {
   });
 }
 
+async function scenarioTuiPromptHistory() {
+  return await withTempWorkspace("tui-prompt-history", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const latestPrompts = [];
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ body }) => {
+        const latestPrompt = latestUserPromptFromBody(body);
+        latestPrompts.push(latestPrompt);
+        if (latestPrompt.includes("First history prompt.")) {
+          return messageText("TUI history seed accepted.");
+        }
+        assert(
+          latestPrompt.includes("Second history prompt."),
+          `TUI prompt history submitted unexpected prompt:\n${latestPrompt}`
+        );
+        return messageText("TUI history recall accepted.");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const historyEdit = [
+        "\x1b[A",
+        "\x1b[H",
+        "\x1b[3~",
+        "\x1b[3~",
+        "\x1b[3~",
+        "\x1b[3~",
+        "\x1b[3~",
+        "Second",
+        "\r"
+      ].join("");
+      const result = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "TUI prompt history",
+        steps: [
+          { waitForText: "/help for commands", inputText: "First history prompt.\r" },
+          { waitForText: "TUI history seed accepted.", inputText: historyEdit },
+          { waitForText: "TUI history recall accepted.", inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        result.exitCode === 0,
+        `TUI prompt history exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(visible.includes("TUI history seed accepted."), "history seed response did not render");
+      assert(
+        visible.includes("TUI history recall accepted."),
+        "history recall response did not render"
+      );
+      assert(provider.calls.length === 2, "TUI prompt history should make two provider calls");
+      assert(
+        latestPrompts[0]?.includes("First history prompt."),
+        "first provider prompt missed seed text"
+      );
+      assert(
+        latestPrompts[1]?.includes("Second history prompt."),
+        "second provider prompt missed edited history text"
+      );
+      return {
+        score: 1,
+        assertions: [
+          "TUI prompt history recalled previous prompt",
+          "TUI prompt history edit submitted revised prompt",
+          "TUI prompt history reached provider twice",
+          "TUI prompt history rendered both provider responses"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioTuiStatefulPickers() {
   return await withTempWorkspace("tui-stateful-pickers", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -4543,6 +4634,7 @@ async function main() {
     ["slash resume search TTY", scenarioSlashResumeSearchTty],
     ["resume picker search fields TTY", scenarioResumePickerSearchFieldsTty],
     ["TUI keyboard input", scenarioTuiKeyboardInput],
+    ["TUI prompt history", scenarioTuiPromptHistory],
     ["TUI stateful pickers", scenarioTuiStatefulPickers],
     ["TUI approval picker", scenarioTuiApprovalPicker],
     ["retry fallback", scenarioRetryAndFallback],
