@@ -565,6 +565,28 @@ async function seedMemoryAndGoal({ workDir, configDir }) {
 function createComplexRouter() {
   let complexTurns = 0;
   return ({ transcript, toolNames }) => {
+    if (transcript.includes("Use the mature blackbox verify skill after multiple learning cycles.")) {
+      assert(
+        transcript.includes("[Relevant Skills]"),
+        "mature skill recall request missed skills context"
+      );
+      assert(
+        transcript.includes("## blackbox-verify"),
+        "mature skill recall missed learned skill name"
+      );
+      assert(
+        transcript.includes("Run isolated provider validation, then focused CLI E2E, before broad suites."),
+        "mature skill recall missed latest multi-cycle guidance"
+      );
+      assert(
+        !transcript.includes("Confirm the patched skill update before broad suites."),
+        "mature skill recall still included superseded patch guidance"
+      );
+      return messageText(
+        "Use mature blackbox-verify: isolated provider validation, focused CLI E2E, then broad suites."
+      );
+    }
+
     if (transcript.includes("Use the patched blackbox verify skill after a learning update.")) {
       assert(
         transcript.includes("[Relevant Skills]"),
@@ -1161,6 +1183,100 @@ async function scenarioComplexWorkflow() {
         correctedSkillRecall.includes("corrected blackbox-verify"),
         "corrected skill recall answer missed corrected skill name"
       );
+      const consolidatedSkill = correctedSkill.replace(
+        "\n\n<!-- LearningDraft " +
+          skillPatchDraftId +
+          " -->\n## Learned patch update\n\nConfirm the patched skill update before broad suites.\n",
+        ""
+      );
+      const iterativeSkillPatchDraft = await runCli({
+        args: [
+          "learning",
+          "propose",
+          "--kind",
+          "skill_patch",
+          "--target",
+          "skills/blackbox-verify/SKILL.md",
+          "--reason",
+          "Fold another cycle of successful black-box verification back into the skill.",
+          "--evidence",
+          "Validated after create, patch, correction, and recall cycles",
+          "--confidence",
+          "0.94",
+          [
+            "old_string:",
+            "```",
+            correctedSkill,
+            "```",
+            "new_string:",
+            "```",
+            consolidatedSkill.replace(
+              "Use isolated provider validation before broad suites.",
+              "Run isolated provider validation, then focused CLI E2E, before broad suites."
+            ),
+            "```"
+          ].join("\n")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "learning iterative skill patch draft propose"
+      });
+      assert(
+        iterativeSkillPatchDraft.includes("Created LearningDraft:"),
+        "iterative skill LearningDraft was not proposed"
+      );
+      const iterativeSkillPatchDraftId = /learn_[a-z0-9_]+/i.exec(iterativeSkillPatchDraft)?.[0];
+      assert(iterativeSkillPatchDraftId, "iterative skill LearningDraft id was not returned");
+      const iterativeSkillPatchReview = await runCli({
+        args: ["learning", "draft", "show", iterativeSkillPatchDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning iterative skill patch draft show"
+      });
+      assert(
+        iterativeSkillPatchReview.includes("Fold another cycle of successful black-box verification"),
+        "iterative skill review missed reason"
+      );
+      assert(
+        iterativeSkillPatchReview.includes("Validated after create, patch, correction, and recall cycles"),
+        "iterative skill review missed evidence"
+      );
+      const iterativeSkillPatchApply = await runCli({
+        args: ["learning", "draft", "apply", iterativeSkillPatchDraftId],
+        cwd: workDir,
+        configDir,
+        label: "learning iterative skill patch draft apply"
+      });
+      assert(
+        iterativeSkillPatchApply.includes("Applied LearningDraft:"),
+        "iterative skill LearningDraft apply did not run"
+      );
+      const matureSkill = readFileSync(skillFile, "utf8");
+      assert(
+        matureSkill.includes("Run isolated provider validation, then focused CLI E2E, before broad suites."),
+        "mature skill file missed latest learned guidance"
+      );
+      assert(
+        !matureSkill.includes("Use isolated provider validation before broad suites."),
+        "mature skill file retained prior corrected guidance"
+      );
+      const matureSkillRecall = await runCli({
+        args: [
+          "--session-id",
+          "blackbox-mature-skill-session",
+          "--model",
+          "main",
+          "-p",
+          "Use the mature blackbox verify skill after multiple learning cycles."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "mature skill recall"
+      });
+      assert(
+        matureSkillRecall.includes("mature blackbox-verify"),
+        "mature skill recall answer missed mature skill name"
+      );
 
       const memorySearch = await runCli({
         args: ["memory", "search", "CLI E2E workflow"],
@@ -1346,7 +1462,10 @@ async function scenarioComplexWorkflow() {
           "patched skill recalled in model context",
           "stale skill correction draft reviewed",
           "stale skill correction applied replacement",
-          "corrected skill recalled without stale guidance"
+          "corrected skill recalled without stale guidance",
+          "iterative skill patch reviewed after correction",
+          "iterative skill patch applied latest guidance",
+          "mature skill recalled after multiple learning cycles"
         ],
         filesVerified: [
           "reports/e2e-result.md",

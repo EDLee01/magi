@@ -144,6 +144,10 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("stale skill correction draft reviewed") &&
     assertionList.includes("stale skill correction applied replacement") &&
     assertionList.includes("corrected skill recalled without stale guidance");
+  const longCycleSkillIterationSeen =
+    assertionList.includes("iterative skill patch reviewed after correction") &&
+    assertionList.includes("iterative skill patch applied latest guidance") &&
+    assertionList.includes("mature skill recalled after multiple learning cycles");
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
@@ -155,6 +159,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
   if (!skillPatchLearningSeen) failures.push("skillPatchLearningSeen=false");
   if (!skillCorrectionSeen) failures.push("skillCorrectionSeen=false");
+  if (!longCycleSkillIterationSeen) failures.push("longCycleSkillIterationSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
@@ -176,6 +181,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       skillLearningApplySeen,
       skillPatchLearningSeen,
       skillCorrectionSeen,
+      longCycleSkillIterationSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
