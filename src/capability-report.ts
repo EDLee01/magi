@@ -1779,6 +1779,19 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h8Session = readRecord(h8?.session);
   const h8AgentQueue = readRecord(h8?.agentQueue);
   const h8WriteClaimFiles = readStringList(h8AgentQueue.writeClaimFiles);
+  const h8TaskPrompts = readStringList(h8AgentQueue.taskPrompts);
+  const h8Tasks = readRecordList(h8AgentQueue.tasks);
+  const h8Claims = readRecordList(h8AgentQueue.claims);
+  const h8ExpectedWorkerTasks = [
+    { prompt: "update left module", filePath: "src/left.txt" },
+    { prompt: "update right module", filePath: "src/right.txt" }
+  ];
+  const h8WorkerTaskEvidenceSeen = hasWorkerTaskEvidence(h8Tasks, h8ExpectedWorkerTasks);
+  const h8ClaimOwnerEvidenceSeen = hasWorkerClaimEvidence(
+    h8Claims,
+    h8Tasks,
+    h8ExpectedWorkerTasks.map((task) => task.filePath)
+  );
   const h8Limits = readRecord(h8?.limitResults);
   const h8Seen = Boolean(h8);
   const h9 = detailsList.find((details) => details.taskId === "H9");
@@ -1788,6 +1801,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h9ForbiddenChanges = readStringList(h9?.forbiddenChanges);
   const h9Session = readRecord(h9?.session);
   const h9Approval = readRecord(h9?.approval);
+  const h9CompletedToolIds = readStringList(h9Approval.completedToolIds);
   const h9Limits = readRecord(h9?.limitResults);
   const h9Seen = Boolean(h9);
   const h10 = detailsList.find((details) => details.taskId === "H10");
@@ -2043,6 +2057,13 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (JSON.stringify(h8WriteClaimFiles) !== JSON.stringify(["src/left.txt", "src/right.txt"])) {
     failures.push(`H8WriteClaimFiles=${JSON.stringify(h8WriteClaimFiles)}`);
   }
+  if (
+    JSON.stringify(h8TaskPrompts) !== JSON.stringify(["update left module", "update right module"])
+  ) {
+    failures.push(`H8TaskPrompts=${JSON.stringify(h8TaskPrompts)}`);
+  }
+  if (!h8WorkerTaskEvidenceSeen) failures.push("H8WorkerTaskEvidenceMissing");
+  if (!h8ClaimOwnerEvidenceSeen) failures.push("H8ClaimOwnerEvidenceMissing");
   if (h8AgentQueue.conflictRejected !== true) failures.push("H8ConflictRejected=false");
   if (h8Limits.withinTime !== true) failures.push("H8WithinTime=false");
   if (h8Limits.withinCommands !== true) failures.push("H8WithinCommands=false");
@@ -2066,8 +2087,16 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (readNumber(h9Approval.resolvedCount) < 1) failures.push("H9ResolvedApprovalCount < 1");
   if (readNumber(h9Approval.controlResolvedCount) !== 1)
     failures.push("H9ControlResolvedApprovalCount != 1");
-  if (readNumber(h9Approval.completedBashToolCount) < 2)
-    failures.push("H9CompletedBashToolCount < 2");
+  if (readNumber(h9Approval.completedBashToolCount) < 3)
+    failures.push("H9CompletedBashToolCount < 3");
+  if (h9Approval.pendingToolUseId !== "h9-run-approved-bash")
+    failures.push("H9PendingToolUseIdMismatch");
+  if (
+    JSON.stringify(h9CompletedToolIds) !==
+    JSON.stringify(["h9-readonly-pwd", "h9-run-approved-bash", "h9-run-control-approval-flow"])
+  ) {
+    failures.push(`H9CompletedToolIds=${JSON.stringify(h9CompletedToolIds)}`);
+  }
   if (h9Approval.pendingCommand !== "npm test") failures.push("H9PendingCommandMismatch");
   if (readNumber(h9Approval.pendingTimeoutMs) !== 7000) failures.push("H9PendingTimeoutMismatch");
   if (typeof h9Approval.pendingCwd !== "string" || h9Approval.pendingCwd.length === 0)
@@ -2289,6 +2318,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H8WorkerTaskCount: readNumber(h8AgentQueue.workerTaskCount),
       H8WriteClaimCount: readNumber(h8AgentQueue.writeClaimCount),
       H8WriteClaimFiles: h8WriteClaimFiles,
+      H8TaskPrompts: h8TaskPrompts,
+      H8WorkerTaskEvidenceSeen: h8WorkerTaskEvidenceSeen,
+      H8ClaimOwnerEvidenceSeen: h8ClaimOwnerEvidenceSeen,
       H8ConflictRejected: h8AgentQueue.conflictRejected === true,
       H8WithinTime: h8Limits.withinTime === true,
       H8WithinCommands: h8Limits.withinCommands === true,
@@ -2310,6 +2342,8 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H9ResolvedApprovalCount: readNumber(h9Approval.resolvedCount),
       H9ControlResolvedApprovalCount: readNumber(h9Approval.controlResolvedCount),
       H9CompletedBashToolCount: readNumber(h9Approval.completedBashToolCount),
+      H9PendingToolUseId: h9Approval.pendingToolUseId,
+      H9CompletedToolIds: h9CompletedToolIds,
       H9PendingCommand: h9Approval.pendingCommand,
       H9PendingTimeoutMs: readNumber(h9Approval.pendingTimeoutMs),
       H9PendingCwdSeen:
@@ -3362,6 +3396,53 @@ function readRecordList(value: unknown): Record<string, unknown>[] {
 
 function readStringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
+}
+
+function hasWorkerTaskEvidence(
+  tasks: Record<string, unknown>[],
+  expectedTasks: { prompt: string; filePath: string }[]
+): boolean {
+  return (
+    tasks.length === expectedTasks.length &&
+    expectedTasks.every((expected) =>
+      tasks.some(
+        (task) =>
+          typeof task.id === "string" &&
+          task.id.length > 0 &&
+          task.role === "worker" &&
+          task.status === "completed" &&
+          task.prompt === expected.prompt &&
+          JSON.stringify(readStringList(task.writeFiles)) === JSON.stringify([expected.filePath])
+      )
+    )
+  );
+}
+
+function hasWorkerClaimEvidence(
+  claims: Record<string, unknown>[],
+  tasks: Record<string, unknown>[],
+  expectedFiles: string[]
+): boolean {
+  const taskWriteFilesById = new Map<string, string[]>();
+  for (const task of tasks) {
+    if (typeof task.id === "string" && task.id.length > 0) {
+      taskWriteFilesById.set(task.id, readStringList(task.writeFiles));
+    }
+  }
+
+  return (
+    claims.length === expectedFiles.length &&
+    expectedFiles.every((filePath) =>
+      claims.some((claim) => {
+        if (typeof claim.taskId !== "string") return false;
+        return (
+          claim.filePath === filePath &&
+          claim.ownerRole === "worker" &&
+          taskWriteFilesById.get(claim.taskId)?.includes(filePath) === true
+        );
+      })
+    )
+  );
 }
 
 function hasFailedToolReason(

@@ -1182,6 +1182,61 @@ describe("capability report", () => {
       ])
     );
   });
+
+  it("fails complex harness alignment when H8/H9 structured evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport({
+        h8TaskPrompts: ["update left module"],
+        h8Tasks: [
+          {
+            id: "h8-left-worker",
+            role: "assistant",
+            prompt: "update left module",
+            status: "completed",
+            writeFiles: ["src/left.txt"]
+          }
+        ],
+        h8Claims: [
+          {
+            taskId: "h8-left-worker",
+            filePath: "src/left.txt",
+            ownerRole: "assistant"
+          }
+        ],
+        h9PendingToolUseId: "h9-other-bash",
+        h9CompletedBashToolCount: 2,
+        h9CompletedToolIds: ["h9-readonly-pwd", "h9-run-approved-bash"]
+      })
+    });
+
+    const complex = report.checks.find((check) => check.id === "complex-harness");
+    expect(report.status).toBe("failed");
+    expect(complex?.failures).toEqual(
+      expect.arrayContaining([
+        'H8TaskPrompts=["update left module"]',
+        "H8WorkerTaskEvidenceMissing",
+        "H8ClaimOwnerEvidenceMissing",
+        "H9CompletedBashToolCount < 3",
+        "H9PendingToolUseIdMismatch",
+        'H9CompletedToolIds=["h9-readonly-pwd","h9-run-approved-bash"]'
+      ])
+    );
+  });
 });
 
 function harnessReport(input: {
@@ -1424,6 +1479,12 @@ function complexHarnessReport(
     h7ProviderRetrySeen?: boolean;
     h7ProviderRetryCount?: number;
     h7ProviderFallbackSeen?: boolean;
+    h8TaskPrompts?: string[];
+    h8Tasks?: Record<string, unknown>[];
+    h8Claims?: Record<string, unknown>[];
+    h9PendingToolUseId?: string;
+    h9CompletedBashToolCount?: number;
+    h9CompletedToolIds?: string[];
     changedFiles?: string[];
     forbiddenChanges?: string[];
     sessionMessages?: number;
@@ -1576,6 +1637,34 @@ function complexHarnessReport(
         FileEdit: 0
       }
     : {};
+  const h8Tasks = overrides.h8Tasks ?? [
+    {
+      id: "h8-left-worker",
+      role: "worker",
+      prompt: "update left module",
+      status: "completed",
+      writeFiles: ["src/left.txt"]
+    },
+    {
+      id: "h8-right-worker",
+      role: "worker",
+      prompt: "update right module",
+      status: "completed",
+      writeFiles: ["src/right.txt"]
+    }
+  ];
+  const h8Claims = overrides.h8Claims ?? [
+    {
+      taskId: "h8-left-worker",
+      filePath: "src/left.txt",
+      ownerRole: "worker"
+    },
+    {
+      taskId: "h8-right-worker",
+      filePath: "src/right.txt",
+      ownerRole: "worker"
+    }
+  ];
   const toolCallCount =
     overrides.toolCallCount ??
     Object.values(h1ToolCounts).reduce((sum, count) => sum + count, 0) +
@@ -1904,6 +1993,9 @@ function complexHarnessReport(
           workerTaskCount: 2,
           writeClaimCount: 2,
           writeClaimFiles: ["src/left.txt", "src/right.txt"],
+          taskPrompts: overrides.h8TaskPrompts ?? ["update left module", "update right module"],
+          tasks: h8Tasks,
+          claims: h8Claims,
           conflictRejected: true
         },
         limitResults: {
@@ -1943,15 +2035,19 @@ function complexHarnessReport(
           pendingCount: 1,
           resolvedCount: 1,
           controlResolvedCount: 1,
-          completedBashToolCount: 2,
-          pendingToolUseId: "h9-run-approved-bash",
+          completedBashToolCount: overrides.h9CompletedBashToolCount ?? 3,
+          pendingToolUseId: overrides.h9PendingToolUseId ?? "h9-run-approved-bash",
           pendingCommand: "npm test",
           pendingTimeoutMs: 7000,
           pendingCwd: "/tmp/h9-fixture",
           approved: true,
           readOnlyBashCompleted: true,
           approvedBashCompleted: true,
-          completedToolIds: ["h9-readonly-pwd", "h9-run-approved-bash"]
+          completedToolIds: overrides.h9CompletedToolIds ?? [
+            "h9-readonly-pwd",
+            "h9-run-approved-bash",
+            "h9-run-control-approval-flow"
+          ]
         },
         limitResults: {
           withinTime: true,
