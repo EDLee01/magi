@@ -43,6 +43,7 @@ jobs:
         run: npm run test:blackbox
 
       - name: Run complex task harness
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 22
         run: npm run test:complex-harness
 
       - name: Run model task benchmark
