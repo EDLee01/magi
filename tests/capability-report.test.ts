@@ -327,7 +327,8 @@ describe("capability report", () => {
           filePatchCalls: 0,
           fileEditCalls: 0,
           fileWriteCalls: 1,
-          patchUsageRate: 0
+          patchUsageRate: 0,
+          fileWriteAvoided: false
         },
         regressions: 1
       }),
@@ -373,6 +374,16 @@ describe("capability report", () => {
         "patchStrategyFilePatchCalls < 1",
         "patchStrategyFileEditCalls != 1",
         "patchStrategyRate=0",
+        "patchStrategyFileWriteAvoided=false",
+        "dependencyRefactorBashCalls != 2",
+        "dependencyRefactorFileReadCalls < 2",
+        "dependencyRefactorFilePatchCalls < 2",
+        "dependencyRefactorFileWriteAvoided=false",
+        "testDrivenRecoveryBashCalls != 2",
+        "testDrivenRecoveryFileReadCalls < 1",
+        "testDrivenRecoveryFilePatchCalls < 2",
+        "testDrivenRecoveryFileWriteCalls != 1",
+        "testDrivenRecoverySeen=false",
         "continuousPatchFailedAttempts < 2",
         "continuousPatchFilePatchCalls < 3",
         "continuousPatchFileReadCalls < 2",
@@ -513,6 +524,71 @@ describe("capability report", () => {
         "ciVendorSlugShimUntouched=false",
         "ciFailureVerified=false",
         "regressions=1"
+      ])
+    );
+  });
+
+  it("fails model task alignment when foundational task evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport({
+        patchStrategy: {
+          filePatchCalls: 1,
+          fileEditCalls: 1,
+          fileWriteCalls: 0,
+          patchUsageRate: 0.5,
+          fileWriteAvoided: false
+        },
+        dependencyRefactor: {
+          bashCalls: 1,
+          fileReadCalls: 1,
+          filePatchCalls: 1,
+          fileWriteCalls: 1,
+          fileEditCalls: 1,
+          fileWriteAvoided: false
+        },
+        testDrivenRecovery: {
+          bashCalls: 1,
+          fileReadCalls: 0,
+          filePatchCalls: 1,
+          fileWriteCalls: 0,
+          fileEditCalls: 1,
+          recoverySeen: false
+        }
+      }),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
+    });
+
+    const modelTasks = report.checks.find((check) => check.id === "model-tasks");
+    expect(report.status).toBe("failed");
+    expect(modelTasks?.failures).toEqual(
+      expect.arrayContaining([
+        "patchStrategyFileWriteAvoided=false",
+        "dependencyRefactorBashCalls != 2",
+        "dependencyRefactorFileReadCalls < 2",
+        "dependencyRefactorFilePatchCalls < 2",
+        "dependencyRefactorFileWrite used",
+        "dependencyRefactorFileEdit used",
+        "dependencyRefactorFileWriteAvoided=false",
+        "testDrivenRecoveryBashCalls != 2",
+        "testDrivenRecoveryFileReadCalls < 1",
+        "testDrivenRecoveryFilePatchCalls < 2",
+        "testDrivenRecoveryFileWriteCalls != 1",
+        "testDrivenRecoveryFileEdit used",
+        "testDrivenRecoverySeen=false"
       ])
     );
   });
@@ -2346,6 +2422,23 @@ function modelTaskReport(
       fileEditCalls: number;
       fileWriteCalls: number;
       patchUsageRate: number;
+      fileWriteAvoided: boolean;
+    };
+    dependencyRefactor: {
+      bashCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      fileWriteAvoided: boolean;
+    };
+    testDrivenRecovery: {
+      bashCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      recoverySeen: boolean;
     };
     continuousPatchRecovery: {
       failedPatchAttempts: number;
@@ -2559,7 +2652,24 @@ function modelTaskReport(
     filePatchCalls: 1,
     fileEditCalls: 1,
     fileWriteCalls: 0,
-    patchUsageRate: 0.5
+    patchUsageRate: 0.5,
+    fileWriteAvoided: true
+  };
+  const dependencyRefactor = overrides.dependencyRefactor ?? {
+    bashCalls: 2,
+    fileReadCalls: 2,
+    filePatchCalls: 2,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    fileWriteAvoided: true
+  };
+  const testDrivenRecovery = overrides.testDrivenRecovery ?? {
+    bashCalls: 2,
+    fileReadCalls: 1,
+    filePatchCalls: 2,
+    fileWriteCalls: 1,
+    fileEditCalls: 0,
+    recoverySeen: true
   };
   const continuousPatchRecovery = overrides.continuousPatchRecovery ?? {
     failedPatchAttempts: 2,
@@ -2774,7 +2884,32 @@ function modelTaskReport(
                 FileEdit: patchStrategy.fileEditCalls,
                 FileWrite: patchStrategy.fileWriteCalls
               },
-              patchUsageRate: patchStrategy.patchUsageRate
+              patchUsageRate: patchStrategy.patchUsageRate,
+              fileWriteAvoided: patchStrategy.fileWriteAvoided
+            }
+          : {}),
+        ...(taskClasses[index] === "dependency_refactor"
+          ? {
+              toolCounts: {
+                Bash: dependencyRefactor.bashCalls,
+                FileRead: dependencyRefactor.fileReadCalls,
+                FilePatch: dependencyRefactor.filePatchCalls,
+                FileWrite: dependencyRefactor.fileWriteCalls,
+                FileEdit: dependencyRefactor.fileEditCalls
+              },
+              fileWriteAvoided: dependencyRefactor.fileWriteAvoided
+            }
+          : {}),
+        ...(taskClasses[index] === "test_driven_recovery"
+          ? {
+              toolCounts: {
+                Bash: testDrivenRecovery.bashCalls,
+                FileRead: testDrivenRecovery.fileReadCalls,
+                FilePatch: testDrivenRecovery.filePatchCalls,
+                FileWrite: testDrivenRecovery.fileWriteCalls,
+                FileEdit: testDrivenRecovery.fileEditCalls
+              },
+              recoverySeen: testDrivenRecovery.recoverySeen
             }
           : {}),
         ...(taskClasses[index] === "continuous_patch_recovery"

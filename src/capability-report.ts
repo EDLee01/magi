@@ -523,8 +523,32 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   const patchStrategyFilePatchCalls = readNumber(patchStrategyToolCounts.FilePatch);
   const patchStrategyFileEditCalls = readNumber(patchStrategyToolCounts.FileEdit);
   const patchStrategyFileWriteCalls = readNumber(patchStrategyToolCounts.FileWrite);
-  const testDrivenRecoveryTaskSeen = taskClasses.has("test_driven_recovery");
+  const dependencyRefactor = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "dependency_refactor"
+  );
+  const dependencyRefactorDetails = readRecord(
+    dependencyRefactor ? readRecord(dependencyRefactor).details : {}
+  );
+  const dependencyRefactorToolCounts = readRecord(dependencyRefactorDetails.toolCounts);
   const dependencyRefactorTaskSeen = taskClasses.has("dependency_refactor");
+  const dependencyRefactorBashCalls = readNumber(dependencyRefactorToolCounts.Bash);
+  const dependencyRefactorFileReadCalls = readNumber(dependencyRefactorToolCounts.FileRead);
+  const dependencyRefactorFilePatchCalls = readNumber(dependencyRefactorToolCounts.FilePatch);
+  const dependencyRefactorFileWriteCalls = readNumber(dependencyRefactorToolCounts.FileWrite);
+  const dependencyRefactorFileEditCalls = readNumber(dependencyRefactorToolCounts.FileEdit);
+  const testDrivenRecovery = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "test_driven_recovery"
+  );
+  const testDrivenRecoveryDetails = readRecord(
+    testDrivenRecovery ? readRecord(testDrivenRecovery).details : {}
+  );
+  const testDrivenRecoveryToolCounts = readRecord(testDrivenRecoveryDetails.toolCounts);
+  const testDrivenRecoveryTaskSeen = taskClasses.has("test_driven_recovery");
+  const testDrivenRecoveryBashCalls = readNumber(testDrivenRecoveryToolCounts.Bash);
+  const testDrivenRecoveryFileReadCalls = readNumber(testDrivenRecoveryToolCounts.FileRead);
+  const testDrivenRecoveryFilePatchCalls = readNumber(testDrivenRecoveryToolCounts.FilePatch);
+  const testDrivenRecoveryFileWriteCalls = readNumber(testDrivenRecoveryToolCounts.FileWrite);
+  const testDrivenRecoveryFileEditCalls = readNumber(testDrivenRecoveryToolCounts.FileEdit);
   const continuousPatchRecovery = scenarios.find(
     (scenario) => readRecord(scenario.details).taskClass === "continuous_patch_recovery"
   );
@@ -849,6 +873,31 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
   if (patchStrategyFileWriteCalls !== 0) failures.push("patchStrategyFileWrite used");
   if (patchStrategyRate < 0.5) failures.push(`patchStrategyRate=${patchStrategyRate}`);
+  if (patchStrategyDetails.fileWriteAvoided !== true) {
+    failures.push("patchStrategyFileWriteAvoided=false");
+  }
+  if (dependencyRefactorBashCalls !== 2) failures.push("dependencyRefactorBashCalls != 2");
+  if (dependencyRefactorFileReadCalls < 2) failures.push("dependencyRefactorFileReadCalls < 2");
+  if (dependencyRefactorFilePatchCalls < 2) {
+    failures.push("dependencyRefactorFilePatchCalls < 2");
+  }
+  if (dependencyRefactorFileWriteCalls !== 0) failures.push("dependencyRefactorFileWrite used");
+  if (dependencyRefactorFileEditCalls !== 0) failures.push("dependencyRefactorFileEdit used");
+  if (dependencyRefactorDetails.fileWriteAvoided !== true) {
+    failures.push("dependencyRefactorFileWriteAvoided=false");
+  }
+  if (testDrivenRecoveryBashCalls !== 2) failures.push("testDrivenRecoveryBashCalls != 2");
+  if (testDrivenRecoveryFileReadCalls < 1) failures.push("testDrivenRecoveryFileReadCalls < 1");
+  if (testDrivenRecoveryFilePatchCalls < 2) {
+    failures.push("testDrivenRecoveryFilePatchCalls < 2");
+  }
+  if (testDrivenRecoveryFileWriteCalls !== 1) {
+    failures.push("testDrivenRecoveryFileWriteCalls != 1");
+  }
+  if (testDrivenRecoveryFileEditCalls !== 0) failures.push("testDrivenRecoveryFileEdit used");
+  if (testDrivenRecoveryDetails.recoverySeen !== true) {
+    failures.push("testDrivenRecoverySeen=false");
+  }
   if (continuousPatchFailedAttempts < 2) failures.push("continuousPatchFailedAttempts < 2");
   if (continuousPatchFilePatchCalls < 3) failures.push("continuousPatchFilePatchCalls < 3");
   if (continuousPatchFileReadCalls < 2) failures.push("continuousPatchFileReadCalls < 2");
@@ -1322,8 +1371,21 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       patchStrategyFilePatchCalls,
       patchStrategyFileEditCalls,
       patchStrategyFileWriteCalls,
+      patchStrategyFileWriteAvoided: patchStrategyDetails.fileWriteAvoided === true,
       testDrivenRecoveryTaskSeen,
+      testDrivenRecoveryBashCalls,
+      testDrivenRecoveryFileReadCalls,
+      testDrivenRecoveryFilePatchCalls,
+      testDrivenRecoveryFileWriteCalls,
+      testDrivenRecoveryFileEditCalls,
+      testDrivenRecoverySeen: testDrivenRecoveryDetails.recoverySeen === true,
       dependencyRefactorTaskSeen,
+      dependencyRefactorBashCalls,
+      dependencyRefactorFileReadCalls,
+      dependencyRefactorFilePatchCalls,
+      dependencyRefactorFileWriteCalls,
+      dependencyRefactorFileEditCalls,
+      dependencyRefactorFileWriteAvoided: dependencyRefactorDetails.fileWriteAvoided === true,
       continuousPatchRecoveryTaskSeen,
       continuousPatchFailedAttempts,
       continuousPatchFilePatchCalls,
