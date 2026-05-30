@@ -1391,7 +1391,7 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 58) failures.push(`assertions=${assertions}`);
+  if (assertions < 64) failures.push(`assertions=${assertions}`);
   if (filesVerified < 6) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 4) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -1434,6 +1434,12 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
     "sseJitterCompletionSeen",
     "sseJitterNoDuplicateReplay",
     "sseJitterAuditPersisted",
+    "restartServeStarted",
+    "restartDeviceAuthPersisted",
+    "restartSessionPersisted",
+    "restartSessionContextSeen",
+    "restartJobPersisted",
+    "restartJobAuditPersisted",
     "mobileBrowserViewportSeen",
     "mobileBrowserTokenStored",
     "mobileBrowserTokenUrlCleaned",
@@ -1524,6 +1530,12 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       sseJitterCompletionSeen: details.sseJitterCompletionSeen === true,
       sseJitterNoDuplicateReplay: details.sseJitterNoDuplicateReplay === true,
       sseJitterAuditPersisted: details.sseJitterAuditPersisted === true,
+      restartServeStarted: details.restartServeStarted === true,
+      restartDeviceAuthPersisted: details.restartDeviceAuthPersisted === true,
+      restartSessionPersisted: details.restartSessionPersisted === true,
+      restartSessionContextSeen: details.restartSessionContextSeen === true,
+      restartJobPersisted: details.restartJobPersisted === true,
+      restartJobAuditPersisted: details.restartJobAuditPersisted === true,
       mobileBrowserViewportSeen: details.mobileBrowserViewportSeen === true,
       mobileBrowserTokenStored: details.mobileBrowserTokenStored === true,
       mobileBrowserTokenUrlCleaned: details.mobileBrowserTokenUrlCleaned === true,

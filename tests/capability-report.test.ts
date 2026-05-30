@@ -599,6 +599,12 @@ describe("capability report", () => {
         sseJitterCompletionSeen: false,
         sseJitterNoDuplicateReplay: false,
         sseJitterAuditPersisted: false,
+        restartServeStarted: false,
+        restartDeviceAuthPersisted: false,
+        restartSessionPersisted: false,
+        restartSessionContextSeen: false,
+        restartJobPersisted: false,
+        restartJobAuditPersisted: false,
         mobileBrowserViewportSeen: false,
         mobileBrowserStreamRendered: false,
         mobileBrowserCancelRendered: false,
@@ -667,6 +673,12 @@ describe("capability report", () => {
         "sseJitterCompletionSeen=false",
         "sseJitterNoDuplicateReplay=false",
         "sseJitterAuditPersisted=false",
+        "restartServeStarted=false",
+        "restartDeviceAuthPersisted=false",
+        "restartSessionPersisted=false",
+        "restartSessionContextSeen=false",
+        "restartJobPersisted=false",
+        "restartJobAuditPersisted=false",
         "mobileBrowserViewportSeen=false",
         "mobileBrowserStreamRendered=false",
         "mobileBrowserCancelRendered=false",
@@ -1807,6 +1819,12 @@ function controlApiReport(
     sseJitterCompletionSeen: boolean;
     sseJitterNoDuplicateReplay: boolean;
     sseJitterAuditPersisted: boolean;
+    restartServeStarted: boolean;
+    restartDeviceAuthPersisted: boolean;
+    restartSessionPersisted: boolean;
+    restartSessionContextSeen: boolean;
+    restartJobPersisted: boolean;
+    restartJobAuditPersisted: boolean;
     mobileBrowserViewportSeen: boolean;
     mobileBrowserTokenStored: boolean;
     mobileBrowserTokenUrlCleaned: boolean;
@@ -1854,7 +1872,7 @@ function controlApiReport(
       name: "control-api-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 61,
+      assertions: overrides.assertions ?? 67,
       filesVerified: overrides.filesVerified ?? 7,
       toolCallCount: overrides.toolCallCount ?? 4,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
@@ -1869,7 +1887,7 @@ function controlApiReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 56 },
+            { length: overrides.assertions ?? 67 },
             (_, index) => `control-api assertion ${index + 1}`
           ),
           filesVerified: Array.from(
@@ -1919,6 +1937,12 @@ function controlApiReport(
           sseJitterCompletionSeen: true,
           sseJitterNoDuplicateReplay: true,
           sseJitterAuditPersisted: true,
+          restartServeStarted: true,
+          restartDeviceAuthPersisted: true,
+          restartSessionPersisted: true,
+          restartSessionContextSeen: true,
+          restartJobPersisted: true,
+          restartJobAuditPersisted: true,
           mobileBrowserViewportSeen: true,
           mobileBrowserTokenStored: true,
           mobileBrowserTokenUrlCleaned: true,

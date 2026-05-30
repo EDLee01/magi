@@ -69,6 +69,12 @@ try {
     sseJitterCompletionSeen: false,
     sseJitterNoDuplicateReplay: false,
     sseJitterAuditPersisted: false,
+    restartServeStarted: false,
+    restartDeviceAuthPersisted: false,
+    restartSessionPersisted: false,
+    restartSessionContextSeen: false,
+    restartJobPersisted: false,
+    restartJobAuditPersisted: false,
     mobileBrowserViewportSeen: false,
     mobileBrowserTokenStored: false,
     mobileBrowserTokenUrlCleaned: false,
@@ -138,13 +144,22 @@ try {
     const headers = authHeaders(pairing);
 
     await exerciseMdnsDiscovery({ controlPort, state });
-    await exerciseBackgroundApprovalFlow({ serve, headers, workDir, state });
+    const approvalFlow = await exerciseBackgroundApprovalFlow({ serve, headers, workDir, state });
     await exerciseBackgroundCancelFlow({ serve, headers, state });
     await exerciseApprovalCancelFlow({ serve, headers, workDir, state });
-    await exercisePanelResumeFlow({ serve, headers, state });
+    const resumeFlow = await exercisePanelResumeFlow({ serve, headers, state });
     await exerciseWebPanelContract({ serve, headers, state });
     await exerciseSseReconnectFlow({ serve, headers, state });
     await exerciseSseJitterRecoveryFlow({ serve, headers, state });
+    const restartFlow = await exerciseControlRestartPersistenceFlow({
+      serve,
+      headers,
+      state,
+      controlPort,
+      approvalJobId: approvalFlow.jobId,
+      resumeSessionId: resumeFlow.sessionId
+    });
+    serve = restartFlow.serve;
     await exerciseMobilePanelBrowserFlow({ pairingUrl, pairing, state });
     const lanSmoke = await exerciseLanDeviceSmoke({ controlPort, pairing, state });
     const peerDispatch = await exercisePeerDispatchFlow({ provider, state });
@@ -185,6 +200,12 @@ try {
       "SSE jitter observed long job completion",
       "SSE jitter avoided duplicate replay",
       "SSE jitter completion persisted in audit",
+      "control server restarted on persisted state",
+      "paired device authenticated after restart",
+      "panel session messages survived control restart",
+      "restarted session follow-up saw prior context",
+      "completed approval job survived control restart",
+      "completed approval job audit survived control restart",
       "mobile viewport rendered panel",
       "mobile pairing token stored and URL cleaned",
       "mobile browser sent message",
@@ -353,6 +374,7 @@ async function exerciseBackgroundApprovalFlow({ serve, headers, workDir, state }
   const actions = (events.events ?? []).map((event) => event.action);
   state.approvalAuditPersisted =
     actions.includes("agent.approval.pending") && actions.includes("control.approval.resolved");
+  return { jobId: started.jobId };
 }
 
 async function exerciseBackgroundCancelFlow({ serve, headers, state }) {
@@ -495,6 +517,77 @@ async function exercisePanelResumeFlow({ serve, headers, state }) {
   );
   const actions = (events.events ?? []).map((event) => event.action);
   assert(actions.includes("agent.query.completed"), "resume session events missed completion");
+  return { sessionId };
+}
+
+async function exerciseControlRestartPersistenceFlow({
+  serve,
+  headers,
+  state,
+  controlPort,
+  approvalJobId,
+  resumeSessionId
+}) {
+  await serve.close();
+  let restarted;
+  try {
+    restarted = await startServe({ configDir, workDir, controlPort, controlBind: "0.0.0.0" });
+    state.restartServeStarted = true;
+
+    const health = await getJson(`${restarted.url}/health`);
+    assert(health.ok === true, "restarted control health check failed");
+
+    const sessions = await getJson(`${restarted.url}/sessions`, headers);
+    state.restartDeviceAuthPersisted = Array.isArray(sessions.sessions);
+
+    const session = await getJson(
+      `${restarted.url}/sessions/${encodeURIComponent(resumeSessionId)}`,
+      headers
+    );
+    const messages = session.session?.messages ?? [];
+    state.restartSessionPersisted =
+      messages.some(
+        (message) =>
+          message.role === "user" &&
+          textFromMessage(message).includes("Panel resume seed: keep token orchid-17.")
+      ) &&
+      messages.some(
+        (message) => message.role === "assistant" && textFromMessage(message) === "CONTROL RESUME DONE"
+      );
+
+    const followUp = await postJson(
+      `${restarted.url}/sessions/${encodeURIComponent(resumeSessionId)}/messages`,
+      { content: "Panel restart follow-up: what token remains visible?", modelAlias: "main" },
+      headers
+    );
+    assert(
+      followUp.message === "CONTROL RESTART RESUME DONE",
+      "restarted panel session follow-up returned wrong content"
+    );
+
+    const job = await getJson(
+      `${restarted.url}/jobs/${encodeURIComponent(approvalJobId)}`,
+      headers
+    );
+    state.restartJobPersisted = job.job?.status === "completed";
+
+    const events = await getJson(
+      `${restarted.url}/jobs/${encodeURIComponent(approvalJobId)}/events?limit=100`,
+      headers
+    );
+    const actions = (events.events ?? []).map((event) => event.action);
+    state.restartJobAuditPersisted =
+      actions.includes("agent.approval.pending") &&
+      actions.includes("control.approval.resolved") &&
+      actions.includes("agent.query.completed");
+
+    return { serve: restarted };
+  } catch (error) {
+    if (restarted) {
+      await restarted.close();
+    }
+    throw error;
+  }
 }
 
 async function exerciseWebPanelContract({ serve, headers, state }) {
@@ -1155,6 +1248,19 @@ function createRouter(state) {
       );
       state.resumedSessionContextSeen = true;
       return messageText("CONTROL RESUME DONE");
+    }
+
+    if (latestUser.includes("Panel restart follow-up")) {
+      assert(
+        transcript.includes("Panel resume seed: keep token orchid-17."),
+        "restarted session context did not include the first panel message"
+      );
+      assert(
+        transcript.includes("CONTROL RESUME DONE"),
+        "restarted session context did not include the pre-restart assistant message"
+      );
+      state.restartSessionContextSeen = true;
+      return messageText("CONTROL RESTART RESUME DONE");
     }
 
     if (latestUser.includes("Panel resume seed")) {
