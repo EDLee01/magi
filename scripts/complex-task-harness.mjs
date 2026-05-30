@@ -977,6 +977,114 @@ function createH7Router() {
   };
 }
 
+function createH8Router() {
+  let turn = 0;
+  return ({ transcript, toolNames }) => {
+    if (!transcript.includes("Exercise the multi-agent write-claim boundary")) {
+      return messageText("OK");
+    }
+    turn += 1;
+
+    if (turn === 1) {
+      assert(toolNames.includes("FileRead"), "H8 missing FileRead");
+      assert(toolNames.includes("FileWrite"), "H8 missing FileWrite");
+      assert(toolNames.includes("Bash"), "H8 missing Bash");
+      assert(
+        transcript.includes("two workers can claim disjoint files"),
+        "H8 disjoint write-claim requirement was not visible"
+      );
+      assert(
+        transcript.includes("same-file conflict") && transcript.includes("rejected"),
+        "H8 conflict rejection requirement was not visible"
+      );
+      return toolResponse([
+        toolCall("h8-read-agent-notes", "FileRead", {
+          file_path: "docs/agent-boundary.md"
+        }),
+        toolCall("h8-run-agent-queue-flow", "Bash", {
+          timeout_ms: 20_000,
+          command: [
+            "node <<'NODE'",
+            "const { spawnSync } = require('node:child_process');",
+            "const cli = process.env.MAGI_CLI_UNDER_TEST;",
+            "if (!cli) throw new Error('MAGI_CLI_UNDER_TEST missing');",
+            "function run(args, expectCode = 0) {",
+            "  const result = spawnSync(process.execPath, [cli, '--no-color', ...args], {",
+            "    encoding: 'utf8',",
+            "    env: process.env",
+            "  });",
+            "  if (result.status !== expectCode) {",
+            "    throw new Error(`unexpected exit ${result.status} for ${args.join(' ')}\\nSTDOUT:\\n${result.stdout}\\nSTDERR:\\n${result.stderr}`);",
+            "  }",
+            "  return result;",
+            "}",
+            "const left = JSON.parse(run(['agents', 'spawn', 'worker', 'update left module', '--write-file', 'src/left.txt']).stdout);",
+            "const right = JSON.parse(run(['agents', 'spawn', 'worker', 'update right module', '--write-file', 'src/right.txt']).stdout);",
+            "run(['agents', 'start', left.id]);",
+            "run(['agents', 'start', right.id]);",
+            "run(['agents', 'complete', left.id, 'left done']);",
+            "run(['agents', 'complete', right.id, 'right done']);",
+            "const conflict = spawnSync(process.execPath, [cli, '--no-color', 'agents', 'spawn', 'worker', 'duplicate left module', '--write-file', 'src/left.txt'], {",
+            "  encoding: 'utf8',",
+            "  env: process.env",
+            "});",
+            "if (conflict.status === 0) {",
+            "  throw new Error('conflicting worker claim unexpectedly succeeded');",
+            "}",
+            "if (!conflict.stderr.includes('Write conflict for src/left.txt')) {",
+            "  throw new Error(`missing write conflict: ${conflict.stderr}`);",
+            "}",
+            "const list = run(['agents', 'list']).stdout;",
+            "if (!list.includes(left.id) || !list.includes(right.id) || !list.includes('completed')) {",
+            "  throw new Error(`agent list missing completed workers: ${list}`);",
+            "}",
+            "console.log(JSON.stringify({",
+            "  left: left.id,",
+            "  right: right.id,",
+            "  conflict: conflict.stderr.trim().split('\\n').at(-1)",
+            "}));",
+            "NODE"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 2) {
+      assert(transcript.includes("Parallel worker claims"), "H8 notes were not read");
+      assert(transcript.includes("Command exited 0"), "H8 agent queue command did not pass");
+      assert(transcript.includes("Write conflict for src/left.txt"), "H8 conflict was not visible");
+      assert(transcript.includes('"left"'), "H8 left worker id was not visible");
+      assert(transcript.includes('"right"'), "H8 right worker id was not visible");
+      return toolResponse([
+        toolCall("h8-write-report", "FileWrite", {
+          file_path: "reports/agent-conflict-report.md",
+          content: [
+            "# Agent Conflict Report",
+            "",
+            "- Disjoint worker write claims succeeded for `src/left.txt` and `src/right.txt`.",
+            "- Both disjoint worker tasks reached `completed` status.",
+            "- A second worker claim for `src/left.txt` was rejected with `Write conflict for src/left.txt`.",
+            "- The conflict was persisted in the shared SQLite write claim boundary by preserving the original claim only.",
+            ""
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (turn === 3) {
+      assert(
+        transcript.includes("Wrote reports/agent-conflict-report.md"),
+        "H8 report write result was not visible"
+      );
+      return messageText(
+        "Verified multi-agent write claims and wrote reports/agent-conflict-report.md."
+      );
+    }
+
+    throw new Error(`H8 exceeded expected provider turns: ${turn}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -1340,6 +1448,74 @@ function taskDefinitionFor(taskId) {
     };
   }
 
+  if (taskId === "H8") {
+    return {
+      createRouter: createH8Router,
+      finalMessage: "Verified multi-agent write claims and wrote reports/agent-conflict-report.md.",
+      assertions: [
+        "H8 fixture copied into isolated workspace",
+        "H8 provider saw disjoint write-claim requirement",
+        "H8 provider saw same-file conflict requirement",
+        "H8 agent notes read before command execution",
+        "H8 agents CLI spawned disjoint worker claims",
+        "H8 agents CLI started disjoint workers",
+        "H8 agents CLI completed disjoint workers",
+        "H8 same-file worker claim was rejected",
+        "H8 CLI list showed completed workers",
+        "H8 conflict report written",
+        "H8 changed exactly expected report",
+        "H8 forbidden paths unchanged",
+        "H8 SQLite agent tasks persisted",
+        "H8 SQLite write claims persisted",
+        "H8 only disjoint write claims remained",
+        "H8 session and audit persisted"
+      ],
+      filesVerified: [
+        "docs/agent-boundary.md",
+        "reports/agent-conflict-report.md",
+        "stdout.jsonl",
+        "stderr.txt",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session, agentQueue }) => {
+        assert((toolCounts.FileRead ?? 0) === 1, "H8 should read agent notes once");
+        assert((toolCounts.Bash ?? 0) === 1, "H8 should use one Bash CLI flow");
+        assert((toolCounts.FileWrite ?? 0) === 1, "H8 should write one report");
+        assert((toolCounts.FilePatch ?? 0) === 0, "H8 should not patch source");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H8 should not use FileEdit");
+        const report = after["reports/agent-conflict-report.md"]?.text ?? "";
+        assert(
+          report.includes("Disjoint worker write claims succeeded"),
+          "H8 report missed disjoint success"
+        );
+        assert(
+          report.includes("Both disjoint worker tasks reached `completed` status"),
+          "H8 report missed completion status"
+        );
+        assert(
+          report.includes("Write conflict for src/left.txt"),
+          "H8 report missed conflict evidence"
+        );
+        assert(session.auditEventCount > 0, "H8 audit events were not persisted");
+        assert(session.messageCount >= 2, "H8 session messages were not persisted");
+        assert(
+          agentQueue.taskCount === 2,
+          `H8 expected 2 persisted agent tasks, saw ${agentQueue.taskCount}`
+        );
+        assert(
+          agentQueue.completedTaskCount === 2,
+          `H8 expected 2 completed agent tasks, saw ${agentQueue.completedTaskCount}`
+        );
+        assert(
+          JSON.stringify(agentQueue.writeClaimFiles) ===
+            JSON.stringify(["src/left.txt", "src/right.txt"]),
+          `H8 write claims mismatch: ${JSON.stringify(agentQueue.writeClaimFiles)}`
+        );
+        assert(agentQueue.conflictRejected === true, "H8 conflict rejection evidence missing");
+      }
+    };
+  }
+
   throw new Error(`Unknown complex harness task id: ${taskId}`);
 }
 
@@ -1351,6 +1527,7 @@ async function runCommand({ command, args, cwd, configDir, label, timeoutMs = 30
       env: {
         ...process.env,
         MAGI_CONFIG_DIR: configDir,
+        MAGI_CLI_UNDER_TEST: cliPath,
         MAGI_OPENAI_API_KEY: "test-key",
         NO_COLOR: "1"
       },
@@ -1494,6 +1671,7 @@ async function runTask(taskName) {
       path.join(configDir, "state", "sessions.sqlite"),
       completed.sessionId
     );
+    const agentQueue = readAgentQueueEvidence(path.join(configDir, "state", "sessions.sqlite"));
     const diffText = renderChangedFileDiffs(before, after, changedFiles);
     writeFileSync(path.join(archiveDir, "diff.txt"), diffText, "utf8");
 
@@ -1511,7 +1689,15 @@ async function runTask(taskName) {
       changedFiles.length <= limits.maxFileChanges,
       `file changes ${changedFiles.length} exceeded limit`
     );
-    taskDefinition.validate({ before, after, changedFiles, toolCounts, session, stream });
+    taskDefinition.validate({
+      before,
+      after,
+      changedFiles,
+      toolCounts,
+      session,
+      stream,
+      agentQueue
+    });
 
     return {
       name: expected.name,
@@ -1534,6 +1720,8 @@ async function runTask(taskName) {
         streamJsonLifecycleVerified: true,
         stream,
         session,
+        agentQueue:
+          agentQueue.taskCount > 0 || agentQueue.writeClaimCount > 0 ? agentQueue : undefined,
         limits,
         limitResults: {
           withinTime: elapsedMs <= limits.maxTimeMs,
@@ -1775,6 +1963,63 @@ function readSessionEvidence(dbFile, sessionId) {
   }
 }
 
+function readAgentQueueEvidence(dbFile) {
+  assert(existsSync(dbFile), "sessions.sqlite was not created");
+  const db = new Database(dbFile, { readonly: true });
+  try {
+    const tasks = db
+      .prepare(
+        "select id, role, prompt, status, metadata_json from agent_tasks order by created_at asc"
+      )
+      .all()
+      .map((row) => {
+        let metadata = {};
+        try {
+          metadata = JSON.parse(row.metadata_json);
+        } catch {
+          metadata = {};
+        }
+        return {
+          id: row.id,
+          role: row.role,
+          prompt: row.prompt,
+          status: row.status,
+          writeFiles: Array.isArray(metadata.writeFiles)
+            ? metadata.writeFiles.filter((item) => typeof item === "string")
+            : []
+        };
+      });
+    const claims = db
+      .prepare("select task_id, file_path, owner_role from write_claims order by id asc")
+      .all()
+      .map((row) => ({
+        taskId: row.task_id,
+        filePath: row.file_path,
+        ownerRole: row.owner_role
+      }));
+    const writeClaimFiles = claims.map((claim) => claim.filePath).sort();
+    const taskPrompts = tasks.map((task) => task.prompt);
+    return {
+      taskCount: tasks.length,
+      completedTaskCount: tasks.filter((task) => task.status === "completed").length,
+      workerTaskCount: tasks.filter((task) => task.role === "worker").length,
+      writeClaimCount: claims.length,
+      writeClaimFiles,
+      taskPrompts,
+      tasks,
+      claims,
+      conflictRejected:
+        tasks.length === 2 &&
+        claims.length === 2 &&
+        writeClaimFiles.includes("src/left.txt") &&
+        writeClaimFiles.includes("src/right.txt") &&
+        taskPrompts.every((prompt) => prompt !== "duplicate left module")
+    };
+  } finally {
+    db.close();
+  }
+}
+
 function parseStreamEvents(output) {
   const events = [];
   for (const line of output.split(/\r?\n/)) {
@@ -1929,7 +2174,8 @@ async function main() {
     "h4-repository-investigation",
     "h5-permission-boundary",
     "h6-resume-after-interruption",
-    "h7-stream-json-automation"
+    "h7-stream-json-automation",
+    "h8-multi-agent-conflict"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);

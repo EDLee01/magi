@@ -621,7 +621,13 @@ Checks:
 - Same file conflict rejected.
 - Audit records conflict.
 
-Current status: unit-level partial, no end-to-end harness.
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H8 fixture drives Magi through the real `magi agents` CLI from an outer
+agent run. It creates two worker tasks with disjoint write claims, starts and
+completes both, attempts a third worker claiming the same `src/left.txt` path,
+verifies the conflict is rejected, writes a concise report, and then checks the
+shared SQLite state for exactly two completed worker tasks and two surviving
+disjoint write claims.
 
 ## G. Visual and Interaction Quality
 

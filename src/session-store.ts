@@ -627,15 +627,26 @@ export class SessionStore {
     return rows.map(toAgentTask);
   }
 
+  getWriteClaimByFile(filePath: string, excludeTaskId?: string): WriteClaimRecord | undefined {
+    const row = (
+      excludeTaskId
+        ? this.db
+            .prepare(
+              "select * from write_claims where file_path = ? and task_id != ? order by id asc limit 1"
+            )
+            .get(filePath, excludeTaskId)
+        : this.db
+            .prepare("select * from write_claims where file_path = ? order by id asc limit 1")
+            .get(filePath)
+    ) as DbWriteClaim | undefined;
+    return row ? toWriteClaim(row) : undefined;
+  }
+
   claimWriteFile(input: { taskId: string; filePath: string; ownerRole: string }): WriteClaimRecord {
-    const existing = this.db
-      .prepare(
-        "select * from write_claims where file_path = ? and task_id != ? order by id asc limit 1"
-      )
-      .get(input.filePath, input.taskId) as DbWriteClaim | undefined;
+    const existing = this.getWriteClaimByFile(input.filePath, input.taskId);
     if (existing) {
       throw new MagiUsageError(
-        `Write conflict for ${input.filePath}: already claimed by ${existing.task_id}`
+        `Write conflict for ${input.filePath}: already claimed by ${existing.taskId}`
       );
     }
     const result = this.db

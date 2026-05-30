@@ -1,0 +1,6 @@
+{
+  "id": "H8",
+  "name": "H8 multi-agent conflict",
+  "taskClass": "multi_agent_conflict",
+  "expectedChangedFiles": ["reports/agent-conflict-report.md"]
+}

@@ -1407,13 +1407,23 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h7Stream = readRecord(h7?.stream);
   const h7Limits = readRecord(h7?.limitResults);
   const h7Seen = Boolean(h7);
+  const h8 = detailsList.find((details) => details.taskId === "H8");
+  const h8ToolCounts = readRecord(h8?.toolCounts);
+  const h8ChangedFiles = readStringList(h8?.changedFiles);
+  const h8Assertions = readStringList(h8?.assertions);
+  const h8ForbiddenChanges = readStringList(h8?.forbiddenChanges);
+  const h8Session = readRecord(h8?.session);
+  const h8AgentQueue = readRecord(h8?.agentQueue);
+  const h8WriteClaimFiles = readStringList(h8AgentQueue.writeClaimFiles);
+  const h8Limits = readRecord(h8?.limitResults);
+  const h8Seen = Boolean(h8);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const failures = [...base.failures];
 
-  if (readNumber(summary.total) < 7) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (readNumber(summary.total) < 8) failures.push(`scenarios=${readNumber(summary.total)}`);
   if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
   if (!taskClasses.has("multi_file_feature")) failures.push("multiFileFeatureTask=false");
   if (!taskClasses.has("behavior_preserving_refactor"))
@@ -1424,6 +1434,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!taskClasses.has("resume_after_interruption"))
     failures.push("resumeAfterInterruptionTask=false");
   if (!taskClasses.has("stream_json_automation")) failures.push("streamJsonAutomationTask=false");
+  if (!taskClasses.has("multi_agent_conflict")) failures.push("multiAgentConflictTask=false");
   if (!h1Seen) failures.push("H1=false");
   if (!h2Seen) failures.push("H2=false");
   if (!h3Seen) failures.push("H3=false");
@@ -1431,9 +1442,10 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!h5Seen) failures.push("H5=false");
   if (!h6Seen) failures.push("H6=false");
   if (!h7Seen) failures.push("H7=false");
-  if (assertions < 94) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 37) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 48) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!h8Seen) failures.push("H8=false");
+  if (assertions < 110) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 42) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 51) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
@@ -1593,6 +1605,32 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h7Limits.withinTime !== true) failures.push("H7WithinTime=false");
   if (h7Limits.withinCommands !== true) failures.push("H7WithinCommands=false");
   if (h7Limits.withinFileChanges !== true) failures.push("H7WithinFileChanges=false");
+  if (readNumber(h8ToolCounts.FileRead) !== 1) failures.push("H8FileReadCalls != 1");
+  if (readNumber(h8ToolCounts.Bash) !== 1) failures.push("H8BashCalls != 1");
+  if (readNumber(h8ToolCounts.FileWrite) !== 1) failures.push("H8FileWriteCalls != 1");
+  if (readNumber(h8ToolCounts.FilePatch) !== 0) failures.push("H8FilePatch used");
+  if (readNumber(h8ToolCounts.FileEdit) !== 0) failures.push("H8FileEdit used");
+  if (h8?.checksPassed !== true) failures.push("H8ChecksPassed=false");
+  if (h8?.streamJsonLifecycleVerified !== true) failures.push("H8StreamJsonLifecycle=false");
+  if (JSON.stringify(h8ChangedFiles) !== JSON.stringify(["reports/agent-conflict-report.md"])) {
+    failures.push(`H8ChangedFiles=${JSON.stringify(h8ChangedFiles)}`);
+  }
+  if (h8ForbiddenChanges.length > 0)
+    failures.push(`H8ForbiddenChanges=${h8ForbiddenChanges.length}`);
+  if (h8Assertions.length < 16) failures.push(`H8Assertions=${h8Assertions.length}`);
+  if (readNumber(h8Session.messageCount) < 2) failures.push("H8SessionMessages < 2");
+  if (readNumber(h8Session.auditEventCount) < 1) failures.push("H8AuditEvents < 1");
+  if (readNumber(h8AgentQueue.taskCount) !== 2) failures.push("H8TaskCount != 2");
+  if (readNumber(h8AgentQueue.completedTaskCount) !== 2) failures.push("H8CompletedTaskCount != 2");
+  if (readNumber(h8AgentQueue.workerTaskCount) !== 2) failures.push("H8WorkerTaskCount != 2");
+  if (readNumber(h8AgentQueue.writeClaimCount) !== 2) failures.push("H8WriteClaimCount != 2");
+  if (JSON.stringify(h8WriteClaimFiles) !== JSON.stringify(["src/left.txt", "src/right.txt"])) {
+    failures.push(`H8WriteClaimFiles=${JSON.stringify(h8WriteClaimFiles)}`);
+  }
+  if (h8AgentQueue.conflictRejected !== true) failures.push("H8ConflictRejected=false");
+  if (h8Limits.withinTime !== true) failures.push("H8WithinTime=false");
+  if (h8Limits.withinCommands !== true) failures.push("H8WithinCommands=false");
+  if (h8Limits.withinFileChanges !== true) failures.push("H8WithinFileChanges=false");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
   }
@@ -1740,6 +1778,28 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H7WithinTime: h7Limits.withinTime === true,
       H7WithinCommands: h7Limits.withinCommands === true,
       H7WithinFileChanges: h7Limits.withinFileChanges === true,
+      H8Seen: h8Seen,
+      H8FileReadCalls: readNumber(h8ToolCounts.FileRead),
+      H8BashCalls: readNumber(h8ToolCounts.Bash),
+      H8FileWriteCalls: readNumber(h8ToolCounts.FileWrite),
+      H8FilePatchCalls: readNumber(h8ToolCounts.FilePatch),
+      H8FileEditCalls: readNumber(h8ToolCounts.FileEdit),
+      H8ChecksPassed: h8?.checksPassed === true,
+      H8StreamJsonLifecycle: h8?.streamJsonLifecycleVerified === true,
+      H8ChangedFiles: h8ChangedFiles,
+      H8ForbiddenChanges: h8ForbiddenChanges.length,
+      H8Assertions: h8Assertions.length,
+      H8SessionMessages: readNumber(h8Session.messageCount),
+      H8AuditEvents: readNumber(h8Session.auditEventCount),
+      H8TaskCount: readNumber(h8AgentQueue.taskCount),
+      H8CompletedTaskCount: readNumber(h8AgentQueue.completedTaskCount),
+      H8WorkerTaskCount: readNumber(h8AgentQueue.workerTaskCount),
+      H8WriteClaimCount: readNumber(h8AgentQueue.writeClaimCount),
+      H8WriteClaimFiles: h8WriteClaimFiles,
+      H8ConflictRejected: h8AgentQueue.conflictRejected === true,
+      H8WithinTime: h8Limits.withinTime === true,
+      H8WithinCommands: h8Limits.withinCommands === true,
+      H8WithinFileChanges: h8Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

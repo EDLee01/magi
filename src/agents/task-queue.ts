@@ -16,16 +16,25 @@ export function spawnAgentTask(store: SessionStore, input: SpawnAgentTaskInput):
   if (!spec.canWrite && input.writeFiles && input.writeFiles.length > 0) {
     throw new MagiUsageError(`${spec.label} tasks cannot claim write files`);
   }
+  const writeFiles = (input.writeFiles ?? []).map((filePath) => {
+    const resolved = resolveWorkspacePath(input.cwd, filePath);
+    const existing = store.getWriteClaimByFile(resolved.relativePath);
+    if (existing) {
+      throw new MagiUsageError(
+        `Write conflict for ${resolved.relativePath}: already claimed by ${existing.taskId}`
+      );
+    }
+    return resolved.relativePath;
+  });
   const taskId = store.createAgentTask({
     role: input.role,
     prompt: input.prompt,
     cwd: input.cwd,
     sessionId: input.sessionId,
-    metadata: { writeFiles: input.writeFiles ?? [] }
+    metadata: { writeFiles }
   });
-  for (const filePath of input.writeFiles ?? []) {
-    const resolved = resolveWorkspacePath(input.cwd, filePath);
-    store.claimWriteFile({ taskId, filePath: resolved.relativePath, ownerRole: input.role });
+  for (const filePath of writeFiles) {
+    store.claimWriteFile({ taskId, filePath, ownerRole: input.role });
   }
   return store.getAgentTask(taskId)!;
 }

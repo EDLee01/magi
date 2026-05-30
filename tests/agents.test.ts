@@ -86,6 +86,8 @@ describe("multi-agent task queue", () => {
           writeFiles: ["a.txt"]
         })
       ).toThrow(/Write conflict/);
+      expect(store.listAgentTasks()).toHaveLength(1);
+      expect(store.listWriteClaims()).toMatchObject([{ filePath: "a.txt" }]);
     } finally {
       store.close();
     }
