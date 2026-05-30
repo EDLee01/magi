@@ -240,6 +240,10 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("memory maintenance decayed stale node weights") &&
     assertionList.includes("memory correction and maintenance audit persisted") &&
     assertionList.includes("memory correction maintenance completed CLI lifecycle");
+  const tuiRequiresTtySeen =
+    assertionList.includes("non-TTY TUI exits clearly") &&
+    assertionList.includes("TTY requirement message emitted") &&
+    assertionList.includes("non-TTY TUI returned usage exit code");
   const resumePickerTtySeen =
     assertionList.includes("TTY -r rendered searchable session picker") &&
     assertionList.includes("TTY -r filtered sessions by typed query") &&
@@ -351,7 +355,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 187) failures.push(`assertions=${assertions}`);
+  if (assertions < 188) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -376,6 +380,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!memoryCorrectionMaintenanceSeen) {
     failures.push("memoryCorrectionMaintenanceSeen=false");
   }
+  if (!tuiRequiresTtySeen) failures.push("tuiRequiresTtySeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!resumePickerSearchFieldsSeen) failures.push("resumePickerSearchFieldsSeen=false");
@@ -430,6 +435,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       toolFeedbackRankingSeen,
       memoryGraphLinkSeen,
       memoryCorrectionMaintenanceSeen,
+      tuiRequiresTtySeen,
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
       resumePickerSearchFieldsSeen,

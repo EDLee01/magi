@@ -4884,7 +4884,11 @@ async function scenarioTuiRequiresTty() {
     );
     return {
       score: 1,
-      assertions: ["non-TTY TUI exits clearly", "TTY requirement message emitted"]
+      assertions: [
+        "non-TTY TUI exits clearly",
+        "TTY requirement message emitted",
+        "non-TTY TUI returned usage exit code"
+      ]
     };
   });
 }

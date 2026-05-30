@@ -118,6 +118,7 @@ describe("capability report", () => {
         toolFeedbackRankingSeen: false,
         memoryGraphLinkSeen: false,
         memoryCorrectionMaintenanceSeen: false,
+        tuiRequiresTtySeen: false,
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         resumePickerSearchFieldsSeen: false,
@@ -179,6 +180,7 @@ describe("capability report", () => {
         "toolFeedbackRankingSeen=false",
         "memoryGraphLinkSeen=false",
         "memoryCorrectionMaintenanceSeen=false",
+        "tuiRequiresTtySeen=false",
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
         "resumePickerSearchFieldsSeen=false",
@@ -1040,6 +1042,7 @@ function harnessReport(input: {
   toolFeedbackRankingSeen?: boolean;
   memoryGraphLinkSeen?: boolean;
   memoryCorrectionMaintenanceSeen?: boolean;
+  tuiRequiresTtySeen?: boolean;
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
   resumePickerSearchFieldsSeen?: boolean;
@@ -1073,7 +1076,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 187,
+      assertions: input.assertions ?? 188,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1117,6 +1120,7 @@ function harnessReport(input: {
                   ...toolFeedbackRankingAssertions(input),
                   ...memoryGraphLinkAssertions(input),
                   ...memoryCorrectionMaintenanceAssertions(input),
+                  ...tuiRequiresTtyAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...resumePickerSearchFieldsAssertions(input),
@@ -2037,6 +2041,16 @@ function memoryCorrectionMaintenanceAssertions(input: {
         "memory maintenance decayed stale node weights",
         "memory correction and maintenance audit persisted",
         "memory correction maintenance completed CLI lifecycle"
+      ];
+}
+
+function tuiRequiresTtyAssertions(input: { tuiRequiresTtySeen?: boolean }): string[] {
+  return input.tuiRequiresTtySeen === false
+    ? []
+    : [
+        "non-TTY TUI exits clearly",
+        "TTY requirement message emitted",
+        "non-TTY TUI returned usage exit code"
       ];
 }
 
