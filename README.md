@@ -191,11 +191,15 @@ After the eval scripts run, aggregate the current capability evidence with:
 
 ```sh
 npm run report:capability
+npm run report:capability:nightly
 ```
 
 `npm run verify` runs the aggregate report last and fails if blackbox, Memory,
 Patch Engine, Goal/Plan, Tool Discovery, or Control API gates miss their
-required thresholds.
+required thresholds. The default capability trend profile is strict for CI.
+`report:capability:nightly` uses the same evidence with a wider efficiency
+budget for scheduled longer benchmark runs, while still failing on score,
+regression, and excessive provider/tool call growth.
 
 ## Configuration
 

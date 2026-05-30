@@ -32,6 +32,7 @@
     "scan:licenses": "node scripts/scan-licenses.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
     "report:capability": "npm run build && node scripts/capability-report.mjs",
+    "report:capability:nightly": "npm run build && node scripts/capability-report.mjs --profile nightly",
     "verify": "npm run lint && npm run test && npm run test:memory-eval && npm run test:patch-eval && npm run test:goal-plan-eval && npm run test:tool-discovery-eval && npm run test:control-api-eval && npm run test:blackbox && npm run test:model-tasks && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom && npm run report:capability"
   },
   "dependencies": {

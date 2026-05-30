@@ -14,6 +14,7 @@ export interface CapabilityTrendCheckSample {
 
 export interface CapabilityTrendSample {
   generatedAt: string;
+  profile: CapabilityTrendProfile;
   status: string;
   score: number;
   total: number;
@@ -50,6 +51,7 @@ export interface CapabilityTrendReport {
   version: 1;
   name: "capability-trend";
   generatedAt: string;
+  profile: CapabilityTrendProfile;
   status: "passed" | "failed";
   current: CapabilityTrendSample;
   previous?: CapabilityTrendSample;
@@ -60,6 +62,13 @@ export interface CapabilityTrendReport {
   historyCount: number;
 }
 
+export type CapabilityTrendProfile = "ci" | "nightly";
+
+export interface CapabilityTrendOptions {
+  profile: CapabilityTrendProfile;
+  efficiencyBudget?: PartialCapabilityTrendEfficiencyBudget;
+}
+
 export const DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET: CapabilityTrendEfficiencyBudget = {
   providerCalls: { absolute: 20, relative: 0.35 },
   toolCallCount: { absolute: 100, relative: 0.35 },
@@ -67,15 +76,25 @@ export const DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET: CapabilityTrendEfficien
   checkToolCallCount: { absolute: 60, relative: 0.5 }
 };
 
+export const NIGHTLY_CAPABILITY_TREND_EFFICIENCY_BUDGET: CapabilityTrendEfficiencyBudget = {
+  providerCalls: { absolute: 80, relative: 0.6 },
+  toolCallCount: { absolute: 320, relative: 0.6 },
+  checkProviderCalls: { absolute: 35, relative: 0.75 },
+  checkToolCallCount: { absolute: 160, relative: 0.75 }
+};
+
 export function buildCapabilityTrendReport(input: {
   current: CapabilityReport;
   history?: CapabilityTrendSample[];
   generatedAt?: Date;
+  profile?: CapabilityTrendProfile;
   efficiencyBudget?: PartialCapabilityTrendEfficiencyBudget;
 }): CapabilityTrendReport {
   const current = sampleFromCapabilityReport(input.current);
-  const previous = latestSample(input.history ?? []);
-  const efficiencyBudget = normalizeEfficiencyBudget(input.efficiencyBudget);
+  const profile = input.profile ?? "ci";
+  current.profile = profile;
+  const previous = latestSample(input.history ?? [], profile);
+  const efficiencyBudget = normalizeEfficiencyBudget(input.efficiencyBudget, profile);
   const failures: string[] = [];
   const observations: string[] = [];
   let delta: CapabilityTrendDelta | undefined;
@@ -113,6 +132,7 @@ export function buildCapabilityTrendReport(input: {
     version: 1,
     name: "capability-trend",
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
+    profile,
     status: failures.length === 0 ? "passed" : "failed",
     current,
     previous,
@@ -122,6 +142,25 @@ export function buildCapabilityTrendReport(input: {
     observations,
     historyCount: input.history?.length ?? 0
   };
+}
+
+export function readCapabilityTrendOptionsFromEnv(
+  env: Record<string, string | undefined>
+): CapabilityTrendOptions {
+  return readCapabilityTrendOptions({
+    profile: env.MAGI_CAPABILITY_TREND_PROFILE,
+    env
+  });
+}
+
+export function readCapabilityTrendOptions(input: {
+  profile?: string;
+  env?: Record<string, string | undefined>;
+}): CapabilityTrendOptions {
+  const env = input.env ?? {};
+  const profile = readCapabilityTrendProfile(input.profile ?? env.MAGI_CAPABILITY_TREND_PROFILE);
+  const efficiencyBudget = readEfficiencyBudgetFromEnv(env);
+  return Object.keys(efficiencyBudget).length > 0 ? { profile, efficiencyBudget } : { profile };
 }
 
 export function readCapabilityTrendHistory(file: string): CapabilityTrendSample[] {
@@ -162,6 +201,7 @@ export function appendCapabilityTrendHistory(input: {
 export function formatCapabilityTrendReport(report: CapabilityTrendReport): string {
   const lines = [
     `Capability trend: ${report.status}`,
+    `profile: ${report.profile}`,
     `score: ${report.current.score.toFixed(2)}`,
     `checks: ${report.current.passed}/${report.current.total}`,
     `providerCalls: ${report.current.providerCalls}`,
@@ -194,6 +234,7 @@ function sampleFromCapabilityReport(report: CapabilityReport): CapabilityTrendSa
   }
   return {
     generatedAt: report.generatedAt,
+    profile: "ci",
     status: report.status,
     score: report.summary.score,
     total: report.summary.total,
@@ -222,6 +263,7 @@ function readSample(value: unknown): CapabilityTrendSample | undefined {
   const record = value as Record<string, unknown>;
   const generatedAt = typeof record.generatedAt === "string" ? record.generatedAt : undefined;
   const status = typeof record.status === "string" ? record.status : undefined;
+  const rawProfile = typeof record.profile === "string" ? record.profile : undefined;
   if (!generatedAt || !status) return undefined;
   const checks = Array.isArray(record.checks)
     ? record.checks
@@ -230,6 +272,7 @@ function readSample(value: unknown): CapabilityTrendSample | undefined {
     : [];
   return {
     generatedAt,
+    profile: readStoredCapabilityTrendProfile(rawProfile),
     status,
     score: readNumber(record.score),
     total: readNumber(record.total, checks.length),
@@ -258,35 +301,99 @@ function readCheckSample(value: unknown): CapabilityTrendCheckSample | undefined
   };
 }
 
-function latestSample(samples: CapabilityTrendSample[]): CapabilityTrendSample | undefined {
-  return samples.at(-1);
+function latestSample(
+  samples: CapabilityTrendSample[],
+  profile: CapabilityTrendProfile
+): CapabilityTrendSample | undefined {
+  return samples.filter((sample) => sample.profile === profile).at(-1);
 }
 
-type PartialCapabilityTrendEfficiencyBudget = Partial<{
+export type PartialCapabilityTrendEfficiencyBudget = Partial<{
   [K in keyof CapabilityTrendEfficiencyBudget]: Partial<EfficiencyDeltaBudget>;
 }>;
 
+function readCapabilityTrendProfile(value: string | undefined): CapabilityTrendProfile {
+  if (!value || value === "ci") return "ci";
+  if (value === "nightly") return "nightly";
+  throw new Error(`Invalid MAGI_CAPABILITY_TREND_PROFILE: ${value}`);
+}
+
+function readStoredCapabilityTrendProfile(value: string | undefined): CapabilityTrendProfile {
+  return value === "nightly" ? "nightly" : "ci";
+}
+
+function readEfficiencyBudgetFromEnv(
+  env: Record<string, string | undefined>
+): PartialCapabilityTrendEfficiencyBudget {
+  const budget: PartialCapabilityTrendEfficiencyBudget = {};
+  readEnvDeltaBudget(env, budget, "providerCalls", {
+    absolute: "MAGI_CAPABILITY_TREND_PROVIDER_ABSOLUTE",
+    relative: "MAGI_CAPABILITY_TREND_PROVIDER_RELATIVE"
+  });
+  readEnvDeltaBudget(env, budget, "toolCallCount", {
+    absolute: "MAGI_CAPABILITY_TREND_TOOLS_ABSOLUTE",
+    relative: "MAGI_CAPABILITY_TREND_TOOLS_RELATIVE"
+  });
+  readEnvDeltaBudget(env, budget, "checkProviderCalls", {
+    absolute: "MAGI_CAPABILITY_TREND_CHECK_PROVIDER_ABSOLUTE",
+    relative: "MAGI_CAPABILITY_TREND_CHECK_PROVIDER_RELATIVE"
+  });
+  readEnvDeltaBudget(env, budget, "checkToolCallCount", {
+    absolute: "MAGI_CAPABILITY_TREND_CHECK_TOOLS_ABSOLUTE",
+    relative: "MAGI_CAPABILITY_TREND_CHECK_TOOLS_RELATIVE"
+  });
+  return budget;
+}
+
+function readEnvDeltaBudget(
+  env: Record<string, string | undefined>,
+  budget: PartialCapabilityTrendEfficiencyBudget,
+  key: keyof CapabilityTrendEfficiencyBudget,
+  names: { absolute: string; relative: string }
+): void {
+  const absolute = readOptionalEnvNumber(env[names.absolute], names.absolute);
+  const relative = readOptionalEnvNumber(env[names.relative], names.relative);
+  if (absolute === undefined && relative === undefined) return;
+  budget[key] = {
+    ...(absolute === undefined ? {} : { absolute }),
+    ...(relative === undefined ? {} : { relative })
+  };
+}
+
+function readOptionalEnvNumber(value: string | undefined, name: string): number | undefined {
+  if (value === undefined || value === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative number`);
+  }
+  return parsed;
+}
+
 function normalizeEfficiencyBudget(
-  input?: PartialCapabilityTrendEfficiencyBudget
+  input: PartialCapabilityTrendEfficiencyBudget | undefined,
+  profile: CapabilityTrendProfile
 ): CapabilityTrendEfficiencyBudget {
+  const defaultBudget = trendProfileEfficiencyBudget(profile);
   return {
-    providerCalls: normalizeDeltaBudget(
-      input?.providerCalls,
-      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.providerCalls
-    ),
-    toolCallCount: normalizeDeltaBudget(
-      input?.toolCallCount,
-      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.toolCallCount
-    ),
+    providerCalls: normalizeDeltaBudget(input?.providerCalls, defaultBudget.providerCalls),
+    toolCallCount: normalizeDeltaBudget(input?.toolCallCount, defaultBudget.toolCallCount),
     checkProviderCalls: normalizeDeltaBudget(
       input?.checkProviderCalls,
-      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.checkProviderCalls
+      defaultBudget.checkProviderCalls
     ),
     checkToolCallCount: normalizeDeltaBudget(
       input?.checkToolCallCount,
-      DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET.checkToolCallCount
+      defaultBudget.checkToolCallCount
     )
   };
+}
+
+function trendProfileEfficiencyBudget(
+  profile: CapabilityTrendProfile
+): CapabilityTrendEfficiencyBudget {
+  return profile === "nightly"
+    ? NIGHTLY_CAPABILITY_TREND_EFFICIENCY_BUDGET
+    : DEFAULT_CAPABILITY_TREND_EFFICIENCY_BUDGET;
 }
 
 function normalizeDeltaBudget(
@@ -294,7 +401,7 @@ function normalizeDeltaBudget(
   fallback: EfficiencyDeltaBudget
 ): EfficiencyDeltaBudget {
   return {
-    absolute: readPositiveNumber(input?.absolute, fallback.absolute),
+    absolute: readNonNegativeNumber(input?.absolute, fallback.absolute),
     relative: readNonNegativeNumber(input?.relative, fallback.relative)
   };
 }
@@ -356,10 +463,6 @@ function allowedDelta(previous: number, budget: EfficiencyDeltaBudget): number {
 
 function readNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function readPositiveNumber(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function readNonNegativeNumber(value: unknown, fallback: number): number {

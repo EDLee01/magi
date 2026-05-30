@@ -1,0 +1,49 @@
+name: Nightly Capability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 20 * * *"
+
+jobs:
+  nightly-capability:
+    name: Nightly capability benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused capability evals
+        run: |
+          npm run test:blackbox
+          npm run test:model-tasks
+
+      - name: Run supporting capability gates
+        run: |
+          npm run test:memory-eval
+          npm run test:patch-eval
+          npm run test:goal-plan-eval
+          npm run test:tool-discovery-eval
+          npm run test:control-api-eval
+
+      - name: Aggregate nightly capability profile
+        run: npm run report:capability:nightly
+
+      - name: Upload capability reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-capability-reports
+          path: .magi-reports/*.json
+          if-no-files-found: warn

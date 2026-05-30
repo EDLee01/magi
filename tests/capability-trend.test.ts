@@ -9,6 +9,8 @@ import {
   appendCapabilityTrendHistory,
   buildCapabilityTrendReport,
   formatCapabilityTrendReport,
+  readCapabilityTrendOptions,
+  readCapabilityTrendOptionsFromEnv,
   readCapabilityTrendHistory,
   writeCapabilityTrendReport
 } from "../src/capability-trend.js";
@@ -157,6 +159,139 @@ describe("capability trend report", () => {
     expect(report.failures).toEqual([]);
   });
 
+  it("uses the nightly trend profile for longer benchmark runs", () => {
+    const ciReport = buildCapabilityTrendReport({
+      current: capabilityReport({
+        providerCalls: [40, 20],
+        toolCallCount: [150, 30]
+      }),
+      history: [
+        sample({
+          providerCalls: 10,
+          toolCallCount: 14,
+          checks: [
+            sampleCheck({ id: "blackbox", providerCalls: 6, toolCallCount: 8 }),
+            sampleCheck({ id: "memory", providerCalls: 4, toolCallCount: 6 })
+          ]
+        })
+      ]
+    });
+    const nightlyReport = buildCapabilityTrendReport({
+      current: capabilityReport({
+        providerCalls: [40, 20],
+        toolCallCount: [150, 30]
+      }),
+      history: [
+        sample({
+          providerCalls: 10,
+          toolCallCount: 14,
+          checks: [
+            sampleCheck({ id: "blackbox", providerCalls: 6, toolCallCount: 8 }),
+            sampleCheck({ id: "memory", providerCalls: 4, toolCallCount: 6 })
+          ]
+        })
+      ],
+      profile: "nightly"
+    });
+
+    expect(ciReport.status).toBe("failed");
+    expect(ciReport.failures).toContain("providerCallsBudget=+50>+20");
+    expect(nightlyReport).toMatchObject({
+      status: "passed",
+      profile: "nightly",
+      failures: [],
+      efficiencyBudget: {
+        providerCalls: { absolute: 80, relative: 0.6 },
+        toolCallCount: { absolute: 320, relative: 0.6 },
+        checkProviderCalls: { absolute: 35, relative: 0.75 },
+        checkToolCallCount: { absolute: 160, relative: 0.75 }
+      }
+    });
+    expect(formatCapabilityTrendReport(nightlyReport)).toContain("profile: nightly");
+  });
+
+  it("compares trend deltas only against history from the same profile", () => {
+    const report = buildCapabilityTrendReport({
+      current: capabilityReport({
+        providerCalls: [20, 10],
+        toolCallCount: [40, 20]
+      }),
+      profile: "nightly",
+      history: [
+        sample({
+          providerCalls: 10,
+          toolCallCount: 14,
+          checks: [
+            sampleCheck({ id: "blackbox", providerCalls: 6, toolCallCount: 8 }),
+            sampleCheck({ id: "memory", providerCalls: 4, toolCallCount: 6 })
+          ]
+        }),
+        sample({
+          profile: "nightly",
+          providerCalls: 28,
+          toolCallCount: 55,
+          checks: [
+            sampleCheck({ id: "blackbox", providerCalls: 18, toolCallCount: 30 }),
+            sampleCheck({ id: "memory", providerCalls: 10, toolCallCount: 25 })
+          ]
+        })
+      ]
+    });
+
+    expect(report.profile).toBe("nightly");
+    expect(report.previous?.profile).toBe("nightly");
+    expect(report.delta).toMatchObject({
+      providerCalls: 2,
+      toolCallCount: 5
+    });
+    expect(report.status).toBe("passed");
+  });
+
+  it("reads trend profile and budget overrides from environment variables", () => {
+    expect(
+      readCapabilityTrendOptionsFromEnv({
+        MAGI_CAPABILITY_TREND_PROFILE: "nightly",
+        MAGI_CAPABILITY_TREND_PROVIDER_ABSOLUTE: "44",
+        MAGI_CAPABILITY_TREND_PROVIDER_RELATIVE: "0.25",
+        MAGI_CAPABILITY_TREND_CHECK_TOOLS_ABSOLUTE: "88"
+      })
+    ).toEqual({
+      profile: "nightly",
+      efficiencyBudget: {
+        providerCalls: { absolute: 44, relative: 0.25 },
+        checkToolCallCount: { absolute: 88 }
+      }
+    });
+
+    expect(() =>
+      readCapabilityTrendOptionsFromEnv({ MAGI_CAPABILITY_TREND_PROFILE: "weekend" })
+    ).toThrow("Invalid MAGI_CAPABILITY_TREND_PROFILE: weekend");
+    expect(() =>
+      readCapabilityTrendOptionsFromEnv({ MAGI_CAPABILITY_TREND_PROVIDER_ABSOLUTE: "-1" })
+    ).toThrow("MAGI_CAPABILITY_TREND_PROVIDER_ABSOLUTE must be a non-negative number");
+  });
+
+  it("lets CLI profile arguments override the environment profile", () => {
+    expect(
+      readCapabilityTrendOptions({
+        profile: "ci",
+        env: {
+          MAGI_CAPABILITY_TREND_PROFILE: "nightly",
+          MAGI_CAPABILITY_TREND_TOOLS_ABSOLUTE: "125"
+        }
+      })
+    ).toEqual({
+      profile: "ci",
+      efficiencyBudget: {
+        toolCallCount: { absolute: 125 }
+      }
+    });
+
+    expect(() => readCapabilityTrendOptions({ profile: "later" })).toThrow(
+      "Invalid MAGI_CAPABILITY_TREND_PROFILE: later"
+    );
+  });
+
   it("reads, writes, and trims history samples", () => {
     tempDir = mkdtempSync(path.join(tmpdir(), "magi-capability-trend-"));
     const historyFile = path.join(tempDir, "history.json");
@@ -178,7 +313,8 @@ describe("capability trend report", () => {
     expect(history[0]?.generatedAt).toBe("2026-05-30T00:01:00.000Z");
     expect(JSON.parse(readFileSync(reportFile, "utf8"))).toMatchObject({
       name: "capability-trend",
-      status: "passed"
+      status: "passed",
+      profile: "ci"
     });
   });
 });
@@ -236,6 +372,7 @@ function sample(
     providerCalls: number;
     toolCallCount: number;
     regressions: number;
+    profile: "ci" | "nightly";
     checks: Array<{
       id: string;
       status: string;
@@ -248,6 +385,7 @@ function sample(
 ) {
   return {
     generatedAt: "2026-05-29T00:00:00.000Z",
+    profile: overrides.profile ?? "ci",
     status: "passed",
     score: overrides.score ?? 1,
     total: overrides.total ?? 2,
