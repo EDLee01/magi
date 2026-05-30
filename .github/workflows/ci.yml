@@ -41,6 +41,9 @@ jobs:
       - name: Run black-box CLI matrix
         run: npm run test:blackbox
 
+      - name: Run complex task harness
+        run: npm run test:complex-harness
+
       - name: Run model task benchmark
         run: npm run test:model-tasks
 

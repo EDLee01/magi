@@ -27,6 +27,7 @@ jobs:
       - name: Run focused capability evals
         run: |
           npm run test:blackbox
+          npm run test:complex-harness
           npm run test:model-tasks
 
       - name: Run supporting capability gates

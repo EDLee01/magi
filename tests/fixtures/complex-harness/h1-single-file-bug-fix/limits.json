@@ -1,0 +1,5 @@
+{
+  "maxTimeMs": 45000,
+  "maxCommandCount": 3,
+  "maxFileChanges": 1
+}

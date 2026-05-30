@@ -1,0 +1,6 @@
+{
+  "id": "H1",
+  "name": "H1 single-file bug fix",
+  "taskClass": "single_file_bug_fix",
+  "expectedChangedFiles": ["src/discount.ts"]
+}

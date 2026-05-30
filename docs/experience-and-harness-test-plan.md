@@ -29,6 +29,9 @@ Already covered by automated tests:
 - Context budget and compaction.
 - Rust runner JSON-RPC, process run, timeout, PTY smoke, file apply audit.
 - Plugin manifest, local marketplace, skill loader, web panel endpoints.
+- Complex task harness H1: isolated single-file bug-fix fixture with
+  deterministic checks, stream-json capture, session/audit evidence, forbidden
+  path checks, and archived diffs.
 
 Not yet fully covered:
 
@@ -36,7 +39,7 @@ Not yet fully covered:
 - TUI keyboard navigation polish.
 - Broader stream-json parity for less common event types.
 - Full dangerous-tool semantics across every permission mode.
-- Complex multi-step task harness with objective scoring.
+- Complex multi-step task harness beyond the initial H1 fixture.
 - Long-running coding task recovery after interruption.
 - Real provider-driven tool loop for non-trivial code changes.
 
@@ -417,6 +420,11 @@ Harness runner responsibilities:
 5. Score outcome.
 6. Archive logs under `~/.magi-next/logs/harness/` or test temp dir.
 
+Current implementation: `npm run test:complex-harness` runs the first harness
+task against the built CLI with an isolated `MAGI_CONFIG_DIR`, mock provider,
+stream-json capture, SQLite session/audit inspection, file-diff validation, and
+archives under `.magi-reports/harness/`.
+
 ### Scoring
 
 Each task gets:
@@ -454,7 +462,7 @@ Checks:
 - Only expected source file changed.
 - No dependency install.
 
-Current status: not implemented.
+Current status: implemented and gated by `npm run test:complex-harness`.
 
 #### H2. Multi-file feature
 

@@ -9,6 +9,7 @@ export interface CapabilityReportInput {
   goalPlan: Record<string, unknown>;
   toolDiscovery: Record<string, unknown>;
   controlApi: Record<string, unknown>;
+  complexHarness: Record<string, unknown>;
   generatedAt?: Date;
   sources?: Record<string, string>;
 }
@@ -45,7 +46,8 @@ export function buildCapabilityReport(input: CapabilityReportInput): CapabilityR
     checkPatchReport(input.patch),
     checkGoalPlanReport(input.goalPlan),
     checkToolDiscoveryReport(input.toolDiscovery),
-    checkControlApiReport(input.controlApi)
+    checkControlApiReport(input.controlApi),
+    checkComplexHarnessReport(input.complexHarness)
   ];
   const failed = checks.filter((check) => check.status !== "passed");
   return {
@@ -79,6 +81,7 @@ export function buildCapabilityReportFromFiles(input: {
     goalPlan: readJsonReport(reportPath("goal-plan-eval.json")),
     toolDiscovery: readJsonReport(reportPath("tool-discovery-eval.json")),
     controlApi: readJsonReport(reportPath("control-api-eval.json")),
+    complexHarness: readJsonReport(reportPath("complex-harness.json")),
     generatedAt: input.generatedAt,
     sources: {
       blackbox: path.relative(input.repoRoot, reportPath("blackbox-e2e.json")),
@@ -87,7 +90,8 @@ export function buildCapabilityReportFromFiles(input: {
       patch: path.relative(input.repoRoot, reportPath("patch-engine-eval.json")),
       goalPlan: path.relative(input.repoRoot, reportPath("goal-plan-eval.json")),
       toolDiscovery: path.relative(input.repoRoot, reportPath("tool-discovery-eval.json")),
-      controlApi: path.relative(input.repoRoot, reportPath("control-api-eval.json"))
+      controlApi: path.relative(input.repoRoot, reportPath("control-api-eval.json")),
+      complexHarness: path.relative(input.repoRoot, reportPath("complex-harness.json"))
     }
   });
 }
@@ -1316,6 +1320,99 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
         ciFailureDiagnosisFixDetails.generatedRouteSchemaUntouched === true,
       ciVendorSlugShimUntouched: ciFailureDiagnosisFixDetails.vendorSlugShimUntouched === true,
       ciFailureVerified: ciFailureDiagnosisFixDetails.ciFailureVerified === true,
+      regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
+    },
+    failures
+  };
+}
+
+function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityCheck {
+  const base = checkHarnessReport({
+    id: "complex-harness",
+    title: "Complex task harness",
+    report,
+    minScore: 1,
+    minSuccessRate: 1
+  });
+  const summary = readRecord(report.summary);
+  const toolEfficiency = readRecord(summary.toolEfficiency);
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios.map(readRecord) : [];
+  const detailsList = scenarios.map((scenario) => readRecord(scenario.details));
+  const taskClasses = new Set(
+    detailsList
+      .map((details) => details.taskClass)
+      .filter((taskClass): taskClass is string => typeof taskClass === "string")
+  );
+  const h1 = detailsList.find((details) => details.taskId === "H1");
+  const h1ToolCounts = readRecord(h1?.toolCounts);
+  const h1ChangedFiles = readStringList(h1?.changedFiles);
+  const h1Assertions = readStringList(h1?.assertions);
+  const h1ForbiddenChanges = readStringList(h1?.forbiddenChanges);
+  const h1Session = readRecord(h1?.session);
+  const h1Limits = readRecord(h1?.limitResults);
+  const h1Seen = Boolean(h1);
+  const assertions = readNumber(summary.assertions);
+  const filesVerified = readNumber(summary.filesVerified);
+  const toolCallCount = readNumber(toolEfficiency.toolCallCount);
+  const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
+  const failures = [...base.failures];
+
+  if (readNumber(summary.total) < 1) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
+  if (!h1Seen) failures.push("H1=false");
+  if (assertions < 10) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 6) failures.push(`toolCallCount=${toolCallCount}`);
+  if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
+  if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
+  if (readNumber(h1ToolCounts.Bash) !== 2) failures.push("H1BashCalls != 2");
+  if (readNumber(h1ToolCounts.FileWrite) !== 0) failures.push("H1FileWrite used");
+  if (readNumber(h1ToolCounts.FileEdit) !== 0) failures.push("H1FileEdit used");
+  if (h1?.checksPassed !== true) failures.push("H1ChecksPassed=false");
+  if (h1?.streamJsonLifecycleVerified !== true) failures.push("H1StreamJsonLifecycle=false");
+  if (JSON.stringify(h1ChangedFiles) !== JSON.stringify(["src/discount.ts"])) {
+    failures.push(`H1ChangedFiles=${JSON.stringify(h1ChangedFiles)}`);
+  }
+  if (h1ForbiddenChanges.length > 0)
+    failures.push(`H1ForbiddenChanges=${h1ForbiddenChanges.length}`);
+  if (h1Assertions.length < 10) failures.push(`H1Assertions=${h1Assertions.length}`);
+  if (readNumber(h1Session.messageCount) < 2) failures.push("H1SessionMessages < 2");
+  if (readNumber(h1Session.auditEventCount) < 1) failures.push("H1AuditEvents < 1");
+  if (h1Limits.withinTime !== true) failures.push("H1WithinTime=false");
+  if (h1Limits.withinCommands !== true) failures.push("H1WithinCommands=false");
+  if (h1Limits.withinFileChanges !== true) failures.push("H1WithinFileChanges=false");
+  if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
+    failures.push(`regressions=${summary.regressions.length}`);
+  }
+
+  return {
+    ...base,
+    status: failures.length === 0 ? "passed" : "failed",
+    score: failures.length === 0 ? 1 : 0,
+    metrics: {
+      ...base.metrics,
+      taskClasses: Array.from(taskClasses).sort(),
+      assertions,
+      filesVerified,
+      toolCallCount,
+      uniqueToolCount,
+      H1Seen: h1Seen,
+      H1FileReadCalls: readNumber(h1ToolCounts.FileRead),
+      H1FilePatchCalls: readNumber(h1ToolCounts.FilePatch),
+      H1BashCalls: readNumber(h1ToolCounts.Bash),
+      H1FileWriteCalls: readNumber(h1ToolCounts.FileWrite),
+      H1FileEditCalls: readNumber(h1ToolCounts.FileEdit),
+      H1ChecksPassed: h1?.checksPassed === true,
+      H1StreamJsonLifecycle: h1?.streamJsonLifecycleVerified === true,
+      H1ChangedFiles: h1ChangedFiles,
+      H1ForbiddenChanges: h1ForbiddenChanges.length,
+      H1Assertions: h1Assertions.length,
+      H1SessionMessages: readNumber(h1Session.messageCount),
+      H1AuditEvents: readNumber(h1Session.auditEventCount),
+      H1WithinTime: h1Limits.withinTime === true,
+      H1WithinCommands: h1Limits.withinCommands === true,
+      H1WithinFileChanges: h1Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

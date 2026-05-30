@@ -22,12 +22,13 @@ describe("capability report", () => {
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     expect(report).toMatchObject({
       status: "passed",
-      summary: { total: 7, passed: 7, failed: 0, score: 1 },
+      summary: { total: 8, passed: 8, failed: 0, score: 1 },
       checks: [
         { id: "blackbox", status: "passed" },
         { id: "model-tasks", status: "passed" },
@@ -35,7 +36,8 @@ describe("capability report", () => {
         { id: "patch", status: "passed" },
         { id: "goal-plan", status: "passed" },
         { id: "tool-discovery", status: "passed" },
-        { id: "control-api", status: "passed" }
+        { id: "control-api", status: "passed" },
+        { id: "complex-harness", status: "passed" }
       ]
     });
   });
@@ -62,7 +64,8 @@ describe("capability report", () => {
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     const patch = report.checks.find((check) => check.id === "patch");
@@ -127,7 +130,8 @@ describe("capability report", () => {
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     const blackbox = report.checks.find((check) => check.id === "blackbox");
@@ -200,7 +204,8 @@ describe("capability report", () => {
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     const output = formatCapabilityReport(report);
@@ -261,7 +266,8 @@ describe("capability report", () => {
       }),
       goalPlan: goalPlanReport(),
       toolDiscovery: toolDiscoveryReport(),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     const modelTasks = report.checks.find((check) => check.id === "model-tasks");
@@ -499,7 +505,8 @@ describe("capability report", () => {
         uniqueToolCount: 1
       }),
       toolDiscovery: toolDiscoveryReport(),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     const goalPlan = report.checks.find((check) => check.id === "goal-plan");
@@ -635,7 +642,8 @@ describe("capability report", () => {
         grepPathFailures: 2,
         grepIntentPathFailures: 2
       }),
-      controlApi: controlApiReport()
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport()
     });
 
     const toolDiscovery = report.checks.find((check) => check.id === "tool-discovery");
@@ -786,7 +794,8 @@ describe("capability report", () => {
         filesVerified: 2,
         toolCallCount: 2,
         uniqueToolCount: 2
-      })
+      }),
+      complexHarness: complexHarnessReport()
     });
 
     const controlApi = report.checks.find((check) => check.id === "control-api");
@@ -856,6 +865,82 @@ describe("capability report", () => {
         "peerLongRemoteFileIsolated=false",
         "peerLongRemoteJobCompleted=false",
         "peerLongRemoteAuditPersisted=false"
+      ])
+    );
+  });
+
+  it("fails complex harness alignment when H1 business evidence is incomplete", () => {
+    const report = buildCapabilityReport({
+      blackbox: harnessReport({ name: "blackbox-e2e", scenarios: 9, providerCalls: 118 }),
+      modelTasks: modelTaskReport(),
+      memory: memoryReport({ failed: 0, thresholdPassed: true, score: 1 }),
+      patch: patchReport({
+        filePatchCalls: 10,
+        fileEditCalls: 1,
+        fileWriteCalls: 0,
+        recoverySeen: true,
+        toolSearchRankedFilePatch: true,
+        approvalDiffPreviewSeen: true,
+        patchUsageRate: 10 / 11
+      }),
+      goalPlan: goalPlanReport(),
+      toolDiscovery: toolDiscoveryReport(),
+      controlApi: controlApiReport(),
+      complexHarness: complexHarnessReport({
+        status: "failed",
+        score: 0.3,
+        successRate: 0,
+        taskClass: "thin_demo",
+        assertions: 2,
+        filesVerified: 1,
+        toolCallCount: 2,
+        uniqueToolCount: 2,
+        fileReadCalls: 1,
+        filePatchCalls: 0,
+        bashCalls: 1,
+        fileWriteCalls: 1,
+        fileEditCalls: 1,
+        checksPassed: false,
+        streamJsonLifecycleVerified: false,
+        changedFiles: ["src/discount.ts", "tests/discount.test.mjs"],
+        forbiddenChanges: ["tests/discount.test.mjs"],
+        sessionMessages: 1,
+        auditEvents: 0,
+        withinTime: false,
+        withinCommands: false,
+        withinFileChanges: false,
+        regressions: 1
+      })
+    });
+
+    const complex = report.checks.find((check) => check.id === "complex-harness");
+    expect(report.status).toBe("failed");
+    expect(complex?.failures).toEqual(
+      expect.arrayContaining([
+        "status=failed",
+        "successRate=0",
+        "score=0.3",
+        "singleFileBugFixTask=false",
+        "assertions=2",
+        "filesVerified=1",
+        "toolCallCount=2",
+        "uniqueToolCount=2",
+        "H1FileReadCalls < 2",
+        "H1FilePatchCalls < 2",
+        "H1BashCalls != 2",
+        "H1FileWrite used",
+        "H1FileEdit used",
+        "H1ChecksPassed=false",
+        "H1StreamJsonLifecycle=false",
+        'H1ChangedFiles=["src/discount.ts","tests/discount.test.mjs"]',
+        "H1ForbiddenChanges=1",
+        "H1Assertions=2",
+        "H1SessionMessages < 2",
+        "H1AuditEvents < 1",
+        "H1WithinTime=false",
+        "H1WithinCommands=false",
+        "H1WithinFileChanges=false",
+        "regressions=1"
       ])
     );
   });
@@ -956,6 +1041,107 @@ function harnessReport(input: {
                     ? []
                     : ["skills/blackbox-verify/SKILL.md"])
                 ]
+        }
+      }
+    ]
+  };
+}
+
+function complexHarnessReport(
+  overrides: {
+    status?: "passed" | "failed";
+    score?: number;
+    successRate?: number;
+    taskClass?: string;
+    assertions?: number;
+    filesVerified?: number;
+    toolCallCount?: number;
+    uniqueToolCount?: number;
+    fileReadCalls?: number;
+    filePatchCalls?: number;
+    bashCalls?: number;
+    fileWriteCalls?: number;
+    fileEditCalls?: number;
+    checksPassed?: boolean;
+    streamJsonLifecycleVerified?: boolean;
+    changedFiles?: string[];
+    forbiddenChanges?: string[];
+    sessionMessages?: number;
+    auditEvents?: number;
+    withinTime?: boolean;
+    withinCommands?: boolean;
+    withinFileChanges?: boolean;
+    regressions?: number;
+  } = {}
+): Record<string, unknown> {
+  const status = overrides.status ?? "passed";
+  const assertions = overrides.assertions ?? 10;
+  const filesVerified = overrides.filesVerified ?? 4;
+  const toolCounts = {
+    FileRead: overrides.fileReadCalls ?? 2,
+    FilePatch: overrides.filePatchCalls ?? 2,
+    Bash: overrides.bashCalls ?? 2,
+    FileWrite: overrides.fileWriteCalls ?? 0,
+    FileEdit: overrides.fileEditCalls ?? 0
+  };
+  return {
+    version: 1,
+    name: "complex-task-harness",
+    status,
+    summary: {
+      total: 1,
+      passed: status === "passed" ? 1 : 0,
+      failed: status === "passed" ? 0 : 1,
+      successRate: overrides.successRate ?? (status === "passed" ? 1 : 0),
+      score: overrides.score ?? (status === "passed" ? 1 : 0),
+      providerCalls: 4,
+      providerCallsPerScenario: 4,
+      assertions,
+      filesVerified,
+      toolEfficiency: {
+        toolCallCount: overrides.toolCallCount ?? 6,
+        uniqueToolCount: overrides.uniqueToolCount ?? 3,
+        toolCallsPerScenario: overrides.toolCallCount ?? 6,
+        topTools: [
+          { name: "Bash", count: toolCounts.Bash },
+          { name: "FileRead", count: toolCounts.FileRead },
+          { name: "FilePatch", count: toolCounts.FilePatch }
+        ]
+      },
+      regressions: Array.from({ length: overrides.regressions ?? 0 }, (_, index) => ({
+        scenario: `complex regression ${index + 1}`,
+        failureKind: "assertion"
+      }))
+    },
+    scenarios: [
+      {
+        name: "H1 single-file bug fix",
+        status,
+        durationMs: 400,
+        score: overrides.score ?? (status === "passed" ? 1 : 0),
+        failureKind: status === "passed" ? null : "assertion",
+        details: {
+          taskId: "H1",
+          taskClass: overrides.taskClass ?? "single_file_bug_fix",
+          toolCounts,
+          assertions: Array.from({ length: assertions }, (_, index) => `H1 assertion ${index + 1}`),
+          filesVerified: Array.from(
+            { length: filesVerified },
+            (_, index) => `H1 file ${index + 1}`
+          ),
+          changedFiles: overrides.changedFiles ?? ["src/discount.ts"],
+          forbiddenChanges: overrides.forbiddenChanges ?? [],
+          checksPassed: overrides.checksPassed ?? true,
+          streamJsonLifecycleVerified: overrides.streamJsonLifecycleVerified ?? true,
+          session: {
+            messageCount: overrides.sessionMessages ?? 3,
+            auditEventCount: overrides.auditEvents ?? 8
+          },
+          limitResults: {
+            withinTime: overrides.withinTime ?? true,
+            withinCommands: overrides.withinCommands ?? true,
+            withinFileChanges: overrides.withinFileChanges ?? true
+          }
         }
       }
     ]
