@@ -973,7 +973,7 @@ function permissionModePickerDescription(mode: ToolPermissionMode): string {
   }
 }
 
-async function pickInteractiveSession(input: {
+export async function pickInteractiveSession(input: {
   input: NodeJS.ReadStream;
   output: NodeJS.WriteStream;
   store: SessionStore;

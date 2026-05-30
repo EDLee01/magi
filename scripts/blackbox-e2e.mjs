@@ -488,6 +488,58 @@ async function runCliAllowFailure(input) {
   });
 }
 
+async function runCliWithTtyIo({
+  args,
+  cwd,
+  configDir,
+  label,
+  inputText,
+  timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS
+}) {
+  console.log(`+ ${label}: runCli(${args.map((part) => JSON.stringify(part)).join(" ")})`);
+  const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
+  const harness = createPromptHarness();
+  const promise = runCliApi(
+    args,
+    {
+      ...process.env,
+      MAGI_CONFIG_DIR: configDir,
+      MAGI_OPENAI_API_KEY: "test-key",
+      NO_COLOR: "1"
+    },
+    cwd,
+    {
+      stdin: harness.input,
+      stdout: harness.output
+    }
+  );
+  try {
+    await waitFor(
+      () => stripTerminalControls(harness.stdout()).includes("resume sessions"),
+      label,
+      timeoutMs
+    ).catch((error) => {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nSTDOUT:\n${harness.stdout()}`
+      );
+    });
+    harness.input.write(inputText);
+    const result = await Promise.race([
+      promise,
+      sleep(timeoutMs).then(() => {
+        throw new Error(`${label} timed out waiting for completion\nSTDOUT:\n${harness.stdout()}`);
+      })
+    ]);
+    return {
+      ...result,
+      stdout: `${harness.stdout()}${result.stdout}`,
+      stderr: result.stderr
+    };
+  } finally {
+    harness.input.destroy();
+  }
+}
+
 function parseDraftId(output) {
   const match = output.match(/(?:id:|Memory Draft:)\s*([a-z0-9_-]+)/i);
   assert(match, `could not parse draft id from output:\n${output}`);
@@ -508,6 +560,12 @@ function parseStreamSessionId(output) {
     throw new Error(`could not parse stream session id from output:\n${output}`);
   }
   return sessionId;
+}
+
+function parseTextSessionId(output) {
+  const match = output.match(/^sessionId:\s*(.+)$/m);
+  assert(match, `could not parse session id from output:\n${output}`);
+  return match[1].trim();
 }
 
 function parseStreamEvents(output) {
@@ -1703,6 +1761,83 @@ async function scenarioBarePromptHeadless() {
   });
 }
 
+async function scenarioResumePickerTty() {
+  return await withTempWorkspace("resume-picker", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: () => messageText("Resume picker seed response.")
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      await runCli({
+        args: ["--model", "main", "--name", "fix parser", "-p", "seed parser session"],
+        cwd: workDir,
+        configDir,
+        label: "resume picker seed parser"
+      });
+      const targetOutput = await runCli({
+        args: ["--model", "main", "--name", "review auth target", "-p", "seed auth session"],
+        cwd: workDir,
+        configDir,
+        label: "resume picker seed auth"
+      });
+      await runCli({
+        args: ["--model", "main", "--name", "write docs", "-p", "seed docs session"],
+        cwd: workDir,
+        configDir,
+        label: "resume picker seed docs"
+      });
+      const targetSessionId = parseTextSessionId(targetOutput);
+      const nonTtyList = await runCli({
+        args: ["-r"],
+        cwd: workDir,
+        configDir,
+        label: "resume picker non-TTY list"
+      });
+      assert(nonTtyList.includes("Resume sessions:"), "non-TTY -r did not list sessions");
+      assert(
+        nonTtyList.includes("review auth target"),
+        "non-TTY -r did not include the target session"
+      );
+      const result = await runCliWithTtyIo({
+        args: ["--no-color", "-r"],
+        cwd: workDir,
+        configDir,
+        label: "resume picker TTY",
+        inputText: "auth\r"
+      });
+      assert(
+        result.exitCode === 0,
+        `resume picker exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
+      );
+      const combined = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
+      assert(combined.includes("resume sessions"), "resume picker title did not render");
+      assert(combined.includes("matching auth"), "resume picker did not filter by typed query");
+      assert(combined.includes("review auth target"), "resume picker did not show target title");
+      assert(
+        combined.includes(`sessionId: ${targetSessionId}`),
+        "resume picker did not resume the selected session"
+      );
+      return {
+        score: 1,
+        assertions: [
+          "TTY -r rendered searchable session picker",
+          "TTY -r filtered sessions by typed query",
+          "TTY -r resumed selected session",
+          "non-TTY -r session list remains available"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -2471,27 +2606,38 @@ async function scenarioInteractiveTui() {
 }
 
 function runInteractiveTuiCommand({ inputFile, cwd, configDir, timeoutMs }) {
+  return runPseudoTtyCliCommand({
+    inputFile,
+    cwd,
+    configDir,
+    args: [],
+    label: "interactive TUI",
+    timeoutMs
+  });
+}
+
+function runPseudoTtyCliCommand({ inputFile, cwd, configDir, args, label, timeoutMs }) {
+  const quotedCommand = `${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color ${args
+    .map(shellQuote)
+    .join(" ")}`.trim();
   return process.platform === "darwin"
     ? runCommand({
         command: "/bin/sh",
-        args: [
-          "-c",
-          `script -q /dev/null ${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color < ${shellQuote(inputFile)}`
-        ],
+        args: ["-c", `script -q /dev/null ${quotedCommand} < ${shellQuote(inputFile)}`],
         cwd,
         configDir,
-        label: "interactive TUI",
+        label,
         timeoutMs
       })
     : runCommand({
         command: "/bin/sh",
         args: [
           "-c",
-          `script -q -e -c ${shellQuote(`${shellQuote(nodeBin)} ${shellQuote(cliPath)} --no-color`)} /dev/null < ${shellQuote(inputFile)}`
+          `script -q -e -c ${shellQuote(quotedCommand)} /dev/null < ${shellQuote(inputFile)}`
         ],
         cwd,
         configDir,
-        label: "interactive TUI",
+        label,
         timeoutMs
       });
 }
@@ -2653,6 +2799,7 @@ function createPromptHarness() {
       callback();
     }
   });
+  output.isTTY = true;
   output.columns = 80;
   return {
     input,
@@ -2727,6 +2874,7 @@ async function main() {
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
     ["bare prompt headless", scenarioBarePromptHeadless],
+    ["resume picker TTY", scenarioResumePickerTty],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],

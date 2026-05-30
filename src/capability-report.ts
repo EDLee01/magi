@@ -163,6 +163,11 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("bare prompt argument entered headless provider path") &&
     assertionList.includes("bare prompt stream-json emitted valid lifecycle events") &&
     assertionList.includes("bare prompt headless session completed");
+  const resumePickerTtySeen =
+    assertionList.includes("TTY -r rendered searchable session picker") &&
+    assertionList.includes("TTY -r filtered sessions by typed query") &&
+    assertionList.includes("TTY -r resumed selected session") &&
+    assertionList.includes("non-TTY -r session list remains available");
   const slashSuggestionPromptSeen =
     assertionList.includes("slash suggestion menu rendered for slash input") &&
     assertionList.includes("slash suggestion filtered command descriptions") &&
@@ -173,7 +178,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 53) failures.push(`assertions=${assertions}`);
+  if (assertions < 57) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -183,6 +188,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!harnessCiTuiGuardSeen) failures.push("harnessCiTuiGuardSeen=false");
   if (!streamJsonProtocolSeen) failures.push("streamJsonProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
+  if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 8) failures.push(`uniqueToolCount=${uniqueToolCount}`);
@@ -209,6 +215,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       harnessCiTuiGuardSeen,
       streamJsonProtocolSeen,
       barePromptHeadlessSeen,
+      resumePickerTtySeen,
       slashSuggestionPromptSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0

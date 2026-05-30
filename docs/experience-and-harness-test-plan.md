@@ -19,6 +19,7 @@ Already covered by automated tests:
 - File read/search/write, shell guardrails, git summary.
 - SQLite sessions, jobs, audit, usage.
 - TUI basic startup, slash command dispatch, and `/` suggestion menu behavior.
+- Searchable `-r` TTY resume picker and non-TTY resume session list.
 - MCP list/call approval basics.
 - Control API pairing, auth, jobs, approvals, SSE, agents.
 - Multi-agent queue and write conflict detection.
@@ -28,7 +29,7 @@ Already covered by automated tests:
 
 Not yet fully covered:
 
-- Searchable `/resume` and `-r` picker UI.
+- Richer `/resume` picker edge cases and visual polish.
 - TUI keyboard navigation polish.
 - Broader stream-json parity for less common event types.
 - Tool permission modes across every tool.
@@ -226,7 +227,8 @@ Acceptance:
 - In non-TTY, prints a session list with stable columns and exits nonzero or
   provides an actionable instruction.
 
-Current status: not implemented. `-r` requires a value in headless path.
+Current status: implemented and black-box gated. In a TTY, `magi -r` opens the
+searchable session picker; in non-TTY it prints a stable session list.
 
 ### C2. `/resume` Search
 
@@ -244,7 +246,9 @@ Acceptance:
 - Enter resumes selected session.
 - Esc returns to previous input.
 
-Current status: not implemented.
+Current status: partially implemented. `/resume` with no args opens the same
+interactive picker in the TUI; richer no-results and escape-path coverage remain
+future polish.
 
 ### C3. Session Picker Data
 
@@ -261,7 +265,8 @@ Acceptance:
 - Search `auth` shows B.
 - Search by partial session id works.
 
-Current status: listSessions has data, picker UI missing.
+Current status: implemented for picker item data and search fields; black-box
+coverage verifies selecting a session by typed title query.
 
 ## D. Output Protocol
 

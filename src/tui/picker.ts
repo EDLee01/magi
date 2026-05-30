@@ -157,14 +157,17 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
   };
 
   const wasRaw = stdin.isRaw;
+  const wasPaused = stdin.isPaused();
   stdout.write("\x1b[?25l");
   if (stdin.setRawMode) stdin.setRawMode(true);
+  stdin.resume();
   render();
 
   return new Promise<string | undefined>((resolve) => {
     const cleanup = () => {
       stdin.removeListener("data", onData);
       if (stdin.setRawMode) stdin.setRawMode(Boolean(wasRaw));
+      if (wasPaused) stdin.pause();
       clear();
     };
 

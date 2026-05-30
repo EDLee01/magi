@@ -104,6 +104,7 @@ describe("capability report", () => {
         harnessCiTuiGuardSeen: false,
         streamJsonProtocolSeen: false,
         barePromptHeadlessSeen: false,
+        resumePickerTtySeen: false,
         slashSuggestionPromptSeen: false
       }),
       modelTasks: modelTaskReport(),
@@ -138,6 +139,7 @@ describe("capability report", () => {
         "harnessCiTuiGuardSeen=false",
         "streamJsonProtocolSeen=false",
         "barePromptHeadlessSeen=false",
+        "resumePickerTtySeen=false",
         "slashSuggestionPromptSeen=false",
         "toolCallCount=3",
         "uniqueToolCount=2",
@@ -866,6 +868,7 @@ function harnessReport(input: {
   harnessCiTuiGuardSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
+  resumePickerTtySeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
 }): Record<string, unknown> {
   const regressions = Array.from({ length: input.regressions ?? 0 }, (_, index) => ({
@@ -884,7 +887,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 55,
+      assertions: input.assertions ?? 59,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -917,6 +920,7 @@ function harnessReport(input: {
                   ...harnessGuardAssertions(input),
                   ...streamJsonProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
+                  ...resumePickerTtyAssertions(input),
                   ...slashSuggestionPromptAssertions(input)
                 ],
           filesVerified:
@@ -1006,6 +1010,17 @@ function barePromptHeadlessAssertions(input: { barePromptHeadlessSeen?: boolean 
         "bare prompt argument entered headless provider path",
         "bare prompt stream-json emitted valid lifecycle events",
         "bare prompt headless session completed"
+      ];
+}
+
+function resumePickerTtyAssertions(input: { resumePickerTtySeen?: boolean }): string[] {
+  return input.resumePickerTtySeen === false
+    ? []
+    : [
+        "TTY -r rendered searchable session picker",
+        "TTY -r filtered sessions by typed query",
+        "TTY -r resumed selected session",
+        "non-TTY -r session list remains available"
       ];
 }
 

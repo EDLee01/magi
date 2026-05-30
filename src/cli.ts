@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
+import { stdin as processStdin, stdout as processStdout } from "node:process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import qrcodeTerminal from "qrcode-terminal";
@@ -69,7 +70,12 @@ import { McpConnectionManager } from "./mcp/connection-manager.js";
 import { ensureMagiHome, getMagiPaths, getRuntimeSettings } from "./paths.js";
 import { formatAgentInstructions, loadAgentInstructions } from "./rules/agents-loader.js";
 import { SessionStore } from "./session-store.js";
-import { formatSessionList, formatSessionResume, runInteractiveTerminal } from "./tui.js";
+import {
+  formatSessionList,
+  formatSessionResume,
+  pickInteractiveSession,
+  runInteractiveTerminal
+} from "./tui.js";
 import { startControlServer } from "./control/server.js";
 import {
   getDaemonStatus,
@@ -126,13 +132,19 @@ export interface CliResult {
   stderr: string;
 }
 
+export interface CliIo {
+  stdin?: NodeJS.ReadStream;
+  stdout?: NodeJS.WriteStream;
+}
+
 export async function runCli(
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
-  cwd = process.cwd()
+  cwd = process.cwd(),
+  io: CliIo = {}
 ): Promise<CliResult> {
   try {
-    return await runCliUnsafe(argv, env, cwd);
+    return await runCliUnsafe(argv, env, cwd, io);
   } catch (error) {
     if (error instanceof MagiConfigError || error instanceof MagiUsageError) {
       return { exitCode: 2, stdout: "", stderr: `${error.message}\n` };
@@ -150,7 +162,8 @@ export async function runCli(
 async function runCliUnsafe(
   argv: string[],
   env: NodeJS.ProcessEnv,
-  cwd: string
+  cwd: string,
+  io: CliIo
 ): Promise<CliResult> {
   const parsed = parseArgs(argv);
   const command = parsed.command;
@@ -190,7 +203,7 @@ async function runCliUnsafe(
   }
 
   if (command === "--version" || command === "-v") {
-    return runCliUnsafeWithParsed(parsed, env, cwd);
+    return runCliUnsafeWithParsed(parsed, env, cwd, io);
   }
 
   const runtimeEnv = loadMagiEnvFile(env).env;
@@ -199,16 +212,17 @@ async function runCliUnsafe(
     parsed.command = "-p";
     parsed.prompt = [command, ...parsed.rest].join(" ");
     parsed.rest = [];
-    return runCliUnsafeWithParsed(parsed, runtimeEnv, cwd);
+    return runCliUnsafeWithParsed(parsed, runtimeEnv, cwd, io);
   }
 
-  return runCliUnsafeWithParsed(parsed, runtimeEnv, cwd);
+  return runCliUnsafeWithParsed(parsed, runtimeEnv, cwd, io);
 }
 
 async function runCliUnsafeWithParsed(
   parsed: ParsedArgs,
   env: NodeJS.ProcessEnv,
-  cwd: string
+  cwd: string,
+  io: CliIo
 ): Promise<CliResult> {
   const command = parsed.command;
 
@@ -373,6 +387,24 @@ async function runCliUnsafeWithParsed(
     try {
       if (parsed.resumeSessionId) {
         const output = formatSessionResume(store, parsed.resumeSessionId);
+        return {
+          exitCode: output.startsWith("Session not found:") ? 2 : 0,
+          stdout: output,
+          stderr: ""
+        };
+      }
+      const stdin = io.stdin ?? processStdin;
+      const stdout = io.stdout ?? processStdout;
+      if (stdin.isTTY && stdout.isTTY) {
+        const selected = await pickInteractiveSession({
+          input: stdin,
+          output: stdout,
+          store
+        });
+        if (!selected) {
+          return { exitCode: 1, stdout: "", stderr: "No session selected.\n" };
+        }
+        const output = formatSessionResume(store, selected);
         return {
           exitCode: output.startsWith("Session not found:") ? 2 : 0,
           stdout: output,
