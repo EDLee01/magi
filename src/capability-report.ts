@@ -217,6 +217,17 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("dangerous Bash denied outside bypassPermissions") &&
     assertionList.includes("bypassPermissions dangerous Bash required explicit env approval") &&
     assertionList.includes("bypassPermissions dangerous Bash ran with explicit env approval");
+  const dangerousPermissionMatrixSeen =
+    assertionList.includes("dangerous Bash denied in default mode without approval") &&
+    assertionList.includes("dangerous Bash denied in acceptEdits mode") &&
+    assertionList.includes("dangerous Bash denied in dontAsk mode") &&
+    assertionList.includes("dangerous Bash denied in plan mode") &&
+    assertionList.includes("dangerous Bash bypassPermissions required explicit env approval") &&
+    assertionList.includes(
+      "dangerous Bash bypassPermissions executed only with explicit env approval"
+    ) &&
+    assertionList.includes("dangerous permission matrix preserved denied sentinels") &&
+    assertionList.includes("dangerous permission matrix emitted stream-json tool evidence");
   const slashSuggestionPromptSeen =
     assertionList.includes("slash suggestion menu rendered for slash input") &&
     assertionList.includes("slash suggestion filtered command descriptions") &&
@@ -236,7 +247,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 125) failures.push(`assertions=${assertions}`);
+  if (assertions < 133) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -253,6 +264,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!toolPolicySeen) failures.push("toolPolicySeen=false");
+  if (!dangerousPermissionMatrixSeen) failures.push("dangerousPermissionMatrixSeen=false");
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
   if (!tuiVisualContractSeen) failures.push("tuiVisualContractSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
@@ -287,6 +299,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       resumePickerTtySeen,
       slashResumeSearchTtySeen,
       toolPolicySeen,
+      dangerousPermissionMatrixSeen,
       slashSuggestionPromptSeen,
       tuiVisualContractSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],

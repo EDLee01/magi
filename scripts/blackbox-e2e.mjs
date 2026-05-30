@@ -2468,6 +2468,223 @@ async function scenarioToolPolicyAllowDeny() {
   });
 }
 
+async function scenarioDangerousPermissionMatrix() {
+  return await withTempWorkspace(
+    "dangerous-permission-matrix",
+    async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const deniedReason =
+      "Permission deny: dangerous Bash command requires bypassPermissions mode and explicit dangerous approval";
+    const envReason =
+      "Permission deny: dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1";
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ body, transcript, toolNames }) => {
+        const latestUser = [...(body.messages ?? [])]
+          .reverse()
+          .find((message) => message.role === "user");
+        const latestPrompt = textFromMessage(latestUser ?? {});
+        const cases = [
+          {
+            prompt: "Dangerous Bash default mode",
+            toolUseId: "danger-default",
+            command: "rm -rf danger-default",
+            expectedReason: deniedReason,
+            final: "Dangerous Bash default mode denied."
+          },
+          {
+            prompt: "Dangerous Bash acceptEdits mode",
+            toolUseId: "danger-accept",
+            command: "rm -rf danger-accept",
+            expectedReason: deniedReason,
+            final: "Dangerous Bash acceptEdits mode denied."
+          },
+          {
+            prompt: "Dangerous Bash dontAsk mode",
+            toolUseId: "danger-dontask",
+            command: "rm -rf danger-dontask",
+            expectedReason: deniedReason,
+            final: "Dangerous Bash dontAsk mode denied."
+          },
+          {
+            prompt: "Dangerous Bash plan mode",
+            toolUseId: "danger-plan",
+            command: "rm -rf danger-plan",
+            expectedReason: deniedReason,
+            final: "Dangerous Bash plan mode denied."
+          },
+          {
+            prompt: "Dangerous Bash bypass mode without env",
+            toolUseId: "danger-bypass-missing-env",
+            command: "rm -rf danger-bypass-missing-env",
+            expectedReason: envReason,
+            final: "Dangerous Bash bypass mode without env denied."
+          }
+        ];
+        for (const item of cases) {
+          if (!latestPrompt.includes(item.prompt)) continue;
+          if (!transcript.includes(item.expectedReason)) {
+            assert(toolNames.includes("Bash"), `${item.prompt} did not expose Bash`);
+            return toolResponse([toolCall(item.toolUseId, "Bash", { command: item.command })]);
+          }
+          return messageText(item.final);
+        }
+        if (latestPrompt.includes("Dangerous Bash bypass mode with explicit env")) {
+          if (!transcript.includes("Command exited 0")) {
+            assert(toolNames.includes("Bash"), "explicit bypass did not expose Bash");
+            return toolResponse([
+              toolCall("danger-bypass-explicit-env", "Bash", {
+                command: "rm -rf danger-bypass-explicit-env"
+              })
+            ]);
+          }
+          return messageText("Dangerous Bash bypass mode with explicit env executed.");
+        }
+        return messageText("OK");
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const deniedCases = [
+        {
+          mode: "default",
+          prompt: "Dangerous Bash default mode",
+          label: "dangerous default",
+          dir: "danger-default",
+          expected: "Dangerous Bash default mode denied."
+        },
+        {
+          mode: "acceptEdits",
+          prompt: "Dangerous Bash acceptEdits mode",
+          label: "dangerous acceptEdits",
+          dir: "danger-accept",
+          expected: "Dangerous Bash acceptEdits mode denied."
+        },
+        {
+          mode: "dontAsk",
+          prompt: "Dangerous Bash dontAsk mode",
+          label: "dangerous dontAsk",
+          dir: "danger-dontask",
+          expected: "Dangerous Bash dontAsk mode denied."
+        },
+        {
+          mode: "plan",
+          prompt: "Dangerous Bash plan mode",
+          label: "dangerous plan",
+          dir: "danger-plan",
+          expected: "Dangerous Bash plan mode denied."
+        },
+        {
+          mode: "bypassPermissions",
+          prompt: "Dangerous Bash bypass mode without env",
+          label: "dangerous bypass missing env",
+          dir: "danger-bypass-missing-env",
+          expected: "Dangerous Bash bypass mode without env denied."
+        }
+      ];
+      for (const item of deniedCases) {
+        mkdirSync(path.join(workDir, item.dir), { recursive: true });
+        await writeFile(path.join(workDir, item.dir, "sentinel.txt"), "keep\n", "utf8");
+        const output = await runCli({
+          args: [
+            "--permission-mode",
+            item.mode,
+            "--model",
+            "main",
+            "--output-format",
+            "stream-json",
+            "-p",
+            item.prompt
+          ],
+          cwd: workDir,
+          configDir,
+          label: item.label
+        });
+        const events = parseStreamEvents(output);
+        assert(output.includes(item.expected), `${item.label} final answer missing`);
+        assert(
+          events.some(
+            (event) =>
+              event.type === "tool.failed" &&
+              event.tool === "Bash" &&
+              event.toolUseId?.startsWith("danger-")
+          ),
+          `${item.label} did not emit Bash tool.failed`
+        );
+        assert(
+          !events.some((event) => event.type === "approval.requested"),
+          `${item.label} requested approval instead of denying dangerous Bash`
+        );
+        assert(
+          existsSync(path.join(workDir, item.dir, "sentinel.txt")),
+          `${item.label} removed denied sentinel`
+        );
+      }
+
+      mkdirSync(path.join(workDir, "danger-bypass-explicit-env"), { recursive: true });
+      await writeFile(
+        path.join(workDir, "danger-bypass-explicit-env", "sentinel.txt"),
+        "delete\n",
+        "utf8"
+      );
+      const explicitOutput = await runCli({
+        args: [
+          "--permission-mode",
+          "bypassPermissions",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Dangerous Bash bypass mode with explicit env"
+        ],
+        cwd: workDir,
+        configDir,
+        label: "dangerous bypass explicit env",
+        env: { MAGI_APPROVE_DANGEROUS_COMMANDS: "1" }
+      });
+      const explicitEvents = parseStreamEvents(explicitOutput);
+      assert(
+        explicitOutput.includes("Dangerous Bash bypass mode with explicit env executed."),
+        "explicit bypass final answer missing"
+      );
+      assert(
+        explicitEvents.some(
+          (event) =>
+            event.type === "tool.completed" &&
+            event.tool === "Bash" &&
+            event.toolUseId === "danger-bypass-explicit-env"
+        ),
+        "explicit bypass did not emit Bash tool.completed"
+      );
+      assert(
+        !existsSync(path.join(workDir, "danger-bypass-explicit-env")),
+        "explicit bypass did not remove target directory"
+      );
+      return {
+        score: 1,
+        assertions: [
+          "dangerous Bash denied in default mode without approval",
+          "dangerous Bash denied in acceptEdits mode",
+          "dangerous Bash denied in dontAsk mode",
+          "dangerous Bash denied in plan mode",
+          "dangerous Bash bypassPermissions required explicit env approval",
+          "dangerous Bash bypassPermissions executed only with explicit env approval",
+          "dangerous permission matrix preserved denied sentinels",
+          "dangerous permission matrix emitted stream-json tool evidence"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+    }
+  );
+}
+
 async function scenarioBarePromptHeadless() {
   return await withTempWorkspace("bare-prompt", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -3950,6 +4167,7 @@ async function main() {
     ["text output protocol", scenarioTextOutputProtocol],
     ["json output protocol", scenarioJsonOutputProtocol],
     ["tool policy allow deny", scenarioToolPolicyAllowDeny],
+    ["dangerous permission matrix", scenarioDangerousPermissionMatrix],
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],
     ["slash resume search TTY", scenarioSlashResumeSearchTty],

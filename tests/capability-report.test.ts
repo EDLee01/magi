@@ -114,6 +114,7 @@ describe("capability report", () => {
         resumePickerTtySeen: false,
         slashResumeSearchTtySeen: false,
         toolPolicySeen: false,
+        dangerousPermissionMatrixSeen: false,
         slashSuggestionPromptSeen: false,
         tuiVisualContractSeen: false
       }),
@@ -157,6 +158,7 @@ describe("capability report", () => {
         "resumePickerTtySeen=false",
         "slashResumeSearchTtySeen=false",
         "toolPolicySeen=false",
+        "dangerousPermissionMatrixSeen=false",
         "slashSuggestionPromptSeen=false",
         "tuiVisualContractSeen=false",
         "toolCallCount=3",
@@ -1000,6 +1002,7 @@ function harnessReport(input: {
   resumePickerTtySeen?: boolean;
   slashResumeSearchTtySeen?: boolean;
   toolPolicySeen?: boolean;
+  dangerousPermissionMatrixSeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
   tuiVisualContractSeen?: boolean;
 }): Record<string, unknown> {
@@ -1019,7 +1022,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 130,
+      assertions: input.assertions ?? 140,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1059,6 +1062,7 @@ function harnessReport(input: {
                   ...resumePickerTtyAssertions(input),
                   ...slashResumeSearchTtyAssertions(input),
                   ...toolPolicyAssertions(input),
+                  ...dangerousPermissionMatrixAssertions(input),
                   ...slashSuggestionPromptAssertions(input),
                   ...tuiVisualContractAssertions(input)
                 ],
@@ -1918,6 +1922,23 @@ function toolPolicyAssertions(input: { toolPolicySeen?: boolean }): string[] {
         "dangerous Bash denied outside bypassPermissions",
         "bypassPermissions dangerous Bash required explicit env approval",
         "bypassPermissions dangerous Bash ran with explicit env approval"
+      ];
+}
+
+function dangerousPermissionMatrixAssertions(input: {
+  dangerousPermissionMatrixSeen?: boolean;
+}): string[] {
+  return input.dangerousPermissionMatrixSeen === false
+    ? []
+    : [
+        "dangerous Bash denied in default mode without approval",
+        "dangerous Bash denied in acceptEdits mode",
+        "dangerous Bash denied in dontAsk mode",
+        "dangerous Bash denied in plan mode",
+        "dangerous Bash bypassPermissions required explicit env approval",
+        "dangerous Bash bypassPermissions executed only with explicit env approval",
+        "dangerous permission matrix preserved denied sentinels",
+        "dangerous permission matrix emitted stream-json tool evidence"
       ];
 }
 

@@ -42,7 +42,6 @@ Not yet fully covered:
 
 - Resume picker visual polish beyond the core search/no-results/cancel flow.
 - TUI keyboard navigation polish.
-- Full dangerous-tool semantics across every permission mode.
 - Real provider-driven tool loop for non-trivial code changes.
 
 ## Clean-room Rules for Testing
@@ -398,6 +397,9 @@ Current status: implemented and black-box gated for core CLI/File/Bash paths.
 with CLI allow/deny rules. `dontAsk` denies non-read-only tools without writing,
 `acceptEdits` allows ordinary edits, and dangerous Bash is denied unless
 `bypassPermissions` plus `MAGI_APPROVE_DANGEROUS_COMMANDS=1` are both present.
+The dangerous Bash matrix is gated across `default`, `acceptEdits`, `dontAsk`,
+`plan`, and both bypass-without-env and bypass-with-explicit-env paths, with
+stream-json tool evidence and sentinel preservation checks.
 Long-tail MCP/browser permission parity should keep using the same policy model
 as those tools mature.
 
@@ -788,12 +790,10 @@ Highest priority gaps:
 2. Broader visual regression coverage across full PTY transcripts.
 3. Resume picker visual polish beyond core search/no-results/cancel behavior.
 4. TUI keyboard navigation polish.
-5. Full dangerous-tool semantics across every permission mode.
 
 Recommended next implementation phase:
 
 - Expand full PTY transcript snapshot coverage.
 - Tighten TUI keyboard navigation contracts.
-- Extend dangerous-tool permission matrix coverage.
 - Keep real-provider tool-loop checks opt-in until credentials and upstream
   variability can be isolated from default CI.
