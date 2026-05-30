@@ -360,6 +360,14 @@ describe("capability report", () => {
         conflictedMergeContextSeen: false,
         conflictedMergeResolved: false,
         resolvedMergeContextSeen: false,
+        multiObjectiveConflictDetected: false,
+        multiObjectiveUserChoiceResolved: false,
+        multiObjectiveChoiceContextSeen: false,
+        multiObjectiveRejectedBranchExcluded: false,
+        multiObjectiveCompatibleBranchPreserved: false,
+        multiObjectiveReadBeforeWriteGuardSeen: false,
+        multiObjectiveReleaseFilesUpdated: false,
+        multiObjectiveExecutionVerified: false,
         assertions: 3,
         filesVerified: 1,
         toolCallCount: 2,
@@ -408,7 +416,15 @@ describe("capability report", () => {
         "conflictedMergeNeedsRevision=false",
         "conflictedMergeContextSeen=false",
         "conflictedMergeResolved=false",
-        "resolvedMergeContextSeen=false"
+        "resolvedMergeContextSeen=false",
+        "multiObjectiveConflictDetected=false",
+        "multiObjectiveUserChoiceResolved=false",
+        "multiObjectiveChoiceContextSeen=false",
+        "multiObjectiveRejectedBranchExcluded=false",
+        "multiObjectiveCompatibleBranchPreserved=false",
+        "multiObjectiveReadBeforeWriteGuardSeen=false",
+        "multiObjectiveReleaseFilesUpdated=false",
+        "multiObjectiveExecutionVerified=false"
       ])
     );
   });
@@ -1409,6 +1425,14 @@ function goalPlanReport(
     conflictedMergeContextSeen: boolean;
     conflictedMergeResolved: boolean;
     resolvedMergeContextSeen: boolean;
+    multiObjectiveConflictDetected: boolean;
+    multiObjectiveUserChoiceResolved: boolean;
+    multiObjectiveChoiceContextSeen: boolean;
+    multiObjectiveRejectedBranchExcluded: boolean;
+    multiObjectiveCompatibleBranchPreserved: boolean;
+    multiObjectiveReadBeforeWriteGuardSeen: boolean;
+    multiObjectiveReleaseFilesUpdated: boolean;
+    multiObjectiveExecutionVerified: boolean;
     blockedGoalPersisted: boolean;
     goalCompleted: boolean;
     assertions: number;
@@ -1422,9 +1446,9 @@ function goalPlanReport(
       name: "goal-plan-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 39,
-      filesVerified: overrides.filesVerified ?? 7,
-      toolCallCount: overrides.toolCallCount ?? 19,
+      assertions: overrides.assertions ?? 46,
+      filesVerified: overrides.filesVerified ?? 12,
+      toolCallCount: overrides.toolCallCount ?? 31,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
     }),
     scenarios: [
@@ -1446,9 +1470,9 @@ function goalPlanReport(
           ),
           toolCounts: {
             FileWrite: 3,
-            ExitPlanMode: 4,
-            FileRead: 5,
-            FilePatch: 4
+            ExitPlanMode: 16,
+            FileRead: 8,
+            FilePatch: 9
           },
           activeGoalContextSeen: true,
           completedGoalSuppressed: true,
@@ -1485,6 +1509,14 @@ function goalPlanReport(
           conflictedMergeContextSeen: true,
           conflictedMergeResolved: true,
           resolvedMergeContextSeen: true,
+          multiObjectiveConflictDetected: true,
+          multiObjectiveUserChoiceResolved: true,
+          multiObjectiveChoiceContextSeen: true,
+          multiObjectiveRejectedBranchExcluded: true,
+          multiObjectiveCompatibleBranchPreserved: true,
+          multiObjectiveReadBeforeWriteGuardSeen: true,
+          multiObjectiveReleaseFilesUpdated: true,
+          multiObjectiveExecutionVerified: true,
           blockedGoalPersisted: true,
           goalCompleted: true,
           ...overrides

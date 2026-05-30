@@ -894,9 +894,9 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 39) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 7) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 19) failures.push(`toolCallCount=${toolCallCount}`);
+  if (assertions < 46) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 12) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 31) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.activeGoalContextSeen !== true) failures.push("activeGoalContextSeen=false");
   if (details.completedGoalSuppressed !== true) failures.push("completedGoalSuppressed=false");
@@ -969,6 +969,30 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
   if (details.resolvedMergeContextSeen !== true) {
     failures.push("resolvedMergeContextSeen=false");
   }
+  if (details.multiObjectiveConflictDetected !== true) {
+    failures.push("multiObjectiveConflictDetected=false");
+  }
+  if (details.multiObjectiveUserChoiceResolved !== true) {
+    failures.push("multiObjectiveUserChoiceResolved=false");
+  }
+  if (details.multiObjectiveChoiceContextSeen !== true) {
+    failures.push("multiObjectiveChoiceContextSeen=false");
+  }
+  if (details.multiObjectiveRejectedBranchExcluded !== true) {
+    failures.push("multiObjectiveRejectedBranchExcluded=false");
+  }
+  if (details.multiObjectiveCompatibleBranchPreserved !== true) {
+    failures.push("multiObjectiveCompatibleBranchPreserved=false");
+  }
+  if (details.multiObjectiveReadBeforeWriteGuardSeen !== true) {
+    failures.push("multiObjectiveReadBeforeWriteGuardSeen=false");
+  }
+  if (details.multiObjectiveReleaseFilesUpdated !== true) {
+    failures.push("multiObjectiveReleaseFilesUpdated=false");
+  }
+  if (details.multiObjectiveExecutionVerified !== true) {
+    failures.push("multiObjectiveExecutionVerified=false");
+  }
   if (details.blockedGoalPersisted !== true) failures.push("blockedGoalPersisted=false");
   if (details.goalCompleted !== true) failures.push("goalCompleted=false");
   return {
@@ -1016,6 +1040,16 @@ function checkGoalPlanReport(report: Record<string, unknown>): CapabilityCheck {
       conflictedMergeContextSeen: details.conflictedMergeContextSeen === true,
       conflictedMergeResolved: details.conflictedMergeResolved === true,
       resolvedMergeContextSeen: details.resolvedMergeContextSeen === true,
+      multiObjectiveConflictDetected: details.multiObjectiveConflictDetected === true,
+      multiObjectiveUserChoiceResolved: details.multiObjectiveUserChoiceResolved === true,
+      multiObjectiveChoiceContextSeen: details.multiObjectiveChoiceContextSeen === true,
+      multiObjectiveRejectedBranchExcluded: details.multiObjectiveRejectedBranchExcluded === true,
+      multiObjectiveCompatibleBranchPreserved:
+        details.multiObjectiveCompatibleBranchPreserved === true,
+      multiObjectiveReadBeforeWriteGuardSeen:
+        details.multiObjectiveReadBeforeWriteGuardSeen === true,
+      multiObjectiveReleaseFilesUpdated: details.multiObjectiveReleaseFilesUpdated === true,
+      multiObjectiveExecutionVerified: details.multiObjectiveExecutionVerified === true,
       blockedGoalPersisted: details.blockedGoalPersisted === true,
       goalCompleted: details.goalCompleted === true
     },

@@ -33,6 +33,10 @@ const convergenceSessionId = "goal-plan-eval-convergence";
 const conflictAlphaSessionId = "goal-plan-eval-conflict-alpha";
 const conflictBetaSessionId = "goal-plan-eval-conflict-beta";
 const conflictMergeSessionId = "goal-plan-eval-conflict-merge";
+const multiObjectivePerformanceSessionId = "goal-plan-eval-multi-objective-performance";
+const multiObjectiveCompatibilitySessionId = "goal-plan-eval-multi-objective-compatibility";
+const multiObjectiveSecuritySessionId = "goal-plan-eval-multi-objective-security";
+const multiObjectiveSessionId = "goal-plan-eval-multi-objective-release";
 const activeGoalObjective = "inspect Goal/Plan lifecycle eval context";
 const blockedGoalObjective = "wait for Goal/Plan blocked audit";
 const completedGoalObjective = "complete Goal/Plan lifecycle eval";
@@ -88,6 +92,20 @@ const conflictBetaPlanText = [
   "1. Read src/config.ts",
   "2. Patch src/config.ts to use beta endpoint"
 ].join("\n");
+const multiObjectivePerformancePlanText = [
+  "1. Patch release/config.json to enable aggressive performance mode"
+].join("\n");
+const multiObjectiveCompatibilityPlanText = [
+  "1. Read release/compatibility.md before editing release/config.json",
+  "2. Patch release/config.json to preserve legacy compatibility mode",
+  "3. Patch docs/release.md with compatibility launch note",
+  "4. Read tests/release.test.ts",
+  "5. Patch tests/release.test.ts to assert compatibility mode"
+].join("\n");
+const multiObjectiveSecurityPlanText = [
+  "1. Read release/security.md",
+  "2. Patch release/security-policy.md with required MFA gate"
+].join("\n");
 const inheritedPlanSourcePath = "inherited-plan-source.txt";
 const inheritedPlanOutputPath = "inherited-plan-output.txt";
 const inheritedPlanSourceContent = "source inspected before inherited plan write\n";
@@ -112,6 +130,51 @@ const convergenceTestsBefore =
 const convergenceTestsAfter =
   'import { routeAlias, routeMode } from "../src/routes";\n\n' +
   'test("route mode", () => {\n  expect(routeMode).toBe("stable");\n  expect(routeAlias).toBe("converged");\n});\n';
+const releaseConfigPath = "release/config.json";
+const releaseCompatibilityPath = "release/compatibility.md";
+const releaseSecurityPath = "release/security.md";
+const releaseSecurityPolicyPath = "release/security-policy.md";
+const releaseDocsPath = "docs/release.md";
+const releaseTestsPath = "tests/release.test.ts";
+const releaseConfigBefore = [
+  "{",
+  '  "rollout": "balanced",',
+  '  "compatibilityMode": false',
+  "}",
+  ""
+].join("\n");
+const releaseConfigAfter = [
+  "{",
+  '  "rollout": "compatibility",',
+  '  "compatibilityMode": true',
+  "}",
+  ""
+].join("\n");
+const releaseCompatibilityContent = "compatibility memo: keep legacy API contracts\n";
+const releaseSecurityContent = "security memo: require MFA gate before release\n";
+const releaseSecurityPolicyBefore = "release gate: manual review\n";
+const releaseSecurityPolicyAfter = "release gate: MFA required\n";
+const releaseDocsBefore = "# Release\n\n- rollout: balanced\n";
+const releaseDocsAfter = "# Release\n\n- rollout: balanced\n- compatibility launch note: legacy contracts preserved\n";
+const releaseTestsBefore = [
+  'const releaseMode = "balanced";',
+  'const securityGate = "manual";',
+  "",
+  'test("release mode", () => {',
+  '  expect(releaseMode).toBe("balanced");',
+  "});",
+  ""
+].join("\n");
+const releaseTestsAfter = [
+  'const releaseMode = "compatibility";',
+  'const securityGate = "MFA required";',
+  "",
+  'test("release mode", () => {',
+  '  expect(releaseMode).toBe("compatibility");',
+  '  expect(securityGate).toBe("MFA required");',
+  "});",
+  ""
+].join("\n");
 
 let harnessReport;
 
@@ -145,7 +208,15 @@ try {
     multiBranchConvergenceContextSeen: false,
     multiBranchConvergenceExecuted: false,
     conflictedMergeContextSeen: false,
-    resolvedMergeContextSeen: false
+    resolvedMergeContextSeen: false,
+    multiObjectiveConflictDetected: false,
+    multiObjectiveUserChoiceResolved: false,
+    multiObjectiveChoiceContextSeen: false,
+    multiObjectiveRejectedBranchExcluded: false,
+    multiObjectiveCompatibleBranchPreserved: false,
+    multiObjectiveReadBeforeWriteGuardSeen: false,
+    multiObjectiveReleaseFilesUpdated: false,
+    multiObjectiveExecutionVerified: false
   };
   const provider = await startProvider({ routeRequest: createRouter(state) });
   try {
@@ -163,6 +234,13 @@ try {
     writeFileSync(path.join(workDir, convergenceDocsPath), convergenceDocsBefore, "utf8");
     writeFileSync(path.join(workDir, convergenceApiPath), convergenceApiBefore, "utf8");
     writeFileSync(path.join(workDir, convergenceTestsPath), convergenceTestsBefore, "utf8");
+    mkdirSync(path.join(workDir, "release"), { recursive: true });
+    writeFileSync(path.join(workDir, releaseConfigPath), releaseConfigBefore, "utf8");
+    writeFileSync(path.join(workDir, releaseCompatibilityPath), releaseCompatibilityContent, "utf8");
+    writeFileSync(path.join(workDir, releaseSecurityPath), releaseSecurityContent, "utf8");
+    writeFileSync(path.join(workDir, releaseSecurityPolicyPath), releaseSecurityPolicyBefore, "utf8");
+    writeFileSync(path.join(workDir, releaseDocsPath), releaseDocsBefore, "utf8");
+    writeFileSync(path.join(workDir, releaseTestsPath), releaseTestsBefore, "utf8");
 
     await runCli(
       ["--session-id", sessionId, "--model", "main", "-p", "Prepare Goal/Plan eval session."],
@@ -341,6 +419,9 @@ try {
       tools.executeRegisteredTool
     );
     const conflictedMerge = await runConflictedMergeFlow(tools.executeRegisteredTool);
+    const multiObjectiveChoice = await runMultiObjectiveConflictChoiceFlow(
+      tools.executeRegisteredTool
+    );
     const planRevisionChainLinked = assertPlanRevisionChainLinked(
       planRevision.revisionPlanId,
       planRevision.secondRevisionPlanId,
@@ -432,6 +513,26 @@ try {
     );
     assert(state.conflictedMergeContextSeen, "provider did not see conflicted merge context");
     assert(state.resolvedMergeContextSeen, "provider did not see resolved merge context");
+    assert(
+      state.multiObjectiveChoiceContextSeen,
+      "provider did not see multi-objective choice context"
+    );
+    assert(
+      state.multiObjectiveRejectedBranchExcluded,
+      "provider did not exclude rejected multi-objective branch"
+    );
+    assert(
+      state.multiObjectiveCompatibleBranchPreserved,
+      "provider did not preserve compatible multi-objective branch"
+    );
+    assert(
+      state.multiObjectiveReadBeforeWriteGuardSeen,
+      "provider did not observe multi-objective read-before-write guard"
+    );
+    assert(
+      state.multiObjectiveExecutionVerified,
+      "provider did not execute selected multi-objective plan"
+    );
     assert(state.crossSessionAdoptedPlanContextSeen, "provider did not see adopted plan context");
 
     const toolCounts = mergeToolCounts(
@@ -439,7 +540,8 @@ try {
       planRevision.toolCounts,
       parallelPlans.toolCounts,
       multiBranchConvergence.toolCounts,
-      conflictedMerge.toolCounts
+      conflictedMerge.toolCounts,
+      multiObjectiveChoice.toolCounts
     );
     const assertions = [
       "active goal status visible in CLI",
@@ -480,7 +582,14 @@ try {
       "conflicting plan merge persisted as needs_revision",
       "conflicting merge context included conflict target and source steps",
       "conflicting merge resolved with explicit user choice",
-      "resolved merge context included chosen conflict step only"
+      "resolved merge context included chosen conflict step only",
+      "multi-objective release plans merged into needs_revision",
+      "multi-objective conflict target detected for release config",
+      "multi-objective user choice resolved compatibility over performance",
+      "multi-objective resolved context excluded rejected performance branch",
+      "multi-objective compatible security branch stayed in final plan",
+      "multi-objective read-before-write guard blocked early config patch",
+      "multi-objective release plan executed selected source docs and tests"
     ];
     const filesVerified = [
       "state/goals.json",
@@ -490,7 +599,11 @@ try {
       inheritedPlanOutputPath,
       convergenceDocsPath,
       convergenceApiPath,
-      convergenceTestsPath
+      convergenceTestsPath,
+      releaseConfigPath,
+      releaseSecurityPolicyPath,
+      releaseDocsPath,
+      releaseTestsPath
     ];
 
     const report = harnessReport.buildHarnessReport({
@@ -543,6 +656,17 @@ try {
             conflictedMergeContextSeen: state.conflictedMergeContextSeen,
             conflictedMergeResolved: conflictedMerge.resolved,
             resolvedMergeContextSeen: state.resolvedMergeContextSeen,
+            multiObjectiveConflictDetected: multiObjectiveChoice.conflictDetected,
+            multiObjectiveUserChoiceResolved: multiObjectiveChoice.resolved,
+            multiObjectiveChoiceContextSeen: state.multiObjectiveChoiceContextSeen,
+            multiObjectiveRejectedBranchExcluded:
+              state.multiObjectiveRejectedBranchExcluded,
+            multiObjectiveCompatibleBranchPreserved:
+              state.multiObjectiveCompatibleBranchPreserved,
+            multiObjectiveReadBeforeWriteGuardSeen:
+              state.multiObjectiveReadBeforeWriteGuardSeen,
+            multiObjectiveReleaseFilesUpdated: state.multiObjectiveReleaseFilesUpdated,
+            multiObjectiveExecutionVerified: state.multiObjectiveExecutionVerified,
             blockedGoalPersisted,
             goalCompleted
           }
@@ -566,6 +690,7 @@ function createRouter(state) {
   let planTurns = 0;
   let inheritedPlanExecutionTurns = 0;
   let convergenceExecutionTurns = 0;
+  let multiObjectiveExecutionTurns = 0;
   let deviationBlockCount = 0;
   return ({ latestUser, systemPrompt, transcript, toolNames }) => {
     if (latestUser.includes("Prepare Goal/Plan eval session")) {
@@ -1009,6 +1134,207 @@ function createRouter(state) {
       );
       state.resolvedMergeContextSeen = true;
       return messageText("Resolved merge plan context is present.");
+    }
+
+    if (latestUser.includes("Verify multi-objective release choice context")) {
+      assert(systemPrompt.includes("<session_plan_context>"), "multi-objective context missing");
+      assert(systemPrompt.includes("Status: approved"), "multi-objective resolved status missing");
+      assert(systemPrompt.includes("Resolved from plan:"), "multi-objective resolved source missing");
+      assert(
+        systemPrompt.includes("Resolved with choice plan:"),
+        "multi-objective resolved choice missing"
+      );
+      assert(
+        systemPrompt.includes("Resolved conflict targets: release/config.json"),
+        "multi-objective conflict target missing"
+      );
+      assert(
+        systemPrompt.includes("Patch release/config.json to preserve legacy compatibility mode"),
+        "multi-objective chosen compatibility step missing"
+      );
+      assert(
+        !systemPrompt.includes("Patch release/config.json to enable aggressive performance mode"),
+        "multi-objective rejected performance step leaked"
+      );
+      assert(
+        systemPrompt.includes("Read release/security.md"),
+        "multi-objective compatible security read step missing"
+      );
+      assert(
+        systemPrompt.includes("Patch release/security-policy.md with required MFA gate"),
+        "multi-objective compatible security patch step missing"
+      );
+      state.multiObjectiveChoiceContextSeen = true;
+      state.multiObjectiveRejectedBranchExcluded = true;
+      state.multiObjectiveCompatibleBranchPreserved = true;
+      return messageText("Multi-objective release choice context is present.");
+    }
+
+    if (latestUser.includes("Execute multi-objective release choice plan")) {
+      multiObjectiveExecutionTurns += 1;
+      assert(
+        systemPrompt.includes("<session_plan_context>"),
+        "multi-objective execution context missing"
+      );
+      assert(
+        systemPrompt.includes("Read release/compatibility.md before editing release/config.json"),
+        "multi-objective execution missed read-before-write step"
+      );
+      assert(
+        systemPrompt.includes("Patch release/security-policy.md with required MFA gate"),
+        "multi-objective execution missed security compatible step"
+      );
+      assert(
+        toolNames.includes("FileRead"),
+        "FileRead was not available for multi-objective execution"
+      );
+      assert(
+        toolNames.includes("FilePatch"),
+        "FilePatch was not available for multi-objective execution"
+      );
+      if (multiObjectiveExecutionTurns === 1) {
+        return toolResponse([
+          toolCall("multi-objective-config-too-soon", "FilePatch", {
+            file_path: releaseConfigPath,
+            patch: [
+              "@@",
+              '-  "rollout": "balanced",',
+              '-  "compatibilityMode": false',
+              '+  "rollout": "compatibility",',
+              '+  "compatibilityMode": true'
+            ].join("\n")
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 2) {
+        assert(
+          transcript.includes("Plan execution guard"),
+          "multi-objective guard feedback was not visible"
+        );
+        assert(
+          transcript.includes(`Required first: FileRead ${releaseCompatibilityPath}`),
+          "multi-objective guard did not name compatibility read"
+        );
+        assert(
+          readFileSync(path.join(workDir, releaseConfigPath), "utf8") === releaseConfigBefore,
+          "multi-objective guard allowed early config patch"
+        );
+        state.multiObjectiveReadBeforeWriteGuardSeen = true;
+        return toolResponse([
+          toolCall("multi-objective-compatibility-read", "FileRead", {
+            file_path: releaseCompatibilityPath
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 3) {
+        assert(
+          transcript.includes(releaseCompatibilityContent.trim()),
+          "multi-objective compatibility read result was not visible"
+        );
+        return toolResponse([
+          toolCall("multi-objective-config-patch", "FilePatch", {
+            file_path: releaseConfigPath,
+            patch: [
+              "@@",
+              '-  "rollout": "balanced",',
+              '-  "compatibilityMode": false',
+              '+  "rollout": "compatibility",',
+              '+  "compatibilityMode": true'
+            ].join("\n")
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 4) {
+        assert(
+          readFileSync(path.join(workDir, releaseConfigPath), "utf8") === releaseConfigAfter,
+          "multi-objective selected config patch did not land"
+        );
+        return toolResponse([
+          toolCall("multi-objective-release-docs-patch", "FilePatch", {
+            file_path: releaseDocsPath,
+            patch: [
+              "@@",
+              "-# Release",
+              "-",
+              "-- rollout: balanced",
+              "+# Release",
+              "+",
+              "+- rollout: balanced",
+              "+- compatibility launch note: legacy contracts preserved"
+            ].join("\n")
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 5) {
+        assert(
+          readFileSync(path.join(workDir, releaseDocsPath), "utf8") === releaseDocsAfter,
+          "multi-objective release docs patch did not land"
+        );
+        return toolResponse([
+          toolCall("multi-objective-security-read", "FileRead", {
+            file_path: releaseSecurityPath
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 6) {
+        assert(
+          transcript.includes(releaseSecurityContent.trim()),
+          "multi-objective security read result was not visible"
+        );
+        return toolResponse([
+          toolCall("multi-objective-security-policy-patch", "FilePatch", {
+            file_path: releaseSecurityPolicyPath,
+            patch: [
+              "@@",
+              "-release gate: manual review",
+              "+release gate: MFA required"
+            ].join("\n")
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 7) {
+        assert(
+          readFileSync(path.join(workDir, releaseSecurityPolicyPath), "utf8") ===
+            releaseSecurityPolicyAfter,
+          "multi-objective security policy patch did not land"
+        );
+        return toolResponse([
+          toolCall("multi-objective-release-tests-read", "FileRead", {
+            file_path: releaseTestsPath
+          })
+        ]);
+      }
+      if (multiObjectiveExecutionTurns === 8) {
+        assert(
+          transcript.includes('const releaseMode = "balanced";'),
+          "multi-objective release test read result was not visible"
+        );
+        return toolResponse([
+          toolCall("multi-objective-release-tests-patch", "FilePatch", {
+            file_path: releaseTestsPath,
+            patch: [
+              "@@",
+              '-const releaseMode = "balanced";',
+              '-const securityGate = "manual";',
+              '+const releaseMode = "compatibility";',
+              '+const securityGate = "MFA required";',
+              "@@",
+              " test(\"release mode\", () => {",
+              '-  expect(releaseMode).toBe("balanced");',
+              '+  expect(releaseMode).toBe("compatibility");',
+              '+  expect(securityGate).toBe("MFA required");',
+              " });"
+            ].join("\n")
+          })
+        ]);
+      }
+      assert(
+        readFileSync(path.join(workDir, releaseTestsPath), "utf8") === releaseTestsAfter,
+        "multi-objective release test patch did not land"
+      );
+      state.multiObjectiveReleaseFilesUpdated = true;
+      state.multiObjectiveExecutionVerified = true;
+      return messageText("Multi-objective release execution complete.");
     }
 
     return messageText("OK");
@@ -1864,6 +2190,212 @@ async function runConflictedMergeFlow(executeRegisteredTool) {
   );
 
   return { needsRevision: true, resolved: true, toolCounts: { ExitPlanMode: 2 } };
+}
+
+async function runMultiObjectiveConflictChoiceFlow(executeRegisteredTool) {
+  await runCli(
+    [
+      "--session-id",
+      multiObjectivePerformanceSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare multi-objective performance plan session."
+    ],
+    "seed multi-objective performance session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      multiObjectiveCompatibilitySessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare multi-objective compatibility plan session."
+    ],
+    "seed multi-objective compatibility session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      multiObjectiveSecuritySessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare multi-objective security plan session."
+    ],
+    "seed multi-objective security session"
+  );
+  await runCli(
+    [
+      "--session-id",
+      multiObjectiveSessionId,
+      "--model",
+      "main",
+      "-p",
+      "Prepare multi-objective release target session."
+    ],
+    "seed multi-objective target session"
+  );
+
+  const performance = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: multiObjectivePerformanceSessionId,
+    toolUseId: "approve-multi-objective-performance-plan",
+    plan: multiObjectivePerformancePlanText
+  });
+  const compatibility = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: multiObjectiveCompatibilitySessionId,
+    toolUseId: "approve-multi-objective-compatibility-plan",
+    plan: multiObjectiveCompatibilityPlanText
+  });
+  const security = await approvePlanWithTool({
+    executeRegisteredTool,
+    sessionId: multiObjectiveSecuritySessionId,
+    toolUseId: "approve-multi-objective-security-plan",
+    plan: multiObjectiveSecurityPlanText
+  });
+
+  const sourcePlanIds = [performance.planId, compatibility.planId, security.planId];
+  const merged = await runCli(
+    ["plan", "merge", ...sourcePlanIds, "--session-id", multiObjectiveSessionId],
+    "merge multi-objective release plans"
+  );
+  assert(merged.includes("Plan merged:"), "multi-objective plan merge did not confirm");
+  const mergePlanId = parseMergedPlanId(merged);
+  assert(
+    merged.includes(`Merged from plans: ${sourcePlanIds.join(", ")}`),
+    "multi-objective plan merge missed all sources"
+  );
+
+  const status = await runCli(
+    ["plan", "--session-id", multiObjectiveSessionId],
+    "multi-objective conflicted status"
+  );
+  assert(status.includes("Status: needs_revision"), "multi-objective merge should need revision");
+  assert(status.includes("Merge conflicts: 1"), "multi-objective merge missed conflict count");
+  assert(
+    status.includes("Conflict target: release/config.json"),
+    "multi-objective merge missed release config conflict"
+  );
+  assert(
+    status.includes("Patch release/config.json to enable aggressive performance mode"),
+    "multi-objective merge missed performance branch"
+  );
+  assert(
+    status.includes("Patch release/config.json to preserve legacy compatibility mode"),
+    "multi-objective merge missed compatibility branch"
+  );
+  assert(
+    status.includes("Patch release/security-policy.md with required MFA gate"),
+    "multi-objective merge missed compatible security branch"
+  );
+
+  const resolved = await runCli(
+    [
+      "plan",
+      "resolve",
+      mergePlanId,
+      "--choose",
+      compatibility.planId,
+      "--session-id",
+      multiObjectiveSessionId
+    ],
+    "resolve multi-objective release choice"
+  );
+  assert(resolved.includes("Plan resolved:"), "multi-objective resolve did not confirm");
+  assert(resolved.includes("Status: approved"), "multi-objective resolved plan should be approved");
+  assert(
+    resolved.includes(`Resolved from plan: ${mergePlanId}`),
+    "multi-objective resolved output missed source plan"
+  );
+  assert(
+    resolved.includes(`Resolved with choice plan: ${compatibility.planId}`),
+    "multi-objective resolved output missed choice plan"
+  );
+
+  const resolvedStatus = await runCli(
+    ["plan", "--session-id", multiObjectiveSessionId],
+    "multi-objective resolved status"
+  );
+  assert(
+    resolvedStatus.includes("Status: approved"),
+    "multi-objective resolved status should be approved"
+  );
+  assert(
+    resolvedStatus.includes("Patch release/config.json to preserve legacy compatibility mode"),
+    "multi-objective resolved status missed selected compatibility config step"
+  );
+  assert(
+    !resolvedStatus.includes("Patch release/config.json to enable aggressive performance mode"),
+    "multi-objective resolved status kept rejected performance step"
+  );
+  assert(
+    resolvedStatus.includes("Patch release/security-policy.md with required MFA gate"),
+    "multi-objective resolved status missed compatible security step"
+  );
+
+  const context = await runCli(
+    [
+      "--session-id",
+      multiObjectiveSessionId,
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Verify multi-objective release choice context."
+    ],
+    "multi-objective release choice context"
+  );
+  assert(
+    context.includes("Multi-objective release choice context is present"),
+    "multi-objective release choice context failed"
+  );
+
+  const execution = await runCli(
+    [
+      "--session-id",
+      multiObjectiveSessionId,
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "main",
+      "--output-format",
+      "stream-json",
+      "-p",
+      "Execute multi-objective release choice plan."
+    ],
+    "multi-objective release choice execution"
+  );
+  assert(
+    execution.includes("Multi-objective release execution complete"),
+    "multi-objective release execution failed"
+  );
+  assert(
+    readFileSync(path.join(workDir, releaseConfigPath), "utf8") === releaseConfigAfter,
+    "multi-objective release config was not updated with selected choice"
+  );
+  assert(
+    readFileSync(path.join(workDir, releaseDocsPath), "utf8") === releaseDocsAfter,
+    "multi-objective release docs were not updated"
+  );
+  assert(
+    readFileSync(path.join(workDir, releaseSecurityPolicyPath), "utf8") ===
+      releaseSecurityPolicyAfter,
+    "multi-objective security policy was not updated"
+  );
+  assert(
+    readFileSync(path.join(workDir, releaseTestsPath), "utf8") === releaseTestsAfter,
+    "multi-objective release tests were not updated"
+  );
+
+  return {
+    conflictDetected: true,
+    resolved: true,
+    toolCounts: { ExitPlanMode: 3 }
+  };
 }
 
 async function approvePlanWithTool(input) {
