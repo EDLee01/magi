@@ -183,6 +183,12 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("TTY -r filtered sessions by typed query") &&
     assertionList.includes("TTY -r resumed selected session") &&
     assertionList.includes("non-TTY -r session list remains available");
+  const slashResumeSearchTtySeen =
+    assertionList.includes("slash /resume opened searchable session picker") &&
+    assertionList.includes("slash /resume initial query filtered sessions") &&
+    assertionList.includes("slash /resume Enter resumed selected session") &&
+    assertionList.includes("slash /resume no-results state rendered") &&
+    assertionList.includes("slash /resume Escape returned without resuming");
   const toolPolicySeen =
     assertionList.includes("--tools allow-list filtered exposed schemas") &&
     assertionList.includes("--tools allow-list denied hidden write execution") &&
@@ -200,7 +206,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 75) failures.push(`assertions=${assertions}`);
+  if (assertions < 80) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -214,6 +220,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!jsonOutputProtocolSeen) failures.push("jsonOutputProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
+  if (!slashResumeSearchTtySeen) failures.push("slashResumeSearchTtySeen=false");
   if (!toolPolicySeen) failures.push("toolPolicySeen=false");
   if (!slashSuggestionPromptSeen) failures.push("slashSuggestionPromptSeen=false");
   if (toolCallCount < 20) failures.push(`toolCallCount=${toolCallCount}`);
@@ -245,6 +252,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       jsonOutputProtocolSeen,
       barePromptHeadlessSeen,
       resumePickerTtySeen,
+      slashResumeSearchTtySeen,
       toolPolicySeen,
       slashSuggestionPromptSeen,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],

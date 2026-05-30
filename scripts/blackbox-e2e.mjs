@@ -494,6 +494,7 @@ async function runCliWithTtyIo({
   configDir,
   label,
   inputText,
+  waitForText = "resume sessions",
   timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS
 }) {
   console.log(`+ ${label}: runCli(${args.map((part) => JSON.stringify(part)).join(" ")})`);
@@ -515,7 +516,7 @@ async function runCliWithTtyIo({
   );
   try {
     await waitFor(
-      () => stripTerminalControls(harness.stdout()).includes("resume sessions"),
+      () => stripTerminalControls(harness.stdout()).includes(waitForText),
       label,
       timeoutMs
     ).catch((error) => {
@@ -524,6 +525,59 @@ async function runCliWithTtyIo({
       );
     });
     harness.input.write(inputText);
+    const result = await Promise.race([
+      promise,
+      sleep(timeoutMs).then(() => {
+        throw new Error(`${label} timed out waiting for completion\nSTDOUT:\n${harness.stdout()}`);
+      })
+    ]);
+    return {
+      ...result,
+      stdout: `${harness.stdout()}${result.stdout}`,
+      stderr: result.stderr
+    };
+  } finally {
+    harness.input.destroy();
+  }
+}
+
+async function runInteractiveCliWithTtySteps({
+  cwd,
+  configDir,
+  label,
+  steps,
+  timeoutMs = INTERACTIVE_TUI_TIMEOUT_MS
+}) {
+  console.log(`+ ${label}: runInteractiveCliWithTtySteps`);
+  const { runCli: runCliApi } = await import(pathToFileURL(cliPath).href);
+  const harness = createPromptHarness();
+  const promise = runCliApi(
+    ["--no-color"],
+    {
+      ...process.env,
+      MAGI_CONFIG_DIR: configDir,
+      MAGI_OPENAI_API_KEY: "test-key",
+      NO_COLOR: "1"
+    },
+    cwd,
+    {
+      stdin: harness.input,
+      stdout: harness.output
+    }
+  );
+  try {
+    for (const step of steps) {
+      await waitFor(
+        () => stripTerminalControls(harness.stdout()).includes(step.waitForText),
+        `${label}: ${step.waitForText}`,
+        step.timeoutMs ?? timeoutMs
+      ).catch((error) => {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}\nSTDOUT:\n${harness.stdout()}`
+        );
+      });
+      harness.input.write(step.inputText);
+    }
     const result = await Promise.race([
       promise,
       sleep(timeoutMs).then(() => {
@@ -2218,6 +2272,120 @@ async function scenarioResumePickerTty() {
   });
 }
 
+async function scenarioSlashResumeSearchTty() {
+  return await withTempWorkspace("slash-resume-search", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: () => messageText("Slash resume seed response.")
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      await runCli({
+        args: [
+          "--verbose",
+          "--model",
+          "main",
+          "--name",
+          "repair parser session",
+          "-p",
+          "seed parser session"
+        ],
+        cwd: workDir,
+        configDir,
+        label: "slash resume seed parser"
+      });
+      const targetOutput = await runCli({
+        args: [
+          "--verbose",
+          "--model",
+          "main",
+          "--name",
+          "audit billing export",
+          "-p",
+          "seed billing session"
+        ],
+        cwd: workDir,
+        configDir,
+        label: "slash resume seed billing"
+      });
+      const targetSessionId = parseTextSessionId(targetOutput);
+      const resumeResult = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "slash resume search TTY",
+        steps: [
+          { waitForText: "/help for commands", inputText: "/resume billing\r" },
+          { waitForText: "matching billing", inputText: "\r" },
+          { waitForText: `sessionId: ${targetSessionId}`, inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        resumeResult.exitCode === 0,
+        `slash resume search exited ${resumeResult.exitCode}\nSTDOUT:\n${resumeResult.stdout}\nSTDERR:\n${resumeResult.stderr}`
+      );
+      const resumeVisible = stripTerminalControls(`${resumeResult.stdout}\n${resumeResult.stderr}`);
+      assert(resumeVisible.includes("resume sessions"), "slash /resume picker title did not render");
+      assert(
+        resumeVisible.includes("matching billing"),
+        "slash /resume picker did not start with query filter"
+      );
+      assert(
+        resumeVisible.includes("audit billing export"),
+        "slash /resume picker did not show target title"
+      );
+      assert(
+        resumeVisible.includes(`sessionId: ${targetSessionId}`),
+        "slash /resume did not resume the selected session"
+      );
+
+      const noMatchResult = await runInteractiveCliWithTtySteps({
+        cwd: workDir,
+        configDir,
+        label: "slash resume no match cancel TTY",
+        steps: [
+          { waitForText: "/help for commands", inputText: "/resume no-such-session-token\r" },
+          { waitForText: "No matching sessions", inputText: "\x1b" },
+          { waitForText: "> ", inputText: "/exit\r" }
+        ],
+        timeoutMs: INTERACTIVE_TUI_TIMEOUT_MS
+      });
+      assert(
+        noMatchResult.exitCode === 0,
+        `slash resume no-match exited ${noMatchResult.exitCode}\nSTDOUT:\n${noMatchResult.stdout}\nSTDERR:\n${noMatchResult.stderr}`
+      );
+      const noMatchVisible = stripTerminalControls(
+        `${noMatchResult.stdout}\n${noMatchResult.stderr}`
+      );
+      assert(
+        noMatchVisible.includes("No matching sessions"),
+        "slash /resume picker did not show no-results state"
+      );
+      assert(
+        !noMatchVisible.includes("sessionId:"),
+        "slash /resume Escape path unexpectedly resumed a session"
+      );
+      return {
+        score: 1,
+        assertions: [
+          "slash /resume opened searchable session picker",
+          "slash /resume initial query filtered sessions",
+          "slash /resume Enter resumed selected session",
+          "slash /resume no-results state rendered",
+          "slash /resume Escape returned without resuming"
+        ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioRetryAndFallback() {
   return await withTempWorkspace("retry-fallback", async ({ root, configDir, workDir }) => {
     const providerLog = path.join(root, "provider-log.json");
@@ -3259,6 +3427,7 @@ async function main() {
     ["tool policy allow deny", scenarioToolPolicyAllowDeny],
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],
+    ["slash resume search TTY", scenarioSlashResumeSearchTty],
     ["retry fallback", scenarioRetryAndFallback],
     ["memory graph link", scenarioMemoryGraphLink],
     ["memory correction", scenarioMemoryCorrection],

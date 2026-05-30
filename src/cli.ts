@@ -203,7 +203,9 @@ async function runCliUnsafe(
           paths,
           env: runtimeEnv,
           modelAlias: parsed.modelAlias ?? "main",
-          sessionId: resumeSession?.id
+          sessionId: resumeSession?.id,
+          input: io.stdin,
+          output: io.stdout
         });
         return { exitCode, stdout: "", stderr: "" };
       } finally {

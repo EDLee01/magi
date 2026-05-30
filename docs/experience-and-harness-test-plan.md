@@ -19,7 +19,8 @@ Already covered by automated tests:
 - File read/search/write, shell guardrails, git summary.
 - SQLite sessions, jobs, audit, usage.
 - TUI basic startup, slash command dispatch, and `/` suggestion menu behavior.
-- Searchable `-r` TTY resume picker and non-TTY resume session list.
+- Searchable `-r` TTY resume picker, non-TTY resume session list, and
+  interactive `/resume <query>` picker search/cancel behavior.
 - CLI `--tools`, `--allowed-tools`, and `--disallowed-tools` schema filtering
   plus execution-time denial.
 - MCP list/call approval basics.
@@ -31,7 +32,7 @@ Already covered by automated tests:
 
 Not yet fully covered:
 
-- Richer `/resume` picker edge cases and visual polish.
+- Resume picker visual polish beyond the core search/no-results/cancel flow.
 - TUI keyboard navigation polish.
 - Broader stream-json parity for less common event types.
 - Full dangerous-tool semantics across every permission mode.
@@ -251,9 +252,10 @@ Acceptance:
 - Enter resumes selected session.
 - Esc returns to previous input.
 
-Current status: partially implemented. `/resume` with no args opens the same
-interactive picker in the TUI; richer no-results and escape-path coverage remain
-future polish.
+Current status: implemented and black-box gated for the core flow. `/resume`
+opens the same searchable interactive picker in the TUI; `/resume <query>`
+pre-filters by the provided query, Enter resumes the selected session, no-match
+renders the empty state, and Esc returns without resuming.
 
 ### C3. Session Picker Data
 

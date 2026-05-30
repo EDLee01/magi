@@ -25,6 +25,7 @@ import {
   formatTuiTranscriptStatus,
   formatTuiLiveEvent,
   MAGI_TEXT_HAT,
+  pickInteractiveSession,
   startInteractiveGoalCommand,
   startTuiLiveEventWriter
 } from "../src/tui.js";
@@ -47,7 +48,10 @@ function stripAnsi(str: string | undefined): string | undefined {
 function createTtyInput(): NodeJS.ReadStream {
   const stdin = new PassThrough() as unknown as NodeJS.ReadStream;
   stdin.isTTY = true;
-  stdin.setRawMode = () => stdin;
+  stdin.setRawMode = (mode: boolean) => {
+    stdin.isRaw = mode;
+    return stdin;
+  };
   return stdin;
 }
 import { toEventView } from "../src/events.js";
@@ -292,6 +296,38 @@ describe("TUI, slash commands, and session resume", () => {
           detail: "current"
         })
       );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("opens the interactive resume picker with an initial search query", async () => {
+    temp = makeTempRoot();
+    const store = SessionStore.open(getMagiPaths(temp.env));
+    try {
+      store.createSession({ id: "session-parser", title: "fix parser", cwd: "/repo/parser" });
+      store.createSession({ id: "session-auth", title: "review auth target", cwd: "/repo/auth" });
+      const input = createTtyInput();
+      const chunks: string[] = [];
+      const output = new PassThrough() as unknown as NodeJS.WriteStream;
+      output.isTTY = true;
+      output.columns = 80;
+      output.write = ((chunk: string | Uint8Array) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+        return true;
+      }) as NodeJS.WriteStream["write"];
+
+      const picker = pickInteractiveSession({
+        input,
+        output,
+        store,
+        initialFilter: "auth"
+      });
+      input.write("\r");
+
+      await expect(picker).resolves.toBe("session-auth");
+      expect(stripAnsi(chunks.join(""))).toContain("matching auth");
+      expect(stripAnsi(chunks.join(""))).toContain("review auth target");
     } finally {
       store.close();
     }

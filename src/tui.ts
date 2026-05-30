@@ -1,6 +1,6 @@
 import { Interface as ReadlinePromisesInterface } from "node:readline/promises";
 import readline from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
+import { stdin as defaultInput, stdout as defaultOutput } from "node:process";
 import { Writable } from "node:stream";
 
 import { AgentQueryEvent } from "./agent/query.js";
@@ -24,7 +24,7 @@ import {
 import { runHeadlessPrompt } from "./headless.js";
 import { ActiveInteractionRegistry } from "./interactions.js";
 import { MagiPaths } from "./paths.js";
-import { resolveModelPickerSelection, resolveSessionPickerSelection } from "./slash.js";
+import { resolveModelPickerSelection } from "./slash.js";
 import { parseCommandLine, registry } from "./commands/registry.js";
 import { isVimModeEnabled } from "./commands/vim.js";
 import {
@@ -92,7 +92,11 @@ export {
 } from "./tui/transcript.js";
 export { colorizeDiffLine, createTerminalUserQuestionResolver } from "./tui/interactions.js";
 
-function installRunningInterruptKeys(controller: AbortController): () => void {
+function installRunningInterruptKeys(
+  controller: AbortController,
+  input: NodeJS.ReadStream = defaultInput,
+  output: NodeJS.WriteStream = defaultOutput
+): () => void {
   const wasRaw = input.isRaw;
   let interrupted = false;
   const interrupt = () => {
@@ -122,7 +126,12 @@ export async function runInteractiveTerminal(inputConfig: {
   env?: NodeJS.ProcessEnv;
   modelAlias?: string;
   sessionId?: string;
+  input?: NodeJS.ReadStream;
+  output?: NodeJS.WriteStream;
 }): Promise<number> {
+  const input = inputConfig.input ?? defaultInput;
+  const output = inputConfig.output ?? defaultOutput;
+
   if (!input.isTTY || !output.isTTY) {
     output.write("Interactive terminal requires a TTY. Use magi -p <prompt> for headless mode.\n");
     return 2;
@@ -364,7 +373,23 @@ export async function runInteractiveTerminal(inputConfig: {
           continue;
         }
 
-        if ((parsed.name === "resume" || parsed.name === "sessions") && parsed.args.length === 0) {
+        if (parsed.name === "resume") {
+          const selected = await pickInteractiveSession({
+            input,
+            output,
+            store: inputConfig.store,
+            initialFilter: parsed.args.join(" ")
+          });
+          if (!selected) {
+            continue;
+          }
+          currentSessionId = selected;
+          output.write(formatSessionResume(inputConfig.store, selected) + "\n");
+          writeGoalBadge(output, inputConfig.paths, currentSessionId);
+          continue;
+        }
+
+        if (parsed.name === "sessions" && parsed.args.length === 0) {
           const selected = await pickInteractiveSession({
             input,
             output,
@@ -410,14 +435,6 @@ export async function runInteractiveTerminal(inputConfig: {
           const selected = parsePermissionMode(parsed.args[1]);
           if (selected) {
             currentPermissionMode = selected;
-          }
-        }
-        if (parsed.name === "resume" && parsed.args[0]) {
-          const selected = resolveSessionPickerSelection(inputConfig.store, parsed.args[0]);
-          if (selected) {
-            currentSessionId = selected.id;
-            output.write(formatSessionResume(inputConfig.store, selected.id) + "\n");
-            writeGoalBadge(output, inputConfig.paths, currentSessionId);
           }
         }
         const isGoalStartCommand = parsed.name === "goal" && isGoalCreationArgs(parsed.args);
@@ -548,7 +565,7 @@ export async function runInteractiveTerminal(inputConfig: {
       let result: Awaited<ReturnType<typeof runHeadlessPrompt>> | undefined;
       let stopInterruptKeys: (() => void) | undefined;
       try {
-        stopInterruptKeys = installRunningInterruptKeys(controller);
+        stopInterruptKeys = installRunningInterruptKeys(controller, input, output);
         result = await runHeadlessPrompt({
           prompt: promptWithImages,
           cwd: inputConfig.cwd,
@@ -660,7 +677,7 @@ export function startTuiLiveEventWriter(input: {
   spinner?: { pause(): void; resume(): void };
   signal?: AbortSignal;
 }): TuiLiveEventWriter {
-  const terminalOutput = input.output ?? output;
+  const terminalOutput = input.output ?? defaultOutput;
   let liveSessionId = input.sessionId;
   const afterEventId = input.afterEventId ?? 0;
   const handledInteractions = new Set<string>();
@@ -977,6 +994,7 @@ export async function pickInteractiveSession(input: {
   input: NodeJS.ReadStream;
   output: NodeJS.WriteStream;
   store: SessionStore;
+  initialFilter?: string;
 }): Promise<string | undefined> {
   const sessions = input.store.listSessions(50);
   if (sessions.length === 0) {
@@ -989,6 +1007,7 @@ export async function pickInteractiveSession(input: {
     title: "resume sessions",
     items: buildSessionPickerItems(input.store),
     emptyMessage: "No matching sessions",
+    initialFilter: input.initialFilter,
     footer: "↑↓ select · Tab complete · Enter resume · Esc cancel",
     maxVisibleItems: 10
   });

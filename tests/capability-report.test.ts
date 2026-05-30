@@ -108,6 +108,7 @@ describe("capability report", () => {
         jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
         resumePickerTtySeen: false,
+        slashResumeSearchTtySeen: false,
         toolPolicySeen: false,
         slashSuggestionPromptSeen: false
       }),
@@ -147,6 +148,7 @@ describe("capability report", () => {
         "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
         "resumePickerTtySeen=false",
+        "slashResumeSearchTtySeen=false",
         "toolPolicySeen=false",
         "slashSuggestionPromptSeen=false",
         "toolCallCount=3",
@@ -880,6 +882,7 @@ function harnessReport(input: {
   jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
   resumePickerTtySeen?: boolean;
+  slashResumeSearchTtySeen?: boolean;
   toolPolicySeen?: boolean;
   slashSuggestionPromptSeen?: boolean;
 }): Record<string, unknown> {
@@ -899,7 +902,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 77,
+      assertions: input.assertions ?? 82,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -936,6 +939,7 @@ function harnessReport(input: {
                   ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
                   ...resumePickerTtyAssertions(input),
+                  ...slashResumeSearchTtyAssertions(input),
                   ...toolPolicyAssertions(input),
                   ...slashSuggestionPromptAssertions(input)
                 ],
@@ -1070,6 +1074,18 @@ function resumePickerTtyAssertions(input: { resumePickerTtySeen?: boolean }): st
         "TTY -r filtered sessions by typed query",
         "TTY -r resumed selected session",
         "non-TTY -r session list remains available"
+      ];
+}
+
+function slashResumeSearchTtyAssertions(input: { slashResumeSearchTtySeen?: boolean }): string[] {
+  return input.slashResumeSearchTtySeen === false
+    ? []
+    : [
+        "slash /resume opened searchable session picker",
+        "slash /resume initial query filtered sessions",
+        "slash /resume Enter resumed selected session",
+        "slash /resume no-results state rendered",
+        "slash /resume Escape returned without resuming"
       ];
 }
 
