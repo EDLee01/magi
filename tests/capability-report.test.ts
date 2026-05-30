@@ -394,6 +394,21 @@ describe("capability report", () => {
         "ossSecurityGeneratedCookieSchemaUntouched=false",
         "ossSecurityVendorCookieShimUntouched=false",
         "ossSecurityAdvisoryVerified=false",
+        "ciFailureDiagnosisFixTask=false",
+        "ciFailureDiagnosisFixBashCalls != 2",
+        "ciFailureDiagnosisFixGlobCalls != 1",
+        "ciFailureDiagnosisFixGrepCalls != 1",
+        "ciFailureDiagnosisFixFileReadCalls != 8",
+        "ciFailureDiagnosisFixFilePatchCalls < 3",
+        "ciWorkflowReadBeforePatch=false",
+        "ciFailureLogReadBeforePatch=false",
+        "ciFailureReproduced=false",
+        "ciReleaseSlugFixed=false",
+        "ciProjectPathEncodingFixed=false",
+        "ciDocsChangelogUpdated=false",
+        "ciGeneratedRouteSchemaUntouched=false",
+        "ciVendorSlugShimUntouched=false",
+        "ciFailureVerified=false",
         "regressions=1"
       ])
     );
@@ -1151,6 +1166,24 @@ function modelTaskReport(
       vendorCookieShimUntouched: boolean;
       securityAdvisoryVerified: boolean;
     };
+    ciFailureDiagnosisFix: {
+      bashCalls: number;
+      globCalls: number;
+      grepCalls: number;
+      fileReadCalls: number;
+      filePatchCalls: number;
+      fileWriteCalls: number;
+      fileEditCalls: number;
+      ciWorkflowReadBeforePatch: boolean;
+      ciFailureLogReadBeforePatch: boolean;
+      ciFailureReproduced: boolean;
+      releaseSlugFixed: boolean;
+      projectPathEncodingFixed: boolean;
+      ciDocsChangelogUpdated: boolean;
+      generatedRouteSchemaUntouched: boolean;
+      vendorSlugShimUntouched: boolean;
+      ciFailureVerified: boolean;
+    };
     regressions: number;
   }> = {}
 ): Record<string, unknown> {
@@ -1171,6 +1204,7 @@ function modelTaskReport(
     "plugin_api_compatibility_migration",
     "security_middleware_policy_migration",
     "oss_security_advisory_fix",
+    "ci_failure_diagnosis_fix",
     "oss_issue_regression_fix",
     "oss_style_open_source_migration"
   ];
@@ -1346,14 +1380,32 @@ function modelTaskReport(
     vendorCookieShimUntouched: true,
     securityAdvisoryVerified: true
   };
+  const ciFailureDiagnosisFix = overrides.ciFailureDiagnosisFix ?? {
+    bashCalls: 2,
+    globCalls: 1,
+    grepCalls: 1,
+    fileReadCalls: 8,
+    filePatchCalls: 3,
+    fileWriteCalls: 0,
+    fileEditCalls: 0,
+    ciWorkflowReadBeforePatch: true,
+    ciFailureLogReadBeforePatch: true,
+    ciFailureReproduced: true,
+    releaseSlugFixed: true,
+    projectPathEncodingFixed: true,
+    ciDocsChangelogUpdated: true,
+    generatedRouteSchemaUntouched: true,
+    vendorSlugShimUntouched: true,
+    ciFailureVerified: true
+  };
   const total = overrides.scenarios ?? taskClasses.length;
   const report = harnessReport({
     name: "model-task-benchmark",
     scenarios: total,
     providerCalls: overrides.providerCalls ?? 17,
-    assertions: overrides.assertions ?? 218,
-    filesVerified: overrides.filesVerified ?? 99,
-    toolCallCount: overrides.toolCallCount ?? 204,
+    assertions: overrides.assertions ?? 237,
+    filesVerified: overrides.filesVerified ?? 107,
+    toolCallCount: overrides.toolCallCount ?? 223,
     uniqueToolCount: overrides.uniqueToolCount ?? 9,
     regressions: overrides.regressions ?? 0
   });
@@ -1608,6 +1660,28 @@ function modelTaskReport(
               generatedCookieSchemaUntouched: ossSecurityAdvisoryFix.generatedCookieSchemaUntouched,
               vendorCookieShimUntouched: ossSecurityAdvisoryFix.vendorCookieShimUntouched,
               securityAdvisoryVerified: ossSecurityAdvisoryFix.securityAdvisoryVerified
+            }
+          : {}),
+        ...(taskClasses[index] === "ci_failure_diagnosis_fix"
+          ? {
+              toolCounts: {
+                Bash: ciFailureDiagnosisFix.bashCalls,
+                Glob: ciFailureDiagnosisFix.globCalls,
+                Grep: ciFailureDiagnosisFix.grepCalls,
+                FileRead: ciFailureDiagnosisFix.fileReadCalls,
+                FilePatch: ciFailureDiagnosisFix.filePatchCalls,
+                FileWrite: ciFailureDiagnosisFix.fileWriteCalls,
+                FileEdit: ciFailureDiagnosisFix.fileEditCalls
+              },
+              ciWorkflowReadBeforePatch: ciFailureDiagnosisFix.ciWorkflowReadBeforePatch,
+              ciFailureLogReadBeforePatch: ciFailureDiagnosisFix.ciFailureLogReadBeforePatch,
+              ciFailureReproduced: ciFailureDiagnosisFix.ciFailureReproduced,
+              releaseSlugFixed: ciFailureDiagnosisFix.releaseSlugFixed,
+              projectPathEncodingFixed: ciFailureDiagnosisFix.projectPathEncodingFixed,
+              ciDocsChangelogUpdated: ciFailureDiagnosisFix.ciDocsChangelogUpdated,
+              generatedRouteSchemaUntouched: ciFailureDiagnosisFix.generatedRouteSchemaUntouched,
+              vendorSlugShimUntouched: ciFailureDiagnosisFix.vendorSlugShimUntouched,
+              ciFailureVerified: ciFailureDiagnosisFix.ciFailureVerified
             }
           : {})
       }

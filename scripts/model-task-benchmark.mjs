@@ -4670,6 +4670,370 @@ async function scenarioOssSecurityAdvisoryFixTask() {
   });
 }
 
+async function scenarioCiFailureDiagnosisFixTask() {
+  return await withWorkspace("ci-failure-diagnosis-fix", async ({ root, configDir, workDir }) => {
+    mkdirSync(path.join(workDir, ".github", "workflows"), { recursive: true });
+    mkdirSync(path.join(workDir, "artifacts"), { recursive: true });
+    mkdirSync(path.join(workDir, "packages", "router", "src"), { recursive: true });
+    mkdirSync(path.join(workDir, "docs"), { recursive: true });
+    mkdirSync(path.join(workDir, "changelog"), { recursive: true });
+    mkdirSync(path.join(workDir, "generated"), { recursive: true });
+    mkdirSync(path.join(workDir, "vendor"), { recursive: true });
+    mkdirSync(path.join(workDir, "tests"), { recursive: true });
+    writeFileSync(
+      path.join(workDir, ".github", "workflows", "ci.yml"),
+      [
+        "name: CI",
+        "",
+        "on:",
+        "  pull_request:",
+        "  push:",
+        "",
+        "jobs:",
+        "  test:",
+        "    name: Test on ubuntu-latest with Node 22",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - uses: actions/checkout@v4",
+        "      - uses: actions/setup-node@v4",
+        "        with:",
+        "          node-version: 22",
+        "      - run: node tests/ci-release-routing.test.mjs",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "artifacts", "ci-node22.log"),
+      [
+        "CI / Test on ubuntu-latest with Node 22",
+        "$ node tests/ci-release-routing.test.mjs",
+        "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+        "+ actual - expected",
+        '+ "Release-Notes-2026"',
+        '- "release-notes-2026"',
+        "at tests/ci-release-routing.test.mjs:7:8",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "packages", "router", "src", "slug.js"),
+      [
+        "export function slugifySegment(value) {",
+        '  return String(value).trim().replace(/\\s+/g, "-");',
+        "}",
+        "",
+        "export function buildReleasePath(project, title) {",
+        "  return `/projects/${project}/releases/${slugifySegment(title)}`;",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "docs", "routing.md"),
+      [
+        "# Routing",
+        "",
+        "Release paths preserve title casing and only replace spaces.",
+        "Project path segments are inserted as provided.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    writeFileSync(
+      path.join(workDir, "changelog", "unreleased.md"),
+      ["# Unreleased", "", "- Documented release route slugs.", ""].join("\n"),
+      "utf8"
+    );
+    const generatedBefore = [
+      "{",
+      '  "$comment": "AUTO-GENERATED ROUTE SCHEMA. DO NOT EDIT.",',
+      '  "properties": {',
+      '    "releaseSlug": { "type": "string" }',
+      "  }",
+      "}",
+      ""
+    ].join("\n");
+    const vendorBefore = [
+      "// vendored legacy slug shim",
+      'export function legacySlug(value) { return String(value).trim().replace(/\\s+/g, "-"); }',
+      ""
+    ].join("\n");
+    writeFileSync(path.join(workDir, "generated", "route-schema.json"), generatedBefore, "utf8");
+    writeFileSync(path.join(workDir, "vendor", "legacy-slug.js"), vendorBefore, "utf8");
+    writeFileSync(
+      path.join(workDir, "tests", "ci-release-routing.test.mjs"),
+      [
+        'import assert from "node:assert/strict";',
+        'import { readFileSync } from "node:fs";',
+        'import { slugifySegment, buildReleasePath } from "../packages/router/src/slug.js";',
+        "",
+        'assert.equal(slugifySegment(" Release Notes 2026 "), "release-notes-2026");',
+        'assert.equal(slugifySegment("Bugfix: API Tokens"), "bugfix-api-tokens");',
+        "assert.equal(",
+        '  buildReleasePath("core team", " Release Notes 2026 "),',
+        '  "/projects/core%20team/releases/release-notes-2026"',
+        ");",
+        "",
+        'const source = readFileSync("packages/router/src/slug.js", "utf8");',
+        "assert.match(source, /toLowerCase\\(\\)/);",
+        "assert.match(source, /encodeURIComponent\\(project\\)/);",
+        "",
+        'const docs = readFileSync("docs/routing.md", "utf8");',
+        "assert.match(docs, /lowercase ASCII slug/);",
+        "assert.match(docs, /URL-encoded/);",
+        'const changelog = readFileSync("changelog/unreleased.md", "utf8");',
+        "assert.match(changelog, /CI release routing/);",
+        "",
+        'const generated = readFileSync("generated/route-schema.json", "utf8");',
+        "assert.match(generated, /AUTO-GENERATED ROUTE SCHEMA/);",
+        'const vendor = readFileSync("vendor/legacy-slug.js", "utf8");',
+        "assert.match(vendor, /vendored legacy slug shim/);",
+        'assert.match(vendor, /replace\\(\\/\\\\s\\+\\/g, "-"/);',
+        'console.log("ci release routing ok");',
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const providerLog = path.join(root, "provider-log.json");
+    let turn = 0;
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript, toolNames }) => {
+        turn += 1;
+        if (turn === 1) {
+          assert(toolNames.includes("Bash"), "Bash was not available");
+          assert(toolNames.includes("Glob"), "Glob was not available");
+          assert(toolNames.includes("Grep"), "Grep was not available");
+          assert(toolNames.includes("FileRead"), "FileRead was not available");
+          assert(toolNames.includes("FilePatch"), "FilePatch was not available");
+          return toolResponse([
+            toolCall("run-ci-routing-before", "Bash", {
+              command: "node tests/ci-release-routing.test.mjs",
+              timeout_ms: 5000
+            }),
+            toolCall("glob-ci-failure-repo", "Glob", {
+              pattern: "**/*.{js,json,md,mjs,yml,log}",
+              max_matches: 50
+            }),
+            toolCall("grep-slugify", "Grep", {
+              pattern: "slugifySegment",
+              path: ".",
+              output_mode: "content",
+              max_matches: 50
+            }),
+            toolCall("read-ci-workflow", "FileRead", {
+              file_path: ".github/workflows/ci.yml"
+            }),
+            toolCall("read-ci-node22-log", "FileRead", {
+              file_path: "artifacts/ci-node22.log"
+            }),
+            toolCall("read-ci-routing-test", "FileRead", {
+              file_path: "tests/ci-release-routing.test.mjs"
+            }),
+            toolCall("read-router-slug-source", "FileRead", {
+              file_path: "packages/router/src/slug.js"
+            }),
+            toolCall("read-routing-docs", "FileRead", {
+              file_path: "docs/routing.md"
+            }),
+            toolCall("read-routing-changelog", "FileRead", {
+              file_path: "changelog/unreleased.md"
+            }),
+            toolCall("read-generated-route-schema", "FileRead", {
+              file_path: "generated/route-schema.json"
+            }),
+            toolCall("read-vendor-legacy-slug", "FileRead", {
+              file_path: "vendor/legacy-slug.js"
+            })
+          ]);
+        }
+        if (turn === 2) {
+          assert(transcript.includes("AssertionError"), "failing CI routing test missing");
+          assert(transcript.includes("CI / Test on ubuntu-latest with Node 22"), "CI log missing");
+          assert(transcript.includes(".github/workflows/ci.yml"), "CI workflow context missing");
+          assert(transcript.includes("slugifySegment"), "slug search context missing");
+          assert(
+            transcript.includes("AUTO-GENERATED ROUTE SCHEMA"),
+            "generated route schema boundary missing"
+          );
+          assert(transcript.includes("vendored legacy slug shim"), "vendor slug boundary missing");
+          return toolResponse([
+            toolCall("patch-router-slug-source", "FilePatch", {
+              file_path: "packages/router/src/slug.js",
+              patch: [
+                "@@",
+                " export function slugifySegment(value) {",
+                '-  return String(value).trim().replace(/\\s+/g, "-");',
+                "+  return String(value)",
+                "+    .trim()",
+                "+    .toLowerCase()",
+                '+    .replace(/[^a-z0-9]+/g, "-")',
+                '+    .replace(/^-+|-+$/g, "");',
+                " }",
+                " ",
+                " export function buildReleasePath(project, title) {",
+                "-  return `/projects/${project}/releases/${slugifySegment(title)}`;",
+                "+  return `/projects/${encodeURIComponent(project)}/releases/${slugifySegment(title)}`;",
+                " }"
+              ].join("\n")
+            }),
+            toolCall("patch-routing-docs", "FilePatch", {
+              file_path: "docs/routing.md",
+              patch: [
+                "@@",
+                " # Routing",
+                " ",
+                "-Release paths preserve title casing and only replace spaces.",
+                "-Project path segments are inserted as provided.",
+                "+Release paths use a lowercase ASCII slug derived from the release title.",
+                "+Project path segments are URL-encoded before the release slug is appended."
+              ].join("\n")
+            }),
+            toolCall("patch-routing-changelog", "FilePatch", {
+              file_path: "changelog/unreleased.md",
+              patch: [
+                "@@",
+                " # Unreleased",
+                " ",
+                "-- Documented release route slugs.",
+                "+- Fixed CI release routing failures by normalizing release slugs and encoding project path segments."
+              ].join("\n")
+            })
+          ]);
+        }
+        if (turn === 3) {
+          assert(
+            transcript.includes("Patched packages/router/src/slug.js"),
+            "router slug patch result missing"
+          );
+          assert(transcript.includes("Patched docs/routing.md"), "routing docs patch missing");
+          assert(
+            transcript.includes("Patched changelog/unreleased.md"),
+            "routing changelog patch missing"
+          );
+          return toolResponse([
+            toolCall("run-ci-routing-after", "Bash", {
+              command: "node tests/ci-release-routing.test.mjs",
+              timeout_ms: 5000
+            })
+          ]);
+        }
+        assert(transcript.includes("ci release routing ok"), "passing CI routing test missing");
+        return messageText(
+          "CI release routing failure fixed after reading the workflow, failure log, and owned routing files."
+        );
+      }
+    });
+
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig(provider.port), "utf8");
+      const output = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          [
+            "Diagnose and fix the Node 22 CI failure for release routing.",
+            "Read the GitHub Actions workflow and saved CI log, reproduce the focused test failure,",
+            "discover files with Glob and Grep, inspect source, docs, changelog, generated schema, and vendor shim,",
+            "fix owned routing code and docs, do not modify generated or vendor files, then rerun the focused CI test."
+          ].join(" ")
+        ],
+        cwd: workDir,
+        configDir,
+        label: "CI failure diagnosis fix task",
+        timeoutMs: 45_000
+      });
+      assert(output.includes("session.completed"), "CI failure diagnosis task did not complete");
+      const source = readFileSync(path.join(workDir, "packages", "router", "src", "slug.js"), "utf8");
+      assert(source.includes("toLowerCase()"), "release slug does not lowercase");
+      assert(source.includes("encodeURIComponent(project)"), "project path segment is not encoded");
+      const docs = readFileSync(path.join(workDir, "docs", "routing.md"), "utf8");
+      assert(docs.includes("lowercase ASCII slug"), "routing docs missing slug normalization");
+      assert(docs.includes("URL-encoded"), "routing docs missing project encoding");
+      const changelog = readFileSync(path.join(workDir, "changelog", "unreleased.md"), "utf8");
+      assert(changelog.includes("CI release routing"), "changelog missing CI failure fix");
+      const generatedAfter = readFileSync(
+        path.join(workDir, "generated", "route-schema.json"),
+        "utf8"
+      );
+      const vendorAfter = readFileSync(path.join(workDir, "vendor", "legacy-slug.js"), "utf8");
+      assert(generatedAfter === generatedBefore, "generated route schema was modified");
+      assert(vendorAfter === vendorBefore, "vendor slug shim was modified");
+      const summary = provider.summary();
+      const toolCounts = summary.toolCounts;
+      assert(toolCounts.Bash === 2, "CI diagnosis should run tests before and after");
+      assert(toolCounts.Glob === 1, "CI diagnosis should discover files with Glob");
+      assert(toolCounts.Grep === 1, "CI diagnosis should search slug references with Grep");
+      assert(toolCounts.FileRead === 8, "CI diagnosis should inspect logs, source, docs, and boundaries");
+      assert(toolCounts.FilePatch === 3, "CI diagnosis should patch source, docs, and changelog");
+      assert(!toolCounts.FileWrite, "CI diagnosis should not rewrite existing files");
+      assert(!toolCounts.FileEdit, "CI diagnosis should not use FileEdit");
+      return {
+        score: 1,
+        assertions: [
+          "focused failing CI routing test ran first",
+          "CI workflow inspected before patching",
+          "CI failure log inspected before patching",
+          "CI failure repo discovery ran with Glob",
+          "slug reference search ran with Grep",
+          "routing source inspected before patching",
+          "routing docs and changelog inspected before patching",
+          "generated route schema boundary inspected",
+          "vendor slug shim boundary inspected",
+          "release slug normalization fixed",
+          "project path segment encoding fixed",
+          "routing docs updated",
+          "routing changelog updated",
+          "focused passing CI routing test ran after fix",
+          "generated route schema stayed unchanged",
+          "vendor slug shim stayed unchanged",
+          "FileWrite avoided for CI diagnosis fix",
+          "FileEdit avoided for CI diagnosis fix",
+          "final response completed"
+        ],
+        filesVerified: [
+          ".github/workflows/ci.yml",
+          "artifacts/ci-node22.log",
+          "packages/router/src/slug.js",
+          "docs/routing.md",
+          "changelog/unreleased.md",
+          "generated/route-schema.json",
+          "vendor/legacy-slug.js",
+          "tests/ci-release-routing.test.mjs"
+        ],
+        provider: summary,
+        taskClass: "ci_failure_diagnosis_fix",
+        toolCounts,
+        ciWorkflowReadBeforePatch: true,
+        ciFailureLogReadBeforePatch: true,
+        ciFailureReproduced: true,
+        releaseSlugFixed: true,
+        projectPathEncodingFixed: true,
+        ciDocsChangelogUpdated: true,
+        generatedRouteSchemaUntouched: true,
+        vendorSlugShimUntouched: true,
+        ciFailureVerified: true,
+        fileWriteAvoided: !toolCounts.FileWrite,
+        fileEditAvoided: !toolCounts.FileEdit
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
 async function scenarioOssStyleOpenSourceMigrationTask() {
   return await withWorkspace("oss-style-open-source", async ({ root, configDir, workDir }) => {
     mkdirSync(path.join(workDir, "packages", "core", "src"), { recursive: true });
@@ -5605,6 +5969,7 @@ async function main() {
     ["plugin API compatibility migration task", scenarioPluginApiCompatibilityMigrationTask],
     ["security middleware policy migration task", scenarioSecurityMiddlewarePolicyMigrationTask],
     ["OSS security advisory fix task", scenarioOssSecurityAdvisoryFixTask],
+    ["CI failure diagnosis fix task", scenarioCiFailureDiagnosisFixTask],
     ["OSS issue regression fix task", scenarioOssIssueRegressionFixTask],
     ["oss-style open source migration task", scenarioOssStyleOpenSourceMigrationTask]
   ];

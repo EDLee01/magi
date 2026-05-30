@@ -495,13 +495,28 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
     ossSecurityAdvisoryFixToolCounts.FileWrite
   );
   const ossSecurityAdvisoryFixFileEditCalls = readNumber(ossSecurityAdvisoryFixToolCounts.FileEdit);
+  const ciFailureDiagnosisFix = scenarios.find(
+    (scenario) => readRecord(scenario.details).taskClass === "ci_failure_diagnosis_fix"
+  );
+  const ciFailureDiagnosisFixDetails = readRecord(
+    ciFailureDiagnosisFix ? readRecord(ciFailureDiagnosisFix).details : {}
+  );
+  const ciFailureDiagnosisFixToolCounts = readRecord(ciFailureDiagnosisFixDetails.toolCounts);
+  const ciFailureDiagnosisFixTaskSeen = taskClasses.has("ci_failure_diagnosis_fix");
+  const ciFailureDiagnosisFixBashCalls = readNumber(ciFailureDiagnosisFixToolCounts.Bash);
+  const ciFailureDiagnosisFixGlobCalls = readNumber(ciFailureDiagnosisFixToolCounts.Glob);
+  const ciFailureDiagnosisFixGrepCalls = readNumber(ciFailureDiagnosisFixToolCounts.Grep);
+  const ciFailureDiagnosisFixFileReadCalls = readNumber(ciFailureDiagnosisFixToolCounts.FileRead);
+  const ciFailureDiagnosisFixFilePatchCalls = readNumber(ciFailureDiagnosisFixToolCounts.FilePatch);
+  const ciFailureDiagnosisFixFileWriteCalls = readNumber(ciFailureDiagnosisFixToolCounts.FileWrite);
+  const ciFailureDiagnosisFixFileEditCalls = readNumber(ciFailureDiagnosisFixToolCounts.FileEdit);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (readNumber(summary.total) < 18) failures.push(`scenarios=${readNumber(summary.total)}`);
-  if (taskClasses.size < 18) failures.push(`taskClasses=${taskClasses.size}`);
+  if (readNumber(summary.total) < 19) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (taskClasses.size < 19) failures.push(`taskClasses=${taskClasses.size}`);
   if (!taskClasses.has("patch_strategy")) failures.push("patchStrategyTask=false");
   if (!testDrivenRecoveryTaskSeen) failures.push("testDrivenRecoveryTask=false");
   if (!dependencyRefactorTaskSeen) failures.push("dependencyRefactorTask=false");
@@ -530,9 +545,12 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (!ossSecurityAdvisoryFixTaskSeen) {
     failures.push("ossSecurityAdvisoryFixTask=false");
   }
-  if (assertions < 218) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 99) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 204) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!ciFailureDiagnosisFixTaskSeen) {
+    failures.push("ciFailureDiagnosisFixTask=false");
+  }
+  if (assertions < 237) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 107) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 223) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
@@ -942,6 +960,54 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (ossSecurityAdvisoryFixDetails.securityAdvisoryVerified !== true) {
     failures.push("ossSecurityAdvisoryVerified=false");
   }
+  if (ciFailureDiagnosisFixBashCalls !== 2) {
+    failures.push("ciFailureDiagnosisFixBashCalls != 2");
+  }
+  if (ciFailureDiagnosisFixGlobCalls !== 1) {
+    failures.push("ciFailureDiagnosisFixGlobCalls != 1");
+  }
+  if (ciFailureDiagnosisFixGrepCalls !== 1) {
+    failures.push("ciFailureDiagnosisFixGrepCalls != 1");
+  }
+  if (ciFailureDiagnosisFixFileReadCalls !== 8) {
+    failures.push("ciFailureDiagnosisFixFileReadCalls != 8");
+  }
+  if (ciFailureDiagnosisFixFilePatchCalls < 3) {
+    failures.push("ciFailureDiagnosisFixFilePatchCalls < 3");
+  }
+  if (ciFailureDiagnosisFixFileWriteCalls !== 0) {
+    failures.push("ciFailureDiagnosisFixFileWrite used");
+  }
+  if (ciFailureDiagnosisFixFileEditCalls !== 0) {
+    failures.push("ciFailureDiagnosisFixFileEdit used");
+  }
+  if (ciFailureDiagnosisFixDetails.ciWorkflowReadBeforePatch !== true) {
+    failures.push("ciWorkflowReadBeforePatch=false");
+  }
+  if (ciFailureDiagnosisFixDetails.ciFailureLogReadBeforePatch !== true) {
+    failures.push("ciFailureLogReadBeforePatch=false");
+  }
+  if (ciFailureDiagnosisFixDetails.ciFailureReproduced !== true) {
+    failures.push("ciFailureReproduced=false");
+  }
+  if (ciFailureDiagnosisFixDetails.releaseSlugFixed !== true) {
+    failures.push("ciReleaseSlugFixed=false");
+  }
+  if (ciFailureDiagnosisFixDetails.projectPathEncodingFixed !== true) {
+    failures.push("ciProjectPathEncodingFixed=false");
+  }
+  if (ciFailureDiagnosisFixDetails.ciDocsChangelogUpdated !== true) {
+    failures.push("ciDocsChangelogUpdated=false");
+  }
+  if (ciFailureDiagnosisFixDetails.generatedRouteSchemaUntouched !== true) {
+    failures.push("ciGeneratedRouteSchemaUntouched=false");
+  }
+  if (ciFailureDiagnosisFixDetails.vendorSlugShimUntouched !== true) {
+    failures.push("ciVendorSlugShimUntouched=false");
+  }
+  if (ciFailureDiagnosisFixDetails.ciFailureVerified !== true) {
+    failures.push("ciFailureVerified=false");
+  }
   if (providerCallsPerScenario <= 0) failures.push("providerCallsPerScenario=0");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
@@ -1170,6 +1236,25 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       ossSecurityVendorCookieShimUntouched:
         ossSecurityAdvisoryFixDetails.vendorCookieShimUntouched === true,
       ossSecurityAdvisoryVerified: ossSecurityAdvisoryFixDetails.securityAdvisoryVerified === true,
+      ciFailureDiagnosisFixTaskSeen,
+      ciFailureDiagnosisFixBashCalls,
+      ciFailureDiagnosisFixGlobCalls,
+      ciFailureDiagnosisFixGrepCalls,
+      ciFailureDiagnosisFixFileReadCalls,
+      ciFailureDiagnosisFixFilePatchCalls,
+      ciFailureDiagnosisFixFileWriteCalls,
+      ciFailureDiagnosisFixFileEditCalls,
+      ciWorkflowReadBeforePatch: ciFailureDiagnosisFixDetails.ciWorkflowReadBeforePatch === true,
+      ciFailureLogReadBeforePatch:
+        ciFailureDiagnosisFixDetails.ciFailureLogReadBeforePatch === true,
+      ciFailureReproduced: ciFailureDiagnosisFixDetails.ciFailureReproduced === true,
+      ciReleaseSlugFixed: ciFailureDiagnosisFixDetails.releaseSlugFixed === true,
+      ciProjectPathEncodingFixed: ciFailureDiagnosisFixDetails.projectPathEncodingFixed === true,
+      ciDocsChangelogUpdated: ciFailureDiagnosisFixDetails.ciDocsChangelogUpdated === true,
+      ciGeneratedRouteSchemaUntouched:
+        ciFailureDiagnosisFixDetails.generatedRouteSchemaUntouched === true,
+      ciVendorSlugShimUntouched: ciFailureDiagnosisFixDetails.vendorSlugShimUntouched === true,
+      ciFailureVerified: ciFailureDiagnosisFixDetails.ciFailureVerified === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures
