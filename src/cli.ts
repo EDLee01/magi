@@ -7,6 +7,7 @@ import qrcodeTerminal from "qrcode-terminal";
 
 import { MagiConfigError, MagiUsageError } from "./errors.js";
 import { ProviderError } from "./providers/errors.js";
+import { ProviderUsage } from "./providers/ir.js";
 import { formatConfig, loadConfig } from "./config.js";
 import { formatDoctorReport } from "./doctor.js";
 import { loadMagiEnvFile } from "./env.js";
@@ -148,14 +149,23 @@ export async function runCli(
     return await runCliUnsafe(argv, env, cwd, io);
   } catch (error) {
     if (error instanceof MagiConfigError || error instanceof MagiUsageError) {
+      if (requestedOutputFormat(argv) === "json") {
+        return { exitCode: 2, stdout: formatJsonError(error, 2), stderr: "" };
+      }
       return { exitCode: 2, stdout: "", stderr: `${error.message}\n` };
     }
     if (error instanceof ProviderError) {
       // Provider errors (HTTP 401/429/502/etc) already carry a user-friendly
       // message. Don't print the stack — it adds noise without information.
+      if (requestedOutputFormat(argv) === "json") {
+        return { exitCode: 1, stdout: formatJsonError(error, 1), stderr: "" };
+      }
       return { exitCode: 1, stdout: "", stderr: `${error.message}\n` };
     }
     const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    if (requestedOutputFormat(argv) === "json") {
+      return { exitCode: 1, stdout: formatJsonError(error, 1), stderr: "" };
+    }
     return { exitCode: 1, stdout: "", stderr: `${detail}\n` };
   }
 }
@@ -307,7 +317,7 @@ async function runCliUnsafeWithParsed(
         };
       }
       if (parsed.outputFormat === "json") {
-        return { exitCode: 0, stdout: `${JSON.stringify(result)}\n`, stderr: "" };
+        return { exitCode: 0, stdout: formatHeadlessJson(result), stderr: "" };
       }
       return {
         exitCode: 0,
@@ -2047,10 +2057,77 @@ function formatStreamJson(result: Awaited<ReturnType<typeof runHeadlessPrompt>>)
       status: "completed",
       message: result.message,
       provider: result.provider,
-      model: result.model
+      model: result.model,
+      usage: normalizeProviderUsage(result.usage)
     })
   ];
   return `${lines.join("\n")}\n`;
+}
+
+function formatHeadlessJson(result: Awaited<ReturnType<typeof runHeadlessPrompt>>): string {
+  return `${JSON.stringify({
+    sessionId: result.sessionId,
+    jobId: result.jobId,
+    status: result.status ?? "completed",
+    message: result.message,
+    provider: result.provider ?? "none",
+    model: result.model ?? "none",
+    usage: normalizeProviderUsage(result.usage)
+  })}\n`;
+}
+
+function formatJsonError(error: unknown, exitCode: number): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const body: {
+    status: "failed";
+    exitCode: number;
+    error: {
+      kind: string;
+      message: string;
+      retryable?: boolean;
+      status?: number;
+    };
+  } = {
+    status: "failed",
+    exitCode,
+    error: {
+      kind: classifyCliError(error),
+      message
+    }
+  };
+  if (error instanceof ProviderError) {
+    body.error.retryable = error.retryable;
+    if (error.status !== undefined) {
+      body.error.status = error.status;
+    }
+  }
+  return `${JSON.stringify(body)}\n`;
+}
+
+function classifyCliError(error: unknown): string {
+  if (error instanceof MagiConfigError) return "config";
+  if (error instanceof MagiUsageError) return "usage";
+  if (error instanceof ProviderError) return error.kind;
+  return "unexpected";
+}
+
+function requestedOutputFormat(argv: string[]): "text" | "json" | "stream-json" | undefined {
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === "--output-format") {
+      const value = argv[index + 1];
+      if (value === "text" || value === "json" || value === "stream-json") {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizeProviderUsage(usage: ProviderUsage | undefined): ProviderUsage {
+  return {
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0
+  };
 }
 
 function formatStreamJsonAgentEvent(input: {

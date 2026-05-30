@@ -103,6 +103,7 @@ describe("capability report", () => {
         longCycleSkillIterationSeen: false,
         harnessCiTuiGuardSeen: false,
         streamJsonProtocolSeen: false,
+        jsonOutputProtocolSeen: false,
         barePromptHeadlessSeen: false,
         resumePickerTtySeen: false,
         toolPolicySeen: false,
@@ -139,6 +140,7 @@ describe("capability report", () => {
         "longCycleSkillIterationSeen=false",
         "harnessCiTuiGuardSeen=false",
         "streamJsonProtocolSeen=false",
+        "jsonOutputProtocolSeen=false",
         "barePromptHeadlessSeen=false",
         "resumePickerTtySeen=false",
         "toolPolicySeen=false",
@@ -869,6 +871,7 @@ function harnessReport(input: {
   longCycleSkillIterationSeen?: boolean;
   harnessCiTuiGuardSeen?: boolean;
   streamJsonProtocolSeen?: boolean;
+  jsonOutputProtocolSeen?: boolean;
   barePromptHeadlessSeen?: boolean;
   resumePickerTtySeen?: boolean;
   toolPolicySeen?: boolean;
@@ -890,7 +893,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 65,
+      assertions: input.assertions ?? 70,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -922,6 +925,7 @@ function harnessReport(input: {
                   ...skillLearningAssertions(input),
                   ...harnessGuardAssertions(input),
                   ...streamJsonProtocolAssertions(input),
+                  ...jsonOutputProtocolAssertions(input),
                   ...barePromptHeadlessAssertions(input),
                   ...resumePickerTtyAssertions(input),
                   ...toolPolicyAssertions(input),
@@ -1004,6 +1008,18 @@ function streamJsonProtocolAssertions(input: { streamJsonProtocolSeen?: boolean 
         "stream-json emitted tool started and completed events",
         "stream-json preserved raw agent events",
         "stream-json completed with status and final message"
+      ];
+}
+
+function jsonOutputProtocolAssertions(input: { jsonOutputProtocolSeen?: boolean }): string[] {
+  return input.jsonOutputProtocolSeen === false
+    ? []
+    : [
+        "json output emitted single object",
+        "json output included session job status message",
+        "json output included provider model usage",
+        "json error output stayed JSON",
+        "json error output included failure status and kind"
       ];
 }
 

@@ -7,7 +7,7 @@ import { ToolPermissionMode } from "./agent/tools.js";
 import { MagiConfig } from "./config.js";
 import { MagiPaths } from "./paths.js";
 import { buildProviderRegistry } from "./providers/registry.js";
-import { textMessage } from "./providers/ir.js";
+import { ProviderUsage, textMessage } from "./providers/ir.js";
 import { ActiveInteractionRegistry } from "./interactions.js";
 import { hasProviderRoute, routeProviderRequest } from "./routing/router.js";
 import { resolveFallbackChain, resolveModelAlias } from "./routing/model-alias.js";
@@ -21,9 +21,11 @@ import { executeHooks } from "./hooks/runner.js";
 export interface HeadlessResult {
   sessionId: string;
   jobId: string;
+  status?: "completed" | "recorded";
   message: string;
   provider?: string;
   model?: string;
+  usage?: ProviderUsage;
   events?: AgentQueryEvent[];
 }
 
@@ -136,16 +138,22 @@ async function runEphemeralHeadless(
     return {
       sessionId,
       jobId,
+      status: "completed",
       message: routed.response.text,
       provider: routed.providerName,
-      model: routed.model
+      model: routed.model,
+      usage: routed.response.usage
     };
   }
   return {
     sessionId,
     jobId,
+    status: "completed",
     message:
-      "No provider is configured. Run 'magi init' to set up a provider + API key, then try again."
+      "No provider is configured. Run 'magi init' to set up a provider + API key, then try again.",
+    provider: "none",
+    model: "none",
+    usage: { inputTokens: 0, outputTokens: 0 }
   };
 }
 
@@ -208,7 +216,11 @@ async function runPersistedHeadless(
     return {
       sessionId,
       jobId,
-      message: local.output ?? ""
+      status: "completed",
+      message: local.output ?? "",
+      provider: "local",
+      model: "local-headless-tools",
+      usage: { inputTokens: 0, outputTokens: 0 }
     };
   }
 
@@ -309,9 +321,11 @@ async function runPersistedHeadless(
     return {
       sessionId,
       jobId,
+      status: "completed",
       message: agentResult.text,
       provider: agentResult.providerName,
       model: agentResult.model,
+      usage: agentResult.usage,
       events: input.collectEvents ? agentResult.events : undefined
     };
   }
@@ -343,8 +357,12 @@ async function runPersistedHeadless(
   return {
     sessionId,
     jobId,
+    status: "recorded",
     message:
-      "No provider is configured for this prompt.\n\nQuick start:\n  1. Set ANTHROPIC_AUTH_TOKEN (or your provider's API key) in your environment\n  2. Run 'magi init' to set up a default provider + model alias\n  3. Or run 'magi config' to see current config\n\nYour prompt is saved — re-run after configuring."
+      "No provider is configured for this prompt.\n\nQuick start:\n  1. Set ANTHROPIC_AUTH_TOKEN (or your provider's API key) in your environment\n  2. Run 'magi init' to set up a default provider + model alias\n  3. Or run 'magi config' to see current config\n\nYour prompt is saved — re-run after configuring.",
+    provider: "none",
+    model: "none",
+    usage: { inputTokens: 0, outputTokens: 0 }
   };
 }
 

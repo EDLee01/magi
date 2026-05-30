@@ -302,7 +302,9 @@ Acceptance:
 - Contains `sessionId`, `jobId`, `status`, `message`, `usage`, `model`.
 - Errors return JSON if requested.
 
-Current status: partial.
+Current status: implemented and black-box gated for successful provider output plus JSON usage
+errors. Success output is one JSON object with session/job ids, status, final message,
+provider/model, and normalized usage.
 
 ### D3. Stream JSON Output
 

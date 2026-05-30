@@ -582,6 +582,19 @@ function parseStreamEvents(output) {
   return events;
 }
 
+function parseSingleJsonObject(output, label) {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  assert(lines.length === 1, `${label} emitted ${lines.length} JSON lines, expected 1`);
+  try {
+    return JSON.parse(lines[0]);
+  } catch {
+    throw new Error(`${label} output was not valid JSON:\n${output}`);
+  }
+}
+
 function assertStreamProtocol(events, { finalMessage }) {
   assert(events.length > 0, "stream-json emitted no events");
   assert(events[0].type === "session.started", "stream-json did not start with session.started");
@@ -625,6 +638,17 @@ function assertStreamProtocol(events, { finalMessage }) {
     "stream-json session.completed missed sessionId"
   );
   return completed.sessionId;
+}
+
+function assertJsonOutputProtocol(body, { finalMessage }) {
+  assert(typeof body.sessionId === "string" && body.sessionId, "json output missed sessionId");
+  assert(typeof body.jobId === "string" && body.jobId, "json output missed jobId");
+  assert(body.status === "completed", "json output missed completed status");
+  assert(body.message === finalMessage, "json output missed final message");
+  assert(body.provider === "openai", "json output missed provider");
+  assert(body.model === "mock-main", "json output missed model");
+  assert(body.usage?.inputTokens === 1, "json output missed input token usage");
+  assert(body.usage?.outputTokens === 1, "json output missed output token usage");
 }
 
 function assertStreamProtocolWithoutTools(events, { finalMessage }) {
@@ -1687,6 +1711,74 @@ async function scenarioDefaultPermissionDenied() {
           "permission denial returned to model",
           "denied write did not mutate workspace"
         ],
+        provider: provider.summary()
+      };
+    } catch (error) {
+      printProviderLog(providerLog);
+      throw error;
+    } finally {
+      await provider.close();
+    }
+  });
+}
+
+async function scenarioJsonOutputProtocol() {
+  return await withTempWorkspace("json-output", async ({ root, configDir, workDir }) => {
+    const providerLog = path.join(root, "provider-log.json");
+    const provider = await startProvider({
+      logPath: providerLog,
+      routeRequest: ({ transcript }) => {
+        if (transcript.includes("Return JSON protocol status.")) {
+          return messageText("JSON protocol final.");
+        }
+        return fail(500, `unexpected json-output prompt: ${transcript}`);
+      }
+    });
+    try {
+      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+      const output = await runCli({
+        args: [
+          "--model",
+          "main",
+          "--output-format",
+          "json",
+          "-p",
+          "Return JSON protocol status."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "json output protocol"
+      });
+      const body = parseSingleJsonObject(output, "json output protocol");
+      assertJsonOutputProtocol(body, { finalMessage: "JSON protocol final." });
+
+      const failed = await runCliAllowFailure({
+        args: ["--output-format", "json", "resume"],
+        cwd: workDir,
+        configDir,
+        label: "json output usage error"
+      });
+      assert(failed.code === 2, "json usage error did not exit with code 2");
+      assert(!failed.stderr.trim(), "json usage error wrote stderr");
+      const errorBody = parseSingleJsonObject(failed.stdout, "json output usage error");
+      assert(errorBody.status === "failed", "json error missed failed status");
+      assert(errorBody.exitCode === 2, "json error missed exit code");
+      assert(errorBody.error?.kind === "usage", "json error missed usage kind");
+      assert(
+        errorBody.error?.message === "magi resume requires a session id",
+        "json error missed message"
+      );
+
+      return {
+        score: 1,
+        assertions: [
+          "json output emitted single object",
+          "json output included session job status message",
+          "json output included provider model usage",
+          "json error output stayed JSON",
+          "json error output included failure status and kind"
+        ],
+        filesVerified: [],
         provider: provider.summary()
       };
     } catch (error) {
@@ -3053,6 +3145,7 @@ async function main() {
   const scenarios = [
     ["complex workflow", scenarioComplexWorkflow],
     ["default permission denied", scenarioDefaultPermissionDenied],
+    ["json output protocol", scenarioJsonOutputProtocol],
     ["tool policy allow deny", scenarioToolPolicyAllowDeny],
     ["bare prompt headless", scenarioBarePromptHeadless],
     ["resume picker TTY", scenarioResumePickerTty],

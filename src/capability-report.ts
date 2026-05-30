@@ -159,6 +159,12 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("stream-json emitted tool started and completed events") &&
     assertionList.includes("stream-json preserved raw agent events") &&
     assertionList.includes("stream-json completed with status and final message");
+  const jsonOutputProtocolSeen =
+    assertionList.includes("json output emitted single object") &&
+    assertionList.includes("json output included session job status message") &&
+    assertionList.includes("json output included provider model usage") &&
+    assertionList.includes("json error output stayed JSON") &&
+    assertionList.includes("json error output included failure status and kind");
   const barePromptHeadlessSeen =
     assertionList.includes("bare prompt argument entered headless provider path") &&
     assertionList.includes("bare prompt stream-json emitted valid lifecycle events") &&
@@ -185,7 +191,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 63) failures.push(`assertions=${assertions}`);
+  if (assertions < 68) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");
@@ -194,6 +200,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   if (!longCycleSkillIterationSeen) failures.push("longCycleSkillIterationSeen=false");
   if (!harnessCiTuiGuardSeen) failures.push("harnessCiTuiGuardSeen=false");
   if (!streamJsonProtocolSeen) failures.push("streamJsonProtocolSeen=false");
+  if (!jsonOutputProtocolSeen) failures.push("jsonOutputProtocolSeen=false");
   if (!barePromptHeadlessSeen) failures.push("barePromptHeadlessSeen=false");
   if (!resumePickerTtySeen) failures.push("resumePickerTtySeen=false");
   if (!toolPolicySeen) failures.push("toolPolicySeen=false");
@@ -222,6 +229,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
       longCycleSkillIterationSeen,
       harnessCiTuiGuardSeen,
       streamJsonProtocolSeen,
+      jsonOutputProtocolSeen,
       barePromptHeadlessSeen,
       resumePickerTtySeen,
       toolPolicySeen,

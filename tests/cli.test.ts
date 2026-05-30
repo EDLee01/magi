@@ -113,10 +113,93 @@ describe("CLI entrypoint", () => {
       process.cwd()
     );
     expect(result.exitCode).toBe(0);
-    const body = JSON.parse(result.stdout) as { sessionId: string; jobId: string; message: string };
+    const body = JSON.parse(result.stdout) as {
+      sessionId: string;
+      jobId: string;
+      status: string;
+      message: string;
+      provider: string;
+      model: string;
+      usage: { inputTokens: number; outputTokens: number };
+    };
     expect(body.sessionId).toBeTruthy();
     expect(body.jobId).toBeTruthy();
+    expect(body.status).toBe("recorded");
     expect(body.message).toContain("No provider is configured");
+    expect(body.provider).toBe("none");
+    expect(body.model).toBe("none");
+    expect(body.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+
+  it("includes provider model and usage in json output", async () => {
+    temp = makeTempRoot();
+    server = http.createServer(async (_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [{ message: { content: "JSON STATUS OK" } }],
+          usage: { prompt_tokens: 7, completion_tokens: 3 }
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["--model", "main", "--output-format", "json", "-p", "write json status"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      process.cwd()
+    );
+
+    expect(result.exitCode).toBe(0);
+    const body = JSON.parse(result.stdout) as {
+      status: string;
+      message: string;
+      provider: string;
+      model: string;
+      usage: { inputTokens: number; outputTokens: number };
+    };
+    expect(body).toMatchObject({
+      status: "completed",
+      message: "JSON STATUS OK",
+      provider: "main",
+      model: "gpt-main",
+      usage: { inputTokens: 7, outputTokens: 3 }
+    });
+  });
+
+  it("returns json errors when json output is requested", async () => {
+    const result = await runCli(["--output-format", "json", "resume"], {}, process.cwd());
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toBe("");
+    const body = JSON.parse(result.stdout) as {
+      status: string;
+      exitCode: number;
+      error: { kind: string; message: string };
+    };
+    expect(body).toEqual({
+      status: "failed",
+      exitCode: 2,
+      error: { kind: "usage", message: "magi resume requires a session id" }
+    });
   });
 
   it("uses memory.writeDecisionModel instead of selectionModel for memory write decisions", async () => {
@@ -308,9 +391,18 @@ describe("CLI entrypoint", () => {
       temp.env,
       process.cwd()
     );
-    const body = JSON.parse(ephemeral.stdout) as { sessionId: string; message: string };
+    const body = JSON.parse(ephemeral.stdout) as {
+      sessionId: string;
+      status: string;
+      message: string;
+      provider: string;
+      model: string;
+    };
     expect(body.sessionId).toBeTruthy();
+    expect(body.status).toBe("completed");
     expect(body.message).toContain("No provider is configured");
+    expect(body.provider).toBe("none");
+    expect(body.model).toBe("none");
   });
 
   it("shows empty goal status before any session exists", async () => {
