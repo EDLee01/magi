@@ -544,6 +544,30 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       .map((scenario) => readRecord(scenario.details).taskClass)
       .filter((taskClass): taskClass is string => typeof taskClass === "string")
   );
+  const detailsByTaskClass = new Map<string, Record<string, unknown>>();
+  for (const scenario of scenarios) {
+    const details = readRecord(scenario.details);
+    if (typeof details.taskClass === "string") {
+      detailsByTaskClass.set(details.taskClass, details);
+    }
+  }
+  const fileEditAvoidanceTaskClasses = [
+    "monorepo_generated_boundary",
+    "workspace_policy_migration",
+    "mixed_language_contract_migration",
+    "large_repo_long_chain_migration",
+    "plugin_api_compatibility_migration",
+    "security_middleware_policy_migration",
+    "oss_security_advisory_fix",
+    "ci_failure_diagnosis_fix",
+    "oss_issue_regression_fix",
+    "oss_style_open_source_migration"
+  ];
+  const fileEditAvoidedTaskCount = fileEditAvoidanceTaskClasses.filter((taskClass) => {
+    const details = detailsByTaskClass.get(taskClass);
+    const toolCounts = readRecord(details?.toolCounts);
+    return details?.fileEditAvoided === true && readNumber(toolCounts.FileEdit) === 0;
+  }).length;
   const patchStrategy = scenarios.find(
     (scenario) => readRecord(scenario.details).taskClass === "patch_strategy"
   );
@@ -899,6 +923,9 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (filesVerified < 107) failures.push(`filesVerified=${filesVerified}`);
   if (toolCallCount < 223) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 9) failures.push(`uniqueToolCount=${uniqueToolCount}`);
+  if (fileEditAvoidedTaskCount !== fileEditAvoidanceTaskClasses.length) {
+    failures.push(`fileEditAvoidedTaskCount=${fileEditAvoidedTaskCount}`);
+  }
   if (patchStrategyFilePatchCalls < 1) failures.push("patchStrategyFilePatchCalls < 1");
   if (patchStrategyFileEditCalls !== 1) failures.push("patchStrategyFileEditCalls != 1");
   if (patchStrategyFileWriteCalls !== 0) failures.push("patchStrategyFileWrite used");
@@ -1257,6 +1284,9 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
   if (ossIssueRegressionFixFileEditCalls !== 0) {
     failures.push("ossIssueRegressionFixFileEdit used");
   }
+  if (ossIssueRegressionFixDetails.ossIssueRegressionTaskSeen !== true) {
+    failures.push("ossIssueRegressionTaskSeen=false");
+  }
   if (ossIssueRegressionFixDetails.issueReportReadBeforePatch !== true) {
     failures.push("ossIssueReportReadBeforePatch=false");
   }
@@ -1397,6 +1427,8 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       toolCallCount,
       uniqueToolCount,
       topTools: Array.isArray(toolEfficiency.topTools) ? toolEfficiency.topTools : [],
+      fileEditAvoidedTaskCount,
+      fileEditAvoidanceTaskTarget: fileEditAvoidanceTaskClasses.length,
       patchStrategyRate,
       patchStrategyFilePatchCalls,
       patchStrategyFileEditCalls,
@@ -1585,6 +1617,7 @@ function checkModelTaskReport(report: Record<string, unknown>): CapabilityCheck 
       ossIssueRegressionFixFilePatchCalls,
       ossIssueRegressionFixFileWriteCalls,
       ossIssueRegressionFixFileEditCalls,
+      ossIssueRegressionTaskSeen: ossIssueRegressionFixDetails.ossIssueRegressionTaskSeen === true,
       ossIssueReportReadBeforePatch:
         ossIssueRegressionFixDetails.issueReportReadBeforePatch === true,
       ossIssueRegressionReproduced: ossIssueRegressionFixDetails.issueRegressionReproduced === true,
@@ -1942,6 +1975,13 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h7Stream.toolCompletedSeen !== true) failures.push("H7ToolCompleted=false");
   if (h7Stream.rawToolUseSeen !== true) failures.push("H7RawToolUse=false");
   if (h7Stream.rawToolResultSeen !== true) failures.push("H7RawToolResult=false");
+  if (h7Seen && h7Stream.providerRetrySeen !== false) failures.push("H7ProviderRetrySeen=true");
+  if (h7Seen && readNumber(h7Stream.providerRetryCount) !== 0) {
+    failures.push("H7ProviderRetryStreamCount != 0");
+  }
+  if (h7Seen && h7Stream.providerFallbackSeen !== false) {
+    failures.push("H7ProviderFallbackSeen=true");
+  }
   if (h7Stream.finalMessageMatched !== true) failures.push("H7FinalMessage=false");
   if (h7Limits.withinTime !== true) failures.push("H7WithinTime=false");
   if (h7Limits.withinCommands !== true) failures.push("H7WithinCommands=false");
@@ -2184,6 +2224,9 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H7ToolCompletedSeen: h7Stream.toolCompletedSeen === true,
       H7RawToolUseSeen: h7Stream.rawToolUseSeen === true,
       H7RawToolResultSeen: h7Stream.rawToolResultSeen === true,
+      H7ProviderRetrySeen: h7Stream.providerRetrySeen === true,
+      H7ProviderRetryStreamCount: readNumber(h7Stream.providerRetryCount),
+      H7ProviderFallbackSeen: h7Stream.providerFallbackSeen === true,
       H7FinalMessageMatched: h7Stream.finalMessageMatched === true,
       H7WithinTime: h7Limits.withinTime === true,
       H7WithinCommands: h7Limits.withinCommands === true,
@@ -3018,6 +3061,7 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
   const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
   const scenario = readRecord(scenarios[0]);
   const details = readRecord(scenario.details);
+  const lanSmoke = readRecord(details.lanSmoke);
   const summary = readRecord(report.summary);
   const toolEfficiency = readRecord(summary.toolEfficiency);
   const failures = [...base.failures];
@@ -3116,6 +3160,9 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       failures.push(`${key}=false`);
     }
   }
+  if (lanSmoke.healthOk !== true) failures.push("lanSmokeHealthOk=false");
+  if (lanSmoke.panelOk !== true) failures.push("lanSmokePanelOk=false");
+  if (lanSmoke.authOk !== true) failures.push("lanSmokeAuthOk=false");
   return {
     ...base,
     status: failures.length === 0 ? "passed" : "failed",
@@ -3181,6 +3228,10 @@ function checkControlApiReport(report: Record<string, unknown>): CapabilityCheck
       lanSmokeHealthSeen: details.lanSmokeHealthSeen === true,
       lanSmokePanelLoaded: details.lanSmokePanelLoaded === true,
       lanSmokeAuthenticatedApiSeen: details.lanSmokeAuthenticatedApiSeen === true,
+      lanSmokeUsedLoopbackFallback: lanSmoke.usedLoopbackFallback === true,
+      lanSmokeHealthOk: lanSmoke.healthOk === true,
+      lanSmokePanelOk: lanSmoke.panelOk === true,
+      lanSmokeAuthOk: lanSmoke.authOk === true,
       peerCredentialsSaved: details.peerCredentialsSaved === true,
       peerSavedListed: details.peerSavedListed === true,
       peerDispatchBoundAllInterfaces: details.peerDispatchBoundAllInterfaces === true,
