@@ -67,6 +67,20 @@ try {
     crossTurnMixedIntentAgentStable: false,
     crossTurnMixedIntentSchemaIsolationSeen: false,
     crossTurnMixedIntentProviderCalls: 0,
+    largeRepoInitialDeferredSeen: false,
+    largeRepoMemoryCorrectCoreAvailable: false,
+    largeRepoWorkspaceRanked: false,
+    largeRepoFileEditRanked: false,
+    largeRepoBrowserRanked: false,
+    largeRepoArchiveRanked: false,
+    largeRepoMemoryCorrectRanked: false,
+    largeRepoMemoryRecallRanked: false,
+    largeRepoLearningDraftRanked: false,
+    largeRepoAgentRanked: false,
+    largeRepoSchemasRevealed: false,
+    largeRepoSchemaIsolationSeen: false,
+    largeRepoProviderCalls: 0,
+    largeRepoSelectedToolCount: 0,
     initialToolCount: 0,
     revealedToolCount: 0
   };
@@ -133,6 +147,32 @@ try {
     const longCycle = await runLongCycleStrategyEval(provider, state);
     const mixedIntent = await runMixedIntentDynamicEval(provider, state);
     const crossTurnMixedIntent = await runCrossTurnMixedIntentDriftEval(provider, state);
+    const largeRepo = await runLargeRepoRoutingEval(provider, state);
+    const contextPath = path.join(configDir, "state", "tool-usage-context.json");
+    assert(existsSync(contextPath), "tool usage context was not persisted");
+    const contextStore = JSON.parse(readFileSync(contextPath, "utf8"));
+    const contextIntents = new Set(
+      (contextStore.contexts ?? [])
+        .flatMap((context) => context.intents ?? [])
+        .filter((intent) => typeof intent === "string")
+    );
+    const requiredContextIntents = [
+      "file-edit",
+      "workspace-search",
+      "browser-automation",
+      "memory-correction",
+      "memory-recall",
+      "skill-learning",
+      "archive-management",
+      "parallel-agent"
+    ];
+    const contextIntentCoverage = requiredContextIntents.filter((intent) =>
+      contextIntents.has(intent)
+    ).length;
+    assert(
+      contextIntentCoverage === requiredContextIntents.length,
+      `tool usage context intent coverage was incomplete: ${contextIntentCoverage}/${requiredContextIntents.length}`
+    );
     const assertions = [
       "ToolSearch exposed as core tool",
       "core file/search tools exposed initially",
@@ -169,9 +209,21 @@ try {
       "cross-turn mixed-intent browser ranking stayed stable",
       "cross-turn mixed-intent memory recall ranking stayed stable",
       "cross-turn mixed-intent agent ranking stayed stable",
-      "cross-turn mixed-intent schemas revealed only after select"
+      "cross-turn mixed-intent schemas revealed only after select",
+      "large-repo task restarted with deferred schemas hidden",
+      "large-repo task kept MemoryCorrect available as a core correction tool",
+      "large-repo workspace search reused Glob ranking after feedback",
+      "large-repo source edit ranked FilePatch",
+      "large-repo browser regression ranked Browser",
+      "large-repo release archive ranked ArchiveCreate",
+      "large-repo memory correction ranked MemoryCorrect",
+      "large-repo memory recall ranked SessionSearch",
+      "large-repo learning draft ranked LearningDraft",
+      "large-repo parallel dispatch ranked Agent",
+      "large-repo selected schemas revealed without unrelated deferred tools leaking",
+      "ToolSearch context persisted multi-intent routing history"
     ];
-    const filesVerified = ["state/tool-usage-stats.json"];
+    const filesVerified = ["state/tool-usage-stats.json", "state/tool-usage-context.json"];
 
     const report = harnessReport.buildHarnessReport({
       name: "tool-discovery-eval",
@@ -230,6 +282,22 @@ try {
             crossTurnMixedIntentSchemaIsolationSeen:
               crossTurnMixedIntent.schemaIsolationSeen,
             crossTurnMixedIntentProviderCalls: crossTurnMixedIntent.providerCalls,
+            largeRepoInitialDeferredSeen: largeRepo.initialDeferredSeen,
+            largeRepoMemoryCorrectCoreAvailable: largeRepo.memoryCorrectCoreAvailable,
+            largeRepoWorkspaceRanked: largeRepo.workspaceRanked,
+            largeRepoFileEditRanked: largeRepo.fileEditRanked,
+            largeRepoBrowserRanked: largeRepo.browserRanked,
+            largeRepoArchiveRanked: largeRepo.archiveRanked,
+            largeRepoMemoryCorrectRanked: largeRepo.memoryCorrectRanked,
+            largeRepoMemoryRecallRanked: largeRepo.memoryRecallRanked,
+            largeRepoLearningDraftRanked: largeRepo.learningDraftRanked,
+            largeRepoAgentRanked: largeRepo.agentRanked,
+            largeRepoSchemasRevealed: largeRepo.schemasRevealed,
+            largeRepoSchemaIsolationSeen: largeRepo.schemaIsolationSeen,
+            largeRepoProviderCalls: largeRepo.providerCalls,
+            largeRepoSelectedToolCount: largeRepo.selectedToolCount,
+            toolSearchContextPersisted: true,
+            toolSearchContextIntentCoverage: contextIntentCoverage,
             initialToolCount: state.initialToolCount,
             revealedToolCount: state.revealedToolCount,
             grepFailures,
@@ -275,6 +343,7 @@ function createRouter(state) {
   let crossTaskTurn = 0;
   let longCycleTurn = 0;
   let crossTurnMixedIntentTurn = 0;
+  let largeRepoTurn = 0;
   return ({ latestUser, transcript, toolNames }) => {
     if (latestUser.includes("Run long-cycle ToolSearch strategy regression checks.")) {
       longCycleTurn += 1;
@@ -386,6 +455,16 @@ function createRouter(state) {
         toolNames,
         state,
         turn: crossTurnMixedIntentTurn
+      });
+    }
+
+    if (latestUser.includes("Run large-repository ToolSearch routing checks.")) {
+      largeRepoTurn += 1;
+      return routeLargeRepoRouting({
+        transcript,
+        toolNames,
+        state,
+        turn: largeRepoTurn
       });
     }
 
@@ -718,6 +797,194 @@ async function runCrossTurnMixedIntentDriftEval(provider, state) {
   }
 }
 
+async function runLargeRepoRoutingEval(provider, state) {
+  const output = await runCli([
+    "--model",
+    "main",
+    "--output-format",
+    "stream-json",
+    "-p",
+    [
+      "Run large-repository ToolSearch routing checks.",
+      "Pretend this is a multi-package migration that needs source discovery, file edits, UI regression, release archive packaging, memory correction, memory recall, learning capture, and parallel agent review.",
+      "Use ToolSearch only for tools whose schema is not already visible."
+    ].join(" ")
+  ]);
+  const matchingCalls = providerCallsForPrompt("Run large-repository ToolSearch routing checks");
+  assert(matchingCalls.length > 0, "large-repo routing prompt did not call provider");
+  assert(
+    output.includes("Large-repository Tool Discovery routing verified"),
+    "large-repo routing final answer missing"
+  );
+  assert(state.largeRepoInitialDeferredSeen, "large-repo deferred visibility was not verified");
+  assert(
+    state.largeRepoMemoryCorrectCoreAvailable,
+    "large-repo MemoryCorrect core availability was not verified"
+  );
+  assert(state.largeRepoWorkspaceRanked, "large-repo workspace ranking was not verified");
+  assert(state.largeRepoFileEditRanked, "large-repo file-edit ranking was not verified");
+  assert(state.largeRepoBrowserRanked, "large-repo browser ranking was not verified");
+  assert(state.largeRepoArchiveRanked, "large-repo archive ranking was not verified");
+  assert(
+    state.largeRepoMemoryCorrectRanked,
+    "large-repo memory-correction ranking was not verified"
+  );
+  assert(state.largeRepoMemoryRecallRanked, "large-repo memory-recall ranking was not verified");
+  assert(state.largeRepoLearningDraftRanked, "large-repo learning ranking was not verified");
+  assert(state.largeRepoAgentRanked, "large-repo agent ranking was not verified");
+  assert(state.largeRepoSchemasRevealed, "large-repo schema reveal was not verified");
+  assert(state.largeRepoSchemaIsolationSeen, "large-repo schema isolation was not verified");
+  state.largeRepoProviderCalls = matchingCalls.length;
+  return {
+    initialDeferredSeen: state.largeRepoInitialDeferredSeen,
+    memoryCorrectCoreAvailable: state.largeRepoMemoryCorrectCoreAvailable,
+    workspaceRanked: state.largeRepoWorkspaceRanked,
+    fileEditRanked: state.largeRepoFileEditRanked,
+    browserRanked: state.largeRepoBrowserRanked,
+    archiveRanked: state.largeRepoArchiveRanked,
+    memoryCorrectRanked: state.largeRepoMemoryCorrectRanked,
+    memoryRecallRanked: state.largeRepoMemoryRecallRanked,
+    learningDraftRanked: state.largeRepoLearningDraftRanked,
+    agentRanked: state.largeRepoAgentRanked,
+    schemasRevealed: state.largeRepoSchemasRevealed,
+    schemaIsolationSeen: state.largeRepoSchemaIsolationSeen,
+    providerCalls: matchingCalls.length,
+    selectedToolCount: state.largeRepoSelectedToolCount
+  };
+
+  function providerCallsForPrompt(prompt) {
+    return provider.calls.filter((call) => call.transcript.includes(prompt));
+  }
+}
+
+function routeLargeRepoRouting({ transcript, toolNames, state, turn }) {
+  if (turn === 1) {
+    assert(toolNames.includes("ToolSearch"), "ToolSearch was not visible in large-repo task");
+    assert(toolNames.includes("FilePatch"), "FilePatch was not visible in large-repo task");
+    assert(toolNames.includes("Glob"), "Glob was not visible in large-repo task");
+    assert(toolNames.includes("Grep"), "Grep was not visible in large-repo task");
+    assert(
+      toolNames.includes("MemoryCorrect"),
+      "MemoryCorrect should be a core tool in large-repo task"
+    );
+    assert(!toolNames.includes("Browser"), "Browser leaked into fresh large-repo tool context");
+    assert(
+      !toolNames.includes("ArchiveCreate"),
+      "ArchiveCreate leaked into fresh large-repo tool context"
+    );
+    assert(
+      !toolNames.includes("SessionSearch"),
+      "SessionSearch leaked into fresh large-repo tool context"
+    );
+    assert(
+      !toolNames.includes("LearningDraft"),
+      "LearningDraft leaked into fresh large-repo tool context"
+    );
+    assert(!toolNames.includes("Agent"), "Agent leaked into fresh large-repo tool context");
+    state.largeRepoInitialDeferredSeen = true;
+    state.largeRepoMemoryCorrectCoreAvailable = true;
+    return toolResponse([
+      toolCall("large-repo-workspace-search", "ToolSearch", {
+        query: "search workspace files across a large repository",
+        max_results: 5
+      }),
+      toolCall("large-repo-file-edit-search", "ToolSearch", {
+        query: "apply a multi-line patch to a file",
+        max_results: 5
+      }),
+      toolCall("large-repo-browser-search", "ToolSearch", {
+        query: "automate browser click and screenshot",
+        max_results: 5
+      }),
+      toolCall("large-repo-archive-search", "ToolSearch", {
+        query: "create zip release archive",
+        max_results: 5
+      }),
+      toolCall("large-repo-memory-correct-search", "ToolSearch", {
+        query: "correct a wrong outdated memory",
+        max_results: 5
+      }),
+      toolCall("large-repo-memory-recall-search", "ToolSearch", {
+        query: "search previous session memory history",
+        max_results: 5
+      }),
+      toolCall("large-repo-learning-search", "ToolSearch", {
+        query: "propose learning draft for stable workflow",
+        max_results: 5
+      }),
+      toolCall("large-repo-agent-search", "ToolSearch", {
+        query: "dispatch parallel agent to peer machine",
+        max_results: 5
+      })
+    ]);
+  }
+
+  if (turn === 2) {
+    assertLargeRepoRankings(transcript);
+    state.largeRepoWorkspaceRanked = true;
+    state.largeRepoFileEditRanked = true;
+    state.largeRepoBrowserRanked = true;
+    state.largeRepoArchiveRanked = true;
+    state.largeRepoMemoryCorrectRanked = true;
+    state.largeRepoMemoryRecallRanked = true;
+    state.largeRepoLearningDraftRanked = true;
+    state.largeRepoAgentRanked = true;
+    return toolResponse([
+      toolCall("large-repo-select-browser", "ToolSearch", { query: "select:Browser" }),
+      toolCall("large-repo-select-archive", "ToolSearch", { query: "select:ArchiveCreate" }),
+      toolCall("large-repo-select-session-search", "ToolSearch", {
+        query: "select:SessionSearch"
+      }),
+      toolCall("large-repo-select-learning-draft", "ToolSearch", {
+        query: "select:LearningDraft"
+      }),
+      toolCall("large-repo-select-agent", "ToolSearch", { query: "select:Agent" })
+    ]);
+  }
+
+  assert(transcript.includes("Tool: Browser"), "large-repo Browser schema was not selected");
+  assert(
+    transcript.includes("Tool: ArchiveCreate"),
+    "large-repo ArchiveCreate schema was not selected"
+  );
+  assert(
+    transcript.includes("Tool: SessionSearch"),
+    "large-repo SessionSearch schema was not selected"
+  );
+  assert(
+    transcript.includes("Tool: LearningDraft"),
+    "large-repo LearningDraft schema was not selected"
+  );
+  assert(transcript.includes("Tool: Agent"), "large-repo Agent schema was not selected");
+  assert(toolNames.includes("Browser"), "Browser was not visible after large-repo select");
+  assert(
+    toolNames.includes("ArchiveCreate"),
+    "ArchiveCreate was not visible after large-repo select"
+  );
+  assert(
+    toolNames.includes("SessionSearch"),
+    "SessionSearch was not visible after large-repo select"
+  );
+  assert(
+    toolNames.includes("LearningDraft"),
+    "LearningDraft was not visible after large-repo select"
+  );
+  assert(toolNames.includes("Agent"), "Agent was not visible after large-repo select");
+  assert(!toolNames.includes("ArchiveExtract"), "unselected ArchiveExtract schema leaked");
+  assert(!toolNames.includes("WebBrowser"), "unselected WebBrowser schema leaked");
+  assert(!toolNames.includes("SkillManage"), "unselected SkillManage schema leaked");
+  state.largeRepoSchemasRevealed = true;
+  state.largeRepoSchemaIsolationSeen = true;
+  state.largeRepoSelectedToolCount = [
+    "Browser",
+    "ArchiveCreate",
+    "SessionSearch",
+    "LearningDraft",
+    "Agent"
+  ].filter((toolName) => toolNames.includes(toolName)).length;
+  return messageText("Large-repository Tool Discovery routing verified.");
+}
+
 function routeMixedIntentDynamicSelection({ transcript, toolNames, state }) {
   const schemaRevealSeen =
     transcript.includes("Tool: FilePatch") &&
@@ -934,6 +1201,91 @@ function assertLongCycleRankings(transcript, { minimumOccurrences }) {
     "long-cycle workspace intent feedback missing"
   );
   assert(transcript.includes("failure:path"), "long-cycle workspace failure feedback missing");
+}
+
+function assertLargeRepoRankings(transcript) {
+  assert(
+    transcript.includes('ToolSearch results for "search workspace files across a large repository"'),
+    "large-repo workspace ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "apply a multi-line patch to a file"'),
+    "large-repo file-edit ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "automate browser click and screenshot"'),
+    "large-repo browser ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "create zip release archive"'),
+    "large-repo archive ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "correct a wrong outdated memory"'),
+    "large-repo memory-correction ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "search previous session memory history"'),
+    "large-repo memory-recall ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "propose learning draft for stable workflow"'),
+    "large-repo learning ToolSearch result was not visible"
+  );
+  assert(
+    transcript.includes('ToolSearch results for "dispatch parallel agent to peer machine"'),
+    "large-repo agent ToolSearch result was not visible"
+  );
+  assert(transcript.includes("1. Glob"), "large-repo workspace search did not rank Glob first");
+  assert(
+    transcript.includes("1. FilePatch"),
+    "large-repo file-edit search did not rank FilePatch first"
+  );
+  assert(transcript.includes("1. Browser"), "large-repo browser search did not rank Browser first");
+  assert(
+    transcript.includes("1. ArchiveCreate"),
+    "large-repo archive search did not rank ArchiveCreate first"
+  );
+  assert(
+    transcript.includes("1. MemoryCorrect"),
+    "large-repo memory-correction search did not rank MemoryCorrect first"
+  );
+  assert(
+    transcript.includes("1. SessionSearch"),
+    "large-repo memory-recall search did not rank SessionSearch first"
+  );
+  assert(
+    transcript.includes("1. LearningDraft"),
+    "large-repo learning search did not rank LearningDraft first"
+  );
+  assert(transcript.includes("1. Agent"), "large-repo agent search did not rank Agent first");
+  assertTranscriptIntent(transcript, "workspace-search", "large-repo workspace intent missing");
+  assertTranscriptIntent(transcript, "file-edit", "large-repo file-edit intent missing");
+  assertTranscriptIntent(transcript, "browser-automation", "large-repo browser intent missing");
+  assertTranscriptIntent(transcript, "archive-management", "large-repo archive intent missing");
+  assertTranscriptIntent(
+    transcript,
+    "memory-correction",
+    "large-repo memory-correction intent missing"
+  );
+  assertTranscriptIntent(transcript, "memory-recall", "large-repo memory-recall intent missing");
+  assertTranscriptIntent(transcript, "skill-learning", "large-repo skill intent missing");
+  assertTranscriptIntent(transcript, "parallel-agent", "large-repo agent intent missing");
+  assert(transcript.includes("usage:+"), "large-repo persisted positive usage feedback missing");
+  assert(transcript.includes("usage:-"), "large-repo persisted negative usage feedback missing");
+}
+
+function assertTranscriptIntent(transcript, intent, message) {
+  const seen = transcript
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("intent:"))
+    .flatMap((line) =>
+      line
+        .slice("intent:".length)
+        .split(",")
+        .map((value) => value.trim())
+    );
+  assert(seen.includes(intent), message);
 }
 
 function countOccurrences(value, pattern) {

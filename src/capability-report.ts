@@ -1315,9 +1315,9 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
-  if (assertions < 28) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 1) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 23) failures.push(`toolCallCount=${toolCallCount}`);
+  if (assertions < 48) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 2) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 60) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 3) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (details.coreToolsExposed !== true) failures.push("coreToolsExposed=false");
   if (details.deferredToolsHidden !== true) failures.push("deferredToolsHidden=false");
@@ -1415,6 +1415,48 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   if (details.crossTurnMixedIntentSchemaIsolationSeen !== true) {
     failures.push("crossTurnMixedIntentSchemaIsolationSeen=false");
   }
+  if (details.largeRepoInitialDeferredSeen !== true) {
+    failures.push("largeRepoInitialDeferredSeen=false");
+  }
+  if (details.largeRepoMemoryCorrectCoreAvailable !== true) {
+    failures.push("largeRepoMemoryCorrectCoreAvailable=false");
+  }
+  if (details.largeRepoWorkspaceRanked !== true) {
+    failures.push("largeRepoWorkspaceRanked=false");
+  }
+  if (details.largeRepoFileEditRanked !== true) {
+    failures.push("largeRepoFileEditRanked=false");
+  }
+  if (details.largeRepoBrowserRanked !== true) {
+    failures.push("largeRepoBrowserRanked=false");
+  }
+  if (details.largeRepoArchiveRanked !== true) {
+    failures.push("largeRepoArchiveRanked=false");
+  }
+  if (details.largeRepoMemoryCorrectRanked !== true) {
+    failures.push("largeRepoMemoryCorrectRanked=false");
+  }
+  if (details.largeRepoMemoryRecallRanked !== true) {
+    failures.push("largeRepoMemoryRecallRanked=false");
+  }
+  if (details.largeRepoLearningDraftRanked !== true) {
+    failures.push("largeRepoLearningDraftRanked=false");
+  }
+  if (details.largeRepoAgentRanked !== true) {
+    failures.push("largeRepoAgentRanked=false");
+  }
+  if (details.largeRepoSchemasRevealed !== true) {
+    failures.push("largeRepoSchemasRevealed=false");
+  }
+  if (details.largeRepoSchemaIsolationSeen !== true) {
+    failures.push("largeRepoSchemaIsolationSeen=false");
+  }
+  if (details.toolSearchContextPersisted !== true) {
+    failures.push("toolSearchContextPersisted=false");
+  }
+  if (readNumber(details.toolSearchContextIntentCoverage) < 8) {
+    failures.push("toolSearchContextIntentCoverage < 8");
+  }
   if (readNumber(details.crossTaskProviderCalls) <= 0) failures.push("crossTaskProviderCalls=0");
   if (readNumber(details.longCycleProviderCalls) <= 0) failures.push("longCycleProviderCalls=0");
   if (readNumber(details.mixedIntentProviderCalls) <= 0) {
@@ -1422,6 +1464,10 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
   }
   if (readNumber(details.crossTurnMixedIntentProviderCalls) <= 0) {
     failures.push("crossTurnMixedIntentProviderCalls=0");
+  }
+  if (readNumber(details.largeRepoProviderCalls) <= 0) failures.push("largeRepoProviderCalls=0");
+  if (readNumber(details.largeRepoSelectedToolCount) < 5) {
+    failures.push("largeRepoSelectedToolCount < 5");
   }
   if (readNumber(details.grepFailures) < 4) failures.push("grepFailures < 4");
   if (readNumber(details.globSuccesses) < 4) failures.push("globSuccesses < 4");
@@ -1483,10 +1529,26 @@ function checkToolDiscoveryReport(report: Record<string, unknown>): CapabilityCh
       crossTurnMixedIntentAgentStable: details.crossTurnMixedIntentAgentStable === true,
       crossTurnMixedIntentSchemaIsolationSeen:
         details.crossTurnMixedIntentSchemaIsolationSeen === true,
+      largeRepoInitialDeferredSeen: details.largeRepoInitialDeferredSeen === true,
+      largeRepoMemoryCorrectCoreAvailable: details.largeRepoMemoryCorrectCoreAvailable === true,
+      largeRepoWorkspaceRanked: details.largeRepoWorkspaceRanked === true,
+      largeRepoFileEditRanked: details.largeRepoFileEditRanked === true,
+      largeRepoBrowserRanked: details.largeRepoBrowserRanked === true,
+      largeRepoArchiveRanked: details.largeRepoArchiveRanked === true,
+      largeRepoMemoryCorrectRanked: details.largeRepoMemoryCorrectRanked === true,
+      largeRepoMemoryRecallRanked: details.largeRepoMemoryRecallRanked === true,
+      largeRepoLearningDraftRanked: details.largeRepoLearningDraftRanked === true,
+      largeRepoAgentRanked: details.largeRepoAgentRanked === true,
+      largeRepoSchemasRevealed: details.largeRepoSchemasRevealed === true,
+      largeRepoSchemaIsolationSeen: details.largeRepoSchemaIsolationSeen === true,
+      toolSearchContextPersisted: details.toolSearchContextPersisted === true,
+      toolSearchContextIntentCoverage: readNumber(details.toolSearchContextIntentCoverage),
       crossTaskProviderCalls: readNumber(details.crossTaskProviderCalls),
       longCycleProviderCalls: readNumber(details.longCycleProviderCalls),
       mixedIntentProviderCalls: readNumber(details.mixedIntentProviderCalls),
       crossTurnMixedIntentProviderCalls: readNumber(details.crossTurnMixedIntentProviderCalls),
+      largeRepoProviderCalls: readNumber(details.largeRepoProviderCalls),
+      largeRepoSelectedToolCount: readNumber(details.largeRepoSelectedToolCount),
       initialToolCount: readNumber(details.initialToolCount),
       revealedToolCount: readNumber(details.revealedToolCount),
       grepFailures: readNumber(details.grepFailures),

@@ -372,6 +372,7 @@ const TERM_ALIASES: Record<string, string[]> = {
   docs: ["documentation", "schema", "tool"],
   edit: ["patch", "file", "write"],
   e2e: ["verify", "test"],
+  export: ["archive", "package"],
   fetch: ["web", "browser"],
   file: ["workspace"],
   fix: ["patch", "edit"],
@@ -388,6 +389,7 @@ const TERM_ALIASES: Record<string, string[]> = {
   multi: ["agent", "parallel"],
   open: ["browser", "web", "fetch"],
   page: ["browser", "web"],
+  package: ["archive", "zip"],
   parallel: ["agent", "subagent"],
   patch: ["edit", "diff", "file"],
   plan: ["todo", "state"],
@@ -415,7 +417,8 @@ const TERM_ALIASES: Record<string, string[]> = {
   verification: ["verify", "test", "build"],
   web: ["browser", "fetch", "search"],
   wrong: ["correct", "dispute", "supersede"],
-  workflow: ["learning", "memory"]
+  workflow: ["learning", "memory"],
+  zip: ["archive", "package"]
 };
 
 const INTENT_PROFILES: ToolIntentProfile[] = [
@@ -425,6 +428,14 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
     categories: ["files"],
     tags: ["patch", "edit", "write", "file"],
     toolBoosts: { FilePatch: 180, FileEdit: 120, FileWrite: 70, NotebookEdit: 50 }
+  },
+  {
+    name: "archive-management",
+    triggers: ["archive", "zip", "tar", "compress", "package", "export"],
+    phrases: ["release archive", "create archive", "zip release"],
+    categories: ["files"],
+    tags: ["archive", "zip", "tar", "compress"],
+    toolBoosts: { ArchiveCreate: 190, ArchiveExtract: 70 }
   },
   {
     name: "workspace-search",

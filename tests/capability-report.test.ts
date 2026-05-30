@@ -511,10 +511,26 @@ describe("capability report", () => {
         crossTurnMixedIntentMemoryRecallStable: false,
         crossTurnMixedIntentAgentStable: false,
         crossTurnMixedIntentSchemaIsolationSeen: false,
+        largeRepoInitialDeferredSeen: false,
+        largeRepoMemoryCorrectCoreAvailable: false,
+        largeRepoWorkspaceRanked: false,
+        largeRepoFileEditRanked: false,
+        largeRepoBrowserRanked: false,
+        largeRepoArchiveRanked: false,
+        largeRepoMemoryCorrectRanked: false,
+        largeRepoMemoryRecallRanked: false,
+        largeRepoLearningDraftRanked: false,
+        largeRepoAgentRanked: false,
+        largeRepoSchemasRevealed: false,
+        largeRepoSchemaIsolationSeen: false,
+        toolSearchContextPersisted: false,
+        toolSearchContextIntentCoverage: 3,
         crossTaskProviderCalls: 0,
         longCycleProviderCalls: 0,
         mixedIntentProviderCalls: 0,
         crossTurnMixedIntentProviderCalls: 0,
+        largeRepoProviderCalls: 0,
+        largeRepoSelectedToolCount: 2,
         assertions: 5,
         filesVerified: 0,
         toolCallCount: 8,
@@ -567,10 +583,26 @@ describe("capability report", () => {
         "crossTurnMixedIntentMemoryRecallStable=false",
         "crossTurnMixedIntentAgentStable=false",
         "crossTurnMixedIntentSchemaIsolationSeen=false",
+        "largeRepoInitialDeferredSeen=false",
+        "largeRepoMemoryCorrectCoreAvailable=false",
+        "largeRepoWorkspaceRanked=false",
+        "largeRepoFileEditRanked=false",
+        "largeRepoBrowserRanked=false",
+        "largeRepoArchiveRanked=false",
+        "largeRepoMemoryCorrectRanked=false",
+        "largeRepoMemoryRecallRanked=false",
+        "largeRepoLearningDraftRanked=false",
+        "largeRepoAgentRanked=false",
+        "largeRepoSchemasRevealed=false",
+        "largeRepoSchemaIsolationSeen=false",
+        "toolSearchContextPersisted=false",
+        "toolSearchContextIntentCoverage < 8",
         "crossTaskProviderCalls=0",
         "longCycleProviderCalls=0",
         "mixedIntentProviderCalls=0",
         "crossTurnMixedIntentProviderCalls=0",
+        "largeRepoProviderCalls=0",
+        "largeRepoSelectedToolCount < 5",
         "grepFailures < 4",
         "grepIntentFailures < 4",
         "grepPathFailures < 4",
@@ -1788,6 +1820,22 @@ function toolDiscoveryReport(
     crossTurnMixedIntentProviderCalls: number;
     initialToolCount: number;
     revealedToolCount: number;
+    largeRepoInitialDeferredSeen: boolean;
+    largeRepoMemoryCorrectCoreAvailable: boolean;
+    largeRepoWorkspaceRanked: boolean;
+    largeRepoFileEditRanked: boolean;
+    largeRepoBrowserRanked: boolean;
+    largeRepoArchiveRanked: boolean;
+    largeRepoMemoryCorrectRanked: boolean;
+    largeRepoMemoryRecallRanked: boolean;
+    largeRepoLearningDraftRanked: boolean;
+    largeRepoAgentRanked: boolean;
+    largeRepoSchemasRevealed: boolean;
+    largeRepoSchemaIsolationSeen: boolean;
+    largeRepoProviderCalls: number;
+    largeRepoSelectedToolCount: number;
+    toolSearchContextPersisted: boolean;
+    toolSearchContextIntentCoverage: number;
     grepFailures: number;
     globSuccesses: number;
     grepIntentFailures: number;
@@ -1805,9 +1853,9 @@ function toolDiscoveryReport(
       name: "tool-discovery-eval",
       scenarios: 1,
       providerCalls: 5,
-      assertions: overrides.assertions ?? 28,
-      filesVerified: overrides.filesVerified ?? 1,
-      toolCallCount: overrides.toolCallCount ?? 23,
+      assertions: overrides.assertions ?? 48,
+      filesVerified: overrides.filesVerified ?? 2,
+      toolCallCount: overrides.toolCallCount ?? 60,
       uniqueToolCount: overrides.uniqueToolCount ?? 3
     }),
     scenarios: [
@@ -1820,11 +1868,11 @@ function toolDiscoveryReport(
         details: {
           provider: { callCount: 5 },
           assertions: Array.from(
-            { length: overrides.assertions ?? 28 },
+            { length: overrides.assertions ?? 48 },
             (_, index) => `tool-discovery assertion ${index + 1}`
           ),
           filesVerified: Array.from(
-            { length: overrides.filesVerified ?? 1 },
+            { length: overrides.filesVerified ?? 2 },
             (_, index) => `tool-discovery-file-${index + 1}.json`
           ),
           toolCounts: {
@@ -1868,10 +1916,26 @@ function toolDiscoveryReport(
           crossTurnMixedIntentMemoryRecallStable: true,
           crossTurnMixedIntentAgentStable: true,
           crossTurnMixedIntentSchemaIsolationSeen: true,
+          largeRepoInitialDeferredSeen: true,
+          largeRepoMemoryCorrectCoreAvailable: true,
+          largeRepoWorkspaceRanked: true,
+          largeRepoFileEditRanked: true,
+          largeRepoBrowserRanked: true,
+          largeRepoArchiveRanked: true,
+          largeRepoMemoryCorrectRanked: true,
+          largeRepoMemoryRecallRanked: true,
+          largeRepoLearningDraftRanked: true,
+          largeRepoAgentRanked: true,
+          largeRepoSchemasRevealed: true,
+          largeRepoSchemaIsolationSeen: true,
           crossTaskProviderCalls: 2,
           longCycleProviderCalls: 2,
           mixedIntentProviderCalls: 2,
           crossTurnMixedIntentProviderCalls: 2,
+          largeRepoProviderCalls: 3,
+          largeRepoSelectedToolCount: 5,
+          toolSearchContextPersisted: true,
+          toolSearchContextIntentCoverage: 8,
           initialToolCount: 21,
           revealedToolCount: 22,
           grepFailures: 4,
