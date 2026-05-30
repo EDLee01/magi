@@ -1,0 +1,7 @@
+{
+  "name": "h9-bash-approval-control-fixture",
+  "private": true,
+  "scripts": {
+    "test": "node tests/bash-approval.test.mjs"
+  }
+}

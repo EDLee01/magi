@@ -629,6 +629,28 @@ verifies the conflict is rejected, writes a concise report, and then checks the
 shared SQLite state for exactly two completed worker tasks and two surviving
 disjoint write claims.
 
+#### H9. Bash approval control
+
+Prompt:
+
+```text
+Validate Bash approval details through a real Control API job.
+```
+
+Checks:
+
+- Read-only Bash runs without approval.
+- Non-read-only Bash enters an active approval.
+- Pending approval exposes command, cwd, and timeout.
+- Control API approval resolves the interaction and the Bash command completes.
+
+Current status: implemented and gated by `npm run test:complex-harness`.
+The H9 fixture drives an outer Magi run that starts a real `magi serve`
+Control API, creates a background job in default permission mode, verifies
+`pwd` runs without approval, verifies `npm test` waits on a Bash approval with
+`command`, `cwd`, and `timeout_ms` evidence, resolves the approval through the
+Control API, and checks persisted audit events plus the final report.
+
 ## G. Visual and Interaction Quality
 
 ### G1. Text Hat Identity

@@ -1085,6 +1085,233 @@ function createH8Router() {
   };
 }
 
+function createH9Router() {
+  let outerTurn = 0;
+  let controlTurn = 0;
+  return ({ transcript, toolNames }) => {
+    if (transcript.includes("Run the Bash approval control probe")) {
+      controlTurn += 1;
+
+      if (controlTurn === 1) {
+        assert(toolNames.includes("Bash"), "H9 control job missing Bash");
+        return toolResponse([
+          toolCall("h9-readonly-pwd", "Bash", {
+            command: "pwd"
+          })
+        ]);
+      }
+
+      if (controlTurn === 2) {
+        assert(transcript.includes("Command exited 0"), "H9 read-only Bash did not execute");
+        return toolResponse([
+          toolCall("h9-run-approved-bash", "Bash", {
+            command: "npm test",
+            timeout_ms: 7000
+          })
+        ]);
+      }
+
+      if (controlTurn === 3) {
+        assert(transcript.includes("bash approval test ok"), "H9 approved Bash output missing");
+        assert(transcript.includes("Command exited 0"), "H9 approved Bash did not complete");
+        return messageText("CONTROL BASH APPROVAL DONE");
+      }
+
+      throw new Error(`H9 control job exceeded expected provider turns: ${controlTurn}`);
+    }
+
+    if (!transcript.includes("Validate the Bash approval boundary")) {
+      return messageText("OK");
+    }
+    outerTurn += 1;
+
+    if (outerTurn === 1) {
+      assert(toolNames.includes("FileRead"), "H9 missing FileRead");
+      assert(toolNames.includes("FileWrite"), "H9 missing FileWrite");
+      assert(toolNames.includes("Bash"), "H9 missing Bash");
+      assert(transcript.includes("Control API"), "H9 Control API requirement was not visible");
+      assert(
+        transcript.includes("command, cwd, and timeout"),
+        "H9 approval detail requirement was not visible"
+      );
+      return toolResponse([
+        toolCall("h9-read-policy", "FileRead", {
+          file_path: "docs/bash-approval-policy.md"
+        }),
+        toolCall("h9-run-control-approval-flow", "Bash", {
+          timeout_ms: 45_000,
+          command: [
+            "node <<'NODE'",
+            "const { spawn } = require('node:child_process');",
+            "const cli = process.env.MAGI_CLI_UNDER_TEST;",
+            "if (!cli) throw new Error('MAGI_CLI_UNDER_TEST missing');",
+            "const port = 18000 + Math.floor(Math.random() * 20000);",
+            "const base = `http://127.0.0.1:${port}`;",
+            "const serve = spawn(process.execPath, [cli, '--no-color', 'serve'], {",
+            "  env: {",
+            "    ...process.env,",
+            "    MAGI_CONTROL_PORT: String(port),",
+            "    MAGI_INTERACTION_TIMEOUT_MS: '20000',",
+            "    NO_COLOR: '1'",
+            "  },",
+            "  stdio: ['ignore', 'pipe', 'pipe']",
+            "});",
+            "let stdout = '';",
+            "let stderr = '';",
+            "serve.stdout.on('data', (chunk) => { stdout += chunk.toString('utf8'); });",
+            "serve.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });",
+            "function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }",
+            "async function waitFor(check, label, timeoutMs = 15000) {",
+            "  const deadline = Date.now() + timeoutMs;",
+            "  let lastError;",
+            "  while (Date.now() < deadline) {",
+            "    try {",
+            "      if (await check()) return;",
+            "    } catch (error) {",
+            "      lastError = error;",
+            "    }",
+            "    await sleep(100);",
+            "  }",
+            "  throw new Error(`${label} timed out${lastError ? `: ${lastError.message}` : ''}\\nSTDOUT:\\n${stdout}\\nSTDERR:\\n${stderr}`);",
+            "}",
+            "async function request(method, path, body, headers = {}, expectStatus = 200) {",
+            "  const response = await fetch(`${base}${path}`, {",
+            "    method,",
+            "    headers: { 'content-type': 'application/json', ...headers },",
+            "    body: body === undefined ? undefined : JSON.stringify(body)",
+            "  });",
+            "  const text = await response.text();",
+            "  let parsed;",
+            "  try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { text }; }",
+            "  if (response.status !== expectStatus) {",
+            "    throw new Error(`${method} ${path} returned ${response.status}: ${text}`);",
+            "  }",
+            "  return parsed;",
+            "}",
+            "function authHeaders(pairing) {",
+            "  return {",
+            "    'x-magi-device-id': pairing.deviceId,",
+            "    authorization: `Bearer ${pairing.token}`",
+            "  };",
+            "}",
+            "async function main() {",
+            "try {",
+            "  await waitFor(() => stdout.includes('Magi Control API listening on'), 'control server start');",
+            "  const health = await request('GET', '/health');",
+            "  if (health.ok !== true) throw new Error('control health check failed');",
+            "  const pairing = await request('POST', '/pairing', { name: 'bash-approval-harness' });",
+            "  if (!pairing.deviceId || !pairing.token) throw new Error('pairing did not return credentials');",
+            "  const headers = authHeaders(pairing);",
+            "  const started = await request('POST', '/jobs', {",
+            "    prompt: 'Run the Bash approval control probe.',",
+            "    model: 'main',",
+            "    background: true,",
+            "    permissionMode: 'default'",
+            "  }, headers, 202);",
+            "  if (!started.jobId || !started.sessionId) throw new Error('background job did not start');",
+            "  let pending;",
+            "  await waitFor(async () => {",
+            "    const response = await request('GET', `/jobs/${encodeURIComponent(started.jobId)}/interactions`, undefined, headers);",
+            "    pending = (response.interactions ?? []).find((item) =>",
+            "      item.kind === 'approval' &&",
+            "      item.status === 'pending' &&",
+            "      item.toolName === 'Bash' &&",
+            "      item.toolUseId === 'h9-run-approved-bash'",
+            "    );",
+            "    return Boolean(pending);",
+            "  }, 'pending Bash approval');",
+            "  if (pending.toolUse.input.command !== 'npm test') throw new Error('pending approval command mismatch');",
+            "  if (pending.toolUse.input.timeout_ms !== 7000) throw new Error('pending approval timeout mismatch');",
+            "  const pendingEvents = await request('GET', `/jobs/${encodeURIComponent(started.jobId)}/events?limit=50`, undefined, headers);",
+            "  const pendingAudit = (pendingEvents.events ?? []).find((event) => event.action === 'agent.approval.pending' && event.target === 'Bash');",
+            "  if (!pendingAudit) throw new Error('approval pending audit missing');",
+            "  if (pendingAudit.metadata.cwd !== process.cwd()) throw new Error(`pending audit cwd mismatch: ${pendingAudit.metadata.cwd}`);",
+            "  if (pendingAudit.metadata.toolUse.input.command !== 'npm test') throw new Error('pending audit command mismatch');",
+            "  if (pendingAudit.metadata.toolUse.input.timeout_ms !== 7000) throw new Error('pending audit timeout mismatch');",
+            "  const resolved = await request('POST', `/jobs/${encodeURIComponent(started.jobId)}/approvals/h9-run-approved-bash`, {",
+            "    decision: 'approve',",
+            "    responder: 'bash-approval-harness'",
+            "  }, headers);",
+            "  if (resolved.ok !== true || resolved.interaction.approved !== true) throw new Error('approval resolution failed');",
+            "  await waitFor(async () => {",
+            "    const response = await request('GET', `/jobs/${encodeURIComponent(started.jobId)}`, undefined, headers);",
+            "    return response.job?.status === 'completed';",
+            "  }, 'control job completion', 15000);",
+            "  const job = await request('GET', `/jobs/${encodeURIComponent(started.jobId)}`, undefined, headers);",
+            "  const events = await request('GET', `/jobs/${encodeURIComponent(started.jobId)}/events?limit=80`, undefined, headers);",
+            "  const actions = (events.events ?? []).map((event) => event.action);",
+            "  if (!actions.includes('agent.approval.pending')) throw new Error('job events missed approval pending');",
+            "  if (!actions.includes('control.approval.resolved')) throw new Error('job events missed control approval resolve');",
+            "  const bashCompleted = (events.events ?? []).filter((event) => event.action === 'agent.tool.completed' && event.target === 'Bash');",
+            "  if (bashCompleted.length < 2) throw new Error(`expected two completed Bash tools, saw ${bashCompleted.length}`);",
+            "  if (job.job?.status !== 'completed') throw new Error('control job did not complete');",
+            "  console.log(JSON.stringify({",
+            "    readOnly: 'pwd completed without approval',",
+            "    approval: {",
+            "      toolUseId: pending.toolUseId,",
+            "      command: pending.toolUse.input.command,",
+            "      cwd: pendingAudit.metadata.cwd,",
+            "      timeout_ms: pending.toolUse.input.timeout_ms",
+            "    },",
+            "    approved: resolved.interaction.approved,",
+            "    bashCompleted: bashCompleted.length,",
+            "    message: 'CONTROL BASH APPROVAL DONE'",
+            "  }));",
+            "} finally {",
+            "  serve.kill('SIGTERM');",
+            "  await sleep(300);",
+            "  if (serve.exitCode === null && serve.signalCode === null) serve.kill('SIGKILL');",
+            "}",
+            "}",
+            "main().catch((error) => {",
+            "  console.error(error && error.stack ? error.stack : String(error));",
+            "  serve.kill('SIGTERM');",
+            "  setTimeout(() => serve.kill('SIGKILL'), 300).unref?.();",
+            "  process.exit(1);",
+            "});",
+            "NODE"
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (outerTurn === 2) {
+      assert(transcript.includes("Bash Approval Policy"), "H9 policy document was not read");
+      assert(transcript.includes("pwd completed without approval"), "H9 read-only Bash proof missing");
+      assert(transcript.includes('"command":"npm test"'), "H9 approval command proof missing");
+      assert(transcript.includes('"timeout_ms":7000'), "H9 approval timeout proof missing");
+      assert(transcript.includes("CONTROL BASH APPROVAL DONE"), "H9 control job final missing");
+      return toolResponse([
+        toolCall("h9-write-report", "FileWrite", {
+          file_path: "reports/bash-approval-report.md",
+          content: [
+            "# Bash Approval Report",
+            "",
+            "- Read-only Bash `pwd` ran in default permission mode without approval.",
+            "- Non-read-only Bash `npm test` entered an active Control API approval.",
+            "- The pending approval exposed command `npm test`, the repo cwd, and `timeout_ms: 7000`.",
+            "- Control API approval resolved the pending Bash interaction and the approved test completed.",
+            "- The approval and Bash completion events were persisted in the session audit database.",
+            ""
+          ].join("\n")
+        })
+      ]);
+    }
+
+    if (outerTurn === 3) {
+      assert(
+        transcript.includes("Wrote reports/bash-approval-report.md"),
+        "H9 report write result was not visible"
+      );
+      return messageText(
+        "Verified Bash approval boundary and wrote reports/bash-approval-report.md."
+      );
+    }
+
+    throw new Error(`H9 exceeded expected provider turns: ${outerTurn}`);
+  };
+}
+
 function taskDefinitionFor(taskId) {
   if (taskId === "H1") {
     return {
@@ -1516,6 +1743,81 @@ function taskDefinitionFor(taskId) {
     };
   }
 
+  if (taskId === "H9") {
+    return {
+      createRouter: createH9Router,
+      finalMessage: "Verified Bash approval boundary and wrote reports/bash-approval-report.md.",
+      assertions: [
+        "H9 fixture copied into isolated workspace",
+        "H9 provider saw Control API approval requirement",
+        "H9 provider saw command, cwd, and timeout requirement",
+        "H9 Bash approval policy read before execution",
+        "H9 Control API started from dist CLI",
+        "H9 phone-style pairing returned credentials",
+        "H9 read-only Bash ran without approval",
+        "H9 non-read-only Bash produced pending approval",
+        "H9 pending approval exposed command",
+        "H9 pending approval exposed cwd",
+        "H9 pending approval exposed timeout",
+        "H9 Control API resolved approval",
+        "H9 approved Bash command completed",
+        "H9 approval events persisted",
+        "H9 approval report written",
+        "H9 changed exactly expected report",
+        "H9 session and audit persisted"
+      ],
+      filesVerified: [
+        "docs/bash-approval-policy.md",
+        "package.json",
+        "tests/bash-approval.test.mjs",
+        "reports/bash-approval-report.md",
+        "stdout.jsonl",
+        "state/sessions.sqlite"
+      ],
+      validate: ({ after, toolCounts, session, approval }) => {
+        assert((toolCounts.FileRead ?? 0) === 1, "H9 should read policy once");
+        assert((toolCounts.Bash ?? 0) === 1, "H9 should use one Bash Control API flow");
+        assert((toolCounts.FileWrite ?? 0) === 1, "H9 should write one report");
+        assert((toolCounts.FilePatch ?? 0) === 0, "H9 should not patch files");
+        assert((toolCounts.FileEdit ?? 0) === 0, "H9 should not use FileEdit");
+        const report = after["reports/bash-approval-report.md"]?.text ?? "";
+        assert(
+          report.includes("Read-only Bash `pwd` ran"),
+          "H9 report missed read-only Bash evidence"
+        );
+        assert(
+          report.includes("Non-read-only Bash `npm test` entered an active Control API approval"),
+          "H9 report missed approval evidence"
+        );
+        assert(
+          report.includes("timeout_ms: 7000"),
+          "H9 report missed timeout evidence"
+        );
+        assert(session.auditEventCount > 0, "H9 outer session audit events were not persisted");
+        assert(session.messageCount >= 2, "H9 outer session messages were not persisted");
+        assert(approval.pendingCount === 1, `H9 expected one pending approval, saw ${approval.pendingCount}`);
+        assert(
+          approval.resolvedCount >= 1,
+          `H9 expected resolved approval audit, saw ${approval.resolvedCount}`
+        );
+        assert(
+          approval.controlResolvedCount === 1,
+          `H9 expected one control approval resolution, saw ${approval.controlResolvedCount}`
+        );
+        assert(
+          approval.completedBashToolCount >= 2,
+          `H9 expected two completed Bash tools, saw ${approval.completedBashToolCount}`
+        );
+        assert(approval.pendingCommand === "npm test", "H9 pending command mismatch");
+        assert(approval.pendingTimeoutMs === 7000, "H9 pending timeout mismatch");
+        assert(typeof approval.pendingCwd === "string" && approval.pendingCwd.length > 0, "H9 pending cwd missing");
+        assert(approval.approved === true, "H9 approval was not approved");
+        assert(approval.readOnlyBashCompleted === true, "H9 read-only Bash completion missing");
+        assert(approval.approvedBashCompleted === true, "H9 approved Bash completion missing");
+      }
+    };
+  }
+
   throw new Error(`Unknown complex harness task id: ${taskId}`);
 }
 
@@ -1667,11 +1969,10 @@ async function runTask(taskName) {
     const sentinelUnchanged = readFileSync(sentinelPath, "utf8") === "do not touch\n";
     const elapsedMs = Date.now() - started;
     const toolCounts = countStreamTools(events);
-    const session = readSessionEvidence(
-      path.join(configDir, "state", "sessions.sqlite"),
-      completed.sessionId
-    );
-    const agentQueue = readAgentQueueEvidence(path.join(configDir, "state", "sessions.sqlite"));
+    const sessionDbFile = path.join(configDir, "state", "sessions.sqlite");
+    const session = readSessionEvidence(sessionDbFile, completed.sessionId);
+    const agentQueue = readAgentQueueEvidence(sessionDbFile);
+    const approval = readBashApprovalEvidence(sessionDbFile);
     const diffText = renderChangedFileDiffs(before, after, changedFiles);
     writeFileSync(path.join(archiveDir, "diff.txt"), diffText, "utf8");
 
@@ -1696,7 +1997,8 @@ async function runTask(taskName) {
       toolCounts,
       session,
       stream,
-      agentQueue
+      agentQueue,
+      approval
     });
 
     return {
@@ -1722,6 +2024,8 @@ async function runTask(taskName) {
         session,
         agentQueue:
           agentQueue.taskCount > 0 || agentQueue.writeClaimCount > 0 ? agentQueue : undefined,
+        approval:
+          approval.pendingCount > 0 || approval.completedBashToolCount > 0 ? approval : undefined,
         limits,
         limitResults: {
           withinTime: elapsedMs <= limits.maxTimeMs,
@@ -2020,6 +2324,112 @@ function readAgentQueueEvidence(dbFile) {
   }
 }
 
+function readBashApprovalEvidence(dbFile) {
+  assert(existsSync(dbFile), "sessions.sqlite was not created");
+  const db = new Database(dbFile, { readonly: true });
+  try {
+    const rows = db
+      .prepare("select action, target, metadata_json from audit_events order by id asc")
+      .all()
+      .map((row) => {
+        let metadata = {};
+        try {
+          metadata = JSON.parse(row.metadata_json);
+        } catch {
+          metadata = {};
+        }
+        return {
+          action: row.action,
+          target: row.target,
+          metadata
+        };
+      });
+    const pending = rows.filter(
+      (row) => row.action === "agent.approval.pending" && row.target === "Bash"
+    );
+    const resolved = rows.filter(
+      (row) => row.action === "agent.approval.resolved" && row.target === "Bash"
+    );
+    const controlResolved = rows.filter(
+      (row) =>
+        row.action === "control.approval.resolved" &&
+        readNestedString(row.metadata, ["interaction", "toolName"]) === "Bash"
+    );
+    const completed = rows.filter(
+      (row) => row.action === "agent.tool.completed" && row.target === "Bash"
+    );
+    const pendingMetadata = pending[0]?.metadata ?? {};
+    const pendingToolUse = readNestedRecord(pendingMetadata, ["toolUse"]);
+    const pendingInput = readNestedRecord(pendingMetadata, ["toolUse", "input"]);
+    const completedToolIds = completed
+      .map((row) => readNestedString(row.metadata, ["toolCallId"]))
+      .filter((value) => typeof value === "string");
+    return {
+      pendingCount: pending.length,
+      resolvedCount: resolved.length,
+      controlResolvedCount: controlResolved.length,
+      completedBashToolCount: completed.length,
+      pendingToolUseId: readNestedString(pendingToolUse, ["id"]),
+      pendingCommand: readNestedString(pendingInput, ["command"]),
+      pendingTimeoutMs: readNestedNumber(pendingInput, ["timeout_ms"]),
+      pendingCwd: readNestedString(pendingMetadata, ["cwd"]),
+      approved:
+        controlResolved.some(
+          (row) => readNestedBoolean(row.metadata, ["interaction", "approved"]) === true
+        ) || resolved.some((row) => readNestedBoolean(row.metadata, ["approved"]) === true),
+      readOnlyBashCompleted: completedToolIds.includes("h9-readonly-pwd"),
+      approvedBashCompleted: completedToolIds.includes("h9-run-approved-bash"),
+      completedToolIds
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function readNestedRecord(value, pathSegments) {
+  let current = value;
+  for (const segment of pathSegments) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return {};
+    }
+    current = current[segment];
+  }
+  return current && typeof current === "object" && !Array.isArray(current) ? current : {};
+}
+
+function readNestedString(value, pathSegments) {
+  let current = value;
+  for (const segment of pathSegments) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return typeof current === "string" ? current : undefined;
+}
+
+function readNestedNumber(value, pathSegments) {
+  let current = value;
+  for (const segment of pathSegments) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return typeof current === "number" ? current : undefined;
+}
+
+function readNestedBoolean(value, pathSegments) {
+  let current = value;
+  for (const segment of pathSegments) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return typeof current === "boolean" ? current : undefined;
+}
+
 function parseStreamEvents(output) {
   const events = [];
   for (const line of output.split(/\r?\n/)) {
@@ -2175,7 +2585,8 @@ async function main() {
     "h5-permission-boundary",
     "h6-resume-after-interruption",
     "h7-stream-json-automation",
-    "h8-multi-agent-conflict"
+    "h8-multi-agent-conflict",
+    "h9-bash-approval-control"
   ]) {
     const started = Date.now();
     console.log(`\n=== ${taskName} ===`);

@@ -1417,13 +1417,22 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   const h8WriteClaimFiles = readStringList(h8AgentQueue.writeClaimFiles);
   const h8Limits = readRecord(h8?.limitResults);
   const h8Seen = Boolean(h8);
+  const h9 = detailsList.find((details) => details.taskId === "H9");
+  const h9ToolCounts = readRecord(h9?.toolCounts);
+  const h9ChangedFiles = readStringList(h9?.changedFiles);
+  const h9Assertions = readStringList(h9?.assertions);
+  const h9ForbiddenChanges = readStringList(h9?.forbiddenChanges);
+  const h9Session = readRecord(h9?.session);
+  const h9Approval = readRecord(h9?.approval);
+  const h9Limits = readRecord(h9?.limitResults);
+  const h9Seen = Boolean(h9);
   const assertions = readNumber(summary.assertions);
   const filesVerified = readNumber(summary.filesVerified);
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const failures = [...base.failures];
 
-  if (readNumber(summary.total) < 8) failures.push(`scenarios=${readNumber(summary.total)}`);
+  if (readNumber(summary.total) < 9) failures.push(`scenarios=${readNumber(summary.total)}`);
   if (!taskClasses.has("single_file_bug_fix")) failures.push("singleFileBugFixTask=false");
   if (!taskClasses.has("multi_file_feature")) failures.push("multiFileFeatureTask=false");
   if (!taskClasses.has("behavior_preserving_refactor"))
@@ -1435,6 +1444,7 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
     failures.push("resumeAfterInterruptionTask=false");
   if (!taskClasses.has("stream_json_automation")) failures.push("streamJsonAutomationTask=false");
   if (!taskClasses.has("multi_agent_conflict")) failures.push("multiAgentConflictTask=false");
+  if (!taskClasses.has("bash_approval_control")) failures.push("bashApprovalControlTask=false");
   if (!h1Seen) failures.push("H1=false");
   if (!h2Seen) failures.push("H2=false");
   if (!h3Seen) failures.push("H3=false");
@@ -1443,9 +1453,10 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (!h6Seen) failures.push("H6=false");
   if (!h7Seen) failures.push("H7=false");
   if (!h8Seen) failures.push("H8=false");
-  if (assertions < 110) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 42) failures.push(`filesVerified=${filesVerified}`);
-  if (toolCallCount < 51) failures.push(`toolCallCount=${toolCallCount}`);
+  if (!h9Seen) failures.push("H9=false");
+  if (assertions < 127) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 48) failures.push(`filesVerified=${filesVerified}`);
+  if (toolCallCount < 54) failures.push(`toolCallCount=${toolCallCount}`);
   if (uniqueToolCount < 6) failures.push(`uniqueToolCount=${uniqueToolCount}`);
   if (readNumber(h1ToolCounts.FileRead) < 2) failures.push("H1FileReadCalls < 2");
   if (readNumber(h1ToolCounts.FilePatch) < 2) failures.push("H1FilePatchCalls < 2");
@@ -1631,6 +1642,37 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
   if (h8Limits.withinTime !== true) failures.push("H8WithinTime=false");
   if (h8Limits.withinCommands !== true) failures.push("H8WithinCommands=false");
   if (h8Limits.withinFileChanges !== true) failures.push("H8WithinFileChanges=false");
+  if (readNumber(h9ToolCounts.FileRead) !== 1) failures.push("H9FileReadCalls != 1");
+  if (readNumber(h9ToolCounts.Bash) !== 1) failures.push("H9BashCalls != 1");
+  if (readNumber(h9ToolCounts.FileWrite) !== 1) failures.push("H9FileWriteCalls != 1");
+  if (readNumber(h9ToolCounts.FilePatch) !== 0) failures.push("H9FilePatch used");
+  if (readNumber(h9ToolCounts.FileEdit) !== 0) failures.push("H9FileEdit used");
+  if (h9?.checksPassed !== true) failures.push("H9ChecksPassed=false");
+  if (h9?.streamJsonLifecycleVerified !== true) failures.push("H9StreamJsonLifecycle=false");
+  if (JSON.stringify(h9ChangedFiles) !== JSON.stringify(["reports/bash-approval-report.md"])) {
+    failures.push(`H9ChangedFiles=${JSON.stringify(h9ChangedFiles)}`);
+  }
+  if (h9ForbiddenChanges.length > 0)
+    failures.push(`H9ForbiddenChanges=${h9ForbiddenChanges.length}`);
+  if (h9Assertions.length < 17) failures.push(`H9Assertions=${h9Assertions.length}`);
+  if (readNumber(h9Session.messageCount) < 2) failures.push("H9SessionMessages < 2");
+  if (readNumber(h9Session.auditEventCount) < 1) failures.push("H9AuditEvents < 1");
+  if (readNumber(h9Approval.pendingCount) !== 1) failures.push("H9PendingApprovalCount != 1");
+  if (readNumber(h9Approval.resolvedCount) < 1) failures.push("H9ResolvedApprovalCount < 1");
+  if (readNumber(h9Approval.controlResolvedCount) !== 1)
+    failures.push("H9ControlResolvedApprovalCount != 1");
+  if (readNumber(h9Approval.completedBashToolCount) < 2)
+    failures.push("H9CompletedBashToolCount < 2");
+  if (h9Approval.pendingCommand !== "npm test") failures.push("H9PendingCommandMismatch");
+  if (readNumber(h9Approval.pendingTimeoutMs) !== 7000) failures.push("H9PendingTimeoutMismatch");
+  if (typeof h9Approval.pendingCwd !== "string" || h9Approval.pendingCwd.length === 0)
+    failures.push("H9PendingCwdMissing");
+  if (h9Approval.approved !== true) failures.push("H9Approved=false");
+  if (h9Approval.readOnlyBashCompleted !== true) failures.push("H9ReadOnlyBashCompleted=false");
+  if (h9Approval.approvedBashCompleted !== true) failures.push("H9ApprovedBashCompleted=false");
+  if (h9Limits.withinTime !== true) failures.push("H9WithinTime=false");
+  if (h9Limits.withinCommands !== true) failures.push("H9WithinCommands=false");
+  if (h9Limits.withinFileChanges !== true) failures.push("H9WithinFileChanges=false");
   if (Array.isArray(summary.regressions) && summary.regressions.length > 0) {
     failures.push(`regressions=${summary.regressions.length}`);
   }
@@ -1800,6 +1842,33 @@ function checkComplexHarnessReport(report: Record<string, unknown>): CapabilityC
       H8WithinTime: h8Limits.withinTime === true,
       H8WithinCommands: h8Limits.withinCommands === true,
       H8WithinFileChanges: h8Limits.withinFileChanges === true,
+      H9Seen: h9Seen,
+      H9FileReadCalls: readNumber(h9ToolCounts.FileRead),
+      H9BashCalls: readNumber(h9ToolCounts.Bash),
+      H9FileWriteCalls: readNumber(h9ToolCounts.FileWrite),
+      H9FilePatchCalls: readNumber(h9ToolCounts.FilePatch),
+      H9FileEditCalls: readNumber(h9ToolCounts.FileEdit),
+      H9ChecksPassed: h9?.checksPassed === true,
+      H9StreamJsonLifecycle: h9?.streamJsonLifecycleVerified === true,
+      H9ChangedFiles: h9ChangedFiles,
+      H9ForbiddenChanges: h9ForbiddenChanges.length,
+      H9Assertions: h9Assertions.length,
+      H9SessionMessages: readNumber(h9Session.messageCount),
+      H9AuditEvents: readNumber(h9Session.auditEventCount),
+      H9PendingApprovalCount: readNumber(h9Approval.pendingCount),
+      H9ResolvedApprovalCount: readNumber(h9Approval.resolvedCount),
+      H9ControlResolvedApprovalCount: readNumber(h9Approval.controlResolvedCount),
+      H9CompletedBashToolCount: readNumber(h9Approval.completedBashToolCount),
+      H9PendingCommand: h9Approval.pendingCommand,
+      H9PendingTimeoutMs: readNumber(h9Approval.pendingTimeoutMs),
+      H9PendingCwdSeen:
+        typeof h9Approval.pendingCwd === "string" && h9Approval.pendingCwd.length > 0,
+      H9Approved: h9Approval.approved === true,
+      H9ReadOnlyBashCompleted: h9Approval.readOnlyBashCompleted === true,
+      H9ApprovedBashCompleted: h9Approval.approvedBashCompleted === true,
+      H9WithinTime: h9Limits.withinTime === true,
+      H9WithinCommands: h9Limits.withinCommands === true,
+      H9WithinFileChanges: h9Limits.withinFileChanges === true,
       regressions: Array.isArray(summary.regressions) ? summary.regressions.length : 0
     },
     failures

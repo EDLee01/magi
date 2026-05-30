@@ -1,0 +1,6 @@
+{
+  "id": "H9",
+  "name": "H9 Bash approval control",
+  "taskClass": "bash_approval_control",
+  "expectedChangedFiles": ["reports/bash-approval-report.md"]
+}
