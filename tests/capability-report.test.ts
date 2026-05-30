@@ -153,6 +153,7 @@ describe("capability report", () => {
         maintenanceRecallSeen: false,
         workflowGraphRecallSeen: false,
         conflictGroupViewSeen: false,
+        conversationIdentityRecallSeen: false,
         dreamConflictGroupLifecycleSeen: false,
         naturalLanguageCorrectionSeen: false,
         graphEdgeReinforcementSeen: false,
@@ -194,6 +195,7 @@ describe("capability report", () => {
     expect(output).toContain("maintenanceRecallSeen=false");
     expect(output).toContain("workflowGraphRecallSeen=false");
     expect(output).toContain("conflictGroupViewSeen=false");
+    expect(output).toContain("conversationIdentityRecallSeen=false");
     expect(output).toContain("dreamConflictGroupLifecycleSeen=false");
     expect(output).toContain("naturalLanguageCorrectionSeen=false");
     expect(output).toContain("graphEdgeReinforcementSeen=false");
@@ -1696,6 +1698,7 @@ function memoryReport(input: {
   maintenanceRecallSeen?: boolean;
   workflowGraphRecallSeen?: boolean;
   conflictGroupViewSeen?: boolean;
+  conversationIdentityRecallSeen?: boolean;
   dreamConflictGroupLifecycleSeen?: boolean;
   naturalLanguageCorrectionSeen?: boolean;
   graphEdgeReinforcementSeen?: boolean;
@@ -1767,6 +1770,13 @@ function memoryReport(input: {
               "user feedback increased useful memory weight",
               "user feedback persisted memory trend metadata",
               "user feedback trend view rendered useful memory"
+            ]),
+        ...(input.conversationIdentityRecallSeen === false
+          ? []
+          : [
+              "conversation prompt injected durable identity hot memory",
+              "conversation prompt preserved identity question with memory context",
+              "conversation prompt answered identity from durable memory"
             ]),
         ...(input.longCycleFeedbackTrendSeen === false
           ? []
@@ -1860,6 +1870,7 @@ function memoryReport(input: {
         (_, index) => `memory-file-${index + 1}.json`
       ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
+      conversationIdentityRecallSeen: input.conversationIdentityRecallSeen !== false,
       dreamConflictGroupLifecycleSeen: input.dreamConflictGroupLifecycleSeen !== false,
       longCycleFeedbackTrendSeen: input.longCycleFeedbackTrendSeen !== false,
       longProjectFeedbackConvergenceSeen: input.longProjectFeedbackConvergenceSeen !== false,

@@ -1307,8 +1307,13 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   const maintenanceRecallSeen = resultNames.includes("protected workflow survives maintenance");
   const workflowGraphRecallSeen = resultNames.includes("workflow graph recalls second-hop habit");
   const conflictGroupViewSeen = details.conflictGroupViewSeen === true;
-  const dreamConflictGroupLifecycleSeen = details.dreamConflictGroupLifecycleSeen === true;
   const assertionList = readStringList(details.assertions);
+  const conversationIdentityRecallSeen =
+    details.conversationIdentityRecallSeen === true &&
+    assertionList.includes("conversation prompt injected durable identity hot memory") &&
+    assertionList.includes("conversation prompt preserved identity question with memory context") &&
+    assertionList.includes("conversation prompt answered identity from durable memory");
+  const dreamConflictGroupLifecycleSeen = details.dreamConflictGroupLifecycleSeen === true;
   const naturalLanguageCorrectionSeen =
     assertionList.includes("natural-language correction disputed stale memory") &&
     assertionList.includes("natural-language correction recalled replacement only") &&
@@ -1396,11 +1401,12 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
   if (results.length < 11) failures.push(`cases=${results.length}`);
-  if (assertions < 65) failures.push(`assertions=${assertions}`);
+  if (assertions < 68) failures.push(`assertions=${assertions}`);
   if (filesVerified < 10) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
+  if (!conversationIdentityRecallSeen) failures.push("conversationIdentityRecallSeen=false");
   if (!dreamConflictGroupLifecycleSeen) failures.push("dreamConflictGroupLifecycleSeen=false");
   if (!naturalLanguageCorrectionSeen) failures.push("naturalLanguageCorrectionSeen=false");
   if (!graphEdgeReinforcementSeen) failures.push("graphEdgeReinforcementSeen=false");
@@ -1436,6 +1442,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       maintenanceRecallSeen,
       workflowGraphRecallSeen,
       conflictGroupViewSeen,
+      conversationIdentityRecallSeen,
       dreamConflictGroupLifecycleSeen,
       naturalLanguageCorrectionSeen,
       graphEdgeReinforcementSeen,

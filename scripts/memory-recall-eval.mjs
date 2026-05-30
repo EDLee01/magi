@@ -22,6 +22,7 @@ const reportFile =
   options.reportFile ?? path.join(repoRoot, ".magi-reports", "memory-recall-eval.json");
 const lifecycleEvidence = {
   conflictGroupViewSeen: false,
+  conversationIdentityRecallSeen: false,
   dreamConflictGroupLifecycleSeen: false,
   longCycleFeedbackTrendSeen: false,
   longProjectFeedbackConvergenceSeen: false,
@@ -46,6 +47,7 @@ try {
   const evalOutput = runMemoryEval("memory recall eval");
   assertProjectCaseRecall();
   assertGraphEdgeReinforcement();
+  await assertConversationIdentityRecall();
   assertUserFeedbackTrendLifecycle();
   assertLongCycleFeedbackTrendRecall();
   assertStaleKnowledgeDemotionLifecycle();
@@ -270,6 +272,54 @@ function assertGraphEdgeReinforcement() {
     db.close();
   }
   recordAssertion("memory graph recall reinforced traversed edges");
+}
+
+async function assertConversationIdentityRecall() {
+  const provider = await startMemoryIdentityProvider();
+  try {
+    writeFileSync(
+      path.join(configDir, "config.yaml"),
+      renderMemoryIdentityConfig(provider.port),
+      "utf8"
+    );
+    const output = await runCliAsync(
+      [
+        "--model",
+        "main",
+        "--output-format",
+        "stream-json",
+        "-p",
+        "我是谁？请只根据你的长期记忆回答。"
+      ],
+      "conversation identity memory recall prompt"
+    );
+    assert(
+      output.includes("You are Edward, creator of Magi Next."),
+      "conversation identity prompt did not answer from durable memory"
+    );
+    assert(provider.calls.length >= 1, "conversation identity provider was not called");
+    const transcript = provider.calls[0].transcript;
+    assert(transcript.includes("[Hot Memory]"), "conversation prompt missed hot memory layer");
+    assert(
+      transcript.includes("Edward creator identity"),
+      "conversation prompt missed identity memory title"
+    );
+    assert(
+      transcript.includes("Edward is the creator of Magi Next"),
+      "conversation prompt missed identity memory body"
+    );
+    assert(
+      transcript.includes("我是谁") || transcript.includes("长期记忆"),
+      "conversation prompt transcript missed user question"
+    );
+    lifecycleEvidence.conversationIdentityRecallSeen = true;
+    recordAssertion("conversation prompt injected durable identity hot memory");
+    recordAssertion("conversation prompt preserved identity question with memory context");
+    recordAssertion("conversation prompt answered identity from durable memory");
+  } finally {
+    await provider.close();
+    removeConfigFile();
+  }
 }
 
 function assertUserFeedbackTrendLifecycle() {
@@ -2108,6 +2158,31 @@ function renderAutonomousLearningConfig(port) {
   ].join("\n");
 }
 
+function renderMemoryIdentityConfig(port) {
+  return [
+    "defaultProvider: openai",
+    "defaultModel: main",
+    "providers:",
+    "  openai:",
+    "    type: openai",
+    "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+    `    baseUrl: http://127.0.0.1:${port}/v1`,
+    "models:",
+    "  aliases:",
+    "    main: openai:mock-main",
+    "  fallbacks: {}",
+    "memory:",
+    "  enabled: true",
+    "  autoWrite: off",
+    "  maxResults: 8",
+    "  scopes:",
+    "    - user",
+    "    - project",
+    "    - session",
+    ""
+  ].join("\n");
+}
+
 function runCli(args, label) {
   if (!existsSync(cliPath)) {
     throw new Error("dist/cli.js does not exist. Run npm run build first.");
@@ -2309,6 +2384,58 @@ function startAutonomousLearningProvider() {
       });
     });
   });
+}
+
+function startMemoryIdentityProvider() {
+  const calls = [];
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const body = JSON.parse(raw);
+      const transcript = transcriptFromProviderBody(body);
+      calls.push({ model: body.model, transcript });
+      assert(
+        transcript.includes("Edward is the creator of Magi Next"),
+        "provider request did not include durable identity memory"
+      );
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "You are Edward, creator of Magi Next."
+              }
+            }
+          ],
+          usage: { prompt_tokens: 32, completion_tokens: 8 }
+        })
+      );
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      assert(address && typeof address === "object", "identity provider did not bind");
+      resolve({
+        port: address.port,
+        calls,
+        close: () => new Promise((closeResolve) => server.close(closeResolve))
+      });
+    });
+  });
+}
+
+function transcriptFromProviderBody(body) {
+  return (body.messages ?? [])
+    .map((message) =>
+      Array.isArray(message.content)
+        ? message.content.map((part) => part.text ?? "").join("\n")
+        : String(message.content ?? "")
+    )
+    .join("\n");
 }
 
 function draftId(output) {
