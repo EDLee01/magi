@@ -1182,6 +1182,17 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("multi-project Magi rule recalled without Kira rule") &&
     assertionList.includes("multi-project Kira rule recalled without Magi rule") &&
     assertionList.includes("shared user preference recalled across project rules");
+  const multilingualProjectRecallSeen =
+    details.multilingualProjectRecallSeen === true &&
+    resultNames.includes("Spanish preference recalls concise verification") &&
+    resultNames.includes("French project rule recalls recette validation") &&
+    resultNames.includes("Japanese project rule recalls approval") &&
+    assertionList.includes("multilingual Spanish preference recalled") &&
+    assertionList.includes("multilingual French project rule recalled with shared preference") &&
+    assertionList.includes("multilingual Japanese project rule recalled with shared preference") &&
+    assertionList.includes("multilingual project recall isolated unrelated project rule") &&
+    assertionList.includes("multilingual wiki sources indexed into sqlite") &&
+    assertionList.includes("multilingual project graph edges linked shared preference");
   const multiNodeSupersededCleanupSeen =
     details.multiNodeSupersededCleanupSeen === true &&
     assertionList.includes("multi-node superseded cleanup candidates listed disputed nodes") &&
@@ -1196,9 +1207,9 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (report.failed !== 0) failures.push(`failed=${String(report.failed)}`);
   if (report.thresholdPassed !== true) failures.push("thresholdPassed=false");
   if (score < readNumber(report.minScore, 1)) failures.push(`score=${score}`);
-  if (results.length < 8) failures.push(`cases=${results.length}`);
-  if (assertions < 59) failures.push(`assertions=${assertions}`);
-  if (filesVerified < 9) failures.push(`filesVerified=${filesVerified}`);
+  if (results.length < 11) failures.push(`cases=${results.length}`);
+  if (assertions < 65) failures.push(`assertions=${assertions}`);
+  if (filesVerified < 10) failures.push(`filesVerified=${filesVerified}`);
   if (!maintenanceRecallSeen) failures.push("maintenanceRecallSeen=false");
   if (!workflowGraphRecallSeen) failures.push("workflowGraphRecallSeen=false");
   if (!conflictGroupViewSeen) failures.push("conflictGroupViewSeen=false");
@@ -1218,6 +1229,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
   if (!crossNodeRecommendationSeen) failures.push("crossNodeRecommendationSeen=false");
   if (!projectCaseRecallSeen) failures.push("projectCaseRecallSeen=false");
   if (!multiProjectConflictRecallSeen) failures.push("multiProjectConflictRecallSeen=false");
+  if (!multilingualProjectRecallSeen) failures.push("multilingualProjectRecallSeen=false");
   if (!multiNodeSupersededCleanupSeen) failures.push("multiNodeSupersededCleanupSeen=false");
   if (!maintenanceConfigBoundarySeen) failures.push("maintenanceConfigBoundarySeen=false");
   return {
@@ -1248,6 +1260,7 @@ function checkMemoryReport(report: Record<string, unknown>): CapabilityCheck {
       crossNodeRecommendationSeen,
       projectCaseRecallSeen,
       multiProjectConflictRecallSeen,
+      multilingualProjectRecallSeen,
       multiNodeSupersededCleanupSeen,
       maintenanceConfigBoundarySeen
     },

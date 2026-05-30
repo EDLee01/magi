@@ -31,6 +31,7 @@ const lifecycleEvidence = {
   crossNodeRecommendationSeen: false,
   projectCaseRecallSeen: false,
   multiProjectConflictRecallSeen: false,
+  multilingualProjectRecallSeen: false,
   multiNodeSupersededCleanupSeen: false,
   maintenanceConfigBoundarySeen: false,
   assertions: [],
@@ -53,6 +54,7 @@ try {
   assertDreamReviewLifecycle();
   assertMaintenanceLifecycle();
   assertMultiProjectConflictRecall();
+  assertMultilingualProjectRecall();
   assertLongProjectFeedbackConvergence();
   assertLongProjectLearningDraftRecall();
   await assertAutonomousLearningCycle();
@@ -911,6 +913,82 @@ function assertMultiProjectConflictRecall() {
   recordAssertion("shared user preference recalled across project rules");
 }
 
+function assertMultilingualProjectRecall() {
+  const graph = seedMultilingualWikiMemory();
+  const output = runMemoryEval(
+    "memory recall eval for multilingual projects",
+    writeMultilingualProjectCaseFile()
+  );
+  assert(
+    output.includes("Spanish preference recalls concise verification"),
+    "Spanish preference recall case did not run"
+  );
+  assert(
+    output.includes("French project rule recalls recette validation"),
+    "French project recall case did not run"
+  );
+  assert(
+    output.includes("Japanese project rule recalls approval"),
+    "Japanese project recall case did not run"
+  );
+
+  const spanishSearch = runCli(
+    ["memory", "search", "preferencia verificacion concisa resultado clave"],
+    "multilingual Spanish preference search"
+  );
+  assert(
+    spanishSearch.includes("Preferencia de verificacion concisa"),
+    "Spanish search missed Spanish user preference"
+  );
+  assert(
+    spanishSearch.includes("resumen breve"),
+    "Spanish search missed concise verification body"
+  );
+
+  const frenchSearch = runCli(
+    ["memory", "search", "Projet Atlas recette validation client deploiement"],
+    "multilingual French project search"
+  );
+  assert(
+    frenchSearch.includes("Projet Atlas regle de recette"),
+    "French search missed French project rule"
+  );
+  assert(frenchSearch.includes("validation client"), "French search missed validation client rule");
+  assert(
+    frenchSearch.includes("Preferencia de verificacion concisa"),
+    "French project search missed linked shared Spanish preference"
+  );
+  assert(!frenchSearch.includes("承認者"), "French project search leaked Japanese approval rule");
+
+  const japaneseSearch = runCli(
+    ["memory", "search", "Sakura リリース 承認者 検証 要約"],
+    "multilingual Japanese project search"
+  );
+  assert(
+    japaneseSearch.includes("Sakura release approval rule"),
+    "Japanese search missed Japanese project rule"
+  );
+  assert(japaneseSearch.includes("承認者"), "Japanese search missed approval body");
+  assert(
+    japaneseSearch.includes("Preferencia de verificacion concisa"),
+    "Japanese project search missed linked shared Spanish preference"
+  );
+  assert(
+    !japaneseSearch.includes("validation client"),
+    "Japanese project search leaked French project rule"
+  );
+
+  assertMultilingualSqliteGraphLinked(graph);
+
+  lifecycleEvidence.multilingualProjectRecallSeen = true;
+  recordAssertion("multilingual Spanish preference recalled");
+  recordAssertion("multilingual French project rule recalled with shared preference");
+  recordAssertion("multilingual Japanese project rule recalled with shared preference");
+  recordAssertion("multilingual project recall isolated unrelated project rule");
+  recordAssertion("multilingual wiki sources indexed into sqlite");
+  recordAssertion("multilingual project graph edges linked shared preference");
+}
+
 async function assertNaturalLanguageCorrectionLifecycle() {
   const stale = seedTypedGraphNode({
     type: "preference",
@@ -1438,6 +1516,31 @@ function writeMultiProjectConflictCaseFile() {
   return file;
 }
 
+function writeMultilingualProjectCaseFile() {
+  const suite = JSON.parse(readFileSync(options.caseFile, "utf8"));
+  const file = path.join(workDir, "memory-recall-multilingual-business.json");
+  writeFileSync(
+    file,
+    `${JSON.stringify(
+      {
+        ...suite,
+        name: `${suite.name ?? "memory business recall"} with multilingual project rules`,
+        maxResults: Math.max(suite.maxResults ?? 0, 15),
+        cases: [
+          ...(Array.isArray(suite.cases) ? suite.cases : []),
+          ...maintenanceRecallCases(),
+          ...multiProjectConflictCases(),
+          ...multilingualProjectCases()
+        ]
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  return file;
+}
+
 function maintenanceRecallCases() {
   return [
     {
@@ -1477,6 +1580,39 @@ function multiProjectConflictCases() {
         "Shared concise verification style"
       ],
       forbid: ["GitHub checks before npm publish"],
+      minResults: 2
+    }
+  ];
+}
+
+function multilingualProjectCases() {
+  return [
+    {
+      name: "Spanish preference recalls concise verification",
+      query: "preferencia verificacion concisa resultado clave",
+      expect: ["Preferencia de verificacion concisa", "resumen breve"],
+      minResults: 1
+    },
+    {
+      name: "French project rule recalls recette validation",
+      query: "Projet Atlas recette validation client deploiement",
+      expect: [
+        "Projet Atlas regle de recette",
+        "validation client",
+        "Preferencia de verificacion concisa"
+      ],
+      forbid: ["承認者"],
+      minResults: 2
+    },
+    {
+      name: "Japanese project rule recalls approval",
+      query: "Sakura リリース 承認者 検証 要約",
+      expect: [
+        "Sakura release approval rule",
+        "承認者",
+        "Preferencia de verificacion concisa"
+      ],
+      forbid: ["validation client"],
       minResults: 2
     }
   ];
@@ -1543,6 +1679,65 @@ function seedMultiProjectWikiMemory() {
     reason: "Project-specific approval rules conflict and must resolve by project context."
   });
   return { shared, magi, kira };
+}
+
+function seedMultilingualWikiMemory() {
+  writeMemoryWikiFile(
+    "preferences-multilingual.md",
+    [
+      "## Preferencia de verificacion concisa",
+      "El usuario prefiere un resumen breve con resultado clave y siguiente accion.",
+      "Aplicar esta preferencia incluso cuando el proyecto use otro idioma."
+    ].join("\n")
+  );
+  writeMemoryWikiFile(
+    "projects/atlas-fr.md",
+    [
+      "## Projet Atlas regle de recette",
+      "Le Projet Atlas exige une validation client avant le deploiement.",
+      "Les notes de livraison doivent garder le resultat de verification et le risque ensemble."
+    ].join("\n")
+  );
+  writeMemoryWikiFile(
+    "projects/sakura-ja.md",
+    [
+      "## Sakura release approval rule",
+      "Sakura リリース は 承認者 と 検証 要約 を 記録 してから deploy する。",
+      "短い要約 には owner risk next action を含める。"
+    ].join("\n")
+  );
+  runCli(
+    ["memory", "search", "Projet Atlas Sakura preferencia verificacion"],
+    "sync multilingual wiki memory"
+  );
+
+  const shared = wikiChunkByHeading(
+    "memory/preferences-multilingual.md",
+    "Preferencia de verificacion concisa"
+  );
+  const atlas = wikiChunkByHeading("memory/projects/atlas-fr.md", "Projet Atlas regle de recette");
+  const sakura = wikiChunkByHeading("memory/projects/sakura-ja.md", "Sakura release approval rule");
+  seedGraphEdge({
+    fromNodeId: shared.nodeId,
+    toNodeId: atlas.nodeId,
+    relation: "relates_to",
+    weight: 0.94,
+    reason: "Shared concise verification preference applies to the French Atlas project."
+  });
+  seedGraphEdge({
+    fromNodeId: shared.nodeId,
+    toNodeId: sakura.nodeId,
+    relation: "relates_to",
+    weight: 0.94,
+    reason: "Shared concise verification preference applies to the Japanese Sakura project."
+  });
+  seedConflictEdge({
+    fromNodeId: atlas.nodeId,
+    toNodeId: sakura.nodeId,
+    weight: 0.75,
+    reason: "Project-specific approval rules are isolated by project language context."
+  });
+  return { shared, atlas, sakura };
 }
 
 function writeMemoryWikiFile(filePath, content) {
@@ -1689,6 +1884,60 @@ function assertSqliteWikiGraphLinked(graph) {
   }
 }
 
+function assertMultilingualSqliteGraphLinked(graph) {
+  const db = openDb();
+  try {
+    const activeSources = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_sources
+        where status = 'active'
+          and uri in (
+            'memory/preferences-multilingual.md',
+            'memory/projects/atlas-fr.md',
+            'memory/projects/sakura-ja.md'
+          )
+      `
+      )
+      .get();
+    assert(activeSources.count === 3, "multilingual wiki sources were not active in sqlite");
+    const activeChunks = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_chunks
+        where status = 'active'
+          and node_id in (?, ?, ?)
+      `
+      )
+      .get(graph.shared.nodeId, graph.atlas.nodeId, graph.sakura.nodeId);
+    assert(activeChunks.count === 3, "multilingual wiki chunks were not active in sqlite");
+    const linkedEdges = db
+      .prepare(
+        `
+        select count(*) as count
+        from memory_edges
+        where
+          (from_node_id = ? and to_node_id = ? and relation = 'relates_to') or
+          (from_node_id = ? and to_node_id = ? and relation = 'relates_to') or
+          (from_node_id = ? and to_node_id = ? and relation = 'conflicts_with')
+      `
+      )
+      .get(
+        graph.shared.nodeId,
+        graph.atlas.nodeId,
+        graph.shared.nodeId,
+        graph.sakura.nodeId,
+        graph.atlas.nodeId,
+        graph.sakura.nodeId
+      );
+    assert(linkedEdges.count === 3, "multilingual wiki graph edges were not persisted");
+  } finally {
+    db.close();
+  }
+}
+
 function writeLifecycleEvidence() {
   const report = JSON.parse(readFileSync(reportFile, "utf8"));
   recordFileVerified(relativeToRoot(report.caseFile ?? options.caseFile));
@@ -1701,6 +1950,7 @@ function writeLifecycleEvidence() {
   recordFileVerified("memory/dreams");
   recordFileVerified("memory-recall-project-business.json");
   recordFileVerified("memory-recall-multi-project-business.json");
+  recordFileVerified("memory-recall-multilingual-business.json");
   recordFileVerified("memory-recall-maintenance-business.json");
   recordFileVerified("memory/workflows/README.md");
   recordFileVerified("state/learning-drafts");

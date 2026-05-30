@@ -163,6 +163,7 @@ describe("capability report", () => {
         crossNodeRecommendationSeen: false,
         projectCaseRecallSeen: false,
         multiProjectConflictRecallSeen: false,
+        multilingualProjectRecallSeen: false,
         multiNodeSupersededCleanupSeen: false,
         maintenanceConfigBoundarySeen: false,
         assertions: 4,
@@ -203,6 +204,7 @@ describe("capability report", () => {
     expect(output).toContain("crossNodeRecommendationSeen=false");
     expect(output).toContain("projectCaseRecallSeen=false");
     expect(output).toContain("multiProjectConflictRecallSeen=false");
+    expect(output).toContain("multilingualProjectRecallSeen=false");
     expect(output).toContain("multiNodeSupersededCleanupSeen=false");
     expect(output).toContain("maintenanceConfigBoundarySeen=false");
   });
@@ -1540,6 +1542,7 @@ function memoryReport(input: {
   crossNodeRecommendationSeen?: boolean;
   projectCaseRecallSeen?: boolean;
   multiProjectConflictRecallSeen?: boolean;
+  multilingualProjectRecallSeen?: boolean;
   multiNodeSupersededCleanupSeen?: boolean;
   maintenanceConfigBoundarySeen?: boolean;
   assertions?: number;
@@ -1559,6 +1562,13 @@ function memoryReport(input: {
       : [
           "multi-project Magi release rule wins in Magi context",
           "multi-project Kira support rule wins in Kira context"
+        ]),
+    ...(input.multilingualProjectRecallSeen === false
+      ? []
+      : [
+          "Spanish preference recalls concise verification",
+          "French project rule recalls recette validation",
+          "Japanese project rule recalls approval"
         ])
   ];
   const total = names.length;
@@ -1651,6 +1661,16 @@ function memoryReport(input: {
               "multi-project Kira rule recalled without Magi rule",
               "shared user preference recalled across project rules"
             ]),
+        ...(input.multilingualProjectRecallSeen === false
+          ? []
+          : [
+              "multilingual Spanish preference recalled",
+              "multilingual French project rule recalled with shared preference",
+              "multilingual Japanese project rule recalled with shared preference",
+              "multilingual project recall isolated unrelated project rule",
+              "multilingual wiki sources indexed into sqlite",
+              "multilingual project graph edges linked shared preference"
+            ]),
         ...(input.multiNodeSupersededCleanupSeen === false
           ? []
           : [
@@ -1670,7 +1690,7 @@ function memoryReport(input: {
         )
       ],
       filesVerified: Array.from(
-        { length: input.filesVerified ?? 9 },
+        { length: input.filesVerified ?? 10 },
         (_, index) => `memory-file-${index + 1}.json`
       ),
       conflictGroupViewSeen: input.conflictGroupViewSeen !== false,
@@ -1683,6 +1703,7 @@ function memoryReport(input: {
       crossNodeRecommendationSeen: input.crossNodeRecommendationSeen !== false,
       projectCaseRecallSeen: input.projectCaseRecallSeen !== false,
       multiProjectConflictRecallSeen: input.multiProjectConflictRecallSeen !== false,
+      multilingualProjectRecallSeen: input.multilingualProjectRecallSeen !== false,
       multiNodeSupersededCleanupSeen: input.multiNodeSupersededCleanupSeen !== false,
       maintenanceConfigBoundarySeen: input.maintenanceConfigBoundarySeen !== false
     }
