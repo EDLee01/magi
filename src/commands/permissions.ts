@@ -5,6 +5,7 @@ import { ToolPermissionMode } from "../tools/registry.js";
 export const PERMISSION_MODES: ToolPermissionMode[] = [
   "default",
   "acceptEdits",
+  "dontAsk",
   "bypassPermissions",
   "plan"
 ];
@@ -18,9 +19,11 @@ export function formatPermissionMode(mode: ToolPermissionMode): string {
     case "default":
       return "default - ask before non-read-only tools";
     case "acceptEdits":
-      return "acceptEdits - allow tool edits without approval";
+      return "acceptEdits - allow ordinary edits and commands without approval";
+    case "dontAsk":
+      return "dontAsk - deny non-read-only tools instead of asking";
     case "bypassPermissions":
-      return "bypassPermissions - skip approval prompts";
+      return "bypassPermissions - skip approval prompts; dangerous Bash still needs explicit env approval";
     case "plan":
       return "plan - deny write tools";
   }
@@ -30,7 +33,8 @@ export const command = {
   name: "permissions",
   aliases: ["perms"],
   description: "View or manage persistent permission rules",
-  usage: "/permissions [mode [default|acceptEdits|bypassPermissions|plan]|clear|remove <tool>]",
+  usage:
+    "/permissions [mode [default|acceptEdits|dontAsk|bypassPermissions|plan]|clear|remove <tool>]",
   group: "Config",
   handler: (args: string[], input: SlashCommandInput): string => {
     if (args[0] === "mode") {

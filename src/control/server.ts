@@ -1140,6 +1140,7 @@ function readApprovalDecision(body: Record<string, unknown>): boolean | undefine
 function readPermissionMode(value: unknown): ToolPermissionMode | undefined {
   return value === "default" ||
     value === "acceptEdits" ||
+    value === "dontAsk" ||
     value === "bypassPermissions" ||
     value === "plan"
     ? value

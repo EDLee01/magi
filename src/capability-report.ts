@@ -199,7 +199,12 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
     assertionList.includes("--disallowed-tools filtered exposed schemas") &&
     assertionList.includes("--disallowed-tools denied requested tool execution") &&
     assertionList.includes("--allowed-tools scoped selector allowed matching Bash command") &&
-    assertionList.includes("--allowed-tools scoped selector denied non-matching Bash command");
+    assertionList.includes("--allowed-tools scoped selector denied non-matching Bash command") &&
+    assertionList.includes("dontAsk mode denied non-read-only tool without writing") &&
+    assertionList.includes("acceptEdits mode allowed ordinary write without approval") &&
+    assertionList.includes("dangerous Bash denied outside bypassPermissions") &&
+    assertionList.includes("bypassPermissions dangerous Bash required explicit env approval") &&
+    assertionList.includes("bypassPermissions dangerous Bash ran with explicit env approval");
   const slashSuggestionPromptSeen =
     assertionList.includes("slash suggestion menu rendered for slash input") &&
     assertionList.includes("slash suggestion filtered command descriptions") &&
@@ -213,7 +218,7 @@ function checkBlackboxReport(report: Record<string, unknown>): CapabilityCheck {
   const toolCallCount = readNumber(toolEfficiency.toolCallCount);
   const uniqueToolCount = readNumber(toolEfficiency.uniqueToolCount);
   const providerCallsPerScenario = readNumber(summary.providerCallsPerScenario);
-  if (assertions < 83) failures.push(`assertions=${assertions}`);
+  if (assertions < 88) failures.push(`assertions=${assertions}`);
   if (filesVerified < 4) failures.push(`filesVerified=${filesVerified}`);
   if (!learningDraftApplySeen) failures.push("learningDraftApplySeen=false");
   if (!skillLearningApplySeen) failures.push("skillLearningApplySeen=false");

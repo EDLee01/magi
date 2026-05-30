@@ -983,9 +983,11 @@ function permissionModePickerDescription(mode: ToolPermissionMode): string {
     case "default":
       return "ask before non-read-only tools";
     case "acceptEdits":
-      return "allow tool edits without approval";
+      return "allow ordinary edits and commands without approval";
+    case "dontAsk":
+      return "deny non-read-only tools instead of asking";
     case "bypassPermissions":
-      return "skip approval prompts";
+      return "skip prompts; dangerous Bash needs explicit env approval";
     case "plan":
       return "deny write tools";
   }

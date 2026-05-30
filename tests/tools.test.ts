@@ -87,6 +87,7 @@ describe("local tools", () => {
 
   it("blocks dangerous shell commands unless explicitly approved", async () => {
     expect(isDangerousShellCommand("rm -rf /tmp/something")).toBe(true);
+    expect(isDangerousShellCommand("rm -rf build")).toBe(true);
     await expect(
       runShellCommand({
         cwd: process.cwd(),

@@ -390,10 +390,13 @@ Acceptance:
 - `bypassPermissions` requires explicit dangerous flag and audit.
 - Dangerous shell remains blocked unless mode and flags allow it.
 
-Current status: partially implemented. `default`, `acceptEdits`,
-`bypassPermissions`, and `plan` exist, and CLI allow/deny rules compose with
-them. Dangerous-tool semantics and exhaustive per-tool mode coverage still need
-the unified policy pass.
+Current status: implemented and black-box gated for core CLI/File/Bash paths.
+`default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, and `plan` compose
+with CLI allow/deny rules. `dontAsk` denies non-read-only tools without writing,
+`acceptEdits` allows ordinary edits, and dangerous Bash is denied unless
+`bypassPermissions` plus `MAGI_APPROVE_DANGEROUS_COMMANDS=1` are both present.
+Long-tail MCP/browser permission parity should keep using the same policy model
+as those tools mature.
 
 ## F. Complex Task Harness
 

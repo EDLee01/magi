@@ -384,7 +384,16 @@ async function startServe({ configDir, workDir, controlPort }) {
   };
 }
 
-function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs = 30_000 }) {
+function runCommand({
+  command,
+  args,
+  cwd,
+  configDir,
+  label,
+  inputText,
+  timeoutMs = 30_000,
+  env = {}
+}) {
   console.log(`+ ${label}: ${[command, ...args].map((part) => JSON.stringify(part)).join(" ")}`);
   return new Promise((resolve, reject) => {
     const detached = process.platform !== "win32";
@@ -392,8 +401,9 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
       cwd,
       env: {
         ...process.env,
+        ...env,
         MAGI_CONFIG_DIR: configDir,
-        MAGI_OPENAI_API_KEY: "test-key",
+        MAGI_OPENAI_API_KEY: env.MAGI_OPENAI_API_KEY ?? "test-key",
         NO_COLOR: "1"
       },
       detached,
@@ -457,14 +467,23 @@ function runCommand({ command, args, cwd, configDir, label, inputText, timeoutMs
   });
 }
 
-async function runCli({ args, cwd, configDir, label, timeoutMs = 30_000, expectExit = 0 }) {
+async function runCli({
+  args,
+  cwd,
+  configDir,
+  label,
+  timeoutMs = 30_000,
+  expectExit = 0,
+  env = {}
+}) {
   const result = await runCommand({
     command: nodeBin,
     args: [cliPath, "--no-color", ...args],
     cwd,
     configDir,
     label,
-    timeoutMs
+    timeoutMs,
+    env
   });
   if (result.code !== expectExit) {
     throw new Error(
@@ -484,7 +503,8 @@ async function runCliAllowFailure(input) {
     cwd: input.cwd,
     configDir: input.configDir,
     label: input.label,
-    timeoutMs: input.timeoutMs ?? 30_000
+    timeoutMs: input.timeoutMs ?? 30_000,
+    env: input.env ?? {}
   });
 }
 
@@ -2013,11 +2033,87 @@ async function scenarioToolPolicyAllowDeny() {
             })
           ]);
         }
+        if (turn === 8) {
+          assert(
+            transcript.includes("Permission deny: Bash is not in allowed tools"),
+            "scoped Bash allow did not deny unmatched command"
+          );
+          return messageText("Tool scoped deny observed.");
+        }
+        if (turn === 9) {
+          return toolResponse([
+            toolCall("permission-dontask-write", "FileWrite", {
+              file_path: "dontask-denied.txt",
+              content: "no"
+            })
+          ]);
+        }
+        if (turn === 10) {
+          assert(
+            transcript.includes("Permission deny: FileWrite is not allowed in dontAsk mode"),
+            "dontAsk denial was not returned to the model"
+          );
+          return messageText("Permission dontAsk denial observed.");
+        }
+        if (turn === 11) {
+          return toolResponse([
+            toolCall("permission-accept-write", "FileWrite", {
+              file_path: "accepted-write.txt",
+              content: "accepted\n"
+            })
+          ]);
+        }
+        if (turn === 12) {
+          assert(
+            transcript.includes("Wrote accepted-write.txt"),
+            "acceptEdits did not allow ordinary write"
+          );
+          return messageText("Permission acceptEdits ordinary write observed.");
+        }
+        if (turn === 13) {
+          return toolResponse([
+            toolCall("permission-danger-denied", "Bash", {
+              command: "rm -rf build"
+            })
+          ]);
+        }
+        if (turn === 14) {
+          assert(
+            transcript.includes(
+              "Permission deny: dangerous Bash command requires bypassPermissions mode and explicit dangerous approval"
+            ),
+            "dangerous Bash denial was not returned to the model"
+          );
+          return messageText("Permission dangerous Bash denied without bypass observed.");
+        }
+        if (turn === 15) {
+          return toolResponse([
+            toolCall("permission-danger-bypass-missing-env", "Bash", {
+              command: "rm -rf build"
+            })
+          ]);
+        }
+        if (turn === 16) {
+          assert(
+            transcript.includes(
+              "Permission deny: dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1"
+            ),
+            "bypass dangerous Bash missing-env denial was not returned to the model"
+          );
+          return messageText("Permission bypass dangerous env guard observed.");
+        }
+        if (turn === 17) {
+          return toolResponse([
+            toolCall("permission-danger-bypass-explicit-env", "Bash", {
+              command: "rm -rf build"
+            })
+          ]);
+        }
         assert(
-          transcript.includes("Permission deny: Bash is not in allowed tools"),
-          "scoped Bash allow did not deny unmatched command"
+          transcript.includes("Command exited 0"),
+          "bypass dangerous Bash with env did not execute"
         );
-        return messageText("Tool scoped deny observed.");
+        return messageText("Permission bypass dangerous explicit env observed.");
       }
     });
     try {
@@ -2102,6 +2198,113 @@ async function scenarioToolPolicyAllowDeny() {
         scopedDenyOutput.includes("Tool scoped deny observed"),
         "scoped deny scenario did not complete"
       );
+      const dontAskOutput = await runCli({
+        args: [
+          "--permission-mode",
+          "dontAsk",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try to write in dontAsk mode."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "permission dontAsk"
+      });
+      assert(
+        dontAskOutput.includes("Permission dontAsk denial observed"),
+        "dontAsk scenario did not complete"
+      );
+      assert(
+        !existsSync(path.join(workDir, "dontask-denied.txt")),
+        "dontAsk denied write unexpectedly created a file"
+      );
+      const acceptEditsOutput = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Write a file in acceptEdits mode."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "permission acceptEdits ordinary write"
+      });
+      assert(
+        acceptEditsOutput.includes("Permission acceptEdits ordinary write observed"),
+        "acceptEdits ordinary write scenario did not complete"
+      );
+      assert(
+        readFileSync(path.join(workDir, "accepted-write.txt"), "utf8") === "accepted\n",
+        "acceptEdits write did not create expected file"
+      );
+      const dangerousDeniedOutput = await runCli({
+        args: [
+          "--permission-mode",
+          "acceptEdits",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try dangerous Bash in acceptEdits mode."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "permission dangerous denied"
+      });
+      assert(
+        dangerousDeniedOutput.includes("Permission dangerous Bash denied without bypass observed"),
+        "dangerous Bash denial scenario did not complete"
+      );
+      const bypassMissingEnvOutput = await runCli({
+        args: [
+          "--permission-mode",
+          "bypassPermissions",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try dangerous Bash in bypass mode without env approval."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "permission bypass dangerous missing env"
+      });
+      assert(
+        bypassMissingEnvOutput.includes("Permission bypass dangerous env guard observed"),
+        "bypass missing env scenario did not complete"
+      );
+      mkdirSync(path.join(workDir, "build"), { recursive: true });
+      await writeFile(path.join(workDir, "build", "sentinel.txt"), "delete me\n", "utf8");
+      const bypassExplicitEnvOutput = await runCli({
+        args: [
+          "--permission-mode",
+          "bypassPermissions",
+          "--model",
+          "main",
+          "--output-format",
+          "stream-json",
+          "-p",
+          "Try dangerous Bash in bypass mode with explicit env approval."
+        ],
+        cwd: workDir,
+        configDir,
+        label: "permission bypass dangerous explicit env",
+        env: { MAGI_APPROVE_DANGEROUS_COMMANDS: "1" }
+      });
+      assert(
+        bypassExplicitEnvOutput.includes("Permission bypass dangerous explicit env observed"),
+        "bypass explicit env scenario did not complete"
+      );
+      assert(!existsSync(path.join(workDir, "build")), "explicit dangerous Bash did not remove build");
       assert(seenInitialTools.length > 0, "tool policy scenario did not capture exposed tools");
       return {
         score: 1,
@@ -2111,7 +2314,12 @@ async function scenarioToolPolicyAllowDeny() {
           "--disallowed-tools filtered exposed schemas",
           "--disallowed-tools denied requested tool execution",
           "--allowed-tools scoped selector allowed matching Bash command",
-          "--allowed-tools scoped selector denied non-matching Bash command"
+          "--allowed-tools scoped selector denied non-matching Bash command",
+          "dontAsk mode denied non-read-only tool without writing",
+          "acceptEdits mode allowed ordinary write without approval",
+          "dangerous Bash denied outside bypassPermissions",
+          "bypassPermissions dangerous Bash required explicit env approval",
+          "bypassPermissions dangerous Bash ran with explicit env approval"
         ],
         provider: provider.summary()
       };

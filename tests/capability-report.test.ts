@@ -987,7 +987,7 @@ function harnessReport(input: {
       score: 1,
       providerCalls: input.providerCalls,
       providerCallsPerScenario: input.providerCalls / input.scenarios,
-      assertions: input.assertions ?? 85,
+      assertions: input.assertions ?? 90,
       filesVerified: input.filesVerified ?? 6,
       toolEfficiency: {
         toolCallCount: input.toolCallCount ?? 42,
@@ -1284,7 +1284,12 @@ function toolPolicyAssertions(input: { toolPolicySeen?: boolean }): string[] {
         "--disallowed-tools filtered exposed schemas",
         "--disallowed-tools denied requested tool execution",
         "--allowed-tools scoped selector allowed matching Bash command",
-        "--allowed-tools scoped selector denied non-matching Bash command"
+        "--allowed-tools scoped selector denied non-matching Bash command",
+        "dontAsk mode denied non-read-only tool without writing",
+        "acceptEdits mode allowed ordinary write without approval",
+        "dangerous Bash denied outside bypassPermissions",
+        "bypassPermissions dangerous Bash required explicit env approval",
+        "bypassPermissions dangerous Bash ran with explicit env approval"
       ];
 }
 

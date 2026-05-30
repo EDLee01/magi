@@ -1092,6 +1092,84 @@ describe("CLI entrypoint", () => {
     expect(JSON.stringify(requests.at(-1))).toContain("Wrote permission-mode.txt");
   });
 
+  it("denies non-read-only tools in dontAsk mode without writing files", async () => {
+    temp = makeTempRoot();
+    const requests: Array<{ messages: Array<{ role: string; content?: unknown }> }> = [];
+    server = http.createServer(async (request, response) => {
+      let raw = "";
+      for await (const chunk of request) {
+        raw += Buffer.isBuffer(chunk)
+          ? chunk.toString("utf8")
+          : Buffer.from(chunk).toString("utf8");
+      }
+      const body = JSON.parse(raw) as {
+        messages: Array<{ role: string; content?: unknown }>;
+      };
+      requests.push(body);
+      const hasToolResult = body.messages.some((message) => message.role === "tool");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: hasToolResult
+                ? { content: "DONTASK DENIAL OBSERVED" }
+                : {
+                    content: "",
+                    tool_calls: [
+                      {
+                        id: "write-cli-dontask",
+                        type: "function",
+                        function: {
+                          name: "FileWrite",
+                          arguments: JSON.stringify({
+                            file_path: "dontask-denied.txt",
+                            content: "blocked"
+                          })
+                        }
+                      }
+                    ]
+                  }
+            }
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1 }
+        })
+      );
+    });
+    const baseUrl = await listen(server);
+    const paths = getMagiPaths(temp.env);
+    writeFileSync(
+      paths.configFile,
+      [
+        "version: 0.1",
+        "providers:",
+        "  main:",
+        "    type: openai",
+        "    apiKeyEnv: MAGI_OPENAI_API_KEY",
+        `    baseUrl: ${baseUrl}/v1`,
+        "models:",
+        "  aliases:",
+        "    main: main:gpt-main",
+        "  fallbacks: {}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await runCli(
+      ["--permission-mode", "dontAsk", "--model", "main", "-p", "write a file"],
+      { ...temp.env, MAGI_OPENAI_API_KEY: "test-key" },
+      temp.path
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("DONTASK DENIAL OBSERVED");
+    expect(JSON.stringify(requests.at(-1))).toContain(
+      "Permission deny: FileWrite is not allowed in dontAsk mode"
+    );
+    expect(existsSync(path.join(temp.path, "dontask-denied.txt"))).toBe(false);
+  });
+
   it("applies CLI tool allow and deny rules to exposed schemas and execution", async () => {
     temp = makeTempRoot();
     const requests: Array<{

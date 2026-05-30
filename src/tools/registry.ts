@@ -39,7 +39,7 @@ import {
 } from "./git.js";
 import { executeLspRequest, LSP_SCHEMA, parseLspRequest } from "./lsp.js";
 import { formatSearchMatches, globWorkspace, searchWorkspace } from "./search.js";
-import { isReadOnlyShellCommand, runShellCommand } from "./shell.js";
+import { isDangerousShellCommand, isReadOnlyShellCommand, runShellCommand } from "./shell.js";
 import {
   formatMonitorResult,
   getMonitorData,
@@ -342,7 +342,12 @@ import {
 import { resolveWorkspacePath } from "./workspace.js";
 import { WebSearchConfig } from "../config.js";
 
-export type ToolPermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan";
+export type ToolPermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "dontAsk"
+  | "bypassPermissions"
+  | "plan";
 export type ToolPermissionDecision = "allow" | "ask" | "deny";
 
 export interface ToolPermissionRules {
@@ -761,6 +766,9 @@ export function checkToolPermission(input: {
   if (ruleDecision) {
     return ruleDecision;
   }
+  if (input.mode === "dontAsk" && !tool.isReadOnly(input.toolUse.input)) {
+    return { decision: "deny", reason: `${input.toolUse.name} is not allowed in dontAsk mode` };
+  }
   if (input.mode === "bypassPermissions" || input.mode === "acceptEdits") {
     return { decision: "allow", reason: `${input.mode} mode` };
   }
@@ -1060,7 +1068,29 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
     isReadOnly: (input) =>
       typeof input.command === "string" && isReadOnlyShellCommand(input.command),
     isDestructive: () => false,
-    isConcurrencySafe: () => false
+    isConcurrencySafe: () => false,
+    checkPermissions: (input, context) => {
+      const command = readString(input, "command");
+      const dangerous = isDangerousShellCommand(command);
+      if (dangerous && context.permissionMode !== "bypassPermissions") {
+        return {
+          decision: "deny",
+          reason:
+            "dangerous Bash command requires bypassPermissions mode and explicit dangerous approval"
+        };
+      }
+      if (
+        dangerous &&
+        context.permissionMode === "bypassPermissions" &&
+        context.env?.MAGI_APPROVE_DANGEROUS_COMMANDS !== "1"
+      ) {
+        return {
+          decision: "deny",
+          reason: "dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1"
+        };
+      }
+      return undefined;
+    }
   },
   {
     name: "GitSummary",

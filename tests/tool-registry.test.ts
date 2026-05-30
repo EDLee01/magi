@@ -654,6 +654,14 @@ describe("tool registry", () => {
     expect(checkToolPermission({ toolUse: patchCall, mode: "default" })).toMatchObject({
       decision: "ask"
     });
+    expect(checkToolPermission({ toolUse: patchCall, mode: "dontAsk" })).toMatchObject({
+      decision: "deny",
+      reason: "FilePatch is not allowed in dontAsk mode"
+    });
+    expect(checkToolPermission({ toolUse: patchCall, mode: "acceptEdits" })).toMatchObject({
+      decision: "allow",
+      reason: "acceptEdits mode"
+    });
     expect(
       checkToolPermission({
         toolUse: writeCall,
@@ -686,6 +694,12 @@ describe("tool registry", () => {
       name: "Bash",
       input: { command: "npm test" }
     };
+    const dangerousBashCall = {
+      type: "tool-use" as const,
+      id: "bash-danger",
+      name: "Bash",
+      input: { command: "rm -rf build" }
+    };
 
     expect(checkToolPermission({ toolUse: readOnlyBashCall, mode: "default" })).toEqual({
       decision: "allow",
@@ -701,8 +715,39 @@ describe("tool registry", () => {
     expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "plan" })).toMatchObject({
       decision: "deny"
     });
+    expect(checkToolPermission({ toolUse: mutatingBashCall, mode: "dontAsk" })).toMatchObject({
+      decision: "deny",
+      reason: "Bash is not allowed in dontAsk mode"
+    });
     expect(checkToolPermission({ toolUse: testBashCall, mode: "default" })).toMatchObject({
       decision: "ask"
+    });
+    expect(checkToolPermission({ toolUse: testBashCall, mode: "acceptEdits" })).toMatchObject({
+      decision: "allow"
+    });
+    expect(checkToolPermission({ toolUse: dangerousBashCall, mode: "acceptEdits" })).toMatchObject({
+      decision: "deny",
+      reason:
+        "dangerous Bash command requires bypassPermissions mode and explicit dangerous approval"
+    });
+    expect(
+      checkToolPermission({
+        toolUse: dangerousBashCall,
+        mode: "bypassPermissions"
+      })
+    ).toMatchObject({
+      decision: "deny",
+      reason: "dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1"
+    });
+    expect(
+      checkToolPermission({
+        toolUse: dangerousBashCall,
+        mode: "bypassPermissions",
+        env: { MAGI_APPROVE_DANGEROUS_COMMANDS: "1" }
+      })
+    ).toMatchObject({
+      decision: "allow",
+      reason: "bypassPermissions mode"
     });
   });
 

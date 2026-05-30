@@ -301,8 +301,15 @@ describe("TUI, slash commands, and session resume", () => {
         expect.objectContaining({
           label: "bypassPermissions",
           value: "bypassPermissions",
-          description: "skip approval prompts",
+          description: "skip prompts; dangerous Bash needs explicit env approval",
           detail: "current"
+        })
+      );
+      expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(
+        expect.objectContaining({
+          label: "dontAsk",
+          value: "dontAsk",
+          description: "deny non-read-only tools instead of asking"
         })
       );
     } finally {
