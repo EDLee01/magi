@@ -211,16 +211,36 @@ function graphHitFile(uri: string, heading: string): string {
 }
 
 function tokenize(text: string): string[] {
-  return Array.from(
-    new Set(
-      text
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-        .split(/\s+/)
-        .map((term) => term.trim())
-        .filter(isSearchTerm)
-    )
-  );
+  const terms: string[] = [];
+  for (const term of text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
+    .split(/\s+/)
+    .map((item) => item.trim())) {
+    if (isSearchTerm(term)) {
+      terms.push(term);
+    }
+    terms.push(...cjkNgrams(term));
+  }
+  return Array.from(new Set(terms));
+}
+
+function cjkNgrams(term: string): string[] {
+  const grams: string[] = [];
+  const runs = term.match(/[\u3400-\u9fff\uf900-\ufaff]+/gu) ?? [];
+  for (const run of runs) {
+    const chars = Array.from(run);
+    for (let size = 2; size <= 4; size += 1) {
+      if (chars.length < size) continue;
+      for (let index = 0; index <= chars.length - size; index += 1) {
+        const gram = chars.slice(index, index + size).join("");
+        if (isSearchTerm(gram)) {
+          grams.push(gram);
+        }
+      }
+    }
+  }
+  return grams;
 }
 
 function scoreText(text: string, terms: string[]): number {

@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
 
 import {
   MagiMessage,
   MagiToolUsePart,
+  messageText,
   parsePromptIntoParts,
   textMessage
 } from "../providers/ir.js";
@@ -31,10 +34,19 @@ import type { ToolPermissionRules } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
 import { formatPlanContext, getLatestPlanReview } from "../plan-state.js";
 import { checkPlanExecutionGuard } from "../plan-execution-guard.js";
-import { findSkill, listSkills, SkillRecord } from "../skills/loader.js";
+import { findSkill, listSkills } from "../skills/loader.js";
 import { formatSessionRecallContext, searchSessions } from "../session-search.js";
 import { maybeProposePostTaskLearningDraft } from "../learning-draft.js";
 import { correctMemory } from "../memory-correction.js";
+import {
+  filterMemoryHitsByRecallEvidence,
+  type ModelRecallPlannerRoute,
+  planRecall,
+  planRecallWithModel,
+  RecallDecision,
+  scoreSkillForRecall,
+  selectHotMemoryNodes
+} from "./recall-policy.js";
 
 export interface QueryEngineInput {
   store: SessionStore;
@@ -80,6 +92,7 @@ export interface QueryEngineInput {
     scopes?: MemoryScope[];
     root?: string;
     selectionRoute?: import("../memory-selection.js").MemorySelectionRoute;
+    recallPlannerRoute?: ModelRecallPlannerRoute;
     writeDecisionRoute?: import("../memory-write-decision.js").MemoryWriteDecisionRoute;
   };
 }
@@ -96,6 +109,7 @@ type MemoryOptionsWithPaths = NonNullable<QueryEngineInput["memoryOptions"]> & {
 export class QueryEngine {
   private readonly input: QueryEngineInput;
   private readonly toolUses = new Map<string, MagiToolUsePart>();
+  private readonly memoryWriteJobs = new Set<string>();
 
   constructor(input: QueryEngineInput) {
     this.input = input;
@@ -143,7 +157,12 @@ export class QueryEngine {
       model: this.input.routes[0]?.model
     });
     events.push(...startHooks);
-    const preparedContext = await this.prepareContext(prompt, jobId, currentUserMessageId);
+    const preparedContext = await this.prepareContext(
+      prompt,
+      jobId,
+      currentUserMessageId,
+      this.memoryWriteJobs.has(jobId)
+    );
     events.push(...preparedContext.events);
 
     const iterator = runAgentQuery({
@@ -522,7 +541,8 @@ export class QueryEngine {
   private async prepareContext(
     prompt: string,
     jobId: string,
-    currentUserMessageId: number
+    currentUserMessageId: number,
+    skipPreTaskRecall = false
   ): Promise<{ messages: MagiMessage[]; events: AgentQueryEvent[] }> {
     const events: AgentQueryEvent[] = [];
     const session = this.input.store.getSession(this.input.sessionId);
@@ -573,14 +593,23 @@ export class QueryEngine {
       await this.persistEvent(jobId, compactEvent);
     }
 
+    const recallDecision = await this.planPreTaskRecall(prompt, skipPreTaskRecall);
+    this.recordRecallDecision(jobId, recallDecision);
+
     const hotMemoryNodes: MemoryNode[] = [];
+    const skippedHotMemory: Array<{
+      nodeId: string;
+      title: string;
+      type: MemoryNode["type"];
+      reason: string;
+    }> = [];
     const messages = buildSessionMessages({
       store: this.input.store,
       sessionId: session.id,
       prompt,
       currentUserMessageId,
       recentMessages: this.input.contextOptions?.recentMessages ?? 20,
-      memoryContext: await this.buildMemoryContext(prompt, jobId),
+      memoryContext: await this.buildMemoryContext(prompt, jobId, recallDecision),
       goalContext: this.input.memoryOptions?.paths
         ? formatGoalContext(getGoal(this.input.memoryOptions.paths, session.id))
         : undefined,
@@ -591,11 +620,66 @@ export class QueryEngine {
         : undefined,
       cwd: this.input.cwd,
       paths: this.input.memoryOptions?.paths,
-      hotMemoryNodeSink: (nodes) => hotMemoryNodes.push(...nodes)
+      hotMemoryLimit: recallDecision.budgets.hotMemory,
+      hotMemoryNodeSink: (nodes) => hotMemoryNodes.push(...nodes),
+      hotMemoryFilter: (nodes) => {
+        const selected = selectHotMemoryNodes({
+          nodes,
+          prompt,
+          cwd: this.input.cwd,
+          budget: recallDecision.budgets.hotMemory
+        });
+        skippedHotMemory.push(...selected.skipped);
+        return selected.nodes;
+      }
     });
-    this.recordHotMemoryInjection(jobId, hotMemoryNodes);
+    this.recordHotMemoryInjection(jobId, hotMemoryNodes, skippedHotMemory, recallDecision);
 
     return { messages, events };
+  }
+
+  private async planPreTaskRecall(
+    prompt: string,
+    skipPreTaskRecall: boolean
+  ): Promise<RecallDecision> {
+    const memory = this.input.memoryOptions;
+    const skills = memory?.paths ? listSkills(memory.paths) : [];
+    const hasMemory = Boolean(memory?.paths && memory.enabled !== false);
+    const hasSkills = skills.length > 0;
+
+    if (skipPreTaskRecall) {
+      const decision = planRecall({
+        prompt,
+        cwd: this.input.cwd,
+        hasMemory: false,
+        hasSkills: false
+      });
+      const skippedReason = "explicit memory write or correction already handled before recall";
+      return {
+        ...decision,
+        constraints: [skippedReason],
+        skipped: {
+          hotMemory: [skippedReason],
+          memorySearch: [skippedReason],
+          session: [skippedReason],
+          skill: [skippedReason]
+        }
+      };
+    }
+
+    const plannerRoute = memory?.recallPlannerRoute;
+    const hasInventory = plannerRoute
+      ? hasSkills || (hasMemory && memory?.paths ? hasStoredRecallInventory(memory.paths) : false)
+      : false;
+    return planRecallWithModel({
+      prompt,
+      cwd: this.input.cwd,
+      hasMemory,
+      hasSkills,
+      skills,
+      route: hasInventory ? plannerRoute : undefined,
+      signal: this.input.signal
+    });
   }
 
   private async handleExplicitMemoryWrite(
@@ -628,6 +712,7 @@ export class QueryEngine {
     jobId: string,
     memory: MemoryOptionsWithPaths
   ): void {
+    this.memoryWriteJobs.add(jobId);
     const nodeStore = MemoryNodeStore.open(memory.paths);
     let node: MemoryNode;
     try {
@@ -695,6 +780,7 @@ export class QueryEngine {
     jobId: string,
     memory: MemoryOptionsWithPaths
   ): void {
+    this.memoryWriteJobs.add(jobId);
     const result = correctMemory({
       appRoot: memory.paths.root,
       root: memory.root,
@@ -743,8 +829,39 @@ export class QueryEngine {
     }
   }
 
-  private recordHotMemoryInjection(jobId: string, nodes: MemoryNode[]): void {
-    if (nodes.length === 0) {
+  private recordRecallDecision(jobId: string, decision: RecallDecision): void {
+    this.input.store.recordAudit({
+      sessionId: this.input.sessionId,
+      jobId,
+      action: "agent.recall.decision",
+      target: this.input.sessionId,
+      metadata: {
+        taskKind: decision.taskKind,
+        budgets: decision.budgets,
+        reasons: decision.reasons,
+        skipped: decision.skipped,
+        matchedTerms: decision.matchedTerms,
+        method: decision.method,
+        constraints: decision.constraints,
+        selectedSkills: decision.selectedSkills,
+        planner: decision.planner
+          ? {
+              providerName: decision.planner.providerName,
+              model: decision.planner.model
+            }
+          : undefined,
+        fallbackReason: decision.fallbackReason
+      }
+    });
+  }
+
+  private recordHotMemoryInjection(
+    jobId: string,
+    nodes: MemoryNode[],
+    skipped: Array<{ nodeId: string; title: string; type: MemoryNode["type"]; reason: string }>,
+    decision: RecallDecision
+  ): void {
+    if (nodes.length === 0 && decision.budgets.hotMemory <= 0) {
       return;
     }
     this.input.store.recordAudit({
@@ -754,6 +871,11 @@ export class QueryEngine {
       target: this.input.sessionId,
       metadata: {
         resultCount: nodes.length,
+        decision: nodes.length > 0 ? "injected" : "skipped",
+        budget: decision.budgets.hotMemory,
+        reasons: decision.reasons.hotMemory,
+        skippedReasons: decision.skipped.hotMemory,
+        skippedNodes: skipped.slice(0, 10),
         nodeIds: nodes.map((node) => node.id),
         types: nodes.map((node) => node.type),
         titles: nodes.map((node) => node.title),
@@ -762,19 +884,23 @@ export class QueryEngine {
     });
   }
 
-  private async buildMemoryContext(prompt: string, jobId: string): Promise<string | undefined> {
+  private async buildMemoryContext(
+    prompt: string,
+    jobId: string,
+    recallDecision: RecallDecision
+  ): Promise<string | undefined> {
     const memory = this.input.memoryOptions;
     if (!memory?.paths) {
       return undefined;
     }
     const sections: string[] = [];
 
-    if (memory.enabled !== false) {
-      const memoryHits = retrieveRelevantMemory({
+    if (memory.enabled !== false && recallDecision.budgets.memorySearch > 0) {
+      const rawMemoryHits = retrieveRelevantMemory({
         appRoot: memory.paths.root,
         root: memory.root,
         query: prompt,
-        maxResults: memory.maxResults ?? 5,
+        maxResults: Math.max(memory.maxResults ?? 5, recallDecision.budgets.memorySearch),
         legacy: {
           paths: memory.paths,
           cwd: this.input.cwd,
@@ -783,6 +909,11 @@ export class QueryEngine {
         },
         sessionId: this.input.sessionId
       });
+      const memoryHits = filterMemoryHitsByRecallEvidence(
+        rawMemoryHits,
+        prompt,
+        this.input.cwd
+      ).slice(0, recallDecision.budgets.memorySearch);
       const formalMemoryContext = formatMemoryContext(memoryHits);
       if (formalMemoryContext) {
         sections.push(formalMemoryContext);
@@ -794,6 +925,12 @@ export class QueryEngine {
         target: this.input.sessionId,
         metadata: {
           resultCount: memoryHits.length,
+          rawResultCount: rawMemoryHits.length,
+          decision: memoryHits.length > 0 ? "injected" : "skipped",
+          budget: recallDecision.budgets.memorySearch,
+          reasons: recallDecision.reasons.memorySearch,
+          skippedReasons: recallDecision.skipped.memorySearch,
+          matchedTerms: recallDecision.matchedTerms.memorySearch,
           method: "wiki-search",
           sources: Array.from(new Set(memoryHits.map((hit) => hit.source))),
           sourceKinds: Array.from(new Set(memoryHits.map((hit) => hit.sourceKind).filter(Boolean))),
@@ -803,22 +940,48 @@ export class QueryEngine {
           files: memoryHits.map((hit) => hit.file)
         }
       });
+    } else if (memory.enabled !== false) {
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.memory.retrieved",
+        target: this.input.sessionId,
+        metadata: {
+          resultCount: 0,
+          rawResultCount: 0,
+          decision: "skipped",
+          budget: recallDecision.budgets.memorySearch,
+          reasons: recallDecision.reasons.memorySearch,
+          skippedReasons: recallDecision.skipped.memorySearch,
+          matchedTerms: recallDecision.matchedTerms.memorySearch,
+          method: "wiki-search",
+          sources: [],
+          sourceKinds: [],
+          graphResultCount: 0,
+          nodeIds: [],
+          chunkIds: [],
+          files: []
+        }
+      });
     }
 
-    const skillContext = this.buildSkillRecallContext(prompt, jobId);
+    const skillContext = this.buildSkillRecallContext(prompt, jobId, recallDecision);
     if (skillContext) {
       sections.push(skillContext);
     }
 
-    const sessionHits = searchSessions(this.input.store, {
-      query: prompt,
-      limit: 3,
-      window: 2,
-      currentSessionId: this.input.sessionId
-    });
-    const sessionContext = formatSessionRecallContext(sessionHits);
-    if (sessionContext) {
-      sections.push(sessionContext);
+    let sessionHits: ReturnType<typeof searchSessions> = [];
+    if (recallDecision.budgets.session > 0) {
+      sessionHits = searchSessions(this.input.store, {
+        query: prompt,
+        limit: recallDecision.budgets.session,
+        window: 2,
+        currentSessionId: this.input.sessionId
+      });
+      const sessionContext = formatSessionRecallContext(sessionHits);
+      if (sessionContext) {
+        sections.push(sessionContext);
+      }
     }
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
@@ -828,6 +991,11 @@ export class QueryEngine {
       metadata: {
         query: prompt.slice(0, 500),
         resultCount: sessionHits.length,
+        decision: sessionHits.length > 0 ? "injected" : "skipped",
+        budget: recallDecision.budgets.session,
+        reasons: recallDecision.reasons.session,
+        skippedReasons: recallDecision.skipped.session,
+        matchedTerms: recallDecision.matchedTerms.session,
         sessions: sessionHits.map((hit) => hit.session.id)
       }
     });
@@ -835,21 +1003,58 @@ export class QueryEngine {
     return sections.join("\n\n");
   }
 
-  private buildSkillRecallContext(prompt: string, jobId: string): string | undefined {
+  private buildSkillRecallContext(
+    prompt: string,
+    jobId: string,
+    recallDecision: RecallDecision
+  ): string | undefined {
     const paths = this.input.memoryOptions?.paths;
     if (!paths) return undefined;
-    const terms = tokenizeRecall(prompt);
-    if (terms.length === 0) return undefined;
-    const hits = listSkills(paths)
+    if (recallDecision.budgets.skill <= 0) {
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.skills.recalled",
+        target: this.input.sessionId,
+        metadata: {
+          query: prompt.slice(0, 500),
+          resultCount: 0,
+          decision: "skipped",
+          budget: recallDecision.budgets.skill,
+          reasons: recallDecision.reasons.skill,
+          skippedReasons: recallDecision.skipped.skill,
+          matchedTerms: recallDecision.matchedTerms.skill,
+          skills: []
+        }
+      });
+      return undefined;
+    }
+    const selectedNames = recallDecision.selectedSkills ?? [];
+    const selectedHits = selectedNames
+      .map((name, index) => {
+        const skill = findSkill(paths, name);
+        return skill
+          ? {
+              skill,
+              score: 1000 - index,
+              matchedTerms: ["model-selected"]
+            }
+          : undefined;
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const scoredHits = listSkills(paths)
       .map((skill) => {
         const full = findSkill(paths, skill.name) ?? skill;
-        return { skill: full, score: scoreSkill(full, terms) };
+        return scoreSkillForRecall(full, prompt);
       })
-      .filter((item) => item.score > 0)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
       .sort(
         (left, right) => right.score - left.score || left.skill.name.localeCompare(right.skill.name)
-      )
-      .slice(0, 3);
+      );
+    const hits = dedupeSkillHits([...selectedHits, ...scoredHits]).slice(
+      0,
+      recallDecision.budgets.skill
+    );
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
@@ -858,7 +1063,16 @@ export class QueryEngine {
       metadata: {
         query: prompt.slice(0, 500),
         resultCount: hits.length,
-        skills: hits.map((hit) => hit.skill.name)
+        decision: hits.length > 0 ? "injected" : "skipped",
+        budget: recallDecision.budgets.skill,
+        reasons: recallDecision.reasons.skill,
+        skippedReasons: recallDecision.skipped.skill,
+        matchedTerms: recallDecision.matchedTerms.skill,
+        skills: hits.map((hit) => hit.skill.name),
+        skillMatchedTerms: hits.map((hit) => ({
+          skill: hit.skill.name,
+          terms: hit.matchedTerms
+        }))
       }
     });
     if (hits.length === 0) return undefined;
@@ -957,6 +1171,7 @@ export class QueryEngine {
         target: this.input.routes[0]?.providerName,
         metadata: {
           length: event.text.length,
+          text: event.text,
           preview: event.text.slice(0, 240)
         }
       });
@@ -969,6 +1184,7 @@ export class QueryEngine {
         action: "agent.assistant.message",
         target: this.input.routes[0]?.providerName,
         metadata: {
+          text: messageText(event.message),
           partCount: event.message.content.length,
           textLength: event.message.content
             .filter((part) => part.type === "text")
@@ -1302,30 +1518,6 @@ export class QueryEngine {
   }
 }
 
-function scoreSkill(skill: SkillRecord, terms: string[]): number {
-  const text = `${skill.name}\n${skill.summary}\n${skill.body ?? ""}`.toLowerCase();
-  let score = 0;
-  for (const term of terms) {
-    if (skill.name.toLowerCase().includes(term)) score += 8;
-    if (skill.summary.toLowerCase().includes(term)) score += 5;
-    if (text.includes(term)) score += 2;
-  }
-  return score;
-}
-
-function tokenizeRecall(text: string): string[] {
-  return Array.from(
-    new Set(
-      text
-        .toLowerCase()
-        .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-        .split(/\s+/)
-        .map((term) => term.trim())
-        .filter((term) => term.length >= 3 || (/[\u4e00-\u9fff]/.test(term) && term.length >= 2))
-    )
-  );
-}
-
 function isAbortError(error: unknown): boolean {
   return (
     (error instanceof DOMException && error.name === "AbortError") ||
@@ -1362,6 +1554,78 @@ function countTodoStatuses(todos: unknown[]): Record<string, number> {
     }
   }
   return counts;
+}
+
+function hasStoredRecallInventory(paths: import("../paths.js").MagiPaths): boolean {
+  if (hasNonEmptyFile(path.join(paths.root, "memory.md"))) {
+    return true;
+  }
+  for (const dir of [
+    path.join(paths.root, "memory"),
+    path.join(paths.stateRoot, "project-memory"),
+    path.join(paths.stateRoot, "session-memory")
+  ]) {
+    if (hasNonEmptyMarkdownUnder(dir, 4)) {
+      return true;
+    }
+  }
+
+  let nodeStore: MemoryNodeStore | undefined;
+  try {
+    nodeStore = MemoryNodeStore.open(paths);
+    return nodeStore.listHotNodes({ limit: 1, minWeight: 0 }).length > 0;
+  } catch {
+    return false;
+  } finally {
+    nodeStore?.close();
+  }
+}
+
+function hasNonEmptyFile(file: string): boolean {
+  try {
+    return statSync(file).isFile() && statSync(file).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+function hasNonEmptyMarkdownUnder(dir: string, depth: number): boolean {
+  if (depth < 0 || !existsSync(dir)) {
+    return false;
+  }
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry);
+    let stats: ReturnType<typeof statSync>;
+    try {
+      stats = statSync(fullPath);
+    } catch {
+      continue;
+    }
+    if (stats.isFile() && stats.size > 0 && entry.endsWith(".md")) {
+      return true;
+    }
+    if (stats.isDirectory() && hasNonEmptyMarkdownUnder(fullPath, depth - 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function dedupeSkillHits<T extends { skill: { name: string } }>(hits: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const hit of hits) {
+    if (seen.has(hit.skill.name)) continue;
+    seen.add(hit.skill.name);
+    result.push(hit);
+  }
+  return result;
 }
 
 function explicitMemoryTitle(type: MemoryNodeType, text: string): string {
@@ -1406,6 +1670,8 @@ function buildSessionMessages(input: {
   paths?: import("../paths.js").MagiPaths;
   systemInstructions?: string;
   hotMemoryNodeSink?: (nodes: MemoryNode[]) => void;
+  hotMemoryLimit?: number;
+  hotMemoryFilter?: (nodes: MemoryNode[]) => MemoryNode[];
 }): MagiMessage[] {
   const session = input.store.getSession(input.sessionId);
   if (!session) {
@@ -1428,6 +1694,8 @@ function buildSessionMessages(input: {
       [input.goalContext, input.planContext, input.memoryContext].filter(Boolean).join("\n\n") ||
       undefined,
     hotMemorySink: input.hotMemoryNodeSink,
+    hotMemoryLimit: input.hotMemoryLimit,
+    hotMemoryFilter: input.hotMemoryFilter,
     includeGit: true,
     includeDate: true,
     platform: process.platform

@@ -30,6 +30,9 @@ export interface ContextBuildInput {
   memoryContext?: string;
   userMemoryIndex?: string;
   hotMemorySink?: (nodes: MemoryNode[]) => void;
+  hotMemoryLimit?: number;
+  hotMemoryMinWeight?: number;
+  hotMemoryFilter?: (nodes: MemoryNode[]) => MemoryNode[];
   includeGit?: boolean;
   includeDate?: boolean;
   platform?: string;
@@ -57,7 +60,13 @@ export function buildLayeredContext(input: ContextBuildInput): BuiltContext {
   // Layer 3: Hot memory. This is first-class context, not a best-effort
   // search result. Keep it before skills/recall so user/project facts frame
   // later operating guidance.
-  const hotMemory = input.userMemoryIndex ?? loadHotMemory(input.paths, input.hotMemorySink);
+  const hotMemory =
+    input.userMemoryIndex ??
+    loadHotMemory(input.paths, input.hotMemorySink, {
+      limit: input.hotMemoryLimit,
+      minWeight: input.hotMemoryMinWeight,
+      filter: input.hotMemoryFilter
+    });
   if (hotMemory) {
     layers.push({ name: "hot-memory", content: hotMemory });
   }
@@ -93,12 +102,20 @@ function loadProjectRules(cwd: string): string | undefined {
 
 function loadHotMemory(
   paths?: MagiPaths,
-  hotMemorySink?: (nodes: MemoryNode[]) => void
+  hotMemorySink?: (nodes: MemoryNode[]) => void,
+  options: {
+    limit?: number;
+    minWeight?: number;
+    filter?: (nodes: MemoryNode[]) => MemoryNode[];
+  } = {}
 ): string | undefined {
   if (!paths) {
     return undefined;
   }
-  const nodeMemory = formatNodeHotMemory(paths, hotMemorySink);
+  if (options.limit !== undefined && options.limit <= 0) {
+    return undefined;
+  }
+  const nodeMemory = formatNodeHotMemory(paths, hotMemorySink, options);
   if (!nodeMemory) {
     return undefined;
   }
@@ -114,12 +131,22 @@ function loadHotMemory(
 
 function formatNodeHotMemory(
   paths: MagiPaths,
-  hotMemorySink?: (nodes: MemoryNode[]) => void
+  hotMemorySink?: (nodes: MemoryNode[]) => void,
+  options: {
+    limit?: number;
+    minWeight?: number;
+    filter?: (nodes: MemoryNode[]) => MemoryNode[];
+  } = {}
 ): string | undefined {
   let store: MemoryNodeStore | undefined;
   try {
+    if (options.limit !== undefined && options.limit <= 0) {
+      return undefined;
+    }
     store = MemoryNodeStore.open(paths);
-    const nodes = store.listHotNodes({ limit: 12, minWeight: 0.25 });
+    const nodes = options.filter
+      ? options.filter(store.listHotNodes({ limit: 50, minWeight: options.minWeight ?? 0.25 }))
+      : store.listHotNodes({ limit: options.limit ?? 12, minWeight: options.minWeight ?? 0.25 });
     if (nodes.length === 0) {
       return undefined;
     }

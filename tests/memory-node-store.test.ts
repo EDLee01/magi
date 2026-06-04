@@ -1076,6 +1076,37 @@ describe("memory-node-store", () => {
     }
   });
 
+  it("recalls Chinese workflow nodes through SQL graph search", () => {
+    const paths = makePaths();
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const source = store.upsertSource({
+        kind: "explicit",
+        uri: "memory/nature-workflow",
+        title: "Nature公众号推文工作流",
+        contentHash: "test"
+      });
+      store.upsertChunk({
+        sourceId: source.id,
+        uri: "memory/nature-workflow#Nature公众号推文工作流",
+        type: "workflow",
+        heading: "Nature公众号推文工作流",
+        summary: "High-priority workflow for recurring Nature/公众号推文 creation tasks",
+        body: "用户做 Nature 论文中文推文的标准提示词、模板位置和完整工作流程",
+        weight: 1
+      });
+
+      const hits = store.searchGraph({
+        query: "我们公众号的推文你还记得怎么做么",
+        limit: 3
+      });
+
+      expect(hits.map((hit) => hit.node.title)).toContain("Nature公众号推文工作流");
+    } finally {
+      store.close();
+    }
+  });
+
   it("preserves manually decayed chunk node weight across graph re-index", () => {
     const paths = makePaths();
     const store = MemoryNodeStore.open(paths);

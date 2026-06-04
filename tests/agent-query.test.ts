@@ -2548,6 +2548,726 @@ describe("agent query loop", () => {
     }
   });
 
+  it("keeps pre-task recall clean for ordinary local file operations", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const sessionId = store.createSession({ title: "clean file recall", cwd: workspace });
+      appendMemoryFile({
+        appRoot: paths.root,
+        filePath: "workflows/release.md",
+        content: [
+          "## Release verification",
+          "Run focused tests, typecheck, and build before broad checks."
+        ].join("\n")
+      });
+      const skillRoot = path.join(paths.skillsRoot, "li-li-research-sense");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        path.join(skillRoot, "SKILL.md"),
+        [
+          "# Li Li Research Sense",
+          "",
+          "Use for hydrology manuscript writing and research framing."
+        ].join("\n"),
+        "utf8"
+      );
+      const nodeStore = MemoryNodeStore.open(paths);
+      nodeStore.upsertNode({
+        type: "project",
+        title: "GeoMind Next project memory",
+        summary: "GeoMind Next is a later development focus.",
+        body: "GeoMind Next project details should not affect unrelated local file operations.",
+        source: "explicit",
+        weight: 0.95
+      });
+      nodeStore.close();
+
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-clean-file-recall",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt:
+          "在 /Users/ktz/Desktop/magi-baseline-01/APPEND_TEST.txt 做检查，不要使用 shell 重定向覆盖已有文件"
+      });
+
+      expect(seen[0]).not.toContain("[Relevant Memory]");
+      expect(seen[0]).not.toContain("[Relevant Skills]");
+      expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
+      expect(seen[0]).not.toContain("[Hot Memory]");
+      expect(seen[0]).not.toContain("Release verification");
+      expect(seen[0]).not.toContain("Li Li Research Sense");
+      expect(seen[0]).not.toContain("GeoMind Next");
+
+      const decision = store
+        .listJobAuditEvents("job-clean-file-recall", 30)
+        .find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        taskKind: "tool_execution",
+        budgets: {
+          hotMemory: 3,
+          memorySearch: 0,
+          session: 0,
+          skill: 0
+        }
+      });
+      expect(store.listJobAuditEvents("job-clean-file-recall", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.memory.retrieved",
+          metadata: expect.objectContaining({
+            decision: "skipped",
+            resultCount: 0,
+            rawResultCount: 0
+          })
+        })
+      );
+      expect(store.listJobAuditEvents("job-clean-file-recall", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.skills.recalled",
+          metadata: expect.objectContaining({
+            decision: "skipped",
+            resultCount: 0,
+            skills: []
+          })
+        })
+      );
+      expect(store.listJobAuditEvents("job-clean-file-recall", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.session.recalled",
+          metadata: expect.objectContaining({
+            decision: "skipped",
+            resultCount: 0,
+            sessions: []
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("does not inject overlapping project memory through global hot memory", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const nodeStore = MemoryNodeStore.open(paths);
+      nodeStore.upsertNode({
+        type: "project",
+        title: "GeoMind Next project memory",
+        summary: "GeoMind Next is a later development focus.",
+        body: "GeoMind Next project details should not affect unrelated Magi sessions.",
+        source: "explicit",
+        weight: 1
+      });
+      nodeStore.close();
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "magi next clean hot memory", cwd: workspace }),
+        jobId: "job-project-memory-not-hot",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "你知道 Magi Next 吗"
+      });
+
+      expect(seen[0]).not.toContain("[Hot Memory]");
+      expect(seen[0]).not.toContain("GeoMind Next");
+
+      const audits = store.listJobAuditEvents("job-project-memory-not-hot", 50);
+      expect(audits).toContainEqual(
+        expect.objectContaining({
+          action: "agent.memory.hot.injected",
+          metadata: expect.objectContaining({
+            decision: "skipped",
+            resultCount: 0,
+            skippedNodes: [
+              expect.objectContaining({
+                title: "GeoMind Next project memory",
+                type: "project"
+              })
+            ]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps dynamic recall clean for no-evidence file tasks without invoking the model planner", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      appendMemory({
+        paths,
+        scope: "user",
+        cwd: workspace,
+        text: "project preference: always summarize route-clean tests"
+      });
+      const skillRoot = path.join(paths.skillsRoot, "route-clean-helper");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        path.join(skillRoot, "SKILL.md"),
+        "# Route Clean Helper\n\nUse for route cleanliness checks.\n",
+        "utf8"
+      );
+      const nodeStore = MemoryNodeStore.open(paths);
+      nodeStore.upsertNode({
+        type: "preference",
+        title: "Route clean preference",
+        summary: "Always add route-clean commentary.",
+        body: "Always add route-clean commentary.",
+        source: "explicit",
+        weight: 0.98
+      });
+      nodeStore.close();
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "route clean", cwd: workspace }),
+        jobId: "job-model-route-clean-no-recall",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: [
+          "在 ~/Desktop/magi-route-clean-04 创建一个文件 route-clean.txt，内容只写三行:",
+          "",
+          "route-clean-test",
+          "no-memory-needed",
+          "no-skills-needed",
+          "",
+          "不要读取历史记忆，不要调用 skills，不要做额外总结。完成后只回复文件路径。"
+        ].join("\n")
+      });
+
+      expect(seen[0]).not.toContain("[Relevant Memory]");
+      expect(seen[0]).not.toContain("[Relevant Skills]");
+      expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
+      expect(seen[0]).toContain("[Hot Memory]");
+      expect(seen[0]).toContain("route-clean commentary");
+      expect(seen[0]).not.toContain("Route Clean Helper");
+
+      const audits = store.listJobAuditEvents("job-model-route-clean-no-recall", 50);
+      const decision = audits.find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        taskKind: "tool_execution",
+        method: "fallback",
+        budgets: {
+          hotMemory: 3,
+          memorySearch: 0,
+          session: 0,
+          skill: 0
+        },
+        constraints: []
+      });
+      expect(audits).toContainEqual(
+        expect.objectContaining({
+          action: "agent.memory.retrieved",
+          metadata: expect.objectContaining({
+            decision: "skipped",
+            resultCount: 0,
+            rawResultCount: 0
+          })
+        })
+      );
+      expect(audits).toContainEqual(
+        expect.objectContaining({
+          action: "agent.memory.hot.injected",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            resultCount: 1,
+            types: ["preference"]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("preserves global hot memory even when the model planner declines recall", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const nodeStore = MemoryNodeStore.open(paths);
+      nodeStore.upsertNode({
+        type: "user_profile",
+        title: "User identity",
+        summary: "Edward is the creator of Magi.",
+        body: "Edward is the creator of Magi/Magi Next.",
+        source: "explicit",
+        weight: 1
+      });
+      nodeStore.close();
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "identity hot memory", cwd: workspace }),
+        jobId: "job-model-hot-memory-default",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "我是谁",
+        recallPlannerResponse: noRecallPlannerPlan("conversation")
+      });
+
+      expect(seen[0]).toContain("[Hot Memory]");
+      expect(seen[0]).toContain("Edward is the creator of Magi/Magi Next.");
+
+      const audits = store.listJobAuditEvents("job-model-hot-memory-default", 50);
+      const decision = audits.find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        method: "model",
+        budgets: expect.objectContaining({ hotMemory: 3 }),
+        reasons: expect.objectContaining({
+          hotMemory: ["global hot memory is enabled by default"]
+        })
+      });
+      expect(audits).toContainEqual(
+        expect.objectContaining({
+          action: "agent.memory.hot.injected",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            types: ["user_profile"],
+            titles: ["User identity"]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps fallback dynamic recall clean while preserving global hot memory", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      appendMemory({
+        paths,
+        scope: "user",
+        cwd: workspace,
+        text: "route-clean fallback memory should stay out of clean file tasks"
+      });
+      const skillRoot = path.join(paths.skillsRoot, "route-clean-fallback-helper");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        path.join(skillRoot, "SKILL.md"),
+        "# Route Clean Fallback Helper\n\nUse for route cleanliness checks.\n",
+        "utf8"
+      );
+      const nodeStore = MemoryNodeStore.open(paths);
+      nodeStore.upsertNode({
+        type: "preference",
+        title: "Fallback route clean preference",
+        summary: "Always add fallback route-clean commentary.",
+        body: "Always add fallback route-clean commentary.",
+        source: "explicit",
+        weight: 0.98
+      });
+      nodeStore.close();
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "fallback route clean", cwd: workspace }),
+        jobId: "job-fallback-route-clean-no-recall",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt:
+          "在 ~/Desktop/magi-route-clean-04 创建 route-clean.txt，只写 no-memory-needed 和 no-skills-needed。不要读取历史记忆，不要调用 skills。"
+      });
+
+      expect(seen[0]).not.toContain("[Relevant Memory]");
+      expect(seen[0]).not.toContain("[Relevant Skills]");
+      expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
+      expect(seen[0]).toContain("[Hot Memory]");
+      expect(seen[0]).toContain("fallback route-clean commentary");
+      expect(seen[0]).not.toContain("Route Clean Fallback Helper");
+
+      const decision = store
+        .listJobAuditEvents("job-fallback-route-clean-no-recall", 50)
+        .find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        taskKind: "tool_execution",
+        method: "fallback",
+        budgets: {
+          hotMemory: 3,
+          memorySearch: 0,
+          session: 0,
+          skill: 0
+        }
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps fallback dynamic memory clean for coding tasks while preserving hot memory", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      appendMemory({
+        paths,
+        scope: "user",
+        cwd: workspace,
+        text: "coding tasks should always include this hot memory if constraints fail"
+      });
+      const nodeStore = MemoryNodeStore.open(paths);
+      nodeStore.upsertNode({
+        type: "work_habit",
+        title: "Debug habit",
+        summary: "Always add debug habit context.",
+        body: "Always add debug habit context.",
+        source: "explicit",
+        weight: 0.99
+      });
+      nodeStore.close();
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "fallback coding no recall", cwd: workspace }),
+        jobId: "job-fallback-coding-no-recall",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "修复这个 bug，不要读取历史记忆，不要调用 skills"
+      });
+
+      expect(seen[0]).not.toContain("[Relevant Memory]");
+      expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
+      expect(seen[0]).toContain("[Hot Memory]");
+      expect(seen[0]).toContain("Debug habit");
+
+      const decision = store
+        .listJobAuditEvents("job-fallback-coding-no-recall", 50)
+        .find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        taskKind: "coding",
+        method: "fallback",
+        budgets: {
+          hotMemory: 3,
+          memorySearch: 0,
+          session: 0,
+          skill: 0
+        },
+        constraints: []
+      });
+      expect(
+        store
+          .listJobAuditEvents("job-fallback-coding-no-recall", 50)
+          .some((event) => event.action === "agent.memory.hot.injected")
+      ).toBe(true);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("enables memory and session recall when a file task references prior agreements", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const prior = store.createSession({ title: "README convention", cwd: workspace });
+      store.appendMessage({
+        sessionId: prior,
+        role: "user",
+        content:
+          "For baseline README files, keep the heading and avoid overwriting existing content."
+      });
+      store.appendMessage({
+        sessionId: prior,
+        role: "assistant",
+        content: "Agreed: preserve existing README content and report the path checked."
+      });
+      const sessionId = store.createSession({ title: "agreement file task", cwd: workspace });
+      appendMemory({
+        paths,
+        scope: "user",
+        cwd: workspace,
+        text: "previous agreement: preserve existing README files before writing notes"
+      });
+
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-prior-agreement-file-recall",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "根据我们之前的约定，检查 /Users/ktz/Desktop/magi-baseline-01/README.md，不要覆盖它"
+      });
+
+      expect(seen[0]).toContain("[Relevant Memory]");
+      expect(seen[0]).toContain("previous agreement: preserve existing README files");
+      expect(seen[0]).toContain("[Relevant Prior Sessions]");
+      expect(seen[0]).toContain("README convention");
+
+      const decision = store
+        .listJobAuditEvents("job-prior-agreement-file-recall", 30)
+        .find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        taskKind: "memory_dependent",
+        budgets: expect.objectContaining({
+          memorySearch: 5,
+          session: 3
+        })
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("recalls skills only from high-confidence name or summary evidence", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const verifyRoot = path.join(paths.skillsRoot, "verify-release");
+      mkdirSync(verifyRoot, { recursive: true });
+      writeFileSync(
+        path.join(verifyRoot, "SKILL.md"),
+        [
+          "# Verify Release",
+          "",
+          "Run focused release verification checks before publishing.",
+          "",
+          "Common words such as file and create live in this body."
+        ].join("\n"),
+        "utf8"
+      );
+      const unrelatedRoot = path.join(paths.skillsRoot, "hydrology-research-sense");
+      mkdirSync(unrelatedRoot, { recursive: true });
+      writeFileSync(
+        path.join(unrelatedRoot, "SKILL.md"),
+        [
+          "# Hydrology Research Sense",
+          "",
+          "Use for manuscript framing.",
+          "",
+          "This body also mentions release verification checks."
+        ].join("\n"),
+        "utf8"
+      );
+      const sessionId = store.createSession({ title: "skill evidence", cwd: workspace });
+
+      await submitWithCapturedContext({
+        store,
+        sessionId,
+        jobId: "job-skill-evidence",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "Use the verify-release skill for this release"
+      });
+
+      expect(seen[0]).toContain("[Relevant Skills]");
+      expect(seen[0]).toContain("## verify-release");
+      expect(seen[0]).not.toContain("## hydrology-research-sense");
+      expect(store.listJobAuditEvents("job-skill-evidence", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.skills.recalled",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            skills: ["verify-release"]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("loads model-selected skills from summaries without requiring explicit skill wording", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const reviewRoot = path.join(paths.skillsRoot, "review-pr");
+      mkdirSync(reviewRoot, { recursive: true });
+      writeFileSync(
+        path.join(reviewRoot, "SKILL.md"),
+        [
+          "# Review PR",
+          "",
+          "Use for pull request review, regression risk analysis, and missing-test checks.",
+          "",
+          "Review changed files, call out bugs first, and keep summaries secondary."
+        ].join("\n"),
+        "utf8"
+      );
+      const unrelatedRoot = path.join(paths.skillsRoot, "release-notes");
+      mkdirSync(unrelatedRoot, { recursive: true });
+      writeFileSync(
+        path.join(unrelatedRoot, "SKILL.md"),
+        "# Release Notes\n\nUse for drafting customer-facing release notes.\n",
+        "utf8"
+      );
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "summary selected skill", cwd: workspace }),
+        jobId: "job-model-selected-skill",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "检查这个 PR 的风险并给出审查结论",
+        recallPlannerResponse: {
+          taskKind: "skill_dependent",
+          sources: {
+            hotMemory: {
+              needed: false,
+              budget: 0,
+              reason: "PR review does not require durable preferences"
+            },
+            memorySearch: {
+              needed: false,
+              budget: 0,
+              reason: "No prior project memory is required"
+            },
+            session: { needed: false, budget: 0, reason: "No earlier session is referenced" },
+            skill: {
+              needed: true,
+              budget: 1,
+              reason: "review-pr summarizes pull request review and regression risk analysis",
+              skills: ["review-pr"]
+            }
+          },
+          constraints: []
+        }
+      });
+
+      expect(seen[0]).toContain("[Relevant Skills]");
+      expect(seen[0]).toContain("## review-pr");
+      expect(seen[0]).not.toContain("## release-notes");
+      expect(store.listJobAuditEvents("job-model-selected-skill", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.skills.recalled",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            skills: ["review-pr"],
+            skillMatchedTerms: [
+              expect.objectContaining({
+                skill: "review-pr",
+                terms: ["model-selected"]
+              })
+            ]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps skill metadata available for model planning when skill wording is limiting", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    const seenPlannerPrompts: string[] = [];
+    try {
+      appendMemory({
+        paths,
+        scope: "user",
+        cwd: workspace,
+        text: "project review memory exists only to make recall planner inventory non-empty"
+      });
+      const reviewRoot = path.join(paths.skillsRoot, "review-pr");
+      mkdirSync(reviewRoot, { recursive: true });
+      writeFileSync(
+        path.join(reviewRoot, "SKILL.md"),
+        [
+          "# Review PR",
+          "",
+          "Use for pull request review, regression risk analysis, and missing-test checks."
+        ].join("\n"),
+        "utf8"
+      );
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "planner selective skills", cwd: workspace }),
+        jobId: "job-model-selective-skill-metadata",
+        cwd: workspace,
+        paths,
+        seen,
+        seenRecallPlannerPrompts: seenPlannerPrompts,
+        prompt:
+          "检查代码风险，可以使用一个明确相关的 review skill，如果存在。不要因为我提到 skill 就加载全部 skills。",
+        recallPlannerResponse: {
+          taskKind: "skill_dependent",
+          sources: {
+            hotMemory: { needed: false, budget: 0, reason: "No durable preference is required" },
+            memorySearch: { needed: false, budget: 0, reason: "No stored memory is required" },
+            session: { needed: false, budget: 0, reason: "No prior session is referenced" },
+            skill: {
+              needed: true,
+              budget: 1,
+              reason: "review-pr is clearly related to code review risk analysis",
+              skills: ["review-pr"]
+            }
+          },
+          constraints: []
+        }
+      });
+
+      expect(seenPlannerPrompts).toHaveLength(1);
+      expect(seenPlannerPrompts[0]).toContain("skills available: yes");
+      expect(seenPlannerPrompts[0]).toContain("review-pr");
+      expect(seen[0]).toContain("[Relevant Skills]");
+      expect(seen[0]).toContain("## review-pr");
+
+      const decision = store
+        .listJobAuditEvents("job-model-selective-skill-metadata", 30)
+        .find((event) => event.action === "agent.recall.decision");
+      expect(decision?.metadata).toMatchObject({
+        method: "model",
+        budgets: expect.objectContaining({ skill: 1 }),
+        constraints: []
+      });
+      expect(store.listJobAuditEvents("job-model-selective-skill-metadata", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.skills.recalled",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            skills: ["review-pr"]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("uses updated wiki graph memory and does not inject stale workflow text", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
@@ -2887,7 +3607,7 @@ describe("agent query loop", () => {
           maxResults: 4,
           scopes: ["user", "project", "session"]
         }
-      }).submitMessage("Unrelated prompt with no matching terms");
+      }).submitMessage("What user preference do I have about focused checks?");
 
       expect(seen[0]).toContain("[Hot Memory]");
       expect(seen[0]).toContain(durableFact);
@@ -3418,25 +4138,25 @@ async function submitWithCapturedContext(input: {
   paths: ReturnType<typeof getMagiPaths>;
   seen: string[];
   prompt: string;
+  recallPlannerResponse?: Record<string, unknown> | string;
+  seenRecallPlannerPrompts?: string[];
 }): Promise<void> {
   const adapter: ProviderAdapter = {
     name: `${input.jobId}-provider`,
     complete: async (request) => {
-      input.seen.push(
-        request.messages
-          .map(
-            (message) =>
-              `${message.role}:${message.content
-                .map((part) => {
-                  if (part.type === "text") return part.text;
-                  if (part.type === "tool-result") return part.content;
-                  if (part.type === "tool-use") return `${part.name}:${JSON.stringify(part.input)}`;
-                  return "";
-                })
-                .join("")}`
-          )
-          .join("\n")
-      );
+      const transcript = request.messages
+        .map((message) => `${message.role}:${messageText(message)}`)
+        .join("\n");
+      if (transcript.includes("[Magi recall planner input]")) {
+        input.seenRecallPlannerPrompts?.push(transcript);
+        return {
+          text:
+            typeof input.recallPlannerResponse === "string"
+              ? input.recallPlannerResponse
+              : JSON.stringify(input.recallPlannerResponse ?? noRecallPlannerPlan())
+        };
+      }
+      input.seen.push(transcript);
       return { text: "context captured" };
     }
   };
@@ -3451,10 +4171,31 @@ async function submitWithCapturedContext(input: {
       enabled: true,
       autoWrite: "explicit",
       maxResults: 4,
-      scopes: ["user", "project", "session"]
+      scopes: ["user", "project", "session"],
+      recallPlannerRoute:
+        input.recallPlannerResponse === undefined
+          ? undefined
+          : {
+              providerName: "recall-planner",
+              model: "planner",
+              adapter
+            }
     }
   });
   await engine.submitMessage(input.prompt);
+}
+
+function noRecallPlannerPlan(taskKind = "tool_execution", constraints: string[] = []) {
+  return {
+    taskKind,
+    sources: {
+      hotMemory: { needed: false, budget: 0, reason: "No stable user preference is needed" },
+      memorySearch: { needed: false, budget: 0, reason: "No stored memory is needed" },
+      session: { needed: false, budget: 0, reason: "No prior session is referenced" },
+      skill: { needed: false, budget: 0, reason: "No skill is needed", skills: [] }
+    },
+    constraints
+  };
 }
 
 async function listen(server: http.Server): Promise<string> {

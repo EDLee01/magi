@@ -256,6 +256,13 @@ async function runPersistedHeadless(
       : undefined;
     const memoryWriteDecisionModel =
       input.config.memory.writeDecisionModel ?? input.config.memory.selectionModel;
+    const memorySelectionRoute = input.config.memory.selectionModel
+      ? resolveSelectionRoute({
+          config: input.config,
+          registry,
+          modelRef: input.config.memory.selectionModel
+        })
+      : undefined;
     const queryEngine = new QueryEngine({
       store: input.store,
       sessionId,
@@ -300,13 +307,8 @@ async function runPersistedHeadless(
         autoWrite: input.config.memory.autoWrite,
         maxResults: input.config.memory.maxResults,
         scopes: input.config.memory.scopes,
-        selectionRoute: input.config.memory.selectionModel
-          ? resolveSelectionRoute({
-              config: input.config,
-              registry,
-              modelRef: input.config.memory.selectionModel
-            })
-          : undefined,
+        selectionRoute: memorySelectionRoute,
+        recallPlannerRoute: memorySelectionRoute,
         writeDecisionRoute: memoryWriteDecisionModel
           ? resolveSelectionRoute({
               config: input.config,
