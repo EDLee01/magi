@@ -30,7 +30,7 @@ describe("clean-room compliance", () => {
       scripts?: Record<string, string>;
     };
     expect(packageJson.name).not.toBe("magi-agent");
-    expect(packageJson.bin).toEqual({ magi: "./dist/cli.js" });
+    expect(packageJson.bin).toEqual({ magi: "dist/cli.js" });
     expect(Object.keys(packageJson.bin ?? {})).not.toContain("magi-agent");
     expect(JSON.stringify(packageJson.scripts ?? {})).not.toContain("magi-agent");
   });

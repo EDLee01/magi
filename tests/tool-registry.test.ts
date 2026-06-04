@@ -634,46 +634,59 @@ describe("tool registry", () => {
   });
 
   it("applies permission mode and rule priority", () => {
-    const writeCall = {
-      type: "tool-use" as const,
-      id: "write-1",
-      name: "FileWrite",
-      input: { file_path: "x.txt", content: "x" }
-    };
-    const patchCall = {
-      type: "tool-use" as const,
-      id: "patch-1",
-      name: "FilePatch",
-      input: { file_path: "x.txt", patch: "@@\n-old\n+new" }
-    };
-    expect(checkToolPermission({ toolUse: writeCall, mode: "plan" })).toMatchObject({
-      decision: "deny"
-    });
-    expect(checkToolPermission({ toolUse: patchCall, mode: "plan" })).toMatchObject({
-      decision: "deny"
-    });
-    expect(checkToolPermission({ toolUse: patchCall, mode: "default" })).toMatchObject({
-      decision: "ask"
-    });
-    expect(checkToolPermission({ toolUse: patchCall, mode: "dontAsk" })).toMatchObject({
-      decision: "deny",
-      reason: "FilePatch is not allowed in dontAsk mode"
-    });
-    expect(checkToolPermission({ toolUse: patchCall, mode: "acceptEdits" })).toMatchObject({
-      decision: "allow",
-      reason: "acceptEdits mode"
-    });
-    expect(
-      checkToolPermission({
-        toolUse: writeCall,
-        mode: "default",
-        rules: {
-          allow: ["FileWrite(*)"],
-          deny: ["FileWrite(x.txt)"],
-          ask: []
-        }
-      })
-    ).toMatchObject({ decision: "deny" });
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tool-permissions-"));
+    const previousConfigDir = process.env.MAGI_CONFIG_DIR;
+    process.env.MAGI_CONFIG_DIR = workspace;
+    try {
+      clearPermissionRules();
+      const writeCall = {
+        type: "tool-use" as const,
+        id: "write-1",
+        name: "FileWrite",
+        input: { file_path: "x.txt", content: "x" }
+      };
+      const patchCall = {
+        type: "tool-use" as const,
+        id: "patch-1",
+        name: "FilePatch",
+        input: { file_path: "x.txt", patch: "@@\n-old\n+new" }
+      };
+      expect(checkToolPermission({ toolUse: writeCall, mode: "plan" })).toMatchObject({
+        decision: "deny"
+      });
+      expect(checkToolPermission({ toolUse: patchCall, mode: "plan" })).toMatchObject({
+        decision: "deny"
+      });
+      expect(checkToolPermission({ toolUse: patchCall, mode: "default" })).toMatchObject({
+        decision: "ask"
+      });
+      expect(checkToolPermission({ toolUse: patchCall, mode: "dontAsk" })).toMatchObject({
+        decision: "deny",
+        reason: "FilePatch is not allowed in dontAsk mode"
+      });
+      expect(checkToolPermission({ toolUse: patchCall, mode: "acceptEdits" })).toMatchObject({
+        decision: "allow",
+        reason: "acceptEdits mode"
+      });
+      expect(
+        checkToolPermission({
+          toolUse: writeCall,
+          mode: "default",
+          rules: {
+            allow: ["FileWrite(*)"],
+            deny: ["FileWrite(x.txt)"],
+            ask: []
+          }
+        })
+      ).toMatchObject({ decision: "deny" });
+    } finally {
+      clearPermissionRules();
+      if (previousConfigDir === undefined) {
+        delete process.env.MAGI_CONFIG_DIR;
+      } else {
+        process.env.MAGI_CONFIG_DIR = previousConfigDir;
+      }
+    }
   });
 
   it("honors persistent permission rules for default non-Bash tools", () => {
