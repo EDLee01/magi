@@ -1,4 +1,4 @@
-export type TuiPromptAbortReason = "SIGINT" | "EOF";
+export type TuiPromptAbortReason = "SIGINT" | "EOF" | "ESC";
 
 export class TuiPromptAbortError extends Error {
   constructor(readonly reason: TuiPromptAbortReason) {
@@ -325,6 +325,11 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
         continue;
       }
       if (chunk[i] === "\x1b") {
+        const match = chunk.slice(i).match(/^\x1b\[[0-9;?]*[~A-Za-z]/);
+        if (match) {
+          i += match[0].length;
+          continue;
+        }
         if (getSlashState()) {
           text = "";
           cursor = 0;
@@ -332,9 +337,15 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
           i += 1;
           continue;
         }
-        const match = chunk.slice(i).match(/^\x1b\[[0-9;?]*[~A-Za-z]/);
-        i += match ? match[0].length : 1;
-        continue;
+        if (text.length > 0) {
+          text = "";
+          cursor = 0;
+          slashSelection = 0;
+          i += 1;
+          continue;
+        }
+        abort("ESC");
+        return;
       }
 
       const ch = chunk[i]!;

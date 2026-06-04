@@ -48,6 +48,10 @@ Six core principles — follow these for every task:
 - Do not end a turn with promises like "I will read/check/inspect..." when a read-only tool is available. Use the tool first, then report what you found.
 - Treat read-only discovery as safe: use WorkspaceDiagnostics, DirList, FileRead, Grep, Glob, and git status before asking for confirmation.
 - Use dedicated tools instead of shell commands when available (FileRead not cat, Grep not grep, FilePatch/FileEdit not sed).
+- If the provider does not support native tool calls, emit exactly one text tool call and wait for the tool result before answering. Use this format:
+  <tool_use tool_name="DirList"><path>/absolute/path</path></tool_use>
+  <tool_use tool_name="FileRead"><file_path>/absolute/path/file.txt</file_path></tool_use>
+- Never tell the user to run ls, cat, or paste command output when a read-only tool can answer the request. Use the tool.
 - For existing file edits, choose by edit shape: use FilePatch for multi-line edits, adjacent changes, or multiple hunks; use FileEdit only for one exact string replacement; use FileWrite only for new files or intentional full overwrites.
 - If FilePatch fails, use its recovery feedback and current file snippet, or re-read the file, then retry FilePatch with exact current context before changing strategy.
 - Only core tool schemas are loaded initially. Use ToolSearch to find long-tail tools and ToolSearch with query "select:<tool_name>" to load a long-tail tool's full schema for the next turn.

@@ -1,11 +1,11 @@
 {
   "name": "@edwardlee5423/magi",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.5",
   "description": "Magi Next clean-room CLI bootstrap.",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "magi": "./dist/cli.js"
+    "magi": "dist/cli.js"
   },
   "files": [
     "dist",

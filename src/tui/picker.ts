@@ -23,6 +23,7 @@ export interface TuiPickerOptions {
   allowCustomValue?: (filter: string) => string | undefined;
   hotkeys?: Record<string, string>;
   cancelValue?: string;
+  signal?: AbortSignal;
 }
 
 const RESET = "\x1b[0m";
@@ -164,7 +165,9 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
   render();
 
   return new Promise<string | undefined>((resolve) => {
+    let settled = false;
     const cleanup = () => {
+      options.signal?.removeEventListener("abort", onAbort);
       stdin.removeListener("data", onData);
       if (stdin.setRawMode) stdin.setRawMode(Boolean(wasRaw));
       if (wasPaused) stdin.pause();
@@ -172,9 +175,13 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
     };
 
     const finish = (value: string | undefined) => {
+      if (settled) return;
+      settled = true;
       cleanup();
       resolve(value);
     };
+
+    const onAbort = () => finish(options.cancelValue);
 
     const processChunk = (chunk: string) => {
       let index = 0;
@@ -255,6 +262,11 @@ export async function showTuiPicker(options: TuiPickerOptions): Promise<string |
       processChunk(Buffer.isBuffer(buffer) ? buffer.toString("utf8") : buffer);
     }
 
+    if (options.signal?.aborted) {
+      finish(options.cancelValue);
+      return;
+    }
+    options.signal?.addEventListener("abort", onAbort, { once: true });
     stdin.on("data", onData);
   });
 }

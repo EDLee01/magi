@@ -204,6 +204,7 @@ async function runCliUnsafe(
           env: runtimeEnv,
           modelAlias: parsed.modelAlias ?? "main",
           sessionId: resumeSession?.id,
+          permissionMode: parsed.permissionMode,
           input: io.stdin,
           output: io.stdout
         });
@@ -2432,7 +2433,7 @@ function helpText(): string {
     "  --no-session-persistence                   Do not write prompt/session state",
     "  --output-format <text|json|stream-json>    Select text, JSON, or NDJSON output",
     "  --verbose                                  Include session/job metadata in text output",
-    "  --permission-mode <mode>                   default, acceptEdits, dontAsk, bypassPermissions, or plan",
+    "  --permission-mode <mode>                   default, acceptEdits, dontAsk, fullAccess/yolo, or plan",
     "  --tools <tool[,tool...]>                   Compatibility allow-list for exposed tools",
     "  --allowed-tools <rule[,rule...]>           Allow tool names or selectors like Bash(git:*)",
     "  --disallowed-tools <rule[,rule...]>        Deny tool names or selectors",
@@ -3045,7 +3046,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       const parsedMode = parsePermissionMode(value);
       if (!parsedMode) {
         throw new MagiUsageError(
-          "--permission-mode must be default, acceptEdits, dontAsk, bypassPermissions, or plan"
+          "--permission-mode must be default, acceptEdits, dontAsk, fullAccess/yolo, bypassPermissions, or plan"
         );
       }
       permissionMode = parsedMode;

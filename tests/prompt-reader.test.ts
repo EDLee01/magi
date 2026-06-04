@@ -3,7 +3,8 @@ import { PassThrough, Writable } from "node:stream";
 import {
   buildPromptDisplayForTest,
   readTuiPrompt,
-  shouldContinueOnEnterForTest
+  shouldContinueOnEnterForTest,
+  TuiPromptAbortError
 } from "../src/tui/prompt-reader.js";
 
 function visibleLength(text: string): number {
@@ -235,6 +236,26 @@ describe("prompt reader display", () => {
     const prompt = readTuiPrompt({ input, output, prompt: "> " });
     input.write("first\nsecond\r");
     await expect(prompt).resolves.toBe("first\nsecond");
+  });
+
+  it("clears draft text on Escape and submits the next prompt", async () => {
+    const { input, output } = createPromptStreams();
+
+    const prompt = readTuiPrompt({ input, output, prompt: "> " });
+    input.write("draft\x1bfinal\r");
+
+    await expect(prompt).resolves.toBe("final");
+  });
+
+  it("aborts an empty prompt on Escape", async () => {
+    const { input, output } = createPromptStreams();
+
+    const prompt = readTuiPrompt({ input, output, prompt: "> " });
+    input.write("\x1b");
+
+    await expect(prompt).rejects.toMatchObject({
+      reason: "ESC"
+    } satisfies Partial<TuiPromptAbortError>);
   });
 
   it("submits the selected slash command with arrow keys and Enter", async () => {

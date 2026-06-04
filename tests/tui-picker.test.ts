@@ -7,10 +7,16 @@ function createPickerStreams(): {
   input: NodeJS.ReadStream;
   output: NodeJS.WriteStream;
   chunks: string[];
+  rawModes: boolean[];
 } {
   const input = new PassThrough() as unknown as NodeJS.ReadStream;
   input.isTTY = true;
-  input.setRawMode = () => input;
+  const rawModes: boolean[] = [];
+  input.setRawMode = (mode: boolean) => {
+    input.isRaw = mode;
+    rawModes.push(mode);
+    return input;
+  };
   const chunks: string[] = [];
   const output = new Writable({
     write(chunk, _encoding, callback) {
@@ -19,7 +25,7 @@ function createPickerStreams(): {
     }
   }) as NodeJS.WriteStream;
   output.columns = 80;
-  return { input, output, chunks };
+  return { input, output, chunks, rawModes };
 }
 
 function stripAnsi(text: string): string {
@@ -141,5 +147,25 @@ describe("TUI picker", () => {
     const visible = stripAnsi(chunks.join(""));
     expect(visible).toContain("1/12");
     expect(visible).toContain("…");
+  });
+
+  it("cleans up input state when cancelled by an abort signal", async () => {
+    const { input, output, rawModes } = createPickerStreams();
+    const controller = new AbortController();
+    const picker = showTuiPicker({
+      stdin: input,
+      stdout: output,
+      title: "approval required",
+      items: [{ label: "Deny", value: "deny" }],
+      cancelValue: "deny",
+      signal: controller.signal
+    });
+
+    expect(input.listenerCount("data")).toBe(1);
+    controller.abort();
+
+    await expect(picker).resolves.toBe("deny");
+    expect(input.listenerCount("data")).toBe(0);
+    expect(rawModes).toEqual([true, false]);
   });
 });

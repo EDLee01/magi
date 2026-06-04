@@ -10,22 +10,52 @@ export const PERMISSION_MODES: ToolPermissionMode[] = [
   "plan"
 ];
 
+const PERMISSION_MODE_LABELS: Record<ToolPermissionMode, string> = {
+  default: "Default",
+  acceptEdits: "Accept Edits",
+  dontAsk: "Don't Ask",
+  bypassPermissions: "Full Access",
+  plan: "Plan"
+};
+
+const PERMISSION_MODE_ALIASES: Record<string, ToolPermissionMode> = {
+  default: "default",
+  acceptedits: "acceptEdits",
+  accept: "acceptEdits",
+  dontask: "dontAsk",
+  bypass: "bypassPermissions",
+  bypasspermissions: "bypassPermissions",
+  fullaccess: "bypassPermissions",
+  full: "bypassPermissions",
+  yolo: "bypassPermissions",
+  plan: "plan"
+};
+
 export function parsePermissionMode(value: string | undefined): ToolPermissionMode | undefined {
-  return PERMISSION_MODES.find((mode) => mode.toLowerCase() === value?.toLowerCase());
+  if (!value) return undefined;
+  return PERMISSION_MODE_ALIASES[normalizePermissionMode(value)];
+}
+
+export function formatPermissionModeLabel(mode: ToolPermissionMode): string {
+  return PERMISSION_MODE_LABELS[mode];
+}
+
+export function formatPermissionModeUpdate(mode: ToolPermissionMode): string {
+  return `Permissions updated to ${formatPermissionModeLabel(mode)}`;
 }
 
 export function formatPermissionMode(mode: ToolPermissionMode): string {
   switch (mode) {
     case "default":
-      return "default - ask before non-read-only tools";
+      return "Default - ask before non-read-only tools";
     case "acceptEdits":
-      return "acceptEdits - allow ordinary edits and commands without approval";
+      return "Accept Edits - allow ordinary edits and commands without approval";
     case "dontAsk":
-      return "dontAsk - deny non-read-only tools instead of asking";
+      return "Don't Ask - deny non-read-only tools instead of asking";
     case "bypassPermissions":
-      return "bypassPermissions - skip approval prompts; dangerous Bash still needs explicit env approval";
+      return "Full Access - skip approval prompts; dangerous Bash still needs explicit env approval";
     case "plan":
-      return "plan - deny write tools";
+      return "Plan - deny write tools";
   }
 }
 
@@ -34,16 +64,17 @@ export const command = {
   aliases: ["perms"],
   description: "View or manage persistent permission rules",
   usage:
-    "/permissions [mode [default|acceptEdits|dontAsk|bypassPermissions|plan]|clear|remove <tool>]",
+    "/permissions [mode [default|acceptEdits|dontAsk|fullAccess|bypassPermissions|yolo|plan]|clear|remove <tool>]",
   group: "Config",
   handler: (args: string[], input: SlashCommandInput): string => {
     if (args[0] === "mode") {
-      const mode = parsePermissionMode(args[1]);
-      if (args[1] && !mode) {
-        return `Unknown permission mode: ${args[1]}\n${formatPermissionModeList(input.permissionMode ?? "default")}`;
+      const requestedMode = args.slice(1).join(" ");
+      const mode = parsePermissionMode(requestedMode);
+      if (requestedMode && !mode) {
+        return `Unknown permission mode: ${requestedMode}\n${formatPermissionModeList(input.permissionMode ?? "default")}`;
       }
       if (mode) {
-        return `Permission mode: ${formatPermissionMode(mode)}`;
+        return formatPermissionModeUpdate(mode);
       }
       return formatPermissionModeList(input.permissionMode ?? "default");
     }
@@ -96,4 +127,8 @@ function formatPermissionModeList(currentMode: ToolPermissionMode): string {
     "",
     "Use /permissions mode <mode>."
   ].join("\n");
+}
+
+function normalizePermissionMode(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }

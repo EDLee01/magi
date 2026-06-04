@@ -210,7 +210,8 @@ async function askTerminalApproval(input: {
         N: "deny",
         ...(allowAlways ? { a: "always", A: "always" } : {})
       },
-      cancelValue: "deny"
+      cancelValue: "deny",
+      signal: input.signal
     });
     if (decision === "always") {
       addPermissionRule(toolName, `Always allow ${toolName}`);

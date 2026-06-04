@@ -25,8 +25,10 @@ import {
   formatTuiTranscriptStatus,
   formatTuiLiveEvent,
   MAGI_TEXT_HAT,
+  initialTuiPermissionMode,
   pickInteractiveSession,
   startInteractiveGoalCommand,
+  installRunningInterruptKeys,
   startTuiLiveEventWriter
 } from "../src/tui.js";
 import { ActiveInteractionRegistry } from "../src/interactions.js";
@@ -39,6 +41,7 @@ import {
   isToolAlwaysAllowed
 } from "../src/permissions.js";
 import { getGoal } from "../src/goal.js";
+import { parsePermissionMode } from "../src/commands/permissions.js";
 
 function stripAnsi(str: string | undefined): string | undefined {
   if (str === undefined) return undefined;
@@ -224,7 +227,7 @@ describe("TUI, slash commands, and session resume", () => {
           store,
           permissionMode: "bypassPermissions"
         })
-      ).toContain("Permission mode: bypassPermissions");
+      ).toContain("Permission mode: Full Access");
       expect(
         registry.dispatch("permissions", ["mode"], {
           cwd: "/repo",
@@ -232,7 +235,7 @@ describe("TUI, slash commands, and session resume", () => {
           store,
           permissionMode: "acceptEdits"
         })
-      ).toContain("> acceptEdits");
+      ).toContain("> Accept Edits");
       expect(
         registry.dispatch("permissions", ["mode", "plan"], {
           cwd: "/repo",
@@ -240,7 +243,15 @@ describe("TUI, slash commands, and session resume", () => {
           store,
           permissionMode: "default"
         })
-      ).toContain("Permission mode: plan");
+      ).toContain("Permissions updated to Plan");
+      expect(
+        registry.dispatch("permissions", ["mode", "Full", "Access"], {
+          cwd: "/repo",
+          config,
+          store,
+          permissionMode: "default"
+        })
+      ).toBe("Permissions updated to Full Access");
       expect(formatSessionSearch(store, "one")).toContain("session-");
       expect(formatSessionResume(store, "session-1")).toContain("approval approval-tui");
       expect(formatSessionResume(store, "session-1")).toContain("Transcript:");
@@ -299,22 +310,35 @@ describe("TUI, slash commands, and session resume", () => {
       );
       expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(
         expect.objectContaining({
-          label: "bypassPermissions",
+          label: "Full Access",
           value: "bypassPermissions",
           description: "skip prompts; dangerous Bash needs explicit env approval",
-          detail: "current"
+          detail: "current · bypassPermissions"
         })
       );
       expect(buildPermissionModePickerItems("bypassPermissions")).toContainEqual(
         expect.objectContaining({
-          label: "dontAsk",
+          label: "Don't Ask",
           value: "dontAsk",
-          description: "deny non-read-only tools instead of asking"
+          description: "deny non-read-only tools instead of asking",
+          detail: "dontAsk"
         })
       );
     } finally {
       store.close();
     }
+  });
+
+  it("accepts user-facing aliases for full access permission mode", () => {
+    expect(parsePermissionMode("Full Access")).toBe("bypassPermissions");
+    expect(parsePermissionMode("fullAccess")).toBe("bypassPermissions");
+    expect(parsePermissionMode("yolo")).toBe("bypassPermissions");
+  });
+
+  it("initializes interactive TUI permission mode from CLI input", () => {
+    expect(initialTuiPermissionMode("bypassPermissions")).toBe("bypassPermissions");
+    expect(initialTuiPermissionMode("acceptEdits")).toBe("acceptEdits");
+    expect(initialTuiPermissionMode()).toBe("default");
   });
 
   it("opens the interactive resume picker with an initial search query", async () => {
@@ -1091,6 +1115,77 @@ describe("TUI, slash commands, and session resume", () => {
       interactions.close();
       store.close();
     }
+  });
+
+  it("does not treat approval Escape as a global running interrupt", async () => {
+    const stdin = createTtyInput();
+    const output: string[] = [];
+    const controller = new AbortController();
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    interactions.registerJob({ sessionId: "session-esc", jobId: "job-esc" });
+    const wait = interactions.waitForApproval({
+      sessionId: "session-esc",
+      jobId: "job-esc",
+      toolUse: {
+        type: "tool-use",
+        id: "approve-esc",
+        name: "FileWrite",
+        input: {}
+      },
+      reason: "FileWrite requires approval"
+    });
+    const stop = installRunningInterruptKeys(
+      controller,
+      stdin,
+      {
+        write: (chunk: unknown) => {
+          output.push(String(chunk));
+          return true;
+        }
+      } as NodeJS.WriteStream,
+      { activeInteractions: interactions }
+    );
+
+    stdin.write("\x1b");
+
+    expect(controller.signal.aborted).toBe(false);
+    interactions.resolveApproval({ jobId: "job-esc", toolUseId: "approve-esc", approved: false });
+    await expect(wait).resolves.toBe(false);
+    stop();
+    interactions.close();
+    expect(output.join("")).not.toContain("Interrupting");
+  });
+
+  it("still treats Ctrl+C as a global running interrupt during approval", () => {
+    const stdin = createTtyInput();
+    const controller = new AbortController();
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    interactions.registerJob({ sessionId: "session-ctrl-c", jobId: "job-ctrl-c" });
+    void interactions
+      .waitForApproval({
+        sessionId: "session-ctrl-c",
+        jobId: "job-ctrl-c",
+        toolUse: {
+          type: "tool-use",
+          id: "approve-ctrl-c",
+          name: "FileWrite",
+          input: {}
+        },
+        reason: "FileWrite requires approval"
+      })
+      .catch(() => undefined);
+    const stop = installRunningInterruptKeys(
+      controller,
+      stdin,
+      { write: () => true } as unknown as NodeJS.WriteStream,
+      { activeInteractions: interactions }
+    );
+
+    stdin.write("\x03");
+
+    expect(controller.signal.aborted).toBe(true);
+    stop();
+    interactions.close();
   });
 
   it("resolves pending questions through the live TUI interaction path", async () => {

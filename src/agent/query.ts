@@ -6,6 +6,7 @@ import {
   ProviderRequest,
   ProviderResponse,
   ProviderUsage,
+  messageText,
   textMessage
 } from "../providers/ir.js";
 import { ProviderError, providerErrorFromException } from "../providers/errors.js";
@@ -345,6 +346,19 @@ async function* runAgentQueryInner(
       let normalized = normalizeProviderResponse(response, toolDefinitions);
       response = normalized.response;
       let toolUses = normalized.toolUses;
+      if (toolUses.length === 0) {
+        const fallbackToolUse = inferFallbackToolUse(
+          response.text,
+          messages,
+          toolDefinitions,
+          input.cwd,
+          input.toolRules
+        );
+        if (fallbackToolUse) {
+          response = { ...response, text: "", toolUses: [fallbackToolUse] };
+          toolUses = [fallbackToolUse];
+        }
+      }
 
       if (
         toolUses.length === 0 &&
@@ -366,9 +380,13 @@ async function* runAgentQueryInner(
         toolUses = normalized.toolUses;
       }
 
-      if (response.text && !streamedTextThisTurn) {
-        finalText += response.text;
-        yield { type: "text_delta", text: response.text };
+      const visibleResponseText = toolUses.length > 0 ? "" : response.text;
+      if (toolUses.length > 0 && streamedTextThisTurn) {
+        finalText = removeTrailingText(finalText, streamedTextThisTurn);
+      }
+      if (visibleResponseText && !streamedTextThisTurn) {
+        finalText += visibleResponseText;
+        yield { type: "text_delta", text: visibleResponseText };
       }
       for (const toolUse of toolUses) {
         yield { type: "tool_use", toolUse };
@@ -376,7 +394,7 @@ async function* runAgentQueryInner(
       const assistantMessage: MagiMessage = {
         role: "assistant",
         content: [
-          ...(response.text ? [{ type: "text" as const, text: response.text }] : []),
+          ...(visibleResponseText ? [{ type: "text" as const, text: visibleResponseText }] : []),
           ...toolUses
         ]
       };
@@ -646,6 +664,10 @@ function formatRetryDelay(delayMs: number): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function removeTrailingText(text: string, suffix: string): string {
+  return suffix && text.endsWith(suffix) ? text.slice(0, -suffix.length) : text;
 }
 
 function throwIfCancelled(signal: AbortSignal | undefined): void {
@@ -982,6 +1004,87 @@ function normalizeProviderResponse(
   };
 }
 
+function inferFallbackToolUse(
+  responseText: string,
+  messages: MagiMessage[],
+  toolDefinitions: MagiToolDefinition[],
+  cwd: string,
+  rules: ToolPermissionRules | undefined
+): MagiToolUsePart | null {
+  const hasVisibleDirList = toolDefinitions.some((tool) => tool.name === "DirList");
+  const hasBuiltinDirList = getBuiltinToolDefinitionByName("DirList") !== undefined;
+  const allowedByRules = filterNamedToolRecordsByRules([{ name: "DirList" }], rules).length > 0;
+  if ((!hasVisibleDirList && !hasBuiltinDirList) || !allowedByRules) {
+    return null;
+  }
+  const latestUserText = latestUserMessageText(messages);
+  if (!latestUserText || !isDirectoryListRequest(latestUserText)) {
+    return null;
+  }
+  if (
+    !isToolAccessRefusal(responseText) &&
+    !mentionsShellListingFallback(responseText) &&
+    !mentionsEmptyDirectoryResult(responseText)
+  ) {
+    return null;
+  }
+  const requestedPath = inferDirectoryPath(latestUserText, cwd);
+  if (!requestedPath) {
+    return null;
+  }
+  return {
+    type: "tool-use",
+    id: "fallback-dirlist-1",
+    name: "DirList",
+    input: { path: requestedPath }
+  };
+}
+
+function latestUserMessageText(messages: MagiMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role === "user") {
+      return messageText(message).trim();
+    }
+  }
+  return "";
+}
+
+function isDirectoryListRequest(text: string): boolean {
+  return (
+    /(桌面|desktop|目录|文件夹|folder|directory)/iu.test(text) &&
+    /(看|列|读取|查看|有什么|有哪些|list|show|read|inspect)/iu.test(text)
+  );
+}
+
+function isToolAccessRefusal(text: string): boolean {
+  return /(不能|无法|没有|未能|can't|cannot|unable).{0,30}(工具|tool|访问|access|读取|read)/iu.test(text);
+}
+
+function mentionsShellListingFallback(text: string): boolean {
+  return /\b(ls|dir)\b.*(Desktop|桌面|目录|文件夹)|终端|terminal|命令|command/iu.test(text);
+}
+
+function mentionsEmptyDirectoryResult(text: string): boolean {
+  return /(没有|未|无|no).{0,30}(匹配|文件|文件夹|matches|files|folders|items)/iu.test(text);
+}
+
+function inferDirectoryPath(text: string, cwd: string): string | null {
+  const explicitPath = /(?:^|\s)(\/[^\s`"'，。；;]+)/u.exec(text)?.[1];
+  if (explicitPath) {
+    return explicitPath;
+  }
+  if (/桌面|desktop/iu.test(text)) {
+    return `${homeDirectoryFromCwd(cwd)}/Desktop`;
+  }
+  return null;
+}
+
+function homeDirectoryFromCwd(cwd: string): string {
+  const match = /^(\/Users\/[^/]+)/u.exec(cwd);
+  return match?.[1] ?? (cwd.replace(/\/+$/u, "") || ".");
+}
+
 function parseTextToolUses(
   text: string,
   toolDefinitions: MagiToolDefinition[]
@@ -993,7 +1096,10 @@ function parseTextToolUses(
   const toolUses: MagiToolUsePart[] = [];
   const blockPattern = /<tool_use\b([^>]*)>([\s\S]*?)<\/tool_use>/g;
   const stripped = text.replace(blockPattern, (block, attrs: string, body: string) => {
-    const name = readXmlAttribute(attrs, "tool_name") ?? readXmlAttribute(attrs, "name");
+    const name =
+      readXmlAttribute(attrs, "tool_name") ??
+      readXmlAttribute(attrs, "name") ??
+      readXmlAttribute(attrs, "tool");
     if (!name || !availableTools.has(name)) {
       return block;
     }
@@ -1010,6 +1116,10 @@ function parseTextToolUses(
 
 function parseTextToolArgs(body: string): Record<string, unknown> {
   const input: Record<string, unknown> = {};
+  const jsonInput = parseTextToolJsonArgs(body);
+  if (jsonInput) {
+    return jsonInput;
+  }
   const argPattern = /<arg\b([^>]*)>([\s\S]*?)<\/arg>/g;
   for (const match of body.matchAll(argPattern)) {
     const name = readXmlAttribute(match[1], "name");
@@ -1027,6 +1137,26 @@ function parseTextToolArgs(body: string): Record<string, unknown> {
     input[name] = coerceTextToolValue(decodeXmlEntities(match[2].trim()));
   }
   return input;
+}
+
+function parseTextToolJsonArgs(body: string): Record<string, unknown> | null {
+  const trimmed = decodeXmlEntities(body.trim());
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (isRecord(parsed)) {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeTextToolInput(

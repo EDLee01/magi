@@ -28,7 +28,8 @@ import { resolveModelPickerSelection } from "./slash.js";
 import { parseCommandLine, registry } from "./commands/registry.js";
 import { isVimModeEnabled } from "./commands/vim.js";
 import {
-  formatPermissionMode,
+  formatPermissionModeLabel,
+  formatPermissionModeUpdate,
   parsePermissionMode,
   PERMISSION_MODES
 } from "./commands/permissions.js";
@@ -92,10 +93,11 @@ export {
 } from "./tui/transcript.js";
 export { colorizeDiffLine, createTerminalUserQuestionResolver } from "./tui/interactions.js";
 
-function installRunningInterruptKeys(
+export function installRunningInterruptKeys(
   controller: AbortController,
   input: NodeJS.ReadStream = defaultInput,
-  output: NodeJS.WriteStream = defaultOutput
+  output: NodeJS.WriteStream = defaultOutput,
+  options: { activeInteractions?: ActiveInteractionRegistry } = {}
 ): () => void {
   const wasRaw = input.isRaw;
   let interrupted = false;
@@ -107,6 +109,10 @@ function installRunningInterruptKeys(
   };
   const onData = (chunk: Buffer | string) => {
     const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk;
+    const approvalPending =
+      options.activeInteractions?.listInteractions({ status: "pending", kind: "approval" })
+        .length ?? 0;
+    if (text === "\x1b" && approvalPending > 0) return;
     if (text === "\x1b" || text === "\x03") interrupt();
   };
   input.setRawMode(true);
@@ -118,6 +124,10 @@ function installRunningInterruptKeys(
   };
 }
 
+export function initialTuiPermissionMode(mode?: ToolPermissionMode): ToolPermissionMode {
+  return mode ?? "default";
+}
+
 export async function runInteractiveTerminal(inputConfig: {
   cwd: string;
   config: MagiConfig;
@@ -126,6 +136,7 @@ export async function runInteractiveTerminal(inputConfig: {
   env?: NodeJS.ProcessEnv;
   modelAlias?: string;
   sessionId?: string;
+  permissionMode?: ToolPermissionMode;
   input?: NodeJS.ReadStream;
   output?: NodeJS.WriteStream;
 }): Promise<number> {
@@ -170,7 +181,9 @@ export async function runInteractiveTerminal(inputConfig: {
   });
   let currentModel = inputConfig.modelAlias ?? "main";
   let currentSessionId = inputConfig.sessionId;
-  let currentPermissionMode: ToolPermissionMode = "default";
+  let currentPermissionMode: ToolPermissionMode = initialTuiPermissionMode(
+    inputConfig.permissionMode
+  );
   let running = false;
   let abortController: AbortController | null = null;
   const modelDisplay = inputConfig.config.models.aliases[currentModel] ?? currentModel;
@@ -419,7 +432,7 @@ export async function runInteractiveTerminal(inputConfig: {
             continue;
           }
           currentPermissionMode = selected;
-          output.write(`Permission mode: ${formatPermissionMode(currentPermissionMode)}\n`);
+          output.write(`${formatPermissionModeUpdate(currentPermissionMode)}\n`);
           continue;
         }
 
@@ -433,7 +446,7 @@ export async function runInteractiveTerminal(inputConfig: {
           parsed.args[0] === "mode" &&
           parsed.args[1]
         ) {
-          const selected = parsePermissionMode(parsed.args[1]);
+          const selected = parsePermissionMode(parsed.args.slice(1).join(" "));
           if (selected) {
             currentPermissionMode = selected;
           }
@@ -566,7 +579,9 @@ export async function runInteractiveTerminal(inputConfig: {
       let result: Awaited<ReturnType<typeof runHeadlessPrompt>> | undefined;
       let stopInterruptKeys: (() => void) | undefined;
       try {
-        stopInterruptKeys = installRunningInterruptKeys(controller, input, output);
+        stopInterruptKeys = installRunningInterruptKeys(controller, input, output, {
+          activeInteractions
+        });
         result = await runHeadlessPrompt({
           prompt: promptWithImages,
           cwd: inputConfig.cwd,
@@ -971,10 +986,10 @@ async function pickInteractivePermissionMode(input: {
 
 export function buildPermissionModePickerItems(currentMode: ToolPermissionMode): TuiPickerItem[] {
   return PERMISSION_MODES.map((mode) => ({
-    label: mode,
+    label: formatPermissionModeLabel(mode),
     value: mode,
     description: permissionModePickerDescription(mode),
-    detail: mode === currentMode ? "current" : undefined
+    detail: mode === currentMode ? `current · ${mode}` : mode
   }));
 }
 

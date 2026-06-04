@@ -26,7 +26,7 @@ describe("CLI entrypoint", () => {
   it("runs magi --version", async () => {
     const result = await runCli(["--version"], {}, process.cwd());
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("magi 0.1.0-alpha.2\n");
+    expect(result.stdout).toBe("magi 0.1.5\n");
   });
 
   it("runs magi doctor and displays the isolation root", async () => {
@@ -1982,7 +1982,7 @@ describe("CLI entrypoint", () => {
     ) as {
       bin?: Record<string, string>;
     };
-    expect(packageJson.bin).toEqual({ magi: "./dist/cli.js" });
+    expect(packageJson.bin).toEqual({ magi: "dist/cli.js" });
     expect(packageJson.bin).not.toHaveProperty("magi-agent");
   });
 });

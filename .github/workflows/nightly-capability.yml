@@ -50,4 +50,5 @@ jobs:
         with:
           name: nightly-capability-reports
           path: .magi-reports/*.json
+          include-hidden-files: true
           if-no-files-found: warn
