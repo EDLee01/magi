@@ -65,7 +65,9 @@ export function syncMemoryGraph(
         store.upsertChunk({
           sourceId: source.id,
           uri: section.uri,
-          type: classifyMemoryNodeType(`${section.heading}\n${section.body}`),
+          type: classifyMemoryNodeType(`${section.heading}\n${section.body}`, {
+            scope: wikiFileMemoryScope(file.path)
+          }),
           heading,
           body: section.body,
           summary: summarizeSection(section.body),
@@ -237,6 +239,13 @@ function weightForWikiPath(filePath: string): number {
   if (filePath.startsWith("projects/")) return 0.7;
   if (filePath.startsWith("decisions/")) return 0.68;
   return 0.6;
+}
+
+function wikiFileMemoryScope(filePath: string): "user" | undefined {
+  if (filePath === "user.md" || filePath === "preferences.md") {
+    return "user";
+  }
+  return undefined;
 }
 
 function summarizeSection(body: string): string {

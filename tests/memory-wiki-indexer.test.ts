@@ -98,6 +98,42 @@ describe("memory-wiki-indexer", () => {
     }
   });
 
+  it("keeps user wiki identity and preferences as hot user memory types", () => {
+    const paths = makePaths();
+    appendMemoryFile({
+      appRoot: paths.root,
+      filePath: "user.md",
+      content: [
+        "## Edward creator identity",
+        "Edward is the creator of Magi Next.",
+        "Use this identity only as durable user context.",
+        "",
+        "## Magi summary preference",
+        "User prefers concise Magi verification summaries."
+      ].join("\n")
+    });
+
+    syncMemoryGraph({ appRoot: paths.root, paths });
+    const store = MemoryNodeStore.open(paths);
+    try {
+      const hot = store.listHotNodes({ limit: 10, minWeight: 0 });
+      expect(hot).toContainEqual(
+        expect.objectContaining({
+          title: "Edward creator identity",
+          type: "user_profile"
+        })
+      );
+      expect(hot).toContainEqual(
+        expect.objectContaining({
+          title: "Magi summary preference",
+          type: "preference"
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("updates wiki chunks without duplicates and archives missing sources", () => {
     const paths = makePaths();
     writeMemoryFile({

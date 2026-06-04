@@ -377,18 +377,19 @@ export function classifyMemoryNodeType(
       "https://",
       "docs",
       "documentation",
-      "reference",
       "link",
       "url",
       "文档",
       "链接",
       "参考"
-    ])
+    ]) ||
+    /\breferences?\b/.test(normalized)
   ) {
     return "reference";
   }
 
   if (
+    input.scope !== "user" &&
     hasAny(normalized, [
       "project",
       "repo",
