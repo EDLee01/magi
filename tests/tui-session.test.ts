@@ -42,6 +42,7 @@ import {
 } from "../src/permissions.js";
 import { getGoal } from "../src/goal.js";
 import { parsePermissionMode } from "../src/commands/permissions.js";
+import { shellDisplayName } from "../src/platform/shell.js";
 
 function stripAnsi(str: string | undefined): string | undefined {
   if (str === undefined) return undefined;
@@ -312,7 +313,7 @@ describe("TUI, slash commands, and session resume", () => {
         expect.objectContaining({
           label: "Full Access",
           value: "bypassPermissions",
-          description: "skip prompts; dangerous Bash needs explicit env approval",
+          description: `skip prompts; dangerous ${shellDisplayName()} needs explicit env approval`,
           detail: "current · bypassPermissions"
         })
       );

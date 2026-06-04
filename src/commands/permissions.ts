@@ -1,5 +1,6 @@
 import { SlashCommandInput } from "./registry.js";
 import { listPermissionRules, clearPermissionRules, removePermissionRule } from "../permissions.js";
+import { shellDisplayName } from "../platform/shell.js";
 import { ToolPermissionMode } from "../tools/registry.js";
 
 export const PERMISSION_MODES: ToolPermissionMode[] = [
@@ -53,7 +54,7 @@ export function formatPermissionMode(mode: ToolPermissionMode): string {
     case "dontAsk":
       return "Don't Ask - deny non-read-only tools instead of asking";
     case "bypassPermissions":
-      return "Full Access - skip approval prompts; dangerous Bash still needs explicit env approval";
+      return `Full Access - skip approval prompts; dangerous ${shellDisplayName()} still needs explicit env approval`;
     case "plan":
       return "Plan - deny write tools";
   }

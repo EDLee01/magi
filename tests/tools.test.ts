@@ -5,9 +5,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli } from "../src/cli.js";
+import { createShellInvocation, shellDisplayName } from "../src/platform/shell.js";
 import { readWorkspaceFile, writeWorkspaceFile } from "../src/tools/files.js";
 import { getGitSummary } from "../src/tools/git.js";
-import { searchWorkspace } from "../src/tools/search.js";
+import { globToRegExp, normalizeMatchPath, searchWorkspace } from "../src/tools/search.js";
+import { executeTreeView } from "../src/tools/tree-view.js";
 import {
   isDangerousShellCommand,
   isLongRunningCommand,
@@ -85,6 +87,43 @@ describe("local tools", () => {
     expect(matches).toContainEqual({ path: "src/a.txt", line: 2, text: "beta" });
   });
 
+  it("normalizes Windows-style search paths and globs", () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tools-"));
+    mkdirSync(path.join(workspace, "src", "nested"), { recursive: true });
+    writeFileSync(path.join(workspace, "src", "nested", "a.txt"), "needle\n", "utf8");
+    writeFileSync(path.join(workspace, "other.txt"), "needle\n", "utf8");
+
+    const matches = searchWorkspace({
+      cwd: workspace,
+      query: "needle",
+      glob: "src\\**\\*.txt",
+      fixedStrings: true
+    });
+
+    expect(matches.map((match) => match.path)).toEqual(["src/nested/a.txt"]);
+    expect(normalizeMatchPath(".\\src\\nested\\a.txt")).toBe("src/nested/a.txt");
+    expect(globToRegExp("src\\**\\*.txt").test("src/nested/a.txt")).toBe(true);
+  });
+
+  it("renders tree output for paths with spaces and dot directories", () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-tools-"));
+    mkdirSync(path.join(workspace, ".magi-next"), { recursive: true });
+    mkdirSync(path.join(workspace, "space dir"), { recursive: true });
+    writeFileSync(path.join(workspace, "space dir", "a.txt"), "hello\n", "utf8");
+
+    const result = executeTreeView({
+      cwd: workspace,
+      path: ".",
+      depth: 2,
+      showFiles: true
+    });
+
+    expect(result.path).toBe(".");
+    expect(result.tree).toContain(".magi-next");
+    expect(result.tree).toContain("space dir");
+    expect(result.tree).toContain("a.txt");
+  });
+
   it("blocks dangerous shell commands unless explicitly approved", async () => {
     expect(isDangerousShellCommand("rm -rf /tmp/something")).toBe(true);
     expect(isDangerousShellCommand("rm -rf build")).toBe(true);
@@ -119,8 +158,23 @@ describe("local tools", () => {
       cwd: process.cwd(),
       command: "printf hello"
     });
+    expect(result.shell).toBe(shellDisplayName());
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("hello");
+  });
+
+  it("uses PowerShell on Windows and bash elsewhere", () => {
+    expect(createShellInvocation("Write-Output hello", "win32")).toEqual({
+      executable: "powershell.exe",
+      args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Write-Output hello"],
+      displayName: "PowerShell"
+    });
+    expect(createShellInvocation("printf hello", "darwin")).toEqual({
+      executable: "bash",
+      args: ["-lc", "printf hello"],
+      displayName: "Bash"
+    });
+    expect(shellDisplayName("win32")).toBe("PowerShell");
   });
 
   it("does not auto-background commands that already background a long-running segment", () => {

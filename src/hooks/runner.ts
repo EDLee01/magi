@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 
 import { HookDefinition, HookEvent } from "../config.js";
+import { createShellInvocation } from "../platform/shell.js";
 import { MagiMessage } from "../providers/ir.js";
 
 export interface HookContext {
@@ -193,7 +194,8 @@ async function runCommandHook(
 ): Promise<HookResult> {
   return new Promise((resolve, reject) => {
     let timedOut = false;
-    const child = spawn("bash", ["-lc", hook.command ?? ""], {
+    const shell = createShellInvocation(hook.command ?? "");
+    const child = spawn(shell.executable, shell.args, {
       cwd: context.cwd,
       env: {
         ...env,

@@ -42,13 +42,14 @@ export function searchWorkspace(input: {
   const headLimit = readHeadLimit(input);
   const beforeContext = input.beforeContext ?? 0;
   const afterContext = input.afterContext ?? 0;
+  const glob = input.glob ? normalizeMatchPath(input.glob) : undefined;
   const typeGlobs = typeToGlobs(input.type);
 
   const args = [
     "--json",
     ...(input.fixedStrings ? ["--fixed-strings"] : []),
     ...(input.ignoreCase ? ["--ignore-case"] : []),
-    ...(input.glob ? ["--glob", input.glob] : []),
+    ...(glob ? ["--glob", glob] : []),
     ...typeGlobs.flatMap((glob) => ["--glob", glob]),
     ...(beforeContext > 0 ? ["--before-context", String(beforeContext)] : []),
     ...(afterContext > 0 ? ["--after-context", String(afterContext)] : []),
@@ -76,7 +77,7 @@ export function searchWorkspace(input: {
     query: input.query,
     headLimit,
     maxFileBytes: input.maxFileBytes ?? 128 * 1024,
-    glob: input.glob,
+    glob,
     typeGlobs,
     ignoreCase: input.ignoreCase,
     fixedStrings: input.fixedStrings,
@@ -114,7 +115,7 @@ export function globWorkspace(input: {
       if (!stat.isFile()) {
         continue;
       }
-      const rel = path.relative(input.cwd, item);
+      const rel = normalizeMatchPath(path.relative(input.cwd, item));
       if (regex.test(rel)) {
         matches.push({ path: rel, mtimeMs: stat.mtimeMs });
       }
@@ -149,10 +150,11 @@ export function formatSearchMatches(
 }
 
 export function globToRegExp(pattern: string): RegExp {
+  const normalizedPattern = normalizeMatchPath(pattern);
   let out = "^";
-  for (let i = 0; i < pattern.length; i += 1) {
-    const char = pattern[i];
-    const next = pattern[i + 1];
+  for (let i = 0; i < normalizedPattern.length; i += 1) {
+    const char = normalizedPattern[i];
+    const next = normalizedPattern[i + 1];
     if (char === "*" && next === "*") {
       out += ".*";
       i += 1;
@@ -254,8 +256,9 @@ function readJsonRecord(line: string): unknown {
   }
 }
 
-function normalizeMatchPath(filePath: string): string {
-  return filePath.startsWith("./") ? filePath.slice(2) : filePath;
+export function normalizeMatchPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  return normalized.startsWith("./") ? normalized.slice(2) : normalized;
 }
 
 function searchWithoutRipgrep(input: {
@@ -300,7 +303,7 @@ function searchWithoutRipgrep(input: {
       if (!stat.isFile() || stat.size > input.maxFileBytes) {
         continue;
       }
-      const rel = path.relative(input.cwd, item);
+      const rel = normalizeMatchPath(path.relative(input.cwd, item));
       if (globRegex && !globRegex.test(rel)) {
         continue;
       }

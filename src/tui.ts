@@ -50,6 +50,7 @@ import { SessionStore } from "./session-store.js";
 import { getBuiltinToolDefinitions, ToolPermissionMode } from "./tools/registry.js";
 import { createGoal, formatGoalBadge, getGoal, isGoalCreationArgs } from "./goal.js";
 import { VERSION } from "./version.js";
+import { shellDisplayName } from "./platform/shell.js";
 import {
   AskUserQuestionAnswer,
   AskUserQuestionRequest,
@@ -1002,7 +1003,7 @@ function permissionModePickerDescription(mode: ToolPermissionMode): string {
     case "dontAsk":
       return "deny non-read-only tools instead of asking";
     case "bypassPermissions":
-      return "skip prompts; dangerous Bash needs explicit env approval";
+      return `skip prompts; dangerous ${shellDisplayName()} needs explicit env approval`;
     case "plan":
       return "deny write tools";
   }

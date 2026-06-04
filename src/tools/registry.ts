@@ -342,6 +342,7 @@ import {
 } from "./workspace-diagnostics.js";
 import { resolveWorkspacePath } from "./workspace.js";
 import { WebSearchConfig } from "../config.js";
+import { shellDisplayName } from "../platform/shell.js";
 
 export type ToolPermissionMode =
   | "default"
@@ -1066,6 +1067,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         signal: context.signal
       });
       return [
+        `shell: ${result.shell}`,
         `Command exited ${result.exitCode}`,
         result.stdout ? `stdout:\n${result.stdout.trimEnd()}` : undefined,
         result.stderr ? `stderr:\n${result.stderr.trimEnd()}` : undefined
@@ -1083,8 +1085,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       if (dangerous && context.permissionMode !== "bypassPermissions") {
         return {
           decision: "deny",
-          reason:
-            "dangerous Bash command requires bypassPermissions mode and explicit dangerous approval"
+          reason: `dangerous ${shellDisplayName()} command requires bypassPermissions mode and explicit dangerous approval`
         };
       }
       if (
@@ -1094,7 +1095,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       ) {
         return {
           decision: "deny",
-          reason: "dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1"
+          reason: `dangerous ${shellDisplayName()} command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1`
         };
       }
       return undefined;

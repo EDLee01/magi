@@ -2,11 +2,13 @@ import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { createShellInvocation, isWindowsPlatform } from "../platform/shell.js";
 import { ToolError } from "./errors.js";
 
 export interface ShellResult {
   command: string;
   cwd: string;
+  shell: string;
   exitCode: number | null;
   stdout: string;
   stderr: string;
@@ -203,25 +205,25 @@ export async function runShellCommand(input: {
 
   // Auto-background long-running commands (dev servers, etc.) to avoid hanging
   if (!input.skipAutoBackground && isLongRunningCommand(input.command)) {
-    const logFile = join(tmpdir(), `magi-bg-${Date.now()}.log`);
-    // Wrap the entire command in a subshell so compound commands (cd && npm run dev) work correctly.
-    // Use nohup and redirect stdio so the detached process survives shell exit.
-    const escaped = input.command.replace(/'/g, "'\\''");
-    const bgCommand = `nohup bash -c '${escaped}' > ${logFile} 2>&1 < /dev/null & disown; echo "BG_PID=$!"`;
+    const bg = backgroundCommand(input.command, input.cwd);
     const bgResult = await runShellCommand({
       ...input,
-      command: bgCommand,
+      command: bg.command,
       skipAutoBackground: true
     });
     const pid = parseBackgroundPid(bgResult.stdout);
-    const stopLine = pid ? `To stop: kill ${pid}` : "To stop: use the BG_PID printed below.";
+    const stopLine = pid
+      ? isWindowsPlatform()
+        ? `To stop: Stop-Process -Id ${pid}`
+        : `To stop: kill ${pid}`
+      : "To stop: use the BG_PID printed below.";
     return {
       ...bgResult,
       command: input.command,
       stdout:
         `[Auto-backgrounded] Process detached from shell. The process IS running — DO NOT try to verify by re-running it.\n` +
-        `Log file: ${logFile}\n` +
-        `To check output: cat ${logFile}\n` +
+        `Log file: ${bg.logFile}\n` +
+        `To check output: ${bg.checkCommand}\n` +
         `${stopLine}\n` +
         `Wait 3-5 seconds before checking the log for the URL/port.\n` +
         bgResult.stdout
@@ -229,10 +231,11 @@ export async function runShellCommand(input: {
   }
 
   return new Promise((resolve, reject) => {
-    const child = spawn("bash", ["-lc", input.command], {
+    const shell = createShellInvocation(input.command);
+    const child = spawn(shell.executable, shell.args, {
       cwd: input.cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      detached: true // create new process group so we can kill the entire tree
+      detached: !isWindowsPlatform() // Unix process group lets us kill child trees safely.
     });
     let stdout = "";
     let stderr = "";
@@ -250,7 +253,11 @@ export async function runShellCommand(input: {
     const TRUNC_NOTE = "\n[output truncated at 1MB]\n";
     const killTree = (sig: NodeJS.Signals = "SIGTERM") => {
       try {
-        if (child.pid) process.kill(-child.pid, sig); // negative PID = process group
+        if (child.pid && !isWindowsPlatform()) {
+          process.kill(-child.pid, sig); // negative PID = Unix process group
+          return;
+        }
+        child.kill(sig);
       } catch {
         try {
           child.kill(sig);
@@ -314,6 +321,7 @@ export async function runShellCommand(input: {
       resolve({
         command: input.command,
         cwd: input.cwd,
+        shell: shell.displayName,
         exitCode,
         stdout,
         stderr,
@@ -378,6 +386,49 @@ export async function runShellCommand(input: {
       finish(exitCode ?? exitCodeFromExit);
     });
   });
+}
+
+function backgroundCommand(
+  command: string,
+  cwd: string
+): {
+  command: string;
+  logFile: string;
+  checkCommand: string;
+} {
+  const logFile = join(tmpdir(), `magi-bg-${Date.now()}.log`);
+  if (isWindowsPlatform()) {
+    const stdoutFile = logFile;
+    const stderrFile = logFile.replace(/\.log$/, ".stderr.log");
+    const childCommand = psSingleQuote(command);
+    return {
+      command: [
+        `$p = Start-Process -FilePath 'powershell.exe'`,
+        `-ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-Command',${childCommand})`,
+        `-WorkingDirectory ${psSingleQuote(cwd)}`,
+        `-RedirectStandardOutput ${psSingleQuote(stdoutFile)}`,
+        `-RedirectStandardError ${psSingleQuote(stderrFile)}`,
+        "-PassThru;",
+        `"BG_PID=$($p.Id)";`,
+        `"BG_STDERR=${stderrFile}"`
+      ].join(" "),
+      logFile: stdoutFile,
+      checkCommand: `Get-Content ${psSingleQuote(stdoutFile)}`
+    };
+  }
+
+  // Wrap the command in a subshell so compound commands work correctly.
+  // Use nohup and redirect stdio so the detached process survives shell exit.
+  const escaped = command.replace(/'/g, "'\\''");
+  return {
+    command: `nohup bash -c '${escaped}' > ${logFile} 2>&1 < /dev/null & disown; echo "BG_PID=$!"`,
+    logFile,
+    checkCommand: `cat ${logFile}`
+  };
+}
+
+function psSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function parseBackgroundPid(output: string): number | undefined {

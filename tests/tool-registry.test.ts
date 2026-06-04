@@ -28,6 +28,7 @@ import {
   toolUsageStatsPath
 } from "../src/tool-usage-stats.js";
 import { addPermissionRule, clearPermissionRules } from "../src/permissions.js";
+import { shellDisplayName } from "../src/platform/shell.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
@@ -781,8 +782,7 @@ describe("tool registry", () => {
     });
     expect(checkToolPermission({ toolUse: dangerousBashCall, mode: "acceptEdits" })).toMatchObject({
       decision: "deny",
-      reason:
-        "dangerous Bash command requires bypassPermissions mode and explicit dangerous approval"
+      reason: `dangerous ${shellDisplayName()} command requires bypassPermissions mode and explicit dangerous approval`
     });
     expect(
       checkToolPermission({
@@ -791,7 +791,7 @@ describe("tool registry", () => {
       })
     ).toMatchObject({
       decision: "deny",
-      reason: "dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1"
+      reason: `dangerous ${shellDisplayName()} command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1`
     });
     expect(
       checkToolPermission({
