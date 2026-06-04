@@ -5,7 +5,7 @@ import { AddressInfo } from "node:net";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { QueryEngine } from "../src/agent/query-engine.js";
 import { AgentQueryEvent, runAgentQuery } from "../src/agent/query.js";
@@ -20,14 +20,35 @@ import { writeMemdirEntry } from "../src/memdir.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
 import { ensureMagiHome, getMagiPaths } from "../src/paths.js";
 import { createGoal, updateGoalStatus } from "../src/goal.js";
+import { clearPermissionRules } from "../src/permissions.js";
 
 let workspace: string | undefined;
 let server: http.Server | undefined;
+let permissionRoot: string | undefined;
+let previousConfigDir: string | undefined;
+
+beforeEach(() => {
+  previousConfigDir = process.env.MAGI_CONFIG_DIR;
+  permissionRoot = mkdtempSync(path.join(os.tmpdir(), "magi-query-permissions-"));
+  process.env.MAGI_CONFIG_DIR = permissionRoot;
+  clearPermissionRules();
+});
 
 afterEach(async () => {
   if (server) {
     await closeServer(server);
     server = undefined;
+  }
+  clearPermissionRules();
+  if (previousConfigDir === undefined) {
+    delete process.env.MAGI_CONFIG_DIR;
+  } else {
+    process.env.MAGI_CONFIG_DIR = previousConfigDir;
+  }
+  previousConfigDir = undefined;
+  if (permissionRoot) {
+    rmSync(permissionRoot, { recursive: true, force: true });
+    permissionRoot = undefined;
   }
   if (workspace) {
     rmSync(workspace, { recursive: true, force: true });

@@ -266,11 +266,7 @@ const POSITIVE_REMEMBER_PHRASES = [
   "do not forget"
 ];
 
-const HOT_MEMORY_CORE_TYPES = new Set<MemoryNodeType>([
-  "user_profile",
-  "preference",
-  "work_habit"
-]);
+const HOT_MEMORY_CORE_TYPES = new Set<MemoryNodeType>(["user_profile", "preference", "work_habit"]);
 
 const RECALL_PLANNER_SYSTEM_PROMPT = [
   "You are Magi's recall planner. Decide which stored context sources should be retrieved before the main agent turn.",
@@ -469,7 +465,8 @@ export function selectHotMemoryNodes(input: {
         nodeId: node.id,
         title: node.title,
         type: node.type,
-        reason: "global hot memory only includes durable user profile, preference, or work habit nodes"
+        reason:
+          "global hot memory only includes durable user profile, preference, or work habit nodes"
       });
       continue;
     }
@@ -498,6 +495,7 @@ export function filterMemoryHitsByRecallEvidence<
 >(hits: T[], prompt: string, cwd: string): T[] {
   const terms = tokenizeRecallText(prompt).filter((term) => !WEAK_RECALL_EVIDENCE_TERMS.has(term));
   const cwdTerms = projectTerms(cwd);
+  const isPersonalMemoryQuery = hasPersonalMemoryIntent(prompt);
   return hits.filter((hit) => {
     const header = normalizeText(`${hit.file} ${hit.title}`);
     const body = normalizeText(hit.snippet);
@@ -508,8 +506,37 @@ export function filterMemoryHitsByRecallEvidence<
     const strongTermMatch = terms.some((term) => header.includes(term));
     const bodyMatchCount = terms.filter((term) => body.includes(term)).length;
     const cwdMatch = cwdTerms.some((term) => header.includes(term) || body.includes(term));
+    if (isPersonalMemoryQuery && isPersonalMemoryHit(hit) && bodyMatchCount >= 1) {
+      return true;
+    }
     return strongTermMatch || bodyMatchCount >= 2 || cwdMatch;
   });
+}
+
+function hasPersonalMemoryIntent(prompt: string): boolean {
+  const text = normalizeText(prompt);
+  const hasUserCue = /\b(my|me|user)\b/.test(text) || hasTerm(text, "用户") || hasTerm(text, "我");
+  const hasPreferenceCue =
+    findMatches(text, ["preference", "prefer", "habit", "偏好", "习惯"]).length > 0;
+  const hasMemoryCue =
+    findMatches(text, ["remember", "recall", "memory", "记得", "记忆", "记住"]).length > 0;
+  return hasUserCue && hasPreferenceCue && hasMemoryCue;
+}
+
+function isPersonalMemoryHit(hit: { file: string; title: string; snippet: string }): boolean {
+  const file = hit.file.toLowerCase();
+  if (
+    file === "user.md#user" ||
+    file === "preferences.md#preferences" ||
+    file === "user.md" ||
+    file === "preferences.md"
+  ) {
+    return true;
+  }
+  const text = normalizeText(`${hit.title} ${hit.snippet}`);
+  return (
+    findMatches(text, ["user", "preference", "prefer", "habit", "用户", "偏好", "习惯"]).length >= 2
+  );
 }
 
 function classifyTask(input: {

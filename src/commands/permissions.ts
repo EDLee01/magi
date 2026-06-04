@@ -130,5 +130,8 @@ function formatPermissionModeList(currentMode: ToolPermissionMode): string {
 }
 
 function normalizePermissionMode(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }

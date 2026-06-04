@@ -1153,12 +1153,15 @@ function normalizeControlQuestionAnswer(
 ): AskUserQuestionAnswer {
   const rawAnswer = readOptionalRecord(body.answer) ?? body;
   const candidate =
-    rawAnswer.answers === undefined && (Array.isArray(rawAnswer.selectedLabels) || Array.isArray(body.selectedLabels))
+    rawAnswer.answers === undefined &&
+    (Array.isArray(rawAnswer.selectedLabels) || Array.isArray(body.selectedLabels))
       ? {
           answers: [
             {
               question: question.questions[0]?.question ?? "",
-              selectedLabels: Array.isArray(rawAnswer.selectedLabels) ? rawAnswer.selectedLabels : body.selectedLabels
+              selectedLabels: Array.isArray(rawAnswer.selectedLabels)
+                ? rawAnswer.selectedLabels
+                : body.selectedLabels
             }
           ]
         }

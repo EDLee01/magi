@@ -184,6 +184,27 @@ describe("recall policy", () => {
     expect(hits.map((hit) => hit.title)).toEqual(["Magi Next project memory"]);
   });
 
+  it("keeps user preference memory for explicit personal recall questions", () => {
+    const hits = filterMemoryHitsByRecallEvidence(
+      [
+        {
+          file: "user.md#User",
+          title: "User",
+          snippet: "User prefers focused CLI black-box verification for complex Magi work."
+        },
+        {
+          file: "projects/default.md#Project: Default",
+          title: "Project: Default",
+          snippet: "Run focused CLI E2E before internal unit tests for Magi changes."
+        }
+      ],
+      "What should you remember about my verification preference?",
+      "/Users/ktz/magi-next"
+    );
+
+    expect(hits.map((hit) => hit.title)).toEqual(["User"]);
+  });
+
   it("keeps Chinese SQL graph workflow hits with recall evidence", () => {
     const hits = filterMemoryHitsByRecallEvidence(
       [

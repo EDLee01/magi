@@ -720,7 +720,9 @@ function parseStreamEvents(output) {
       const event = JSON.parse(line);
       events.push(event);
     } catch {
-      throw new Error(`stream-json output contained non-JSON line: ${line}\nFull output:\n${output}`);
+      throw new Error(
+        `stream-json output contained non-JSON line: ${line}\nFull output:\n${output}`
+      );
     }
   }
   return events;
@@ -871,8 +873,11 @@ async function seedMemoryAndGoal({ workDir, configDir }) {
 
 function createComplexRouter() {
   let complexTurns = 0;
-  return ({ transcript, toolNames }) => {
-    if (transcript.includes("Use the mature blackbox verify skill after multiple learning cycles.")) {
+  return ({ body, transcript, toolNames }) => {
+    const latestPrompt = latestUserPromptFromBody(body);
+    if (
+      latestPrompt.includes("Use the mature blackbox verify skill after multiple learning cycles.")
+    ) {
       assert(
         transcript.includes("[Relevant Skills]"),
         "mature skill recall request missed skills context"
@@ -882,7 +887,9 @@ function createComplexRouter() {
         "mature skill recall missed learned skill name"
       );
       assert(
-        transcript.includes("Run isolated provider validation, then focused CLI E2E, before broad suites."),
+        transcript.includes(
+          "Run isolated provider validation, then focused CLI E2E, before broad suites."
+        ),
         "mature skill recall missed latest multi-cycle guidance"
       );
       assert(
@@ -894,7 +901,7 @@ function createComplexRouter() {
       );
     }
 
-    if (transcript.includes("Use the patched blackbox verify skill after a learning update.")) {
+    if (latestPrompt.includes("Use the patched blackbox verify skill after a learning update.")) {
       assert(
         transcript.includes("[Relevant Skills]"),
         "patched skill recall request missed skills context"
@@ -912,7 +919,11 @@ function createComplexRouter() {
       );
     }
 
-    if (transcript.includes("Use the corrected blackbox verify skill after stale guidance was fixed.")) {
+    if (
+      latestPrompt.includes(
+        "Use the corrected blackbox verify skill after stale guidance was fixed."
+      )
+    ) {
       assert(
         transcript.includes("[Relevant Skills]"),
         "corrected skill recall request missed skills context"
@@ -934,17 +945,22 @@ function createComplexRouter() {
       );
     }
 
-    if (transcript.includes("Use the blackbox verify skill for isolated provider validation.")) {
-      assert(transcript.includes("[Relevant Skills]"), "skill recall request missed skills context");
+    if (latestPrompt.includes("Use the blackbox verify skill for isolated provider validation.")) {
+      assert(
+        transcript.includes("[Relevant Skills]"),
+        "skill recall request missed skills context"
+      );
       assert(transcript.includes("## blackbox-verify"), "skill recall missed learned skill name");
       assert(
         transcript.includes("Run isolated provider validation before broad checks."),
         "skill recall missed learned skill body"
       );
-      return messageText("Use blackbox-verify: run isolated provider validation before broad checks.");
+      return messageText(
+        "Use blackbox-verify: run isolated provider validation before broad checks."
+      );
     }
 
-    if (transcript.includes("What should you remember about my verification preference?")) {
+    if (latestPrompt.includes("What should you remember about my verification preference?")) {
       assert(
         transcript.includes("focused CLI black-box verification"),
         "memory recall request did not receive hot user memory"
@@ -954,7 +970,7 @@ function createComplexRouter() {
       );
     }
 
-    if (!transcript.includes("Run the complex Magi black-box E2E")) {
+    if (!latestPrompt.includes("Run the complex Magi black-box E2E")) {
       return messageText("OK");
     }
 
@@ -1311,11 +1327,16 @@ async function scenarioComplexWorkflow() {
         configDir,
         label: "learning skill draft apply"
       });
-      assert(skillApply.includes("Applied LearningDraft:"), "skill LearningDraft apply did not run");
+      assert(
+        skillApply.includes("Applied LearningDraft:"),
+        "skill LearningDraft apply did not run"
+      );
       const skillFile = path.join(configDir, "skills", "blackbox-verify", "SKILL.md");
       assert(existsSync(skillFile), "applied skill LearningDraft did not write SKILL.md");
       assert(
-        readFileSync(skillFile, "utf8").includes("Run isolated provider validation before broad checks."),
+        readFileSync(skillFile, "utf8").includes(
+          "Run isolated provider validation before broad checks."
+        ),
         "applied skill file missed learned workflow"
       );
       const skillRecall = await runCli({
@@ -1545,11 +1566,15 @@ async function scenarioComplexWorkflow() {
         label: "learning iterative skill patch draft show"
       });
       assert(
-        iterativeSkillPatchReview.includes("Fold another cycle of successful black-box verification"),
+        iterativeSkillPatchReview.includes(
+          "Fold another cycle of successful black-box verification"
+        ),
         "iterative skill review missed reason"
       );
       assert(
-        iterativeSkillPatchReview.includes("Validated after create, patch, correction, and recall cycles"),
+        iterativeSkillPatchReview.includes(
+          "Validated after create, patch, correction, and recall cycles"
+        ),
         "iterative skill review missed evidence"
       );
       const iterativeSkillPatchApply = await runCli({
@@ -1564,7 +1589,9 @@ async function scenarioComplexWorkflow() {
       );
       const matureSkill = readFileSync(skillFile, "utf8");
       assert(
-        matureSkill.includes("Run isolated provider validation, then focused CLI E2E, before broad suites."),
+        matureSkill.includes(
+          "Run isolated provider validation, then focused CLI E2E, before broad suites."
+        ),
         "mature skill file missed latest learned guidance"
       );
       assert(
@@ -1893,7 +1920,10 @@ async function scenarioStreamJsonExtendedEvents() {
             })
           ]);
         }
-        assert(transcript.includes("User message delivered"), "user message result was not visible");
+        assert(
+          transcript.includes("User message delivered"),
+          "user message result was not visible"
+        );
         assert(
           transcript.includes("Permission ask: FileWrite requires approval"),
           "approval denial result was not visible"
@@ -2015,10 +2045,16 @@ async function scenarioHelpShape() {
     assert(output.includes("Options:"), "help missed Options group");
     assert(output.includes("Commands:"), "help missed Commands group");
     assert(output.includes("Compatibility notes:"), "help missed compatibility notes");
-    assert(output.includes("--output-format <text|json|stream-json>"), "help missed output formats");
+    assert(
+      output.includes("--output-format <text|json|stream-json>"),
+      "help missed output formats"
+    );
     assert(output.includes("--tools <tool[,tool...]>"), "help missed --tools compatibility option");
     assert(output.includes("--allowed-tools <rule[,rule...]>"), "help missed --allowed-tools");
-    assert(output.includes("--disallowed-tools <rule[,rule...]>"), "help missed --disallowed-tools");
+    assert(
+      output.includes("--disallowed-tools <rule[,rule...]>"),
+      "help missed --disallowed-tools"
+    );
     assert(output.includes("workspace diagnose"), "help missed workspace diagnose command");
     assert(
       output.includes("memory view|search|link|correct|feedback"),
@@ -2118,14 +2154,7 @@ async function scenarioJsonOutputProtocol() {
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
       const output = await runCli({
-        args: [
-          "--model",
-          "main",
-          "--output-format",
-          "json",
-          "-p",
-          "Return JSON protocol status."
-        ],
+        args: ["--model", "main", "--output-format", "json", "-p", "Return JSON protocol status."],
         cwd: workDir,
         configDir,
         label: "json output protocol"
@@ -2511,7 +2540,10 @@ async function scenarioToolPolicyAllowDeny() {
         bypassExplicitEnvOutput.includes("Permission bypass dangerous explicit env observed"),
         "bypass explicit env scenario did not complete"
       );
-      assert(!existsSync(path.join(workDir, "build")), "explicit dangerous Bash did not remove build");
+      assert(
+        !existsSync(path.join(workDir, "build")),
+        "explicit dangerous Bash did not remove build"
+      );
       assert(seenInitialTools.length > 0, "tool policy scenario did not capture exposed tools");
       return {
         score: 1,
@@ -2543,215 +2575,215 @@ async function scenarioDangerousPermissionMatrix() {
   return await withTempWorkspace(
     "dangerous-permission-matrix",
     async ({ root, configDir, workDir }) => {
-    const providerLog = path.join(root, "provider-log.json");
-    const deniedReason =
-      "Permission deny: dangerous Bash command requires bypassPermissions mode and explicit dangerous approval";
-    const envReason =
-      "Permission deny: dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1";
-    const provider = await startProvider({
-      logPath: providerLog,
-      routeRequest: ({ body, transcript, toolNames }) => {
-        const latestUser = [...(body.messages ?? [])]
-          .reverse()
-          .find((message) => message.role === "user");
-        const latestPrompt = textFromMessage(latestUser ?? {});
-        const cases = [
+      const providerLog = path.join(root, "provider-log.json");
+      const deniedReason =
+        "Permission deny: dangerous Bash command requires bypassPermissions mode and explicit dangerous approval";
+      const envReason =
+        "Permission deny: dangerous Bash command requires MAGI_APPROVE_DANGEROUS_COMMANDS=1";
+      const provider = await startProvider({
+        logPath: providerLog,
+        routeRequest: ({ body, transcript, toolNames }) => {
+          const latestUser = [...(body.messages ?? [])]
+            .reverse()
+            .find((message) => message.role === "user");
+          const latestPrompt = textFromMessage(latestUser ?? {});
+          const cases = [
+            {
+              prompt: "Dangerous Bash default mode",
+              toolUseId: "danger-default",
+              command: "rm -rf danger-default",
+              expectedReason: deniedReason,
+              final: "Dangerous Bash default mode denied."
+            },
+            {
+              prompt: "Dangerous Bash acceptEdits mode",
+              toolUseId: "danger-accept",
+              command: "rm -rf danger-accept",
+              expectedReason: deniedReason,
+              final: "Dangerous Bash acceptEdits mode denied."
+            },
+            {
+              prompt: "Dangerous Bash dontAsk mode",
+              toolUseId: "danger-dontask",
+              command: "rm -rf danger-dontask",
+              expectedReason: deniedReason,
+              final: "Dangerous Bash dontAsk mode denied."
+            },
+            {
+              prompt: "Dangerous Bash plan mode",
+              toolUseId: "danger-plan",
+              command: "rm -rf danger-plan",
+              expectedReason: deniedReason,
+              final: "Dangerous Bash plan mode denied."
+            },
+            {
+              prompt: "Dangerous Bash bypass mode without env",
+              toolUseId: "danger-bypass-missing-env",
+              command: "rm -rf danger-bypass-missing-env",
+              expectedReason: envReason,
+              final: "Dangerous Bash bypass mode without env denied."
+            }
+          ];
+          for (const item of cases) {
+            if (!latestPrompt.includes(item.prompt)) continue;
+            if (!transcript.includes(item.expectedReason)) {
+              assert(toolNames.includes("Bash"), `${item.prompt} did not expose Bash`);
+              return toolResponse([toolCall(item.toolUseId, "Bash", { command: item.command })]);
+            }
+            return messageText(item.final);
+          }
+          if (latestPrompt.includes("Dangerous Bash bypass mode with explicit env")) {
+            if (!transcript.includes("Command exited 0")) {
+              assert(toolNames.includes("Bash"), "explicit bypass did not expose Bash");
+              return toolResponse([
+                toolCall("danger-bypass-explicit-env", "Bash", {
+                  command: "rm -rf danger-bypass-explicit-env"
+                })
+              ]);
+            }
+            return messageText("Dangerous Bash bypass mode with explicit env executed.");
+          }
+          return messageText("OK");
+        }
+      });
+      try {
+        writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
+        const deniedCases = [
           {
+            mode: "default",
             prompt: "Dangerous Bash default mode",
-            toolUseId: "danger-default",
-            command: "rm -rf danger-default",
-            expectedReason: deniedReason,
-            final: "Dangerous Bash default mode denied."
+            label: "dangerous default",
+            dir: "danger-default",
+            expected: "Dangerous Bash default mode denied."
           },
           {
+            mode: "acceptEdits",
             prompt: "Dangerous Bash acceptEdits mode",
-            toolUseId: "danger-accept",
-            command: "rm -rf danger-accept",
-            expectedReason: deniedReason,
-            final: "Dangerous Bash acceptEdits mode denied."
+            label: "dangerous acceptEdits",
+            dir: "danger-accept",
+            expected: "Dangerous Bash acceptEdits mode denied."
           },
           {
+            mode: "dontAsk",
             prompt: "Dangerous Bash dontAsk mode",
-            toolUseId: "danger-dontask",
-            command: "rm -rf danger-dontask",
-            expectedReason: deniedReason,
-            final: "Dangerous Bash dontAsk mode denied."
+            label: "dangerous dontAsk",
+            dir: "danger-dontask",
+            expected: "Dangerous Bash dontAsk mode denied."
           },
           {
+            mode: "plan",
             prompt: "Dangerous Bash plan mode",
-            toolUseId: "danger-plan",
-            command: "rm -rf danger-plan",
-            expectedReason: deniedReason,
-            final: "Dangerous Bash plan mode denied."
+            label: "dangerous plan",
+            dir: "danger-plan",
+            expected: "Dangerous Bash plan mode denied."
           },
           {
+            mode: "bypassPermissions",
             prompt: "Dangerous Bash bypass mode without env",
-            toolUseId: "danger-bypass-missing-env",
-            command: "rm -rf danger-bypass-missing-env",
-            expectedReason: envReason,
-            final: "Dangerous Bash bypass mode without env denied."
+            label: "dangerous bypass missing env",
+            dir: "danger-bypass-missing-env",
+            expected: "Dangerous Bash bypass mode without env denied."
           }
         ];
-        for (const item of cases) {
-          if (!latestPrompt.includes(item.prompt)) continue;
-          if (!transcript.includes(item.expectedReason)) {
-            assert(toolNames.includes("Bash"), `${item.prompt} did not expose Bash`);
-            return toolResponse([toolCall(item.toolUseId, "Bash", { command: item.command })]);
-          }
-          return messageText(item.final);
+        for (const item of deniedCases) {
+          mkdirSync(path.join(workDir, item.dir), { recursive: true });
+          await writeFile(path.join(workDir, item.dir, "sentinel.txt"), "keep\n", "utf8");
+          const output = await runCli({
+            args: [
+              "--permission-mode",
+              item.mode,
+              "--model",
+              "main",
+              "--output-format",
+              "stream-json",
+              "-p",
+              item.prompt
+            ],
+            cwd: workDir,
+            configDir,
+            label: item.label
+          });
+          const events = parseStreamEvents(output);
+          assert(output.includes(item.expected), `${item.label} final answer missing`);
+          assert(
+            events.some(
+              (event) =>
+                event.type === "tool.failed" &&
+                event.tool === "Bash" &&
+                event.toolUseId?.startsWith("danger-")
+            ),
+            `${item.label} did not emit Bash tool.failed`
+          );
+          assert(
+            !events.some((event) => event.type === "approval.requested"),
+            `${item.label} requested approval instead of denying dangerous Bash`
+          );
+          assert(
+            existsSync(path.join(workDir, item.dir, "sentinel.txt")),
+            `${item.label} removed denied sentinel`
+          );
         }
-        if (latestPrompt.includes("Dangerous Bash bypass mode with explicit env")) {
-          if (!transcript.includes("Command exited 0")) {
-            assert(toolNames.includes("Bash"), "explicit bypass did not expose Bash");
-            return toolResponse([
-              toolCall("danger-bypass-explicit-env", "Bash", {
-                command: "rm -rf danger-bypass-explicit-env"
-              })
-            ]);
-          }
-          return messageText("Dangerous Bash bypass mode with explicit env executed.");
-        }
-        return messageText("OK");
-      }
-    });
-    try {
-      writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
-      const deniedCases = [
-        {
-          mode: "default",
-          prompt: "Dangerous Bash default mode",
-          label: "dangerous default",
-          dir: "danger-default",
-          expected: "Dangerous Bash default mode denied."
-        },
-        {
-          mode: "acceptEdits",
-          prompt: "Dangerous Bash acceptEdits mode",
-          label: "dangerous acceptEdits",
-          dir: "danger-accept",
-          expected: "Dangerous Bash acceptEdits mode denied."
-        },
-        {
-          mode: "dontAsk",
-          prompt: "Dangerous Bash dontAsk mode",
-          label: "dangerous dontAsk",
-          dir: "danger-dontask",
-          expected: "Dangerous Bash dontAsk mode denied."
-        },
-        {
-          mode: "plan",
-          prompt: "Dangerous Bash plan mode",
-          label: "dangerous plan",
-          dir: "danger-plan",
-          expected: "Dangerous Bash plan mode denied."
-        },
-        {
-          mode: "bypassPermissions",
-          prompt: "Dangerous Bash bypass mode without env",
-          label: "dangerous bypass missing env",
-          dir: "danger-bypass-missing-env",
-          expected: "Dangerous Bash bypass mode without env denied."
-        }
-      ];
-      for (const item of deniedCases) {
-        mkdirSync(path.join(workDir, item.dir), { recursive: true });
-        await writeFile(path.join(workDir, item.dir, "sentinel.txt"), "keep\n", "utf8");
-        const output = await runCli({
+
+        mkdirSync(path.join(workDir, "danger-bypass-explicit-env"), { recursive: true });
+        await writeFile(
+          path.join(workDir, "danger-bypass-explicit-env", "sentinel.txt"),
+          "delete\n",
+          "utf8"
+        );
+        const explicitOutput = await runCli({
           args: [
             "--permission-mode",
-            item.mode,
+            "bypassPermissions",
             "--model",
             "main",
             "--output-format",
             "stream-json",
             "-p",
-            item.prompt
+            "Dangerous Bash bypass mode with explicit env"
           ],
           cwd: workDir,
           configDir,
-          label: item.label
+          label: "dangerous bypass explicit env",
+          env: { MAGI_APPROVE_DANGEROUS_COMMANDS: "1" }
         });
-        const events = parseStreamEvents(output);
-        assert(output.includes(item.expected), `${item.label} final answer missing`);
+        const explicitEvents = parseStreamEvents(explicitOutput);
         assert(
-          events.some(
+          explicitOutput.includes("Dangerous Bash bypass mode with explicit env executed."),
+          "explicit bypass final answer missing"
+        );
+        assert(
+          explicitEvents.some(
             (event) =>
-              event.type === "tool.failed" &&
+              event.type === "tool.completed" &&
               event.tool === "Bash" &&
-              event.toolUseId?.startsWith("danger-")
+              event.toolUseId === "danger-bypass-explicit-env"
           ),
-          `${item.label} did not emit Bash tool.failed`
+          "explicit bypass did not emit Bash tool.completed"
         );
         assert(
-          !events.some((event) => event.type === "approval.requested"),
-          `${item.label} requested approval instead of denying dangerous Bash`
+          !existsSync(path.join(workDir, "danger-bypass-explicit-env")),
+          "explicit bypass did not remove target directory"
         );
-        assert(
-          existsSync(path.join(workDir, item.dir, "sentinel.txt")),
-          `${item.label} removed denied sentinel`
-        );
+        return {
+          score: 1,
+          assertions: [
+            "dangerous Bash denied in default mode without approval",
+            "dangerous Bash denied in acceptEdits mode",
+            "dangerous Bash denied in dontAsk mode",
+            "dangerous Bash denied in plan mode",
+            "dangerous Bash bypassPermissions required explicit env approval",
+            "dangerous Bash bypassPermissions executed only with explicit env approval",
+            "dangerous permission matrix preserved denied sentinels",
+            "dangerous permission matrix emitted stream-json tool evidence"
+          ],
+          provider: provider.summary()
+        };
+      } catch (error) {
+        printProviderLog(providerLog);
+        throw error;
+      } finally {
+        await provider.close();
       }
-
-      mkdirSync(path.join(workDir, "danger-bypass-explicit-env"), { recursive: true });
-      await writeFile(
-        path.join(workDir, "danger-bypass-explicit-env", "sentinel.txt"),
-        "delete\n",
-        "utf8"
-      );
-      const explicitOutput = await runCli({
-        args: [
-          "--permission-mode",
-          "bypassPermissions",
-          "--model",
-          "main",
-          "--output-format",
-          "stream-json",
-          "-p",
-          "Dangerous Bash bypass mode with explicit env"
-        ],
-        cwd: workDir,
-        configDir,
-        label: "dangerous bypass explicit env",
-        env: { MAGI_APPROVE_DANGEROUS_COMMANDS: "1" }
-      });
-      const explicitEvents = parseStreamEvents(explicitOutput);
-      assert(
-        explicitOutput.includes("Dangerous Bash bypass mode with explicit env executed."),
-        "explicit bypass final answer missing"
-      );
-      assert(
-        explicitEvents.some(
-          (event) =>
-            event.type === "tool.completed" &&
-            event.tool === "Bash" &&
-            event.toolUseId === "danger-bypass-explicit-env"
-        ),
-        "explicit bypass did not emit Bash tool.completed"
-      );
-      assert(
-        !existsSync(path.join(workDir, "danger-bypass-explicit-env")),
-        "explicit bypass did not remove target directory"
-      );
-      return {
-        score: 1,
-        assertions: [
-          "dangerous Bash denied in default mode without approval",
-          "dangerous Bash denied in acceptEdits mode",
-          "dangerous Bash denied in dontAsk mode",
-          "dangerous Bash denied in plan mode",
-          "dangerous Bash bypassPermissions required explicit env approval",
-          "dangerous Bash bypassPermissions executed only with explicit env approval",
-          "dangerous permission matrix preserved denied sentinels",
-          "dangerous permission matrix emitted stream-json tool evidence"
-        ],
-        provider: provider.summary()
-      };
-    } catch (error) {
-      printProviderLog(providerLog);
-      throw error;
-    } finally {
-      await provider.close();
-    }
     }
   );
 }
@@ -2924,8 +2956,14 @@ async function scenarioResumePickerVisualContract() {
     assert(frames.length > 0, "resume picker visual frame was not captured");
     const frame = frames[0];
     assertFrameLinesWithin(frame, 54, "resume picker visual frame");
-    assert(frame.some((line) => line.includes("❯")), "resume picker selected row marker missing");
-    assert(frame.some((line) => line.includes("1/12")), "resume picker scroll position missing");
+    assert(
+      frame.some((line) => line.includes("❯")),
+      "resume picker selected row marker missing"
+    );
+    assert(
+      frame.some((line) => line.includes("1/12")),
+      "resume picker scroll position missing"
+    );
     assert(
       frame.some((line) => line.includes("type to filter")),
       "resume picker filter prompt missing"
@@ -2934,7 +2972,10 @@ async function scenarioResumePickerVisualContract() {
       frame.some((line) => line.includes("Enter resume") && line.includes("Esc cancel")),
       "resume picker footer missing"
     );
-    assert(frame.some((line) => line.includes("…")), "resume picker did not clip long row detail");
+    assert(
+      frame.some((line) => line.includes("…")),
+      "resume picker did not clip long row detail"
+    );
     assert(
       stripTerminalControls(result.stdout).includes("visual resume transcript 11"),
       "resume picker visual selection did not resume the selected seeded session"
@@ -3049,7 +3090,10 @@ async function scenarioSlashResumeSearchTty() {
         `slash resume search exited ${resumeResult.exitCode}\nSTDOUT:\n${resumeResult.stdout}\nSTDERR:\n${resumeResult.stderr}`
       );
       const resumeVisible = stripTerminalControls(`${resumeResult.stdout}\n${resumeResult.stderr}`);
-      assert(resumeVisible.includes("resume sessions"), "slash /resume picker title did not render");
+      assert(
+        resumeVisible.includes("resume sessions"),
+        "slash /resume picker title did not render"
+      );
       assert(
         resumeVisible.includes("matching billing"),
         "slash /resume picker did not start with query filter"
@@ -3187,7 +3231,10 @@ async function scenarioResumePickerSearchFieldsTty() {
         assert(cwdVisible.includes("matching repo-a"), "cwd search filter did not render");
         assert(cwdVisible.includes("write docs"), "cwd search missed newest repo-a session");
         assert(cwdVisible.includes("fix parser"), "cwd search missed older repo-a session");
-        assert(!cwdVisible.includes("review auth"), "cwd search included nonmatching repo-b session");
+        assert(
+          !cwdVisible.includes("review auth"),
+          "cwd search included nonmatching repo-b session"
+        );
 
         const idPrefix = authSessionId.slice(0, 8);
         const idResult = await runInteractiveCliWithTtySteps({
@@ -3356,7 +3403,10 @@ async function scenarioTuiPromptHistory() {
         `TUI prompt history exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
       );
       const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
-      assert(visible.includes("TUI history seed accepted."), "history seed response did not render");
+      assert(
+        visible.includes("TUI history seed accepted."),
+        "history seed response did not render"
+      );
       assert(
         visible.includes("TUI history recall accepted."),
         "history recall response did not render"
@@ -3418,13 +3468,7 @@ async function scenarioTuiBracketedPaste() {
     });
     try {
       writeFileSync(path.join(configDir, "config.yaml"), renderConfig({ port: provider.port }));
-      const pasteSequence = [
-        "Start audit: ",
-        "\x1b[200~",
-        pastedBody,
-        "\x1b[201~",
-        "\r"
-      ].join("");
+      const pasteSequence = ["Start audit: ", "\x1b[200~", pastedBody, "\x1b[201~", "\r"].join("");
       const result = await runInteractiveCliWithTtySteps({
         cwd: workDir,
         configDir,
@@ -3516,7 +3560,7 @@ async function scenarioTuiStatefulPickers() {
           },
           { waitForText: "permission modes", inputText: "plan\r" },
           {
-            waitForText: "Permission mode: plan - deny write tools",
+            waitForText: "Permissions updated to Plan",
             inputText: "Try the picker-selected plan mode write.\r"
           },
           { waitForText: "TUI picker plan mode protected workspace.", inputText: "/exit\r" }
@@ -3599,7 +3643,7 @@ async function scenarioTuiPickerKeyboardNavigation() {
           },
           { waitForText: "permission modes", inputText: "\x1b[B\x1b[B\x1b[B\x1b[B\r" },
           {
-            waitForText: "Permission mode: plan - deny write tools",
+            waitForText: "Permissions updated to Plan",
             inputText: "Try the keyboard-selected picker write.\r"
           },
           {
@@ -3619,12 +3663,15 @@ async function scenarioTuiPickerKeyboardNavigation() {
         visible.includes("Selected model fast"),
         "model picker Tab completion did not select fast"
       );
-      assert(visible.includes("❯ plan"), "permission picker arrow selection did not reach plan");
+      assert(visible.includes("❯ Plan"), "permission picker arrow selection did not reach plan");
       assert(
         visible.includes("TUI picker keyboard navigation protected workspace."),
         "TUI picker keyboard final response did not render"
       );
-      assert(provider.calls.length === 2, "TUI keyboard picker flow should make two provider calls");
+      assert(
+        provider.calls.length === 2,
+        "TUI keyboard picker flow should make two provider calls"
+      );
       assert(!existsSync(deniedPath), "keyboard-selected plan mode should not mutate workspace");
       return {
         score: 1,
@@ -4926,7 +4973,10 @@ async function scenarioSlashSuggestionPrompt() {
       "slash suggestion did not render filtered header"
     );
     assert(filteredVisible.includes("/resume"), "slash suggestion missed matching /resume command");
-    assert(!filteredVisible.includes("/model"), "slash suggestion did not filter nonmatching /model");
+    assert(
+      !filteredVisible.includes("/model"),
+      "slash suggestion did not filter nonmatching /model"
+    );
     filtered.input.write("\r");
     assert(
       (await filteredPrompt) === "/resume",
@@ -4943,7 +4993,10 @@ async function scenarioSlashSuggestionPrompt() {
     selected.input.write("/");
     await sleep(10);
     const menuVisible = stripTerminalControls(selected.stdout());
-    assert(menuVisible.includes("commands"), "slash suggestion menu did not render for slash input");
+    assert(
+      menuVisible.includes("commands"),
+      "slash suggestion menu did not render for slash input"
+    );
     assert(menuVisible.includes("Tab complete"), "slash suggestion menu missed keyboard footer");
     selected.input.write("\x1b[B");
     await sleep(10);
@@ -5057,7 +5110,10 @@ async function scenarioHarnessCiTuiGuard() {
       timeoutMs: 200
     }).then(
       () => ({ timedOut: false, message: "" }),
-      (error) => ({ timedOut: true, message: error instanceof Error ? error.message : String(error) })
+      (error) => ({
+        timedOut: true,
+        message: error instanceof Error ? error.message : String(error)
+      })
     );
     assert(timeout.timedOut, "hanging child command did not time out");
     assert(timeout.message.includes("was terminated"), "timeout did not report termination");
@@ -5076,8 +5132,7 @@ async function scenarioHarnessCiTuiGuard() {
 
 function shouldRunInteractiveTui(env = process.env) {
   return (
-    env.MAGI_BLACKBOX_TUI === "1" &&
-    (env.MAGI_BLACKBOX_TUI_FORCE === "1" || env.CI !== "true")
+    env.MAGI_BLACKBOX_TUI === "1" && (env.MAGI_BLACKBOX_TUI_FORCE === "1" || env.CI !== "true")
   );
 }
 

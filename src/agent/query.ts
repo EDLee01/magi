@@ -1058,7 +1058,9 @@ function isDirectoryListRequest(text: string): boolean {
 }
 
 function isToolAccessRefusal(text: string): boolean {
-  return /(不能|无法|没有|未能|can't|cannot|unable).{0,30}(工具|tool|访问|access|读取|read)/iu.test(text);
+  return /(不能|无法|没有|未能|can't|cannot|unable).{0,30}(工具|tool|访问|access|读取|read)/iu.test(
+    text
+  );
 }
 
 function mentionsShellListingFallback(text: string): boolean {
