@@ -4789,14 +4789,14 @@ async function scenarioTuiVisualContract() {
     formatTuiStartupBanner({
       cwd: "/repo",
       modelDisplay: "openai:gpt-visual",
-      toolCount: 42,
       version: "9.9.9"
     })
   );
   assert(startup.includes("△"), "TUI startup text hat missed triangle");
   assert(startup.includes("/✦\\"), "TUI startup text hat missed sparkle");
   assert(startup.includes("▔▔▔"), "TUI startup text hat missed brim");
-  assert(startup.includes("Magi v9.9.9 · 42 tools"), "TUI startup identity line missing");
+  assert(startup.includes("Magi v9.9.9"), "TUI startup identity line missing");
+  assert(!startup.includes("tools"), "TUI startup identity line should not expose tool count");
   assert(startup.includes("cwd: /repo"), "TUI startup cwd missing");
   assert(startup.includes("model: openai:gpt-visual"), "TUI startup model missing");
   assert(startup.includes("/help for commands"), "TUI startup help hint missing");

@@ -346,9 +346,10 @@ async function* runAgentQueryInner(
       let normalized = normalizeProviderResponse(response, toolDefinitions);
       response = normalized.response;
       let toolUses = normalized.toolUses;
+      const fallbackResponseText = longerText(response.text, streamedTextThisTurn);
       if (toolUses.length === 0) {
         const fallbackToolUse = inferFallbackToolUse(
-          response.text,
+          fallbackResponseText,
           messages,
           toolDefinitions,
           input.cwd,
@@ -456,6 +457,7 @@ async function* runAgentQueryInner(
       toolCatalog.revealFromResults(toolResults);
       const toolResultMessages: MagiMessage[] = [];
       const hookMessages: MagiMessage[] = [];
+      let suppressedFailedFallbackResults = 0;
       for (const result of toolResults) {
         if (result.permission?.decision === "ask") {
           yield {
@@ -477,6 +479,10 @@ async function* runAgentQueryInner(
           isError: result.isError,
           retryable: result.retryable
         };
+        if (shouldSuppressFailedFallbackResultForModel(result, fallbackResponseText)) {
+          suppressedFailedFallbackResults++;
+          continue;
+        }
         toolResultMessages.push({
           role: "tool",
           content: [
@@ -516,6 +522,28 @@ async function* runAgentQueryInner(
             hookMessages.push(textMessage("system", `Hook output: ${hook.output}`));
           }
         }
+      }
+      if (suppressedFailedFallbackResults > 0 && toolResultMessages.length === 0) {
+        const text = finalText || fallbackResponseText;
+        if (
+          messages.at(-1) === assistantMessage &&
+          assistantMessage.content.every(isFallbackToolUsePart)
+        ) {
+          messages.pop();
+          if (text.trim()) {
+            messages.push(textMessage("assistant", text));
+          }
+        }
+        yield { type: "done", text, messages };
+        return {
+          text,
+          messages,
+          usage,
+          turns: turn + 1,
+          providerName: activeRoute.providerName,
+          model: activeRoute.model,
+          attempts
+        };
       }
       messages.push(...toolResultMessages, ...hookMessages);
     }
@@ -1011,6 +1039,9 @@ function inferFallbackToolUse(
   cwd: string,
   rules: ToolPermissionRules | undefined
 ): MagiToolUsePart | null {
+  if (hasSubstantiveAssistantResponse(responseText)) {
+    return null;
+  }
   const hasVisibleDirList = toolDefinitions.some((tool) => tool.name === "DirList");
   const hasBuiltinDirList = getBuiltinToolDefinitionByName("DirList") !== undefined;
   const allowedByRules = filterNamedToolRecordsByRules([{ name: "DirList" }], rules).length > 0;
@@ -1018,23 +1049,20 @@ function inferFallbackToolUse(
     return null;
   }
   const latestUserText = latestUserMessageText(messages);
-  if (!latestUserText || !isDirectoryListRequest(latestUserText)) {
-    return null;
-  }
-  if (
-    !isToolAccessRefusal(responseText) &&
-    !mentionsShellListingFallback(responseText) &&
-    !mentionsEmptyDirectoryResult(responseText)
-  ) {
+  if (!latestUserText || !explicitlyRequestsDirectoryListing(responseText)) {
     return null;
   }
   const requestedPath = inferDirectoryPath(latestUserText, cwd);
   if (!requestedPath) {
     return null;
   }
+  if (hasExistingFallbackToolUse(messages, "DirList", requestedPath)) {
+    return null;
+  }
+  const latestUserIndex = latestUserMessageIndex(messages);
   return {
     type: "tool-use",
-    id: "fallback-dirlist-1",
+    id: `fallback-dirlist-u${latestUserIndex}-${stableIdHash(requestedPath)}`,
     name: "DirList",
     input: { path: requestedPath }
   };
@@ -1050,36 +1078,174 @@ function latestUserMessageText(messages: MagiMessage[]): string {
   return "";
 }
 
-function isDirectoryListRequest(text: string): boolean {
+function latestUserMessageIndex(messages: MagiMessage[]): number {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index].role === "user") {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function hasSubstantiveAssistantResponse(responseText: string): boolean {
+  const text = responseText.trim();
+  if (text.length < 200) {
+    return false;
+  }
+  if (explicitlyRequestsDirectoryListing(text)) {
+    return false;
+  }
+  return !refusalOrBlockedPattern().test(text);
+}
+
+function refusalOrBlockedPattern(): RegExp {
+  return /无法|不能|需要你提供|请粘贴|没有权限|读取失败|failed|cannot|unable|permission denied|not accessible|access denied|read failed/iu;
+}
+
+function explicitlyRequestsDirectoryListing(text: string): boolean {
   return (
-    /(桌面|desktop|目录|文件夹|folder|directory)/iu.test(text) &&
-    /(看|列|读取|查看|有什么|有哪些|list|show|read|inspect)/iu.test(text)
+    /(?:我(?:需要|要|先|会|将|准备|可以先)|需要|要|先|准备|将|会|可以先|先来|让我).{0,16}(列出|列一下|查看|看一下|看看|扫描|检查).{0,24}(目录|文件夹|文件列表|桌面|desktop)/iu.test(
+      text
+    ) ||
+    /(?:^|[\n。！？])\s*(列出|列一下|查看|看一下|看看|扫描|检查).{0,24}(目录|文件夹|文件列表|桌面|desktop)/imu.test(
+      text
+    ) ||
+    /(?:我(?:需要|要|先|会|将|准备|可以先)|需要|要|先|准备|将|会|可以先|先来|让我).{0,16}(目录|文件夹|文件列表|桌面|desktop).{0,24}(列出|列一下|查看|看一下|看看|扫描|检查|有什么|有哪些)/iu.test(
+      text
+    ) ||
+    /(?:我(?:需要|要|先|会|将|准备|可以先)|需要|要|先|准备|将|会|可以先|先来|让我).{0,16}(找|查找|寻找|定位).{0,24}(文件|路径)/iu.test(
+      text
+    ) ||
+    /\b(?:i(?:'ll| will| need to| should)|let me|first|先).{0,50}\b(?:list|inspect|scan|check|look at|find|locate)\b.{0,40}\b(?:directory|folder|files?)\b/iu.test(
+      text
+    ) ||
+    /\b(?:list|inspect|scan|check)\b.{0,30}\b(?:directory|folder|files?)\b/iu.test(text)
   );
-}
-
-function isToolAccessRefusal(text: string): boolean {
-  return /(不能|无法|没有|未能|can't|cannot|unable).{0,30}(工具|tool|访问|access|读取|read)/iu.test(
-    text
-  );
-}
-
-function mentionsShellListingFallback(text: string): boolean {
-  return /\b(ls|dir)\b.*(Desktop|桌面|目录|文件夹)|终端|terminal|命令|command/iu.test(text);
-}
-
-function mentionsEmptyDirectoryResult(text: string): boolean {
-  return /(没有|未|无|no).{0,30}(匹配|文件|文件夹|matches|files|folders|items)/iu.test(text);
 }
 
 function inferDirectoryPath(text: string, cwd: string): string | null {
-  const explicitPath = /(?:^|\s)(\/[^\s`"'，。；;]+)/u.exec(text)?.[1];
-  if (explicitPath) {
-    return explicitPath;
+  let sawFilePathCandidate = false;
+  for (const candidate of explicitPathCandidates(text, cwd)) {
+    if (!isLikelyRealFilesystemPath(candidate)) {
+      continue;
+    }
+    if (isLikelyFilePath(candidate)) {
+      sawFilePathCandidate = true;
+      continue;
+    }
+    return normalizeFallbackPath(candidate);
   }
-  if (/桌面|desktop/iu.test(text)) {
+  if (!sawFilePathCandidate && explicitlyMentionsDesktopDirectory(text)) {
     return `${homeDirectoryFromCwd(cwd)}/Desktop`;
   }
   return null;
+}
+
+function explicitPathCandidates(text: string, cwd: string): string[] {
+  const candidates: string[] = [];
+  for (const line of text.split(/\r?\n/u)) {
+    if (isLikelyBannerLine(line)) {
+      continue;
+    }
+    const matches = line.matchAll(/(?:^|\s)(\/[^\s`"'，。；;<>]+|~\/[^\s`"'，。；;<>]+)/gu);
+    for (const match of matches) {
+      const raw = match[1];
+      const candidate = stripPathPunctuation(raw);
+      candidates.push(
+        candidate.startsWith("~/") ? `${homeDirectoryFromCwd(cwd)}${candidate.slice(1)}` : candidate
+      );
+    }
+  }
+  return candidates;
+}
+
+function stripPathPunctuation(path: string): string {
+  return path.replace(/[),\].。；;，、]+$/u, "");
+}
+
+function isLikelyBannerLine(line: string): boolean {
+  return /[✦△▔]/u.test(line) && /\bcwd\s*:/iu.test(line);
+}
+
+function isLikelyRealFilesystemPath(path: string): boolean {
+  if (!path.startsWith("/") && !path.startsWith("~/")) {
+    return false;
+  }
+  if (/[✦△▔]/u.test(path)) {
+    return false;
+  }
+  if (/^\/[^\w.~/-]/u.test(path)) {
+    return false;
+  }
+  return path.length >= 2;
+}
+
+function isLikelyFilePath(path: string): boolean {
+  const withoutTrailingSlash = path.replace(/\/+$/u, "");
+  const basename = withoutTrailingSlash.slice(withoutTrailingSlash.lastIndexOf("/") + 1);
+  if (!basename || (basename.startsWith(".") && basename.indexOf(".", 1) === -1)) {
+    return false;
+  }
+  return /\.[A-Za-z0-9]{1,10}$/u.test(basename);
+}
+
+function explicitlyMentionsDesktopDirectory(text: string): boolean {
+  return (
+    /(桌面|desktop).{0,24}(目录|文件夹|文件列表|有什么|有哪些|文件)/iu.test(text) ||
+    /(目录|文件夹|文件列表|有什么|有哪些|文件).{0,24}(桌面|desktop)/iu.test(text)
+  );
+}
+
+function hasExistingFallbackToolUse(
+  messages: MagiMessage[],
+  toolName: string,
+  requestedPath: string
+): boolean {
+  const latestUserIndex = latestUserMessageIndex(messages);
+  const normalizedPath = normalizeFallbackPath(requestedPath);
+  return messages
+    .slice(latestUserIndex + 1)
+    .some((message) =>
+      message.content.some(
+        (part) =>
+          part.type === "tool-use" &&
+          part.id.startsWith("fallback-") &&
+          part.name === toolName &&
+          normalizeFallbackPath(String(part.input.path ?? "")) === normalizedPath
+      )
+    );
+}
+
+function normalizeFallbackPath(path: string): string {
+  return path.replace(/\/+$/u, "") || "/";
+}
+
+function stableIdHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function longerText(first: string, second: string): string {
+  return second.length > first.length ? second : first;
+}
+
+function shouldSuppressFailedFallbackResultForModel(
+  result: AgentToolResult,
+  assistantTextAlreadyEmitted: string
+): boolean {
+  return (
+    result.isError === true &&
+    result.toolCallId.startsWith("fallback-") &&
+    hasSubstantiveAssistantResponse(assistantTextAlreadyEmitted)
+  );
+}
+
+function isFallbackToolUsePart(part: MagiMessage["content"][number]): boolean {
+  return part.type === "tool-use" && part.id.startsWith("fallback-");
 }
 
 function homeDirectoryFromCwd(cwd: string): string {

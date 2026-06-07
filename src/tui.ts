@@ -47,7 +47,7 @@ import { encodePromptWithImages } from "./providers/ir.js";
 import { findSkill, listSkills } from "./skills/loader.js";
 import { getProactiveSuggestions, isProactiveEnabled, setProactiveEnabled } from "./proactive.js";
 import { SessionStore } from "./session-store.js";
-import { getBuiltinToolDefinitions, ToolPermissionMode } from "./tools/registry.js";
+import { ToolPermissionMode } from "./tools/registry.js";
 import { createGoal, formatGoalBadge, getGoal, isGoalCreationArgs } from "./goal.js";
 import { VERSION } from "./version.js";
 import { shellDisplayName } from "./platform/shell.js";
@@ -65,13 +65,12 @@ export const MAGI_TEXT_HAT = ["  △", " /✦\\", "▔▔▔"].join("\n");
 export function formatTuiStartupBanner(input: {
   cwd: string;
   modelDisplay: string;
-  toolCount: number;
   version?: string;
 }): string {
   const version = input.version ?? VERSION;
   return [
     "",
-    `\x1b[36m  △\x1b[39m   \x1b[1mMagi\x1b[22m \x1b[90mv${version} · ${input.toolCount} tools\x1b[39m`,
+    `\x1b[36m  △\x1b[39m   \x1b[1mMagi\x1b[22m \x1b[90mv${version}\x1b[39m`,
     `\x1b[36m /✦\\\x1b[39m  \x1b[90mcwd:\x1b[39m ${input.cwd}`,
     `\x1b[36m▔▔▔\x1b[39m   \x1b[90mmodel:\x1b[39m ${input.modelDisplay}`,
     "",
@@ -188,8 +187,7 @@ export async function runInteractiveTerminal(inputConfig: {
   let running = false;
   let abortController: AbortController | null = null;
   const modelDisplay = inputConfig.config.models.aliases[currentModel] ?? currentModel;
-  const toolCount = getBuiltinToolDefinitions().length;
-  output.write(formatTuiStartupBanner({ cwd: inputConfig.cwd, modelDisplay, toolCount }));
+  output.write(formatTuiStartupBanner({ cwd: inputConfig.cwd, modelDisplay }));
   writeGoalBadge(output, inputConfig.paths, currentSessionId);
   // Show a setup hint if no provider is configured
   const aliasCount = Object.keys(inputConfig.config.models?.aliases ?? {}).length;

@@ -512,6 +512,188 @@ describe("agent query loop", () => {
     expect(result.final.text).toBe("我会先读取项目文件，找出启动方式。");
   });
 
+  it("does not infer DirList fallback after a substantive file analysis", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const analysis = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `Slide ${index + 1}: the deck already has a clear problem statement, audience context, supporting evidence, and a closing recommendation. The useful feedback is to tighten the narrative and make the transition into the conclusion more explicit.`
+    ).join(" ");
+    let calls = 0;
+    const adapter: ProviderAdapter = {
+      name: "ppt-analysis-provider",
+      complete: async () => {
+        calls++;
+        return { text: analysis };
+      }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [textMessage("user", "/Users/edward/Desktop/test.pptx 这个 ppt 帮我看看")],
+        cwd: workspace
+      })
+    );
+
+    expect(calls).toBe(1);
+    expect(result.events).not.toContainEqual(
+      expect.objectContaining({
+        type: "tool_use",
+        toolUse: expect.objectContaining({ name: "DirList" })
+      })
+    );
+    expect(result.final.text).toBe(analysis);
+  });
+
+  it("does not infer the Magi banner glyph as a directory path", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    let calls = 0;
+    const adapter: ProviderAdapter = {
+      name: "banner-path-provider",
+      complete: async () => {
+        calls++;
+        return { text: "我先列一下目录，确认可用文件。" };
+      }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [
+          textMessage(
+            "user",
+            "△ Magi\n/✦\\ cwd: /Users/edward\n/Users/edward/Desktop/test.pptx 这个 ppt 帮我看看"
+          )
+        ],
+        cwd: workspace
+      })
+    );
+
+    expect(calls).toBe(1);
+    expect(result.events).not.toContainEqual(
+      expect.objectContaining({
+        type: "tool_use",
+        toolUse: expect.objectContaining({
+          name: "DirList",
+          input: expect.objectContaining({ path: "/✦\\" })
+        })
+      })
+    );
+    expect(result.events).not.toContainEqual(
+      expect.objectContaining({
+        type: "tool_use",
+        toolUse: expect.objectContaining({ name: "DirList" })
+      })
+    );
+  });
+
+  it("deduplicates DirList fallback for the same user turn and path", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const directory = path.join(workspace, "slides");
+    mkdirSync(directory);
+    let calls = 0;
+    const adapter: ProviderAdapter = {
+      name: "dedupe-dirlist-provider",
+      complete: async () => {
+        calls++;
+        if (calls <= 2) {
+          return { text: "我先列一下目录。" };
+        }
+        throw new Error("duplicate DirList fallback should not trigger another model call");
+      }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [textMessage("user", `${directory} 请查看目录`)],
+        cwd: workspace,
+        maxTurns: 4
+      })
+    );
+
+    const dirListToolUses = result.events.filter(
+      (event) => event.type === "tool_use" && event.toolUse.name === "DirList"
+    );
+    expect(calls).toBe(2);
+    expect(dirListToolUses).toHaveLength(1);
+    expect(dirListToolUses[0]).toMatchObject({
+      type: "tool_use",
+      toolUse: expect.objectContaining({
+        id: expect.stringMatching(/^fallback-dirlist-u\d+-/),
+        input: { path: directory }
+      })
+    });
+    expect(dirListToolUses[0]).not.toMatchObject({
+      type: "tool_use",
+      toolUse: expect.objectContaining({ id: "fallback-dirlist-1" })
+    });
+  });
+
+  it("does not feed failed fallback results back to the model after a substantive streamed answer", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const analysis = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `Section ${index + 1}: the presentation has already been read and the main recommendation is to simplify the evidence flow, make the audience takeaway explicit, and remove redundant setup before the final decision slide.`
+    ).join(" ");
+    let streamCalls = 0;
+    let completeCalls = 0;
+    const adapter: ProviderAdapter = {
+      name: "failed-fallback-provider",
+      complete: async () => {
+        completeCalls++;
+        throw new Error("failed fallback should not call the provider again");
+      },
+      stream: async function* () {
+        streamCalls++;
+        yield { type: "text-delta", text: analysis };
+        return {
+          text: analysis,
+          toolUses: [
+            {
+              type: "tool-use",
+              id: "fallback-dirlist-stream",
+              name: "DirList",
+              input: { path: "/outside-workspace" }
+            }
+          ]
+        };
+      }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        adapter,
+        model: "explicit-test-model",
+        messages: [textMessage("user", "请查看这个目录")],
+        cwd: workspace,
+        stream: true
+      })
+    );
+
+    expect(streamCalls).toBe(1);
+    expect(completeCalls).toBe(0);
+    expect(result.events).toContainEqual(
+      expect.objectContaining({
+        type: "tool_result",
+        toolCallId: "fallback-dirlist-stream",
+        toolName: "DirList",
+        isError: true
+      })
+    );
+    expect(result.final.messages.some((message) => message.role === "tool")).toBe(false);
+    expect(result.final.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: [{ type: "text", text: analysis }]
+    });
+    expect(result.final.text).toBe(analysis);
+  });
+
   it("yields approval_request for default write tools and lets a resolver approve", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const adapter: ProviderAdapter = {

@@ -103,18 +103,18 @@ describe("TUI, slash commands, and session resume", () => {
     expect(formatSlashSuggestions("/missing-command")).toContain("No slash commands match");
   });
 
-  it("formats startup banner with version, tools, cwd, and model", () => {
+  it("formats startup banner with version, cwd, and model", () => {
     const banner =
       stripAnsi(
         formatTuiStartupBanner({
           cwd: "/repo",
           modelDisplay: "openai:gpt-5.5",
-          toolCount: 86,
           version: "1.2.3"
         })
       ) ?? "";
 
-    expect(banner).toContain("Magi v1.2.3 · 86 tools");
+    expect(banner).toContain("Magi v1.2.3");
+    expect(banner).not.toContain("tools");
     expect(banner).toContain("cwd: /repo");
     expect(banner).toContain("model: openai:gpt-5.5");
   });

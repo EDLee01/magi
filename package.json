@@ -1,6 +1,6 @@
 {
   "name": "@edwardlee5423/magi",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "description": "Magi Next clean-room CLI bootstrap.",
   "type": "module",
   "license": "MIT",

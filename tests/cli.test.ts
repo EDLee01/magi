@@ -26,7 +26,7 @@ describe("CLI entrypoint", () => {
   it("runs magi --version", async () => {
     const result = await runCli(["--version"], {}, process.cwd());
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("magi 0.1.6\n");
+    expect(result.stdout).toBe("magi 0.1.8\n");
   });
 
   it("runs magi doctor and displays the isolation root", async () => {
