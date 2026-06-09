@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 import os from "node:os";
@@ -48,29 +48,30 @@ export async function executeSnip(input: { format: string; cwd: string }): Promi
   try {
     if (platform === "darwin") {
       // macOS: use screencapture
-      execSync(`screencapture -x "${filePath}"`, { stdio: "pipe" });
+      runCaptureCommand("screencapture", ["-x", filePath]);
     } else if (platform === "linux") {
       // Linux: try gnome-screenshot first, fall back to import
       try {
-        execSync(`gnome-screenshot -f "${filePath}"`, { stdio: "pipe" });
+        runCaptureCommand("gnome-screenshot", ["-f", filePath]);
       } catch {
         // Fall back to ImageMagick import
-        execSync(`import -window root "${filePath}"`, { stdio: "pipe" });
+        runCaptureCommand("import", ["-window", "root", filePath]);
       }
     } else if (platform === "win32") {
       // Windows: use PowerShell
+      const escapedFilePath = filePath.replace(/'/g, "''");
       const psCommand = `
         Add-Type -AssemblyName System.Windows.Forms
         [System.Windows.Forms.Screen]::PrimaryScreen | ForEach-Object {
           $bitmap = New-Object System.Drawing.Bitmap($_.Bounds.Width, $_.Bounds.Height)
           $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
           $graphics.CopyFromScreen($_.Bounds.Location, [System.Drawing.Point]::Empty, $_.Bounds.Size)
-          $bitmap.Save("${filePath}")
+          $bitmap.Save('${escapedFilePath}')
           $graphics.Dispose()
           $bitmap.Dispose()
         }
       `;
-      execSync(`powershell -Command "${psCommand}"`, { stdio: "pipe" });
+      runCaptureCommand("powershell.exe", ["-NoProfile", "-Command", psCommand]);
     } else {
       throw new ToolError(`Unsupported platform: ${platform}`, "command-failed");
     }
@@ -92,6 +93,13 @@ export async function executeSnip(input: { format: string; cwd: string }): Promi
     }
     const message = error instanceof Error ? error.message : String(error);
     throw new ToolError(`Failed to take screenshot: ${message}`, "command-failed");
+  }
+}
+
+function runCaptureCommand(command: string, args: string[]): void {
+  const result = spawnSync(command, args, { encoding: "utf8", timeout: 30_000 });
+  if (result.error || result.status !== 0) {
+    throw new Error(result.error?.message ?? result.stderr.trim() ?? `${command} failed`);
   }
 }
 

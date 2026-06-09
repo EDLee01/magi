@@ -1288,7 +1288,8 @@ describe("agent query loop", () => {
         cwd: workspace,
         stateRoot,
         sessionId: "todo-session",
-        permissionMode: "acceptEdits"
+        permissionMode: "acceptEdits",
+        toolRules: { allow: ["TodoWrite(*)"], ask: [], deny: [] }
       })
     );
 
@@ -2203,6 +2204,7 @@ describe("agent query loop", () => {
         cwd: workspace,
         stateRoot,
         permissionMode: "acceptEdits",
+        toolRules: { allow: ["TodoWrite(*)"], ask: [], deny: [] },
         routes: [{ providerName: "todo-engine", model: "explicit", adapter }]
       });
 
@@ -2281,6 +2283,7 @@ describe("agent query loop", () => {
         cwd: workspace,
         stateRoot: paths.stateRoot,
         permissionMode: "acceptEdits",
+        toolRules: { allow: ["Config(*)", "Skill(*)"], ask: [], deny: [] },
         routes: [{ providerName: "audit-tools", model: "explicit", adapter }]
       });
 

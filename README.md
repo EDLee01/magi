@@ -326,7 +326,7 @@ npm run test:live-smoke
 npm run report:capability
 ```
 
-Requires Node ≥ 20.
+Requires Node ≥ 22.
 
 ## Status
 

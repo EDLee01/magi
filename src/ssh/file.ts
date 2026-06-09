@@ -27,8 +27,7 @@ export async function sshFileRead(input: {
   port?: number;
 }): Promise<SshFileReadResult> {
   const args = buildSshArgs(input.host, input.user, input.port);
-  // Use printf with %s to safely pass the path without shell interpretation
-  args.push(`printf '%s' "$(cat -- "$1")" | base64`, "--", input.path);
+  args.push(`base64 < ${quotePosixShell(input.path)}`);
 
   const result = spawnSync("ssh", args, {
     encoding: "utf8",
@@ -73,10 +72,10 @@ export async function sshFileWrite(input: {
   const b64 = Buffer.from(input.content, "utf8").toString("base64");
 
   const args = buildSshArgs(input.host, input.user, input.port);
-  // Use printf and -- to safely pass the path without shell interpretation
-  args.push(`printf '%s' "$1" | base64 -d > -- "$2"`, "--", b64, input.path);
+  args.push(`base64 -d > ${quotePosixShell(input.path)}`);
 
   const result = spawnSync("ssh", args, {
+    input: b64,
     encoding: "utf8",
     timeout: 30_000,
     maxBuffer: 10 * 1024 * 1024
@@ -95,6 +94,10 @@ export async function sshFileWrite(input: {
   return {
     host: input.host,
     path: input.path,
-    sizeBytes: input.content.length
+    sizeBytes: Buffer.byteLength(input.content, "utf8")
   };
+}
+
+function quotePosixShell(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }

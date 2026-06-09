@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-29T16:51:20.718Z",
+  "generatedAt": "2026-06-09T09:01:52.529Z",
   "packages": [
     {
       "name": "@esbuild/aix-ppc64",
@@ -293,37 +293,37 @@
     },
     {
       "name": "@vitest/expect",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
       "name": "@vitest/mocker",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
       "name": "@vitest/pretty-format",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
       "name": "@vitest/runner",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
       "name": "@vitest/snapshot",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
       "name": "@vitest/spy",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
       "name": "@vitest/utils",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {
@@ -873,7 +873,7 @@
     },
     {
       "name": "vitest",
-      "version": "3.2.4",
+      "version": "3.2.6",
       "license": "MIT"
     },
     {

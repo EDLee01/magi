@@ -78,10 +78,14 @@ import {
   runInteractiveTerminal
 } from "./tui.js";
 import { startControlServer } from "./control/server.js";
+import { createPairingToken } from "./control/auth.js";
 import {
+  clearDaemonControlCredentials,
   getDaemonStatus,
+  readDaemonControlCredentials,
   startDaemon,
   stopDaemon,
+  writeDaemonControlCredentials,
   writeDaemonPidFile,
   clearDaemonPidFile
 } from "./control/daemon.js";
@@ -1736,13 +1740,27 @@ async function runCliUnsafeWithParsed(
       };
     }
     const reason = parsed.rest.slice(1).join(" ").trim() || "cancelled by user";
-    const url = `http://${status.bind ?? "127.0.0.1"}:${status.port}/jobs/${encodeURIComponent(jobId)}/cancel`;
+    if (!status.port) {
+      return {
+        exitCode: 1,
+        stdout: "",
+        stderr:
+          "Magi daemon has not finished starting. Retry after 'magi daemon status' shows a port.\n"
+      };
+    }
+    const baseUrl = `http://${daemonHttpHost(status.bind)}:${status.port}`;
+    const url = `${baseUrl}/jobs/${encodeURIComponent(jobId)}/cancel`;
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason })
-      });
+      let credentials = readDaemonControlCredentials(paths);
+      if (!credentials) {
+        credentials = await pairLocalDaemon(baseUrl, paths);
+      }
+      let response = await cancelDaemonJob(url, reason, credentials);
+      if (response.status === 401) {
+        clearDaemonControlCredentials(paths);
+        credentials = await pairLocalDaemon(baseUrl, paths);
+        response = await cancelDaemonJob(url, reason, credentials);
+      }
       if (!response.ok) {
         const text = await response.text();
         return {
@@ -1974,6 +1992,14 @@ async function runCliUnsafeWithParsed(
     // If running as a daemon, write the real PID file with the bound port
     let daemonLogger: Logger | undefined;
     if (env?.MAGI_DAEMON === "1") {
+      writeDaemonControlCredentials(
+        paths,
+        createPairingToken({
+          store,
+          deviceName: "local-cli",
+          ttlMs: 365 * 24 * 60 * 60_000
+        })
+      );
       const portMatch = /:(\d+)$/.exec(handle.url);
       const boundPort = portMatch ? Number(portMatch[1]) : runtime.controlPort;
       writeDaemonPidFile(paths, {
@@ -2000,6 +2026,7 @@ async function runCliUnsafeWithParsed(
           daemonLogger?.info("daemon stopping", { pid: process.pid });
         } catch {}
         clearDaemonPidFile(paths);
+        clearDaemonControlCredentials(paths);
         try {
           daemonLogger?.close();
         } catch {}
@@ -2029,6 +2056,62 @@ function buildPanelPairingUrl(host: string, port: number, deviceId: string, toke
   url.searchParams.set("device", deviceId);
   url.searchParams.set("token", token);
   return url.toString();
+}
+
+function daemonHttpHost(bind: string | undefined): string {
+  if (!bind || bind === "0.0.0.0" || bind === "::") {
+    return "127.0.0.1";
+  }
+  return bind.includes(":") ? `[${bind}]` : bind;
+}
+
+async function pairLocalDaemon(
+  baseUrl: string,
+  paths: ReturnType<typeof getMagiPaths>
+): Promise<{ deviceId: string; token: string; expiresAt: string }> {
+  const response = await fetch(`${baseUrl}/pairing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "local-cli" })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to obtain daemon credentials (${response.status})`);
+  }
+  const credentials = (await response.json()) as {
+    deviceId?: unknown;
+    token?: unknown;
+    expiresAt?: unknown;
+  };
+  if (
+    typeof credentials.deviceId !== "string" ||
+    typeof credentials.token !== "string" ||
+    typeof credentials.expiresAt !== "string"
+  ) {
+    throw new Error("Daemon pairing returned invalid credentials");
+  }
+  const validated = {
+    deviceId: credentials.deviceId,
+    token: credentials.token,
+    expiresAt: credentials.expiresAt
+  };
+  writeDaemonControlCredentials(paths, validated);
+  return validated;
+}
+
+function cancelDaemonJob(
+  url: string,
+  reason: string,
+  credentials: { deviceId: string; token: string }
+): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Magi-Device-Id": credentials.deviceId,
+      Authorization: `Bearer ${credentials.token}`
+    },
+    body: JSON.stringify({ reason })
+  });
 }
 
 function formatStreamJson(result: Awaited<ReturnType<typeof runHeadlessPrompt>>): string {

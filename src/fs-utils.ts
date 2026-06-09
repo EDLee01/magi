@@ -7,12 +7,21 @@
  * session / memory file. The tradeoff is one extra fsync — fine for state.
  */
 
-import { closeSync, fsyncSync, openSync, renameSync, unlinkSync, writeSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeSync
+} from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 
 export interface AtomicWriteOptions {
-  /** File mode for the final file. Defaults to 0o644. */
+  /** File mode for the final file. Existing files keep their mode; new files default to 0o644. */
   mode?: number;
   /** Sync the directory afterward (POSIX-only). Defaults to false; turn on for very critical files. */
   syncDir?: boolean;
@@ -34,7 +43,7 @@ export function atomicWrite(
   const tmpName = `.${base}.tmp.${process.pid}.${randomBytes(4).toString("hex")}`;
   const tmpPath = path.join(dir, tmpName);
   const data = typeof content === "string" ? Buffer.from(content, "utf8") : content;
-  const mode = options.mode ?? 0o644;
+  const mode = options.mode ?? (existsSync(targetPath) ? statSync(targetPath).mode & 0o777 : 0o644);
 
   let fd: number | undefined;
   try {

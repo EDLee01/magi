@@ -1,5 +1,4 @@
-import { execSync } from "node:child_process";
-import os from "node:os";
+import { spawnSync } from "node:child_process";
 
 import { ToolError } from "./errors.js";
 
@@ -50,25 +49,35 @@ export function executeKillProcess(input: {
     }
   }
   if (input.name) {
-    const isMac = os.platform() === "darwin";
-    const cmd = isMac
-      ? `pgrep -f "${input.name.replace(/"/g, '\\"')}"`
-      : `pgrep -f "${input.name.replace(/"/g, '\\"')}"`;
-    try {
-      const pids = execSync(cmd, { encoding: "utf8", timeout: 5000 })
-        .trim()
-        .split("\n")
-        .map(Number)
-        .filter((n) => n > 0);
-      for (const pid of pids) {
-        try {
-          process.kill(pid, input.signal as NodeJS.Signals);
-          results.push({ pid, signal: input.signal, success: true });
-        } catch {
-          /* process already gone */
+    const listed = spawnSync("ps", ["-axo", "pid=,command="], {
+      encoding: "utf8",
+      timeout: 5000
+    });
+    if (listed.error || listed.status !== 0) {
+      throw new ToolError(
+        `Failed to list processes: ${listed.error?.message ?? listed.stderr.trim() ?? "unknown error"}`,
+        "command-failed"
+      );
+    }
+    const pids = listed.stdout
+      .split(/\r?\n/)
+      .flatMap((line) => {
+        const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+        if (!match || !match[2].includes(input.name!) || Number(match[1]) === process.pid) {
+          return [];
         }
+        return [Number(match[1])];
+      })
+      .filter((pid) => pid > 0);
+    for (const pid of pids) {
+      try {
+        process.kill(pid, input.signal as NodeJS.Signals);
+        results.push({ pid, signal: input.signal, success: true });
+      } catch {
+        /* process already gone */
       }
-    } catch {
+    }
+    if (pids.length === 0) {
       throw new ToolError(`No processes found matching: ${input.name}`, "not-found");
     }
   }

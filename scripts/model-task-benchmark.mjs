@@ -380,6 +380,8 @@ async function scenarioProjectEditTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -456,6 +458,8 @@ async function scenarioMemoryDrivenTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -686,6 +690,8 @@ async function scenarioCrossFileVerifiedEditTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -825,6 +831,8 @@ async function scenarioPatchStrategyTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -1010,6 +1018,8 @@ async function scenarioDependencyRefactorTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -1196,6 +1206,8 @@ async function scenarioTestDrivenRecoveryTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -1403,6 +1415,8 @@ async function scenarioContinuousPatchRecoveryTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -1637,6 +1651,8 @@ async function scenarioApiMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -1906,6 +1922,8 @@ async function scenarioMonorepoGeneratedBoundaryTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -2274,6 +2292,8 @@ async function scenarioWorkspacePolicyMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -2567,6 +2587,8 @@ async function scenarioMixedLanguageContractMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -3074,6 +3096,8 @@ async function scenarioLargeRepoLongChainMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -3577,6 +3601,8 @@ async function scenarioPluginApiCompatibilityMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -4094,6 +4120,8 @@ async function scenarioSecurityMiddlewarePolicyMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -4555,6 +4583,8 @@ async function scenarioOssSecurityAdvisoryFixTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -4935,6 +4965,8 @@ async function scenarioCiFailureDiagnosisFixTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -5390,6 +5422,8 @@ async function scenarioOssStyleOpenSourceMigrationTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",
@@ -5801,6 +5835,8 @@ async function scenarioOssIssueRegressionFixTask() {
         args: [
           "--permission-mode",
           "acceptEdits",
+          "--allowed-tools",
+          "FileRead,FileWrite,FileEdit,FilePatch,FileMove,Glob,Grep,ToolSearch,Bash",
           "--model",
           "main",
           "--output-format",

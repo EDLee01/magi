@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Magi 技术路线与稳定性保护基线 - 2026-06-09</title>
+    <style>
+      :root {
+        --bg: #f4f1ea;
+        --paper: #fffdf8;
+        --ink: #17211d;
+        --muted: #5e6b64;
+        --line: #d8d5ca;
+        --brand: #155e4b;
+        --brand-soft: #e2f1eb;
+        --accent: #b45309;
+        --danger: #a61b1b;
+        --danger-soft: #fbe7e7;
+        --warn: #8a5200;
+        --warn-soft: #fff2d7;
+        --ok: #11613d;
+        --ok-soft: #e5f6ed;
+        --code: #15201c;
+        --code-ink: #dcebe4;
+        --shadow: 0 18px 50px rgba(44, 54, 48, 0.09);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        background: var(--bg);
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 8% 0%, rgba(21, 94, 75, 0.12), transparent 28rem),
+          radial-gradient(circle at 96% 8%, rgba(180, 83, 9, 0.09), transparent 25rem), var(--bg);
+        font-family: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        line-height: 1.7;
+      }
+
+      a {
+        color: var(--brand);
+      }
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+
+      code,
+      pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      code {
+        padding: 0.12rem 0.35rem;
+        border: 1px solid rgba(21, 94, 75, 0.14);
+        border-radius: 0.35rem;
+        background: rgba(21, 94, 75, 0.06);
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow: auto;
+        margin: 1rem 0;
+        padding: 1rem 1.1rem;
+        border-radius: 0.75rem;
+        color: var(--code-ink);
+        background: var(--code);
+        line-height: 1.55;
+        font-size: 0.88rem;
+      }
+
+      .shell {
+        width: min(1240px, calc(100% - 2rem));
+        margin: 0 auto;
+      }
+
+      .hero {
+        padding: 4.5rem 0 2.5rem;
+      }
+
+      .eyebrow {
+        margin: 0 0 0.8rem;
+        color: var(--brand);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 980px;
+        margin: 0;
+        font-family: Georgia, "Noto Serif SC", serif;
+        font-size: clamp(2.3rem, 5vw, 4.8rem);
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+      }
+
+      .lede {
+        max-width: 920px;
+        margin: 1.3rem 0 0;
+        color: var(--muted);
+        font-size: clamp(1rem, 2vw, 1.2rem);
+      }
+
+      .meta-grid,
+      .metric-grid,
+      .card-grid {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .meta-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-top: 2rem;
+      }
+
+      .metric-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: 1.2rem 0;
+      }
+
+      .card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .meta-card,
+      .metric,
+      .card,
+      section {
+        border: 1px solid var(--line);
+        background: rgba(255, 253, 248, 0.93);
+        box-shadow: var(--shadow);
+      }
+
+      .meta-card,
+      .metric {
+        min-height: 108px;
+        padding: 1rem;
+        border-radius: 0.8rem;
+      }
+
+      .meta-card span,
+      .metric span {
+        display: block;
+        margin-bottom: 0.45rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .meta-card strong,
+      .metric strong {
+        display: block;
+        font-size: 1.08rem;
+        line-height: 1.3;
+        word-break: break-word;
+      }
+
+      .metric strong {
+        color: var(--brand);
+        font-family: Georgia, serif;
+        font-size: 1.8rem;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 250px minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: start;
+        padding-bottom: 5rem;
+      }
+
+      nav {
+        position: sticky;
+        top: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        background: rgba(255, 253, 248, 0.92);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+      }
+
+      nav strong {
+        display: block;
+        margin-bottom: 0.65rem;
+        font-size: 0.86rem;
+        letter-spacing: 0.05em;
+      }
+
+      nav a {
+        display: block;
+        padding: 0.34rem 0.45rem;
+        border-radius: 0.4rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        color: var(--brand);
+        background: var(--brand-soft);
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      section {
+        margin-bottom: 1.25rem;
+        padding: clamp(1.25rem, 3vw, 2.25rem);
+        border-radius: 1rem;
+      }
+
+      h2 {
+        margin: 0 0 1rem;
+        font-family: Georgia, "Noto Serif SC", serif;
+        font-size: clamp(1.6rem, 3vw, 2.3rem);
+        line-height: 1.2;
+      }
+
+      h3 {
+        margin: 1.6rem 0 0.65rem;
+        font-size: 1.1rem;
+      }
+
+      h4 {
+        margin: 1.1rem 0 0.45rem;
+        font-size: 0.98rem;
+      }
+
+      p {
+        margin: 0.75rem 0;
+      }
+      ul,
+      ol {
+        padding-left: 1.35rem;
+      }
+      li + li {
+        margin-top: 0.32rem;
+      }
+
+      .callout {
+        margin: 1rem 0;
+        padding: 1rem 1.1rem;
+        border-left: 4px solid var(--brand);
+        border-radius: 0.65rem;
+        background: var(--brand-soft);
+      }
+
+      .callout.warn {
+        border-left-color: var(--warn);
+        background: var(--warn-soft);
+      }
+
+      .callout.danger {
+        border-left-color: var(--danger);
+        background: var(--danger-soft);
+      }
+
+      .callout.ok {
+        border-left-color: var(--ok);
+        background: var(--ok-soft);
+      }
+
+      .card {
+        padding: 1.1rem;
+        border-radius: 0.8rem;
+        box-shadow: none;
+      }
+
+      .card h3 {
+        margin-top: 0;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        margin: 0 0.35rem 0.35rem 0;
+        padding: 0.15rem 0.5rem;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        line-height: 1.5;
+      }
+
+      .p0 {
+        color: var(--danger);
+        background: var(--danger-soft);
+      }
+      .p1 {
+        color: var(--warn);
+        background: var(--warn-soft);
+      }
+      .p2 {
+        color: var(--brand);
+        background: var(--brand-soft);
+      }
+      .stable {
+        color: var(--ok);
+        background: var(--ok-soft);
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1rem 0;
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+      }
+
+      table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        background: var(--paper);
+        font-size: 0.88rem;
+      }
+
+      th,
+      td {
+        padding: 0.75rem 0.8rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        text-align: left;
+      }
+
+      th {
+        color: var(--brand);
+        background: #f0eee6;
+        font-size: 0.78rem;
+        letter-spacing: 0.035em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .roadmap {
+        position: relative;
+        padding-left: 1.5rem;
+      }
+
+      .roadmap::before {
+        content: "";
+        position: absolute;
+        left: 0.35rem;
+        top: 0.5rem;
+        bottom: 0.5rem;
+        width: 2px;
+        background: linear-gradient(var(--brand), var(--accent));
+      }
+
+      .version {
+        position: relative;
+        margin: 0 0 1.25rem;
+        padding: 1.2rem;
+        border: 1px solid var(--line);
+        border-radius: 0.85rem;
+        background: var(--paper);
+      }
+
+      .version::before {
+        content: "";
+        position: absolute;
+        left: -1.47rem;
+        top: 1.35rem;
+        width: 0.8rem;
+        height: 0.8rem;
+        border: 3px solid var(--paper);
+        border-radius: 50%;
+        background: var(--brand);
+        box-shadow: 0 0 0 1px var(--brand);
+      }
+
+      .version h3 {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        align-items: baseline;
+        margin: 0 0 0.7rem;
+      }
+
+      .hours {
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+
+      .checklist {
+        list-style: none;
+        padding-left: 0;
+      }
+
+      .checklist li {
+        position: relative;
+        padding-left: 1.55rem;
+      }
+
+      .checklist li::before {
+        content: "□";
+        position: absolute;
+        left: 0;
+        color: var(--brand);
+        font-weight: 900;
+      }
+
+      .footer {
+        padding: 1.5rem 0 3rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: center;
+      }
+
+      @media (max-width: 940px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        nav {
+          position: static;
+        }
+        nav a {
+          display: inline-block;
+        }
+        .meta-grid,
+        .metric-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .shell {
+          width: min(100% - 1rem, 1240px);
+        }
+        .hero {
+          padding-top: 2.5rem;
+        }
+        .meta-grid,
+        .metric-grid,
+        .card-grid {
+          grid-template-columns: 1fr;
+        }
+        section {
+          border-radius: 0.75rem;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+        .shell {
+          width: 100%;
+        }
+        .layout {
+          display: block;
+        }
+        nav {
+          display: none;
+        }
+        section,
+        .meta-card,
+        .metric {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero shell">
+      <p class="eyebrow">Magi Engineering Baseline · Document R1</p>
+      <h1>Magi 技术路线与稳定性保护基线</h1>
+      <p class="lede">
+        本文档是 Magi 从 <code>v0.1.8</code> 向可靠 coding agent 演进的执行依据。
+        它不是愿望清单，而是版本边界、问题处置方案、验收门禁、兼容策略和回滚方法的统一技术基线。
+        后续迭代必须优先保证现有稳定能力不回退。
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-card">
+          <span>基线版本</span>
+          <strong>v0.1.8</strong>
+        </div>
+        <div class="meta-card">
+          <span>基线提交</span>
+          <strong><code>207e12059c22</code></strong>
+        </div>
+        <div class="meta-card">
+          <span>生成日期</span>
+          <strong>2026-06-09</strong>
+        </div>
+        <div class="meta-card">
+          <span>产品方向</span>
+          <strong>高可靠 coding agent</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout shell">
+      <nav aria-label="目录">
+        <strong>目录</strong>
+        <a href="#decision">1. 核心决策</a>
+        <a href="#baseline">2. 验证基线</a>
+        <a href="#contracts">3. 稳定能力合同</a>
+        <a href="#problems">4. 问题清单</a>
+        <a href="#architecture">5. 目标架构</a>
+        <a href="#stability">6. 稳定性策略</a>
+        <a href="#roadmap">7. 版本路线</a>
+        <a href="#gates">8. 测试门禁</a>
+        <a href="#migration">9. 数据与兼容</a>
+        <a href="#delivery">10. 交付与回滚</a>
+        <a href="#metrics">11. 工程指标</a>
+        <a href="#next">12. 下一版本清单</a>
+        <a href="#references">13. 参考依据</a>
+      </nav>
+
+      <main>
+        <section id="decision">
+          <h2>1. 核心决策</h2>
+
+          <div class="callout">
+            <strong>第一目标：</strong>
+            Magi 必须成为一个用户敢于交付真实代码任务、能够持续执行、能够被审阅、能够停止和恢复的
+            coding agent。 对齐 Codex 体验时，优先对齐执行可信度和工作流闭环，而不是表面功能数量。
+          </div>
+
+          <div class="card-grid">
+            <article class="card">
+              <h3>必须优先完成</h3>
+              <ul>
+                <li>OS 级执行沙箱与精确审批边界。</li>
+                <li>长任务、PTY、进程树、取消和恢复。</li>
+                <li>Diff、Review、逐 hunk 接受/撤销与回滚。</li>
+                <li>稳定 TUI、会话恢复、上下文与后台任务可见性。</li>
+                <li>Worktree 隔离和有边界的 Subagent 协作。</li>
+                <li>MCP、Hooks、Memory 的生命周期可靠性。</li>
+              </ul>
+            </article>
+
+            <article class="card">
+              <h3>明确不进入近期范围</h3>
+              <ul>
+                <li>
+                  <strong>Computer Use：</strong>不做通用桌面、浏览器点击和 OS GUI 自动化对齐。
+                </li>
+                <li>不为了“工具数量”继续添加低价值工具。</li>
+                <li>不做大规模重写，不替换已稳定的 TypeScript 核心。</li>
+                <li>移动端和远程控制只在 coding agent 核心稳定后继续增强。</li>
+                <li>不到真实可用和可回滚，不使用 <code>1.0.0</code> 版本号。</li>
+              </ul>
+            </article>
+          </div>
+
+          <div class="callout warn">
+            <strong>允许的行为变化：</strong>
+            安全缺陷修复可以有意收紧旧行为，例如
+            <code>acceptEdits</code> 不再放行非编辑类副作用工具。
+            这种变化必须写入兼容性说明、增加回归测试，并提供明确替代方式；不能把安全收紧伪装成“完全无行为变化”。
+          </div>
+        </section>
+
+        <section id="baseline">
+          <h2>2. 当前验证基线</h2>
+          <p>
+            基线来自提交 <code>207e12059c22eb42c873cae9295e4a4205b4f025</code>。 2026-06-09 在独立
+            Git worktree、Node.js <code>22.22.3</code> 和锁文件依赖下执行完整
+            <code>npm run verify</code>，正式工作树未被验证脚本修改。
+          </p>
+
+          <div class="metric-grid">
+            <div class="metric"><span>单元/集成测试</span><strong>672 / 672</strong></div>
+            <div class="metric"><span>能力门禁</span><strong>8 / 8</strong></div>
+            <div class="metric"><span>黑盒场景</span><strong>31 / 31</strong></div>
+            <div class="metric"><span>能力回归</span><strong>0</strong></div>
+            <div class="metric"><span>复杂任务</span><strong>10 / 10</strong></div>
+            <div class="metric"><span>模型任务</span><strong>19 / 19</strong></div>
+            <div class="metric"><span>Provider 调用</span><strong>423</strong></div>
+            <div class="metric"><span>Tool 调用</span><strong>759</strong></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>门禁</th>
+                  <th>基线结果</th>
+                  <th>后续最低要求</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Lint / Type / Build</td>
+                  <td>通过</td>
+                  <td>必须保持通过，禁止新增 warning 债务。</td>
+                </tr>
+                <tr>
+                  <td>Vitest</td>
+                  <td>51 文件，672 测试全部通过</td>
+                  <td>旧测试不得删除或弱化；新增行为必须新增测试。</td>
+                </tr>
+                <tr>
+                  <td>Memory Eval</td>
+                  <td>4/4，score 1.00</td>
+                  <td>保持 1.00，不允许用更宽松阈值掩盖下降。</td>
+                </tr>
+                <tr>
+                  <td>Patch Eval</td>
+                  <td>4 场景，FilePatch rate 0.91</td>
+                  <td>不得低于 0.91；修改 patch 引擎时必须增加失败恢复场景。</td>
+                </tr>
+                <tr>
+                  <td>Goal / Plan Eval</td>
+                  <td>通过，159 provider calls</td>
+                  <td>Goal、Plan、继承计划和审批链不得回退。</td>
+                </tr>
+                <tr>
+                  <td>Tool Discovery</td>
+                  <td>初始 23 个核心工具，按需揭示通过</td>
+                  <td>保持渐进披露，不能把全部 schema 一次性塞入上下文。</td>
+                </tr>
+                <tr>
+                  <td>Control API</td>
+                  <td>配对、mDNS、SSE、审批、取消、恢复、浏览器 Panel、Peer dispatch 通过</td>
+                  <td>所有 API 变更必须保持旧客户端合同，或提供版本化迁移。</td>
+                </tr>
+                <tr>
+                  <td>Black-box</td>
+                  <td>31 场景，score 1.00</td>
+                  <td>CLI、TTY、权限、恢复、Memory、Learning 行为不得回退。</td>
+                </tr>
+                <tr>
+                  <td>Complex Harness</td>
+                  <td>10 场景，score 1.00</td>
+                  <td>复杂编辑、恢复、权限、多 Agent、Provider fallback 保持通过。</td>
+                </tr>
+                <tr>
+                  <td>Model Tasks</td>
+                  <td>19 场景，score 1.00</td>
+                  <td>跨文件、迁移、安全修复、CI 修复等任务保持通过。</td>
+                </tr>
+                <tr>
+                  <td>Supply Chain</td>
+                  <td>Secret scan 通过；179 包 license/SBOM 通过</td>
+                  <td>每个发布版本重新生成并归档，不复用旧报告。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout ok">
+            <strong>基线解释：</strong>
+            现有 Magi 已经具备有效 coding agent 主链路，不应以“重新设计”为理由推倒重来。
+            后续应在已通过的行为合同外增加更强的安全和工作流能力。
+          </div>
+        </section>
+
+        <section id="contracts">
+          <h2>3. 不可回归的稳定能力合同</h2>
+          <p>
+            下列能力构成后续所有版本的兼容合同。除明确记录的安全收紧外，任何版本如果破坏这些能力，就不能发布。
+          </p>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>稳定能力</th>
+                  <th>必须保持的合同</th>
+                  <th>保护方式</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>S01</td>
+                  <td>CLI 与隔离</td>
+                  <td>
+                    <code>magi</code>、headless、TTY、doctor、config；只使用
+                    <code>~/.magi-next</code>；不暴露 <code>magi-agent</code>。
+                  </td>
+                  <td>Isolation tests、CLI black-box、package bin 检查。</td>
+                </tr>
+                <tr>
+                  <td>S02</td>
+                  <td>输出协议</td>
+                  <td>text、JSON、stream-json；错误码和机器可读字段保持兼容。</td>
+                  <td>Golden fixtures、schema version、兼容解析测试。</td>
+                </tr>
+                <tr>
+                  <td>S03</td>
+                  <td>Provider 与路由</td>
+                  <td>
+                    OpenAI-compatible、Messages-compatible、alias、retry、fallback、显式
+                    <code>--model</code> 覆盖。
+                  </td>
+                  <td>Provider routing tests、retry/fallback harness。</td>
+                </tr>
+                <tr>
+                  <td>S04</td>
+                  <td>文件与 Patch</td>
+                  <td>
+                    读取边界、二进制保护、FileEdit 唯一匹配、FilePatch 上下文匹配、workspace
+                    禁止越界。
+                  </td>
+                  <td>Patch eval、权限黑盒、模式位回归测试。</td>
+                </tr>
+                <tr>
+                  <td>S05</td>
+                  <td>会话与恢复</td>
+                  <td>
+                    session 保存、按 cwd 恢复、partial id、resume picker、context compaction。
+                  </td>
+                  <td>CLI、TUI、black-box resume contracts。</td>
+                </tr>
+                <tr>
+                  <td>S06</td>
+                  <td>Goal / Plan</td>
+                  <td>Goal 生命周期、Plan 审批/修订/继承/合并、plan 模式禁止写入。</td>
+                  <td>Goal/Plan eval 和 plan execution guard。</td>
+                </tr>
+                <tr>
+                  <td>S07</td>
+                  <td>Memory / Learning / Skills</td>
+                  <td>显式写入、纠错、冲突、Dream、reviewable draft、skill create/patch。</td>
+                  <td>Memory eval、graph tests、black-box learning cycle。</td>
+                </tr>
+                <tr>
+                  <td>S08</td>
+                  <td>MCP 与 Hooks</td>
+                  <td>stdio/HTTP/SSE/WebSocket、资源读取、审批、基础重连；hook 生命周期事件。</td>
+                  <td>MCP tests、hook tests、后续增加故障注入。</td>
+                </tr>
+                <tr>
+                  <td>S09</td>
+                  <td>Control API</td>
+                  <td>
+                    localhost 默认绑定、设备配对、token、SSE 顺序、审批、取消、session resume。
+                  </td>
+                  <td>Control API eval、浏览器 Panel E2E。</td>
+                </tr>
+                <tr>
+                  <td>S10</td>
+                  <td>Subagent 基础能力</td>
+                  <td>前台、后台、远端执行；状态记录；hook 事件；写 claim 检测。</td>
+                  <td>Agent tests、complex harness；后续补强隔离和合并。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="problems">
+          <h2>4. 当前问题与可执行处置</h2>
+
+          <h3><span class="tag p0">P0</span> 安全与执行边界</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>问题与证据</th>
+                  <th>影响</th>
+                  <th>实施方案</th>
+                  <th>验收</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>SEC-01</td>
+                  <td>
+                    <code>src/tools/disk-usage.ts:34</code> 使用字符串 <code>execSync</code> 拼接
+                    path； <code>src/tools/which.ts:23</code> 对 shell 参数做不完整转义。
+                  </td>
+                  <td>被标记为只读工具但可形成命令注入，绕过审批语义。</td>
+                  <td>
+                    统一改为 <code>spawnSync(executable, argv)</code>；禁止 shell； path/name 使用
+                    schema 限制；建立 <code>no-shell-interpolation</code> 静态检查；
+                    审计所有字符串型 <code>execSync</code>。
+                  </td>
+                  <td>
+                    注入 payload 不能执行；工具仍返回原有业务结果；新增 Linux/macOS 测试；
+                    扫描不再发现用户输入进入 shell 字符串。
+                  </td>
+                </tr>
+                <tr>
+                  <td>SEC-02</td>
+                  <td>
+                    <code>src/tools/registry.ts:774</code> 对
+                    <code>acceptEdits</code> 直接放行全部工具。
+                  </td>
+                  <td>“接受编辑”可能放行非编辑副作用，例如进程、网络、配置或远程操作。</td>
+                  <td>
+                    将工具风险拆成
+                    <code>read</code>、<code>workspace_edit</code>、<code>command</code>、
+                    <code>network</code>、<code>external_write</code>、<code>destructive</code>；
+                    <code>acceptEdits</code> 仅自动允许 workspace edit； 其他类别继续 ask/deny。
+                  </td>
+                  <td>
+                    权限矩阵逐工具覆盖；旧 FileWrite/Edit/Patch 流程不增加额外打断；
+                    网络、命令和远端写入不能借 acceptEdits 自动通过。
+                  </td>
+                </tr>
+                <tr>
+                  <td>SEC-03</td>
+                  <td>Rust runner 存在，但当前未形成强制 OS 级沙箱边界。</td>
+                  <td>审批依赖应用层判断；模型生成命令仍可能访问过宽的文件系统或网络。</td>
+                  <td>
+                    Linux 使用 bubblewrap；macOS 使用 sandbox-exec/Seatbelt 可行路径；
+                    工作区可写、<code>.git/.magi-next</code> 受保护、网络默认关闭；
+                    命令、文件编辑和子进程统一经过 runner policy。
+                  </td>
+                  <td>
+                    越界写、网络、Unix socket、私网地址均有否定测试； 沙箱不可用时 fail closed
+                    或明确降级并要求授权，不能静默全权限。
+                  </td>
+                </tr>
+                <tr>
+                  <td>SEC-04</td>
+                  <td><code>magi kill</code> 调 Control API 时未附带 daemon 鉴权。</td>
+                  <td>启用鉴权后命令可能 401，取消能力失效。</td>
+                  <td>
+                    daemon 状态文件保存 token reference，不保存明文到日志； CLI 统一走 Control API
+                    client，自动加载 token； token 文件权限固定为 0600。
+                  </td>
+                  <td>
+                    鉴权开启时 <code>magi kill</code> 成功；无 token 明确报错；日志不泄漏 token。
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3><span class="tag p1">P1</span> 正确性与可靠性</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>问题与证据</th>
+                  <th>实施方案</th>
+                  <th>验收</th>
+                  <th>目标版本</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>REL-01</td>
+                  <td>
+                    <code>src/web/panel-html.ts:484</code> 创建 session 时把 cwd 固定为
+                    <code>/</code>。
+                  </td>
+                  <td>
+                    Panel 必须选择已授权 workspace；session 继承 daemon workspace 或显式
+                    cwd；服务端校验路径。
+                  </td>
+                  <td>Panel 发起的 Agent 能看到正确仓库；不能选择未授权路径。</td>
+                  <td>v0.1.9</td>
+                </tr>
+                <tr>
+                  <td>REL-02</td>
+                  <td><code>src/ssh/file.ts</code> 远程 shell 参数布局和重定向语义错误。</td>
+                  <td>
+                    使用固定远程脚本 + stdin
+                    传输；路径通过位置参数；写入采用临时文件、fsync、rename。
+                  </td>
+                  <td>空格、引号、Unicode、二进制、小/大文件读写测试通过；失败不留下半文件。</td>
+                  <td>v0.1.9</td>
+                </tr>
+                <tr>
+                  <td>REL-03</td>
+                  <td><code>atomicWrite</code> 默认 0644，覆盖已有可执行文件时可能丢失 mode。</td>
+                  <td>覆盖前读取原 mode；已有文件默认保留 mode，新文件才使用显式默认值。</td>
+                  <td>编辑可执行脚本后仍可执行；0600 配置不被放宽。</td>
+                  <td>v0.1.9</td>
+                </tr>
+                <tr>
+                  <td>REL-04</td>
+                  <td>
+                    进程取消、PTY 和后台任务由多条路径实现，进程树终止和 daemon 重启恢复仍不完整。
+                  </td>
+                  <td>
+                    统一 Job/Process handle；Unix process group、Windows Job
+                    Object；状态机持久化；取消幂等。
+                  </td>
+                  <td>
+                    父子进程全部终止；重启后 running 任务标记 recovered/interrupted；可继续或清理。
+                  </td>
+                  <td>v0.2.0</td>
+                </tr>
+                <tr>
+                  <td>REL-05</td>
+                  <td>
+                    历史规划写“真实 Subagent 未实现”，但当前代码已实现前台/后台/远端
+                    Subagent，文档失真。
+                  </td>
+                  <td>建立 capability manifest，由测试生成状态；删除手写的过期“未实现”声明。</td>
+                  <td>文档状态与测试事实一致；每个发布生成 capability snapshot。</td>
+                  <td>v0.1.9</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3><span class="tag p1">P1</span> Codex 工作流体验差距</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>当前状态</th>
+                  <th>目标</th>
+                  <th>不破坏现有功能的方法</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>EXP-01</td>
+                  <td><code>/review</code> 当前只提示用户切换 review model。</td>
+                  <td>支持未提交变更、指定 commit、相对 base branch 的独立 reviewer。</td>
+                  <td>
+                    保留原命令语法；无参数进入 picker；旧文本目标作为 custom review instruction。
+                  </td>
+                </tr>
+                <tr>
+                  <td>EXP-02</td>
+                  <td>
+                    TUI 是 readline 级流式界面，已支持 picker、历史、粘贴和审批，但缺完整 transcript
+                    UI。
+                  </td>
+                  <td>流式 Markdown、diff、状态栏、后台任务、文件 mention、可访问键盘导航。</td>
+                  <td>
+                    以 <code>features.tuiV2</code> 计划开关并行实现；旧 TUI 保留到新 TUI
+                    门禁连续通过。
+                  </td>
+                </tr>
+                <tr>
+                  <td>EXP-03</td>
+                  <td>
+                    Subagent 已真实执行，但写 Agent 没有强制 worktree，线程切换和结果合并不足。
+                  </td>
+                  <td>读任务可并行；写任务默认独立 worktree；主 Agent 收摘要和可审阅 diff。</td>
+                  <td>先只对新 coordinator 模式启用；现有 Agent tool 行为保持兼容。</td>
+                </tr>
+                <tr>
+                  <td>EXP-04</td>
+                  <td>
+                    Diff 可显示，Git stage/unstage 工具存在，但没有统一逐 hunk review/rollback
+                    闭环。
+                  </td>
+                  <td>last-turn diff、逐文件/逐 hunk stage/unstage/revert、turn snapshot。</td>
+                  <td>底层继续使用 Git；禁止自研版本控制；所有 revert 先展示影响并可恢复。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3><span class="tag p2">P2</span> 依赖、CI 与产品债务</h3>
+          <ul>
+            <li>
+              <strong>Node 版本：</strong><code>package.json</code> 仍声明 <code>&gt;=20</code>，CI
+              仍测试 Node 20； 2026-06-09 的实际安装基线已使用 Node 22。下一版本统一到 Node 22
+              LTS，停止承诺 Node 20。
+            </li>
+            <li>
+              <strong>Vitest：</strong>锁定的 <code>3.2.4</code> 有开发服务器安全公告；
+              在不跨大版本的前提下升级到已修复版本，并全量验证。
+            </li>
+            <li>
+              <strong>Playwright 预检：</strong>npm 包存在不代表浏览器二进制存在；
+              <code>verify</code> 前增加 <code>playwright install --dry-run</code> 或明确的 doctor
+              检查。
+            </li>
+            <li>
+              <strong>MCP：</strong>需要更强的 reconnect/backoff、resource list change、roots 和
+              OAuth 生命周期。
+            </li>
+            <li>
+              <strong>Memory：</strong
+              >当前关键词和图召回有效，但还缺自动生成的秘密清理、老化策略和跨项目策略边界。
+            </li>
+          </ul>
+        </section>
+
+        <section id="architecture">
+          <h2>5. 目标技术架构</h2>
+          <p>
+            保留 TypeScript 产品层，强化 Rust runner 为执行安全边界。禁止为了技术偏好进行 Rust
+            全量重写。
+          </p>
+
+          <pre aria-label="目标架构图">
+┌──────────────────────────────────────────────────────────┐
+│ Magi Product Layer (TypeScript / Node 22 LTS)           │
+│ CLI · TUI · Session · Goal/Plan · Memory · MCP · Skills │
+│ Provider Router · Review · Control API · Audit          │
+└───────────────────────┬──────────────────────────────────┘
+                        │ typed JSON-RPC / event protocol
+┌───────────────────────▼──────────────────────────────────┐
+│ Magi Runner (Rust)                                      │
+│ PTY · process groups · timeout · cancel · patch apply   │
+│ filesystem policy · network policy · sandbox · audit    │
+└───────────────────────┬──────────────────────────────────┘
+                        │ OS-enforced boundary
+┌───────────────────────▼──────────────────────────────────┐
+│ Linux bubblewrap / macOS sandbox / Windows Job Object   │
+│ workspace roots · protected paths · network deny-first  │
+└──────────────────────────────────────────────────────────┘
+
+Shared durable state:
+SQLite session/job/audit/memory metadata + append-only event records
+
+Execution surfaces:
+Local TUI · headless CLI · web panel · remote control client</pre
+          >
+
+          <h3>架构原则</h3>
+          <ol>
+            <li>
+              <strong>一个执行入口：</strong>命令、PTY、后台任务、Subagent 命令最终统一进入 runner。
+            </li>
+            <li>
+              <strong>两个独立控制：</strong>Sandbox 决定“技术上能做什么”，Approval 决定“何时询问”。
+            </li>
+            <li>
+              <strong>事件先于 UI：</strong>所有状态先写结构化事件，再由 TUI、CLI、Panel
+              渲染，避免多套状态逻辑。
+            </li>
+            <li>
+              <strong>Git 作为变更真相：</strong>Review、stage、revert、worktree 都基于
+              Git，不创建第二套版本系统。
+            </li>
+            <li>
+              <strong>兼容优先：</strong>CLI/JSON/SQLite 变化必须有 schema version 和
+              migration，不做隐式破坏。
+            </li>
+            <li>
+              <strong>失败关闭：</strong>权限、沙箱、token、迁移状态不确定时拒绝执行并给出恢复路径。
+            </li>
+          </ol>
+        </section>
+
+        <section id="stability">
+          <h2>6. 不让稳定功能变得不稳定</h2>
+
+          <div class="callout danger">
+            <strong>发布红线：</strong>
+            只要旧能力合同中有一项下降、完整 <code>verify</code> 未通过、迁移无法回滚、或已知 P0
+            未关闭， 该版本不得发布，也不得把版本号标记为完成。
+          </div>
+
+          <h3>6.1 变更隔离</h3>
+          <ul>
+            <li>每个版本使用独立分支和 Git worktree，不直接在稳定 main 上开发。</li>
+            <li>一个版本只处理该版本问题清单，禁止顺手重构无关模块。</li>
+            <li>安全修复、runner、TUI、Subagent 不在同一版本混改，降低定位难度。</li>
+            <li>新实现先通过 feature flag 或新入口接入；旧路径保留到新路径连续通过门禁。</li>
+          </ul>
+
+          <h3>6.2 测试保护</h3>
+          <ul>
+            <li>
+              现有 672 个测试是最低集合，不允许通过删除、skip、放宽 timeout 或降低断言来“修复”失败。
+            </li>
+            <li>每个 bug 先写失败测试，再修代码；安全问题必须有恶意输入测试。</li>
+            <li>每个版本增加专属 regression suite，并纳入 <code>npm run verify</code>。</li>
+            <li>
+              高风险模块采用 mutation/fault injection：权限矩阵、进程取消、SQLite 迁移、SSE
+              reconnect。
+            </li>
+          </ul>
+
+          <h3>6.3 数据保护</h3>
+          <ul>
+            <li>所有数据库迁移先备份，再在事务中执行；失败自动恢复旧文件。</li>
+            <li>迁移只允许 additive-first：先加字段/表，再双读，最后才移除旧字段。</li>
+            <li>配置新增字段必须有默认值；未知字段不能被旧版本静默删除。</li>
+            <li>
+              跨版本回滚必须验证：新版本产生的数据，至少能被旧版本安全忽略或由 downgrade 工具转换。
+            </li>
+          </ul>
+
+          <h3>6.4 性能与体验保护</h3>
+          <ul>
+            <li>记录启动时间、首 token 时间、工具调度延迟、内存占用和完整任务耗时。</li>
+            <li>默认核心工具数量和 system prompt 大小设预算，新增能力不能无上限扩大上下文。</li>
+            <li>TUI 新实现必须保留无颜色、窄终端、非 TTY 和机器输出路径。</li>
+          </ul>
+
+          <h3>6.5 允许修改稳定行为的唯一流程</h3>
+          <ol>
+            <li>建立 Compatibility Delta，明确旧行为、风险和新行为。</li>
+            <li>提供替代命令、配置或迁移步骤。</li>
+            <li>增加旧行为拒绝测试和新行为成功测试。</li>
+            <li>在 release notes 中单独列为 Breaking/Security Change。</li>
+            <li>用户未确认前，不修改与当前版本范围无关的默认值。</li>
+          </ol>
+        </section>
+
+        <section id="roadmap">
+          <h2>7. 版本化技术路线</h2>
+          <p>
+            工时按 AI
+            实际执行小时拆分。每个版本独立验收、独立回滚；上一个版本未通过，不开始下一个版本的写入工作。
+          </p>
+
+          <div class="roadmap">
+            <article class="version">
+              <h3>v0.1.9 · Security & Baseline Hardening <span class="hours">H1-H20</span></h3>
+              <p>
+                <strong>目标：</strong>关闭已确认安全/正确性问题，统一 Node 22
+                基线，建立后续版本不可回归合同。
+              </p>
+              <ul>
+                <li>
+                  <strong>H1-H2：</strong>冻结 v0.1.8 capability manifest、输出 schema
+                  fixtures、回滚清单。
+                </li>
+                <li>
+                  <strong>H3-H5：</strong>Node engine/CI 升到 22；升级 Vitest 修复安全公告；增加
+                  Playwright preflight。
+                </li>
+                <li>
+                  <strong>H6-H9：</strong>修复 DiskUsage/Which 注入；审计所有 shell
+                  字符串；增加静态规则。
+                </li>
+                <li>
+                  <strong>H10-H13：</strong>实现风险分类权限矩阵；收紧 acceptEdits；保留
+                  FileWrite/Edit/Patch 低打扰体验。
+                </li>
+                <li><strong>H14-H17：</strong>修复 SSH、Panel cwd、文件 mode、magi kill 鉴权。</li>
+                <li>
+                  <strong>H18-H20：</strong>全量 verify、升级/回滚 smoke、release notes、归档报告。
+                </li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong>P0 全部关闭；critical audit 为 0；672 旧测试全通过；8/8
+                能力门禁 1.00；无 CLI/JSON 兼容回退。
+              </p>
+            </article>
+
+            <article class="version">
+              <h3>v0.2.0 · Runner, Sandbox & Durable Jobs <span class="hours">H1-H28</span></h3>
+              <p>
+                <strong>目标：</strong>把执行权限从应用层约定提升为 OS
+                强制边界，并完成可靠取消与恢复。
+              </p>
+              <ul>
+                <li>
+                  <strong>H1-H4：</strong>定义 runner protocol v1、能力协商、错误码和审计事件。
+                </li>
+                <li>
+                  <strong>H5-H10：</strong>Linux bubblewrap
+                  workspace-write/read-only/full-access；保护 .git 和状态目录。
+                </li>
+                <li>
+                  <strong>H11-H14：</strong>网络默认 deny；域名 allowlist；localhost/私网/Unix
+                  socket 独立策略。
+                </li>
+                <li>
+                  <strong>H15-H19：</strong>统一 PTY/命令执行；process
+                  group；超时和取消；stdout/stderr 背压。
+                </li>
+                <li>
+                  <strong>H20-H23：</strong>durable job state；daemon 重启后 interrupted/recoverable
+                  状态。
+                </li>
+                <li><strong>H24-H28：</strong>故障注入、跨平台降级、性能基线、完整发布门禁。</li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong>无 runner 绕行路径；越界写和网络请求被 OS
+                拒绝；取消后无残留子进程；重启状态可解释、可恢复。
+              </p>
+            </article>
+
+            <article class="version">
+              <h3>v0.2.1 · Review, Diff & Rollback <span class="hours">H1-H20</span></h3>
+              <p>
+                <strong>目标：</strong>形成“Agent
+                修改后，用户能精确审阅、部分接受和可靠回退”的闭环。
+              </p>
+              <ul>
+                <li>
+                  <strong>H1-H4：</strong>Review scope：uncommitted、commit、base branch、custom
+                  instructions。
+                </li>
+                <li>
+                  <strong>H5-H8：</strong>独立 reviewer session；findings 严重度、文件和行号合同。
+                </li>
+                <li>
+                  <strong>H9-H12：</strong>last-turn diff 和 turn snapshot；文件/hunk
+                  stage、unstage、revert。
+                </li>
+                <li>
+                  <strong>H13-H16：</strong>inline feedback event model；CLI/TUI 共用 review 数据。
+                </li>
+                <li><strong>H17-H20：</strong>脏工作树、rename、二进制、冲突和回滚 E2E。</li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong
+                ><code>/review</code> 不再只是提示；用户可只保留部分变更；revert
+                不覆盖进入会话前的用户改动。
+              </p>
+            </article>
+
+            <article class="version">
+              <h3>v0.3.0 · TUI v2 <span class="hours">H1-H28</span></h3>
+              <p>
+                <strong>目标：</strong>在不破坏 headless/JSON
+                的前提下，达到稳定、可观察、键盘优先的交互体验。
+              </p>
+              <ul>
+                <li>
+                  <strong>H1-H5：</strong>基于事件流的 transcript renderer，保留 native scrollback
+                  策略。
+                </li>
+                <li><strong>H6-H10：</strong>流式 Markdown、语法高亮、diff、工具生命周期折叠。</li>
+                <li>
+                  <strong>H11-H15：</strong
+                  >状态栏：model、permission、context、tokens、git、goal、background jobs。
+                </li>
+                <li>
+                  <strong>H16-H19：</strong>queued follow-up、Ctrl+R、file mention、prompt
+                  editor、图片占位。
+                </li>
+                <li>
+                  <strong>H20-H23：</strong>审批、AskUserQuestion、Review、Memory、Agent thread
+                  overlay。
+                </li>
+                <li>
+                  <strong>H24-H28：</strong>PTY snapshots、窄终端、无颜色、Unicode、性能和旧 TUI
+                  fallback。
+                </li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong>新 TUI 连续两轮完整门禁通过后才成为默认；旧 TUI
+                至少保留一个版本作为 fallback。
+              </p>
+            </article>
+
+            <article class="version">
+              <h3>v0.3.1 · Worktree & Subagent Coordination <span class="hours">H1-H24</span></h3>
+              <p>
+                <strong>目标：</strong>把已有真实 Subagent
+                扩展为可审阅、可隔离、不会互相破坏的并行工作流。
+              </p>
+              <ul>
+                <li>
+                  <strong>H1-H4：</strong>Agent thread 状态和
+                  <code>/agent</code> 切换；主线程只接收摘要。
+                </li>
+                <li>
+                  <strong>H5-H9：</strong>写 Agent 默认独立 worktree；读 Agent 允许共享只读
+                  workspace。
+                </li>
+                <li>
+                  <strong>H10-H13：</strong>write claim 从声明升级为执行期强制；冲突自动停止。
+                </li>
+                <li>
+                  <strong>H14-H17：</strong>Agent result
+                  diff、review、merge/handoff；冲突不得自动覆盖。
+                </li>
+                <li><strong>H18-H21：</strong>worktree snapshot、磁盘配额、清理和恢复。</li>
+                <li><strong>H22-H24：</strong>并行探索、并行验证、写冲突和 daemon 重启 E2E。</li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong>两个写 Agent 不能修改同一文件；worktree 删除前有
+                snapshot；主工作树用户改动不受影响。
+              </p>
+            </article>
+
+            <article class="version">
+              <h3>v0.4.0 · MCP, Hooks & Memory Reliability <span class="hours">H1-H20</span></h3>
+              <p><strong>目标：</strong>让扩展生态在断线、变更和不可信输入下仍可预测。</p>
+              <ul>
+                <li>
+                  <strong>H1-H4：</strong>MCP reconnect/backoff、session expiry、resource list
+                  changes、roots。
+                </li>
+                <li>
+                  <strong>H5-H8：</strong>OAuth token lifecycle、最小权限存储、明确的 auth-required
+                  恢复。
+                </li>
+                <li>
+                  <strong>H9-H12：</strong>Hook hash
+                  trust、变更后重新审批、timeout/cancel、来源可见性。
+                </li>
+                <li>
+                  <strong>H13-H16：</strong>Memory secret redaction、生成开关、老化和跨项目边界。
+                </li>
+                <li><strong>H17-H20：</strong>不可信 MCP/Hook 故障注入、恢复测试、审计报告。</li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong>扩展失败不拖垮主 Agent；变更后的 hook
+                不会静默运行；Memory 不保存测试中可识别的秘密。
+              </p>
+            </article>
+
+            <article class="version">
+              <h3>v0.5.0 · Productization & Remote Control <span class="hours">H1-H16</span></h3>
+              <p>
+                <strong>目标：</strong>在核心稳定后完善安装、升级、诊断和远程 coding 控制，不扩展为
+                Computer Use。
+              </p>
+              <ul>
+                <li>
+                  <strong>H1-H4：</strong>安装/升级/降级、shell completion、doctor fix suggestions。
+                </li>
+                <li>
+                  <strong>H5-H8：</strong>Control API version negotiation、remote auth、TLS/SSH
+                  forwarding 文档。
+                </li>
+                <li>
+                  <strong>H9-H12：</strong>Web/mobile control 聚焦 session、审批、任务和
+                  review，不执行设备本地 shell。
+                </li>
+                <li>
+                  <strong>H13-H16：</strong>发布包、迁移演练、支持矩阵、用户文档和 telemetry-off
+                  验证。
+                </li>
+              </ul>
+              <p>
+                <strong>退出条件：</strong>新机安装、旧状态升级、降级和远程控制都有自动化
+                smoke；不包含桌面 GUI 自动化。
+              </p>
+            </article>
+          </div>
+
+          <h3>1.0.0 准入条件</h3>
+          <ul>
+            <li>至少三个连续版本没有 P0/P1 数据丢失或权限绕过回归。</li>
+            <li>Linux/macOS 主支持平台完整门禁稳定，Windows 有明确支持或明确实验状态。</li>
+            <li>升级和降级演练通过；状态备份恢复有自动化测试。</li>
+            <li>真实 provider coding smoke 可重复，不依赖 mock 结果宣称可用。</li>
+            <li>默认权限模式具备 OS 级沙箱；无静默 full access。</li>
+            <li>Review/rollback、长任务取消恢复、worktree agent workflow 达到可日常使用。</li>
+          </ul>
+        </section>
+
+        <section id="gates">
+          <h2>8. 每个版本必须执行的质量门禁</h2>
+
+          <h3>8.1 固定命令</h3>
+          <pre>
+npm ci
+npm run lint
+npm test
+npm run build
+npm run build:runner
+npm run scan:secrets
+npm run scan:licenses
+npm run sbom
+npm run verify
+npm audit --json</pre
+          >
+
+          <h3>8.2 分层门禁</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>层级</th>
+                  <th>验证内容</th>
+                  <th>失败处理</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>G0 环境</td>
+                  <td>Node/Rust/Git/rg/Playwright 浏览器/沙箱能力/磁盘空间。</td>
+                  <td>停止测试，报告环境缺口；不能把环境失败解释为代码失败。</td>
+                </tr>
+                <tr>
+                  <td>G1 静态</td>
+                  <td>Format、lint、type、build、禁止危险 API 扫描。</td>
+                  <td>修复后从 G1 重跑。</td>
+                </tr>
+                <tr>
+                  <td>G2 合同</td>
+                  <td>672+ 旧测试、CLI/JSON fixtures、SQLite migration tests。</td>
+                  <td>任何旧合同失败即阻断。</td>
+                </tr>
+                <tr>
+                  <td>G3 能力</td>
+                  <td>8/8 capability、black-box、complex harness、model tasks。</td>
+                  <td>不得降低阈值；定位具体能力再修。</td>
+                </tr>
+                <tr>
+                  <td>G4 安全</td>
+                  <td>注入、越界写、网络、token、symlink、process tree、秘密扫描。</td>
+                  <td>P0/P1 安全失败禁止发布。</td>
+                </tr>
+                <tr>
+                  <td>G5 真实环境</td>
+                  <td>TTY、浏览器 Panel、daemon restart、真实 provider opt-in smoke。</td>
+                  <td>标明 provider 外部故障和产品故障，不能用 mock 代替真实 smoke。</td>
+                </tr>
+                <tr>
+                  <td>G6 迁移回滚</td>
+                  <td>旧状态升级、新状态读取、失败恢复、版本降级。</td>
+                  <td>无法回滚即不得发布。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>8.3 CI 调整</h3>
+          <ul>
+            <li>CI 主矩阵改为 Node 22；Node 24 作为前瞻 allow-failure，稳定后再纳入 required。</li>
+            <li>
+              Linux 负责完整 capability/Playwright/sandbox；macOS 负责 CLI、TTY、runner 和基础
+              sandbox。
+            </li>
+            <li>每个 PR 上传 capability JSON、测试摘要、license、SBOM 和失败 artifact。</li>
+            <li>Nightly 增加重复执行，检测 flaky rate；单次偶然通过不能掩盖不稳定。</li>
+            <li>对 LSP、browser 和本地端口测试设置环境 preflight，不通过时给出明确 blocker。</li>
+          </ul>
+        </section>
+
+        <section id="migration">
+          <h2>9. 数据、配置与协议兼容策略</h2>
+
+          <h3>9.1 SQLite</h3>
+          <ol>
+            <li>新增 <code>schema_migrations</code> 表，记录 version、checksum、applied_at。</li>
+            <li>迁移前复制数据库到 <code>~/.magi-next/backups/&lt;timestamp&gt;/</code>。</li>
+            <li>迁移在单事务中执行；失败 rollback，并保留诊断日志。</li>
+            <li>新版本首次启动后先运行只读检查，再执行 migration。</li>
+            <li>破坏性 schema 删除至少延迟两个 minor 版本。</li>
+          </ol>
+
+          <h3>9.2 配置</h3>
+          <ul>
+            <li>配置结构增加显式 <code>configVersion</code>。</li>
+            <li>未知字段 round-trip 保留，避免旧版本覆盖新字段。</li>
+            <li>默认值变化必须是 Compatibility Delta，并提供 doctor 输出。</li>
+            <li>秘密只从 env 或 0600 secret store 读取，不写入普通 YAML、日志和报告。</li>
+          </ul>
+
+          <h3>9.3 CLI 与事件协议</h3>
+          <ul>
+            <li>text 输出可优化排版，但 JSON 和 stream-json 字段必须 versioned。</li>
+            <li>新增字段只做 additive；删除/重命名字段需保留兼容 alias。</li>
+            <li>Control API 提供 <code>/version</code> 和 protocol negotiation。</li>
+            <li>runner JSON-RPC 明确 protocol version，TS 与 Rust 不允许各自猜测。</li>
+          </ul>
+        </section>
+
+        <section id="delivery">
+          <h2>10. 每个版本的开发、交付与回滚流程</h2>
+
+          <ol>
+            <li>
+              <strong>基线冻结：</strong>
+              记录起始 commit、工作树状态、Node/Rust 版本和完整 verify 结果。
+            </li>
+            <li>
+              <strong>建立隔离 worktree：</strong>
+              分支只包含当前版本范围；禁止在 main 直接实现。
+            </li>
+            <li>
+              <strong>先测试后修复：</strong>
+              每个问题建立复现和验收测试，再修改实现。
+            </li>
+            <li>
+              <strong>小批提交：</strong>
+              安全、迁移、TUI、文档分别提交，确保可二分和可单独回退。
+            </li>
+            <li>
+              <strong>完整门禁：</strong>
+              先 focused tests，再 unit，再完整 verify，再真实 smoke。
+            </li>
+            <li>
+              <strong>产物归档：</strong>
+              source/runtime archive、SHA-256、SBOM、license、capability report、release notes。
+            </li>
+            <li>
+              <strong>回滚演练：</strong>
+              安装新版本、创建状态、降级到旧版本、恢复备份并运行 doctor。
+            </li>
+            <li>
+              <strong>发布后观察：</strong>
+              保留上一版本命令和归档；出现 P0 立即停止 rollout。
+            </li>
+          </ol>
+
+          <h3>每个版本必须保存的交付物</h3>
+          <pre>
+release/&lt;version&gt;/
+  source.tar.gz
+  runtime.tar.gz
+  SHA256SUMS
+  RELEASE_NOTES.md
+  COMPATIBILITY_DELTA.md
+  ROLLBACK.md
+  capability-alignment-report.json
+  capability-trend-report.json
+  license-report.json
+  sbom.cdx.json
+  test-summary.txt</pre
+          >
+        </section>
+
+        <section id="metrics">
+          <h2>11. 工程指标与发布阈值</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>指标</th>
+                  <th>发布阈值</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>旧测试通过率</td>
+                  <td>100%</td>
+                  <td>不能以新增测试稀释旧测试失败。</td>
+                </tr>
+                <tr>
+                  <td>Capability score</td>
+                  <td>1.00</td>
+                  <td>8/8 required checks。</td>
+                </tr>
+                <tr>
+                  <td>Critical/High runtime 漏洞</td>
+                  <td>0</td>
+                  <td>开发依赖也必须有明确处置和不暴露说明。</td>
+                </tr>
+                <tr>
+                  <td>已知命令注入</td>
+                  <td>0</td>
+                  <td>用户输入不能进入 shell 拼接。</td>
+                </tr>
+                <tr>
+                  <td>数据迁移失败恢复</td>
+                  <td>100%</td>
+                  <td>所有故障注入后恢复旧数据库。</td>
+                </tr>
+                <tr>
+                  <td>取消后残留进程</td>
+                  <td>0</td>
+                  <td>检查子进程和端口。</td>
+                </tr>
+                <tr>
+                  <td>Nightly flaky rate</td>
+                  <td>&lt; 1%</td>
+                  <td>连续 20 次统计；超标必须修复或隔离根因。</td>
+                </tr>
+                <tr>
+                  <td>CLI machine schema breaking</td>
+                  <td>0</td>
+                  <td>除非 major version 且有迁移适配器。</td>
+                </tr>
+                <tr>
+                  <td>默认网络访问</td>
+                  <td>关闭</td>
+                  <td>仅用户明确授权或 allowlist 后开启。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="next">
+          <h2>12. 下一版本 v0.1.9 执行清单</h2>
+          <p>下一轮实现必须严格按此顺序推进，避免同时触碰多个高风险边界。</p>
+
+          <ol class="checklist">
+            <li>创建 v0.1.8 baseline tag/归档并保存完整 capability reports。</li>
+            <li>新增 capability manifest，标记当前真实 Subagent、Control API、TUI 和工具状态。</li>
+            <li>将 Node engine、CI 和文档统一到 Node 22。</li>
+            <li>升级 Vitest 到同 major 的已修复版本，完整 verify。</li>
+            <li>修复 DiskUsage 和 Which，增加命令注入回归测试。</li>
+            <li>扫描并迁移所有包含用户输入的 shell 字符串调用。</li>
+            <li>引入工具风险分类，修正 acceptEdits 语义。</li>
+            <li>修复 SSH 读写，并增加真实 localhost SSH 或容器集成测试。</li>
+            <li>修复 atomicWrite mode 保留。</li>
+            <li>修复 Panel workspace 选择和 server-side cwd 校验。</li>
+            <li>修复 magi kill token 传递和 token 文件权限。</li>
+            <li>执行 focused → 672 tests → 8 capability gates → upgrade/rollback smoke。</li>
+            <li>生成 release notes、compatibility delta、rollback 文档和 SHA-256。</li>
+          </ol>
+
+          <div class="callout">
+            <strong>v0.1.9 不做：</strong>
+            不重写 TUI、不重构整个 runner、不增加 Computer Use、不扩充低价值工具、不改变 Memory
+            架构、 不启动移动端新功能。该版本只完成安全和稳定性硬化。
+          </div>
+        </section>
+
+        <section id="references">
+          <h2>13. 事实来源与参考依据</h2>
+
+          <h3>仓库事实</h3>
+          <ul>
+            <li><code>package.json</code>：版本、脚本、依赖和 Node engine。</li>
+            <li>
+              <code>.github/workflows/ci.yml</code>、<code>nightly-capability.yml</code>：当前 CI
+              门禁。
+            </li>
+            <li><code>docs/experience-and-harness-test-plan.md</code>：体验和 harness 合同。</li>
+            <li>
+              <code>planning/stage-summary-2026-05-17.md</code>：历史阶段状态，部分内容已过期。
+            </li>
+            <li>
+              <code>src/tools/registry.ts</code
+              >、<code>src/tools/disk-usage.ts</code>、<code>src/tools/which.ts</code>：权限和注入问题。
+            </li>
+            <li>
+              <code>src/headless.ts</code>、<code>src/tools/worktree.ts</code>：当前真实 Subagent 与
+              worktree 基础。
+            </li>
+            <li>
+              <code>src/web/panel-html.ts</code
+              >、<code>src/ssh/file.ts</code>、<code>src/fs-utils.ts</code>：已确认正确性问题。
+            </li>
+            <li>2026-06-09 独立 worktree 的完整 <code>npm run verify</code> 结果。</li>
+            <li>
+              <a href="magi-v0.1.8-verification-2026-06-09.tar.gz">v0.1.8 完整验证证据包</a>：保存
+              capability、Control API、blackbox、complex harness 和 benchmark 报告。
+            </li>
+            <li><a href="SHA256SUMS">SHA256SUMS</a>：校验路线文档与验证证据包未被替换或损坏。</li>
+          </ul>
+
+          <h3>Codex 体验对齐参考</h3>
+          <ul>
+            <li>
+              <a href="https://developers.openai.com/codex/cli/features">Codex CLI features</a>
+            </li>
+            <li>
+              <a href="https://developers.openai.com/codex/agent-approvals-security"
+                >Agent approvals &amp; security</a
+              >
+            </li>
+            <li><a href="https://developers.openai.com/codex/app/worktrees">Worktrees</a></li>
+            <li><a href="https://developers.openai.com/codex/subagents">Subagents</a></li>
+          </ul>
+
+          <div class="callout ok">
+            <strong>维护规则：</strong>
+            本文档是后续版本迭代的长期参考。每完成一个版本，必须更新：
+            当前基线提交、验证数字、问题状态、Compatibility Delta、下一版本范围。
+            不允许只更新路线表而不更新真实验证结果。
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer shell">
+      Magi Technical Roadmap · Baseline v0.1.8 · Document R1 · 2026-06-09
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Magi Next v0.1.9 发布与验证报告</title>
+    <style>
+      :root {
+        --bg: #f3f5f2;
+        --paper: #fff;
+        --ink: #17211d;
+        --muted: #5d6862;
+        --line: #d9dfda;
+        --brand: #155e4b;
+        --soft: #e6f1ed;
+        --warn: #8a5200;
+        --warn-soft: #fff4dc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--bg);
+        font-family: Inter, "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+        line-height: 1.65;
+      }
+      main { width: min(1080px, calc(100% - 2rem)); margin: 0 auto; padding: 3rem 0 5rem; }
+      header, section {
+        margin-bottom: 1rem;
+        padding: clamp(1.2rem, 3vw, 2rem);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        background: var(--paper);
+      }
+      h1, h2 { margin-top: 0; line-height: 1.2; }
+      h1 { font-size: clamp(2rem, 5vw, 3.8rem); }
+      h2 { color: var(--brand); }
+      .lead { max-width: 850px; color: var(--muted); font-size: 1.08rem; }
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; }
+      .metric { padding: 1rem; border-radius: .8rem; background: var(--soft); }
+      .metric strong { display: block; color: var(--brand); font-size: 1.7rem; }
+      .metric span { color: var(--muted); font-size: .85rem; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: .75rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+      th { color: var(--brand); }
+      code { padding: .12rem .3rem; border-radius: .3rem; background: var(--soft); }
+      .ok { padding: 1rem; border-left: 4px solid var(--brand); background: var(--soft); }
+      .warn { padding: 1rem; border-left: 4px solid var(--warn); background: var(--warn-soft); }
+      li + li { margin-top: .35rem; }
+      @media (max-width: 760px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+      @media print { body { background: #fff; } main { width: 100%; padding: 0; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p><strong>正式发布证据 · 2026-06-09</strong></p>
+        <h1>Magi Next v0.1.9</h1>
+        <p class="lead">
+          本版本从已验证的 v0.1.8 基线做兼容性加固，目标是提高命令执行、权限、
+          SSH、Control API 和发布回滚的可靠性，不引入 Computer Use，也不以新增功能
+          换取现有稳定能力的退化。
+        </p>
+        <div class="grid">
+          <div class="metric"><strong>682</strong><span>自动化测试通过</span></div>
+          <div class="metric"><strong>8/8</strong><span>能力对齐检查通过</span></div>
+          <div class="metric"><strong>1.00</strong><span>三组业务评测得分</span></div>
+          <div class="metric"><strong>0</strong><span>已知 npm 漏洞</span></div>
+        </div>
+      </header>
+
+      <section>
+        <h2>发布结论</h2>
+        <div class="ok">
+          v0.1.9 已达到发布门槛：全量验证、真实模型任务、真实 localhost SSH、
+          安装升级回滚、Rust runner 构建、密钥扫描、许可证扫描、SBOM 和依赖审计全部通过。
+        </div>
+      </section>
+
+      <section>
+        <h2>关键修改</h2>
+        <table>
+          <thead><tr><th>领域</th><th>问题</th><th>v0.1.9 处理</th></tr></thead>
+          <tbody>
+            <tr><td>运行时</td><td>Node.js 20 已不适合作为新版本基线</td><td>最低版本提升至 Node.js 22，CI 增加 Node.js 24 实验矩阵和启动前检查。</td></tr>
+            <tr><td>命令安全</td><td>部分系统工具使用 shell 字符串拼接</td><td>改为 argv 调用或 JavaScript 过滤，并加入命令注入回归测试。</td></tr>
+            <tr><td>权限</td><td><code>acceptEdits</code> 边界过宽</td><td>只自动允许三种工作区编辑工具；命令、网络、远程、状态变更和破坏性操作仍需明确授权。</td></tr>
+            <tr><td>SSH</td><td>路径引用、Unicode 字节数和写入传输存在正确性风险</td><td>使用 POSIX 数据引用和 stdin base64 写入，增加模拟测试与真实 OpenSSH 验证。</td></tr>
+            <tr><td>Control API</td><td>任务 cwd 可能脱离 daemon 工作区</td><td>对 realpath、存在性和工作区边界做服务端强制校验，拒绝符号链接逃逸。</td></tr>
+            <tr><td>Daemon</td><td>本地 kill 流程缺少可靠认证</td><td>增加受文件权限保护的本地凭据和认证重试。</td></tr>
+            <tr><td>文件写入</td><td>原子替换可能改变原文件 mode</td><td>默认继承现有 mode，除非调用方明确指定。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>验证证据</h2>
+        <ul>
+          <li>Vitest：54 个文件、682 个测试全部通过。</li>
+          <li>黑盒 CLI：31 个场景，得分 1.00，0 回归。</li>
+          <li>复杂业务任务：10 个场景，得分 1.00，0 回归。</li>
+          <li>模型任务基准：19 个场景，得分 1.00，0 回归。</li>
+          <li>能力汇总：8/8 通过，累计 423 次 provider 调用、759 次工具调用。</li>
+          <li>真实模型：OpenAI-compatible Responses API，<code>gpt-5.4</code>，完成源码修补、定向测试和报告写入。</li>
+          <li>真实 SSH：隔离的 localhost OpenSSH daemon，验证恶意路径不执行、Unicode 写入和字节数正确。</li>
+          <li>回滚：v0.1.8 → v0.1.9 → v0.1.8，活动目标状态全程保留。</li>
+          <li>供应链：179 个包完成许可证与 SBOM 处理，npm audit 为 0 漏洞。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>兼容性变化</h2>
+        <ul>
+          <li>Node.js 最低要求从 20 提升到 22。</li>
+          <li>依赖 <code>acceptEdits</code> 自动执行 shell 的脚本必须增加范围明确的 allow 规则。</li>
+          <li>Control API 的 <code>cwd</code> 必须是 daemon 工作区内已经存在的真实目录。</li>
+          <li>状态格式无需迁移，升级与回滚已做自动化实证。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>已知限制和后续入口</h2>
+        <div class="warn">
+          下列内容没有被包装为“已完成”。后续版本必须在不降低本报告验证指标的前提下逐项推进。
+        </div>
+        <ul>
+          <li>TUI 仍是 partial，缺少完整 transcript 级回归覆盖。</li>
+          <li>subagent 写操作尚未强制 worktree 隔离。</li>
+          <li>Control API 尚未完成两台独立机器之间的端到端验证。</li>
+          <li>Rust runner 尚未实施操作系统级 sandbox。</li>
+          <li>Memory、Control API、subagents 和 Rust runner 仍标记为 beta。</li>
+          <li>Computer Use 明确排除在 Magi 产品边界外。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>稳定性保护规则</h2>
+        <ol>
+          <li>每个版本先冻结可回滚基线，再修改共享行为。</li>
+          <li>权限、文件写入、进程、远程连接和状态格式变更必须有定向回归测试。</li>
+          <li>模拟评测只能用于可重复回归，真实业务结论必须有真实 provider 或真实协议证据。</li>
+          <li>发布必须保留源码、npm 包、报告、SBOM、许可证清单和 SHA-256 校验文件。</li>
+          <li>任何核心指标低于本版本基线时不得发布。</li>
+        </ol>
+      </section>
+    </main>
+  </body>
+</html>

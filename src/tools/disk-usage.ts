@@ -1,5 +1,5 @@
-import { execSync } from "node:child_process";
-import os from "node:os";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 
 export interface DiskUsageResult {
   filesystem: string;
@@ -30,8 +30,16 @@ export function executeDiskUsage(input: {
   path: string;
   humanReadable: boolean;
 }): DiskUsageResult[] {
-  const h = input.humanReadable ? "-h" : "";
-  const raw = execSync(`df ${h} "${input.path}"`, { encoding: "utf8", timeout: 5000 });
+  const args = ["-P"];
+  if (input.humanReadable) {
+    args.push("-h");
+  }
+  args.push(path.resolve(input.path));
+  const raw = execFileSync("df", args, {
+    encoding: "utf8",
+    timeout: 5000,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
   const lines = raw.trim().split("\n").slice(1); // skip header
   return lines.map((line) => {
     const parts = line.split(/\s+/);
@@ -41,7 +49,7 @@ export function executeDiskUsage(input: {
       used: parts[2] ?? "",
       avail: parts[3] ?? "",
       usePercent: parts[4] ?? "",
-      mount: parts[5] ?? ""
+      mount: parts.slice(5).join(" ")
     };
   });
 }

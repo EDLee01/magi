@@ -2070,6 +2070,8 @@ async function runTask(taskName) {
       args: [
         "--permission-mode",
         "acceptEdits",
+        "--allowed-tools",
+        "AskUserQuestion,Bash,Brief,EnterPlanMode,ExitPlanMode,FileEdit,FilePatch,FileRead,FileWrite,GitDiff,GitLog,GitShow,GitStatus,GitSummary,Glob,Grep,ListMcpResources,Memorize,MemoryCorrect,ReadMcpResource,SendUserMessage,ToolSearch,WorkspaceDiagnostics",
         "--model",
         "main",
         "--output-format",
@@ -2238,6 +2240,8 @@ async function runResumeTask(taskName) {
       args: [
         "--permission-mode",
         "acceptEdits",
+        "--allowed-tools",
+        "AskUserQuestion,Bash,Brief,EnterPlanMode,ExitPlanMode,FileEdit,FilePatch,FileRead,FileWrite,GitDiff,GitLog,GitShow,GitStatus,GitSummary,Glob,Grep,ListMcpResources,Memorize,MemoryCorrect,ReadMcpResource,SendUserMessage,ToolSearch,WorkspaceDiagnostics",
         "--model",
         "main",
         "--output-format",
@@ -2266,6 +2270,8 @@ async function runResumeTask(taskName) {
       args: [
         "--permission-mode",
         "acceptEdits",
+        "--allowed-tools",
+        "AskUserQuestion,Bash,Brief,EnterPlanMode,ExitPlanMode,FileEdit,FilePatch,FileRead,FileWrite,GitDiff,GitLog,GitShow,GitStatus,GitSummary,Glob,Grep,ListMcpResources,Memorize,MemoryCorrect,ReadMcpResource,SendUserMessage,ToolSearch,WorkspaceDiagnostics",
         "--model",
         "main",
         "--output-format",

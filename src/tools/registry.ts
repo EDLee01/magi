@@ -351,6 +351,14 @@ export type ToolPermissionMode =
   | "bypassPermissions"
   | "plan";
 export type ToolPermissionDecision = "allow" | "ask" | "deny";
+export type ToolRiskClass =
+  | "read"
+  | "workspace-edit"
+  | "command"
+  | "network"
+  | "remote"
+  | "state-change"
+  | "destructive";
 
 export interface ToolPermissionRules {
   allow: string[];
@@ -771,8 +779,20 @@ export function checkToolPermission(input: {
   if (input.mode === "dontAsk" && !tool.isReadOnly(input.toolUse.input)) {
     return { decision: "deny", reason: `${input.toolUse.name} is not allowed in dontAsk mode` };
   }
-  if (input.mode === "bypassPermissions" || input.mode === "acceptEdits") {
-    return { decision: "allow", reason: `${input.mode} mode` };
+  if (input.mode === "bypassPermissions") {
+    return { decision: "allow", reason: "bypassPermissions mode" };
+  }
+  if (input.mode === "acceptEdits") {
+    const risk = classifyToolRisk(input.toolUse, tool);
+    if (risk === "workspace-edit") {
+      return { decision: "allow", reason: "acceptEdits workspace edit" };
+    }
+    if (risk !== "read") {
+      return {
+        decision: "ask",
+        reason: `${input.toolUse.name} requires approval in acceptEdits mode (${risk})`
+      };
+    }
   }
   if (input.mode === "plan" && !tool.isReadOnly(input.toolUse.input)) {
     return { decision: "deny", reason: `${input.toolUse.name} is not allowed in plan mode` };
@@ -788,6 +808,39 @@ export function checkToolPermission(input: {
     return { decision: "ask", reason: `${input.toolUse.name} requires approval` };
   }
   return { decision: "allow", reason: "read-only tool" };
+}
+
+const WORKSPACE_EDIT_TOOL_NAMES = new Set(["FileWrite", "FileEdit", "FilePatch"]);
+
+const NETWORK_TOOL_NAMES = new Set(["NetworkCheck"]);
+
+export function classifyToolRisk(
+  toolUse: MagiToolUsePart,
+  tool: RegisteredTool = getBuiltinToolRegistry().get(toolUse.name)!
+): ToolRiskClass {
+  if (toolUse.name === "Bash" || tool.category === "shell") {
+    return "command";
+  }
+  if (tool.category === "ssh") {
+    return "remote";
+  }
+  if (
+    tool.category === "web" ||
+    tool.category === "github" ||
+    NETWORK_TOOL_NAMES.has(toolUse.name)
+  ) {
+    return "network";
+  }
+  if (WORKSPACE_EDIT_TOOL_NAMES.has(toolUse.name)) {
+    return "workspace-edit";
+  }
+  if (tool.isDestructive(toolUse.input)) {
+    return "destructive";
+  }
+  if (tool.isReadOnly(toolUse.input)) {
+    return "read";
+  }
+  return "state-change";
 }
 
 export function formatToolResult(input: {
@@ -3209,6 +3262,10 @@ function ruleMatches(rule: string, toolUse: MagiToolUsePart): boolean {
       toolUse.input.url ??
       ""
   );
+  if (toolUse.name === "Bash" && selector.endsWith(":*")) {
+    const command = selector.slice(0, -2);
+    return haystack === command || haystack.startsWith(`${command} `);
+  }
   return globPattern(selector, haystack);
 }
 

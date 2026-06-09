@@ -481,7 +481,7 @@ export function renderWebPanel(): string {
 
       try {
         if (!currentSessionId) {
-          const session = await client.createSession({ title: text.slice(0, 60), cwd: "/", metadata: { source: "panel" } });
+          const session = await client.createSession({ title: text.slice(0, 60), metadata: { source: "panel" } });
           currentSessionId = session.id;
           els.title.textContent = text.slice(0, 60);
         }

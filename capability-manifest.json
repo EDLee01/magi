@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "product": "Magi Next",
+  "version": "0.1.9",
+  "baseline": {
+    "version": "0.1.8",
+    "commit": "207e12059c22eb42c873cae9295e4a4205b4f025",
+    "verifiedAt": "2026-06-09"
+  },
+  "capabilities": [
+    {
+      "id": "agent-loop",
+      "status": "stable",
+      "evidence": ["tests/agent-query.test.ts", "scripts/blackbox-e2e.mjs"]
+    },
+    {
+      "id": "tool-registry",
+      "status": "stable",
+      "details": {
+        "builtinTools": 91,
+        "permissionModes": ["default", "acceptEdits", "dontAsk", "bypassPermissions", "plan"]
+      },
+      "evidence": ["tests/tool-registry.test.ts", "scripts/tool-discovery-eval.mjs"]
+    },
+    {
+      "id": "subagents",
+      "status": "beta",
+      "details": {
+        "modes": ["foreground", "background", "remote"],
+        "worktreeIsolationRequiredForWrites": false
+      },
+      "evidence": ["src/headless.ts", "src/tools/worktree.ts", "tests/agents.test.ts"]
+    },
+    {
+      "id": "control-api",
+      "status": "beta",
+      "details": {
+        "sessionJobs": true,
+        "approvals": true,
+        "cancellation": true,
+        "resume": true,
+        "remoteMultiMachineValidation": false
+      },
+      "evidence": ["tests/control-api.test.ts", "scripts/control-api-eval.mjs"]
+    },
+    {
+      "id": "tui",
+      "status": "partial",
+      "details": {
+        "readlineInteractive": true,
+        "pickers": true,
+        "approvalFlow": true,
+        "fullTranscriptRegressionCoverage": false
+      },
+      "evidence": ["tests/tui-session.test.ts", "scripts/blackbox-e2e.mjs"]
+    },
+    {
+      "id": "rust-runner",
+      "status": "beta",
+      "details": {
+        "processRun": true,
+        "ptySmoke": true,
+        "filePatch": true,
+        "osSandboxEnforced": false
+      },
+      "evidence": ["runner/src/main.rs", "tests/runner.test.ts"]
+    },
+    {
+      "id": "memory",
+      "status": "beta",
+      "evidence": ["scripts/memory-recall-eval.mjs", "tests/memory-node-store.test.ts"]
+    },
+    {
+      "id": "computer-use",
+      "status": "excluded",
+      "details": {
+        "reason": "Outside the Magi product boundary"
+      },
+      "evidence": ["docs/magi-technical-roadmap-2026-06-09.html"]
+    }
+  ]
+}
