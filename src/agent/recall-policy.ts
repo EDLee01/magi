@@ -428,6 +428,21 @@ export function scoreSkillForRecall(
   return { skill, score, matchedTerms: unique(matchedTerms) };
 }
 
+/**
+ * True only when the prompt contains the skill's full name as a standalone
+ * token (e.g. "verify ..." or "用 stuck 帮我" for a skill named "verify"/"stuck").
+ * This is stricter than scoreSkillForRecall's substring scoring on purpose: it
+ * is used to *force* skill recall past a zero keyword-budget, so it must not
+ * fire on incidental substrings like a "route-clean.txt" filename matching a
+ * "route-clean-helper" skill. Negated mentions ("不要调用 skills") still tokenize
+ * normally, so callers should also respect explicit skip intent.
+ */
+export function promptNamesSkillExactly(skillName: string, prompt: string): boolean {
+  const name = normalizeText(skillName);
+  if (!name) return false;
+  return tokenizeRecallText(prompt).some((term) => term === name);
+}
+
 export function selectHotMemoryNodes(input: {
   nodes: MemoryNode[];
   prompt: string;
