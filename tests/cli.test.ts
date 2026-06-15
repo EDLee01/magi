@@ -30,7 +30,7 @@ describe("CLI entrypoint", () => {
   it("runs magi --version", async () => {
     const result = await runCli(["--version"], {}, process.cwd());
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("magi 0.1.9\n");
+    expect(result.stdout).toBe("magi 0.1.11\n");
   });
 
   it("runs magi doctor and displays the isolation root", async () => {
@@ -470,7 +470,11 @@ describe("CLI entrypoint", () => {
       model: string;
     };
     expect(body.sessionId).toBeTruthy();
-    expect(body.status).toBe("completed");
+    // --no-session-persistence now runs the full agent path against an
+    // in-memory store (so tools work in ephemeral mode); with no provider
+    // configured it reports the shared "recorded" no-provider result rather
+    // than the old bare-provider-call "completed" stub.
+    expect(body.status).toBe("recorded");
     expect(body.message).toContain("No provider is configured");
     expect(body.provider).toBe("none");
     expect(body.model).toBe("none");

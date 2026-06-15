@@ -128,11 +128,18 @@ export class SessionStore {
   private readonly auditSubscribers = new Set<AuditEventSubscriber>();
 
   constructor(dbFile: string) {
-    mkdirSync(path.dirname(dbFile), { recursive: true });
+    const inMemory = dbFile === ":memory:";
+    if (!inMemory) {
+      mkdirSync(path.dirname(dbFile), { recursive: true });
+    }
     this.db = new Database(dbFile);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this.migrate();
+  }
+
+  static memory(): SessionStore {
+    return new SessionStore(":memory:");
   }
 
   static open(paths: MagiPaths): SessionStore {
