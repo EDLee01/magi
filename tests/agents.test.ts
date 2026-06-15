@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -31,7 +31,7 @@ afterEach(() => {
 describe("multi-agent task queue", () => {
   it("spawns explorer and worker tasks and transitions status", () => {
     temp = makeTempRoot();
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-agents-"));
+    workspace = realpathSync(mkdtempSync(path.join(os.tmpdir(), "magi-agents-")));
     const store = SessionStore.open(getMagiPaths(temp.env));
     try {
       const explorer = spawnAgentTask(store, {
@@ -60,7 +60,7 @@ describe("multi-agent task queue", () => {
 
   it("rejects explorer write ownership and detects same-file conflicts", () => {
     temp = makeTempRoot();
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-agents-"));
+    workspace = realpathSync(mkdtempSync(path.join(os.tmpdir(), "magi-agents-")));
     const store = SessionStore.open(getMagiPaths(temp.env));
     try {
       expect(() =>
@@ -95,7 +95,7 @@ describe("multi-agent task queue", () => {
 
   it("supports agent queue commands from CLI", async () => {
     temp = makeTempRoot();
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-agents-"));
+    workspace = realpathSync(mkdtempSync(path.join(os.tmpdir(), "magi-agents-")));
 
     const spawned = await runCli(
       ["agents", "spawn", "worker", "edit file", "--write-file", "a.txt"],
@@ -118,7 +118,7 @@ describe("multi-agent task queue", () => {
 
   it("triggers notification and stop hooks from CLI agent commands", async () => {
     temp = makeTempRoot();
-    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-agents-"));
+    workspace = realpathSync(mkdtempSync(path.join(os.tmpdir(), "magi-agents-")));
     const paths = getMagiPaths(temp.env);
     ensureMagiHome(paths);
     writeFileSync(

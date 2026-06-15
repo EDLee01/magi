@@ -3,6 +3,7 @@ import { request as httpRequest } from "node:http";
 import { TextDecoder } from "node:util";
 
 import { ToolError } from "./errors.js";
+import { assertUrlAllowed } from "./ssrf-guard.js";
 
 export interface HttpRequestResult {
   statusCode: number;
@@ -54,6 +55,10 @@ export async function executeHttpRequest(input: {
   body?: string;
   timeoutMs: number;
 }): Promise<HttpRequestResult> {
+  // Block internal/metadata addresses (SSRF). node http(s).request does not
+  // follow redirects, so a single destination check is sufficient here.
+  await assertUrlAllowed(input.url);
+
   const url = new URL(input.url);
   const mod = url.protocol === "https:" ? httpsRequest : httpRequest;
 

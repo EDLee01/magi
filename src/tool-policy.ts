@@ -1,5 +1,6 @@
 import { MagiToolDefinition, MagiToolUsePart } from "./providers/ir.js";
 import type { ToolPermissionResult, ToolPermissionRules } from "./tools/registry.js";
+import { commandAllowedByPrefix } from "./tools/shell.js";
 
 export interface ToolPolicyInput {
   tools?: string[];
@@ -51,12 +52,12 @@ export function checkToolPolicy(
   rules: ToolPermissionRules | undefined
 ): ToolPermissionResult | undefined {
   if (!rules) return undefined;
-  const denied = matchingToolPolicyRule(toolUse, rules.deny);
+  const denied = matchingToolPolicyRule(toolUse, rules.deny, "deny");
   if (denied) {
     return { decision: "deny", reason: `matched rule ${denied}` };
   }
   if (rules.allow.length > 0) {
-    const allowed = matchingToolPolicyRule(toolUse, rules.allow);
+    const allowed = matchingToolPolicyRule(toolUse, rules.allow, "allow");
     if (!allowed) {
       return { decision: "deny", reason: `${toolUse.name} is not in allowed tools` };
     }
@@ -94,23 +95,30 @@ function normalizeToolPolicyEntry(entry: string): string {
   return /^[A-Za-z0-9_]+\(.+\)$/.test(trimmed) ? trimmed : `${trimmed}(*)`;
 }
 
-function matchingToolPolicyRule(toolUse: MagiToolUsePart, rules: string[]): string | undefined {
+function matchingToolPolicyRule(
+  toolUse: MagiToolUsePart,
+  rules: string[],
+  mode: "allow" | "deny"
+): string | undefined {
   return rules.find((rule) => {
     const parsed = parsePolicyRule(rule);
     if (parsed.name !== toolUse.name) return false;
-    return selectorMatches(parsed.selector, toolPolicyHaystack(toolUse.input));
+    return selectorMatches(parsed.selector, toolPolicyHaystack(toolUse.input), mode);
   });
 }
 
 function matchesToolPolicyRules(
   toolName: string,
   input: Record<string, unknown>,
-  rules: string[]
+  rules: string[],
+  mode: "allow" | "deny"
 ): boolean {
   return rules.some((rule) => {
     const parsed = parsePolicyRule(rule);
     if (parsed.name !== toolName) return false;
-    return parsed.selector === "*" || selectorMatches(parsed.selector, toolPolicyHaystack(input));
+    return (
+      parsed.selector === "*" || selectorMatches(parsed.selector, toolPolicyHaystack(input), mode)
+    );
   });
 }
 
@@ -133,10 +141,17 @@ function parsePolicyRule(rule: string): { name: string; selector: string } {
   return { name: parsed[1], selector: parsed[2] || "*" };
 }
 
-function selectorMatches(selector: string, value: string): boolean {
+function selectorMatches(selector: string, value: string, mode: "allow" | "deny"): boolean {
   if (selector === "*") return true;
   if (/^[A-Za-z0-9_-]+:\*$/.test(selector)) {
     const command = selector.slice(0, -2);
+    if (mode === "allow") {
+      // Allow rules must not be satisfiable by chaining a second command past
+      // the prefix (e.g. `git log && rm -rf /` against Bash(git:*)).
+      return commandAllowedByPrefix(value, command);
+    }
+    // Deny rules keep loose prefix matching so a denied command still matches
+    // even when it chains further operators.
     return value === command || value.startsWith(`${command} `);
   }
   const regex = new RegExp(`^${selector.split("*").map(escapeRegExp).join(".*")}$`);

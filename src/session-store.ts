@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, chmodSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -130,11 +130,24 @@ export class SessionStore {
   constructor(dbFile: string) {
     const inMemory = dbFile === ":memory:";
     if (!inMemory) {
-      mkdirSync(path.dirname(dbFile), { recursive: true });
+      mkdirSync(path.dirname(dbFile), { recursive: true, mode: 0o700 });
     }
     this.db = new Database(dbFile);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
+    // The session DB stores full prompts, executed commands and tool output —
+    // keep it owner-only, including the WAL/SHM sidecars sqlite creates.
+    // In-memory databases have no on-disk footprint, so skip the chmod pass.
+    if (!inMemory) {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        const file = `${dbFile}${suffix}`;
+        try {
+          if (existsSync(file)) chmodSync(file, 0o600);
+        } catch {
+          // best-effort; never block session startup on a chmod failure
+        }
+      }
+    }
     this.migrate();
   }
 

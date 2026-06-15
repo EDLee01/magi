@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 
+import { resolveWorkspacePath } from "./workspace.js";
+
 export interface FileFindResult {
   files: Array<{ path: string; sizeBytes?: number; modifiedAt?: string }>;
   total: number;
@@ -41,12 +43,22 @@ export function executeFileFind(input: {
   maxResults: number;
   cwd: string;
 }): FileFindResult {
-  const args = ["find", input.path ?? ".", "-type", "f"];
+  // Confine the search root to the workspace. Without this, an absolute path
+  // ("/etc") or "../" escapes the workspace and enumerates the whole disk.
+  const searchRoot = resolveWorkspacePath(input.cwd, input.path ?? ".").absolutePath;
+
+  // "--" stops find treating a value as an action/option (e.g. a pattern of
+  // "-delete" would otherwise become a destructive primitive). The root is an
+  // already-resolved absolute path so it can never be read as a flag.
+  // "-name" always consumes the next token as its glob operand, so a pattern
+  // like "-delete" becomes a literal pattern, not a find action. The search
+  // root is an already-resolved absolute path so it cannot be read as a flag.
+  const args = [searchRoot, "-type", "f"];
   if (input.pattern) args.push("-name", input.pattern);
   if (input.minSize) args.push("-size", `+${input.minSize}`);
   if (input.maxSize) args.push("-size", `-${input.maxSize}`);
 
-  const result = spawnSync("find", args.slice(1), {
+  const result = spawnSync("find", args, {
     cwd: input.cwd,
     encoding: "utf8",
     timeout: 30_000,

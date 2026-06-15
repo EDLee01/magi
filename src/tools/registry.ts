@@ -39,7 +39,12 @@ import {
 } from "./git.js";
 import { executeLspRequest, LSP_SCHEMA, parseLspRequest } from "./lsp.js";
 import { formatSearchMatches, globWorkspace, searchWorkspace } from "./search.js";
-import { isDangerousShellCommand, isReadOnlyShellCommand, runShellCommand } from "./shell.js";
+import {
+  commandAllowedByPrefix,
+  isDangerousShellCommand,
+  isReadOnlyShellCommand,
+  runShellCommand
+} from "./shell.js";
 import {
   formatMonitorResult,
   getMonitorData,
@@ -1378,10 +1383,23 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       if (!context.promptModel) {
         throw new Error("WebFetch requires an active model route");
       }
+      const fetchAllowlist = readWebFetchAllowlist(context.env);
       const result = await webFetch({
         url: readString(input, "url"),
         prompt: readString(input, "prompt"),
         maxBytes: readOptionalNumber(input, "max_bytes"),
+        allowHost: (hostname) => {
+          const literal = hostname.includes(":") ? `[${hostname}]` : hostname;
+          try {
+            return webFetchHostAllowed(`http://${literal}`, fetchAllowlist);
+          } catch {
+            return false;
+          }
+        },
+        // No human approves the initial URL under bypassPermissions, so guard
+        // it against internal addresses; otherwise the ask/allowlist gate
+        // already reflects user consent for the initial host.
+        guardInitialHost: context.permissionMode === "bypassPermissions",
         promptModel: context.promptModel
       });
       return [
@@ -3264,7 +3282,7 @@ function ruleMatches(rule: string, toolUse: MagiToolUsePart): boolean {
   );
   if (toolUse.name === "Bash" && selector.endsWith(":*")) {
     const command = selector.slice(0, -2);
-    return haystack === command || haystack.startsWith(`${command} `);
+    return commandAllowedByPrefix(haystack, command);
   }
   return globPattern(selector, haystack);
 }

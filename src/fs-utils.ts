@@ -21,7 +21,12 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 
 export interface AtomicWriteOptions {
-  /** File mode for the final file. Existing files keep their mode; new files default to 0o644. */
+  /**
+   * File mode for the final file. Existing files keep their mode; new files
+   * default to 0o600 (owner-only) — state files routinely contain prompts,
+   * command history, tokens and permission rules, so they must not be
+   * world-readable. Pass an explicit mode for files meant to be shared.
+   */
   mode?: number;
   /** Sync the directory afterward (POSIX-only). Defaults to false; turn on for very critical files. */
   syncDir?: boolean;
@@ -43,7 +48,7 @@ export function atomicWrite(
   const tmpName = `.${base}.tmp.${process.pid}.${randomBytes(4).toString("hex")}`;
   const tmpPath = path.join(dir, tmpName);
   const data = typeof content === "string" ? Buffer.from(content, "utf8") : content;
-  const mode = options.mode ?? (existsSync(targetPath) ? statSync(targetPath).mode & 0o777 : 0o644);
+  const mode = options.mode ?? (existsSync(targetPath) ? statSync(targetPath).mode & 0o777 : 0o600);
 
   let fd: number | undefined;
   try {

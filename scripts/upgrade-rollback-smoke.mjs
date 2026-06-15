@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync
@@ -14,6 +15,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const currentVersion = JSON.parse(
+  readFileSync(path.join(repoRoot, "package.json"), "utf8")
+).version;
 const baselineRef = process.env.MAGI_BASELINE_REF ?? "v0.1.8-baseline-20260609";
 const root = mkdtempSync(path.join(os.tmpdir(), "magi-upgrade-rollback-"));
 const baselineRoot = path.join(root, "baseline");
@@ -44,7 +48,10 @@ try {
 
   install(currentPackage);
   const upgradedVersion = cli(["--version"]);
-  assert(upgradedVersion.includes("0.1.9"), `expected upgraded 0.1.9, got ${upgradedVersion}`);
+  assert(
+    upgradedVersion.includes(currentVersion),
+    `expected upgraded ${currentVersion}, got ${upgradedVersion}`
+  );
   assert(cli(["goal"]).includes("upgrade rollback smoke marker"), "upgrade lost persisted goal state");
 
   install(baselinePackage);

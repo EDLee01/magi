@@ -1,6 +1,6 @@
 {
   "name": "@edwardlee5423/magi",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "description": "Magi Next clean-room CLI bootstrap.",
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,7 @@
     "test:tool-discovery-eval": "npm run build && node scripts/tool-discovery-eval.mjs",
     "test:control-api-eval": "npm run build && node scripts/control-api-eval.mjs",
     "test:blackbox": "npm run build && node scripts/blackbox-e2e.mjs",
+    "test:tui-boundary": "npm run build && node scripts/tui-boundary-stress.mjs",
     "test:complex-harness": "npm run build && node scripts/complex-task-harness.mjs",
     "test:model-tasks": "npm run build && node scripts/model-task-benchmark.mjs",
     "test:live-smoke": "npm run build && node scripts/live-model-smoke.mjs",
