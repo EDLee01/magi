@@ -38,7 +38,7 @@ export function loadSkill(root: string, includeBody = true): SkillRecord {
     throw new MagiConfigError(`Invalid skill directory name: ${name}`);
   }
   const body = readFileSync(path.join(root, "SKILL.md"), "utf8");
-  const summary = firstMeaningfulLine(body) ?? name;
+  const summary = skillSummary(body) ?? name;
   return {
     name,
     root,
@@ -70,9 +70,47 @@ export function formatSkillList(skills: SkillRecord[]): string {
   return `${skills.map((skill) => `${skill.name}\t${skill.summary}\t${skill.root}`).join("\n")}\n`;
 }
 
+function skillSummary(body: string): string | undefined {
+  return frontmatterDescription(body) ?? firstMeaningfulLine(body);
+}
+
+function frontmatterDescription(body: string): string | undefined {
+  const lines = body.split(/\r?\n/);
+  if (lines[0]?.trim() !== "---") {
+    return undefined;
+  }
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === "---") {
+      break;
+    }
+    const match = /^description:\s*(.*)$/i.exec(line);
+    if (match) {
+      const value = match[1].trim().replace(/^["']|["']$/g, "").trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
 function firstMeaningfulLine(body: string): string | undefined {
-  for (const line of body.split(/\r?\n/)) {
-    const trimmed = line.replace(/^#+\s*/, "").trim();
+  const lines = body.split(/\r?\n/);
+  let inFrontmatter = false;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmedLine = lines[i].trim();
+    if (i === 0 && trimmedLine === "---") {
+      inFrontmatter = true;
+      continue;
+    }
+    if (inFrontmatter) {
+      if (trimmedLine === "---") {
+        inFrontmatter = false;
+      }
+      continue;
+    }
+    const trimmed = lines[i].replace(/^#+\s*/, "").trim();
     if (trimmed) {
       return trimmed;
     }

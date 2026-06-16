@@ -106,4 +106,49 @@ describe("plugins, marketplace, and skills", () => {
     expect(traversal.exitCode).toBe(2);
     expect(traversal.stderr).toContain("Skill not found");
   });
+
+  it("uses frontmatter description as the skill summary", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "earth-helper");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "name: earth-helper",
+        "description: Analyze earth science data with care.",
+        "tags: [earth, data]",
+        "---",
+        "",
+        "# Earth Helper",
+        "",
+        "Body content here.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(listSkills(paths)).toMatchObject([
+      { name: "earth-helper", summary: "Analyze earth science data with care." }
+    ]);
+
+    const list = await runCli(["skills", "list"], temp.env, process.cwd());
+    expect(list.stdout).toContain("Analyze earth science data with care.");
+    expect(list.stdout).not.toContain("earth-helper\t---");
+  });
+
+  it("falls back to the first body line when frontmatter lacks a description", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "bare-helper");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      ["---", "name: bare-helper", "---", "", "# Bare Helper", "", "Body."].join("\n"),
+      "utf8"
+    );
+
+    expect(listSkills(paths)).toMatchObject([{ name: "bare-helper", summary: "Bare Helper" }]);
+  });
 });
