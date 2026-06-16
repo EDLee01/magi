@@ -7,7 +7,7 @@
  * blob calls — no `git clone`, no raw-CDN timeouts.
  */
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { atomicWrite } from "../fs-utils.js";
@@ -207,6 +207,11 @@ export async function installSkillFromGitHub(
     throw new SkillInstallError(
       `Skill "${name}" already exists at ${installPath}. Use --force to overwrite.`
     );
+  }
+  // On --force, remove the existing skill directory first so files that were
+  // deleted upstream don't linger (atomicWrite only overwrites paths it writes).
+  if (existsSync(installPath) && options.force) {
+    rmSync(installPath, { recursive: true, force: true });
   }
 
   const written: string[] = [];

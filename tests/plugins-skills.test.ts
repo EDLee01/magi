@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -335,5 +335,51 @@ describe("plugins, marketplace, and skills", () => {
         deps: { fetchJson }
       })
     ).rejects.toThrow(/Multiple skills/);
+  });
+
+  it("removes stale files when reinstalling with force", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+
+    const skillMd = ["---", "name: drift", "description: Drift skill.", "---"].join("\n");
+    let includeOld = true;
+    const fetchJson = async (url: string): Promise<unknown> => {
+      if (url === "https://api.github.com/repos/acme/drift") {
+        return { default_branch: "main" };
+      }
+      if (url.startsWith("https://api.github.com/repos/acme/drift/git/trees/main")) {
+        return {
+          truncated: false,
+          tree: [
+            { path: "SKILL.md", type: "blob", sha: "sha-skill", size: skillMd.length },
+            ...(includeOld ? [{ path: "old.md", type: "blob", sha: "sha-old", size: 3 }] : [])
+          ]
+        };
+      }
+      if (url.endsWith("/git/blobs/sha-skill")) {
+        return { encoding: "base64", content: Buffer.from(skillMd, "utf8").toString("base64") };
+      }
+      if (url.endsWith("/git/blobs/sha-old")) {
+        return { encoding: "base64", content: Buffer.from("old", "utf8").toString("base64") };
+      }
+      throw new Error(`unexpected url: ${url}`);
+    };
+
+    await installSkillFromGitHub({
+      source: "acme/drift",
+      skillsRoot: paths.skillsRoot,
+      deps: { fetchJson }
+    });
+    expect(existsSync(path.join(paths.skillsRoot, "drift", "old.md"))).toBe(true);
+
+    includeOld = false;
+    await installSkillFromGitHub({
+      source: "acme/drift",
+      skillsRoot: paths.skillsRoot,
+      force: true,
+      deps: { fetchJson }
+    });
+    expect(existsSync(path.join(paths.skillsRoot, "drift", "old.md"))).toBe(false);
+    expect(existsSync(path.join(paths.skillsRoot, "drift", "SKILL.md"))).toBe(true);
   });
 });
