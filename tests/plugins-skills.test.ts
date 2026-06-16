@@ -138,6 +138,35 @@ describe("plugins, marketplace, and skills", () => {
     expect(list.stdout).not.toContain("earth-helper\t---");
   });
 
+  it("reads a YAML block scalar description (folded style)", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "ppt-helper");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "name: ppt-helper",
+        "description: >",
+        "  AI-driven SVG content system. Converts source documents",
+        "  into PPTX through multi-role collaboration.",
+        "---",
+        "",
+        "# PPT Helper",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    expect(listSkills(paths)).toMatchObject([
+      {
+        name: "ppt-helper",
+        summary: "AI-driven SVG content system. Converts source documents into PPTX through multi-role collaboration."
+      }
+    ]);
+  });
+
   it("falls back to the first body line when frontmatter lacks a description", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);

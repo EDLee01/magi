@@ -85,14 +85,47 @@ function frontmatterDescription(body: string): string | undefined {
       break;
     }
     const match = /^description:\s*(.*)$/i.exec(line);
-    if (match) {
-      const value = match[1].trim().replace(/^["']|["']$/g, "").trim();
-      if (value) {
-        return value;
+    if (!match) {
+      continue;
+    }
+    const inline = match[1].trim();
+    if (/^[>|][+-]?$/.test(inline)) {
+      const block = readBlockScalar(lines, i + 1);
+      if (block) {
+        return block;
       }
+      continue;
+    }
+    const value = inline.replace(/^["']|["']$/g, "").trim();
+    if (value) {
+      return value;
     }
   }
   return undefined;
+}
+
+function readBlockScalar(lines: string[], start: number): string | undefined {
+  const collected: string[] = [];
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed === "---") {
+      break;
+    }
+    const indented = /^\s+/.test(line);
+    if (!indented) {
+      if (trimmed === "") {
+        if (collected.length > 0) {
+          break;
+        }
+        continue;
+      }
+      break;
+    }
+    collected.push(trimmed);
+  }
+  const joined = collected.join(" ").replace(/\s+/g, " ").trim();
+  return joined || undefined;
 }
 
 function firstMeaningfulLine(body: string): string | undefined {
