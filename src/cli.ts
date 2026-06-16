@@ -1224,6 +1224,36 @@ async function runCliUnsafeWithParsed(
       }
       return { exitCode: 0, stdout: `${skill.body ?? ""}\n`, stderr: "" };
     }
+    if (subcommand === "install" || subcommand === "add") {
+      const source = requireArg(parsed.rest[1], "skill source (owner/repo or GitHub URL)");
+      const force = parsed.rest.includes("--force");
+      const maxFiles = readNumericFlag(parsed.rest, "--max-files");
+      const maxTotalBytes = readNumericFlag(parsed.rest, "--max-bytes");
+      const { installSkillFromGitHub, SkillInstallError } = await import("./skills/install.js");
+      try {
+        const result = await installSkillFromGitHub({
+          source,
+          skillsRoot: paths.skillsRoot,
+          force,
+          maxFiles,
+          maxTotalBytes,
+          deps: { fetchJson: makeGitHubFetchJson(env) }
+        });
+        const lines = [
+          `Installed skill "${result.name}" from ${result.ref.owner}/${result.ref.repo}@${result.resolvedRef}`,
+          `Files: ${result.files.length} (${formatInstallBytes(result.totalBytes)})`,
+          `Path:  ${result.installPath}`,
+          "",
+          "Run /skills to see it. If the skill ships scripts or requirements, install those separately."
+        ];
+        return { exitCode: 0, stdout: `${lines.join("\n")}\n`, stderr: "" };
+      } catch (error) {
+        if (error instanceof SkillInstallError) {
+          return { exitCode: 2, stdout: "", stderr: `${error.message}\n` };
+        }
+        throw error;
+      }
+    }
     throw new MagiUsageError(`Unknown skills command: ${subcommand}`);
   }
 
@@ -2459,6 +2489,8 @@ function helpText(): string {
     "                                            Add reviewable memory",
     "  learning list|propose|draft                Manage learning drafts and skills",
     "  skills list|show <name>                    List or inspect installed skills",
+    "  skills install <owner/repo|url> [--force] [--max-files N] [--max-bytes N]",
+    "                                            Install a skill from GitHub",
     "  agents list|spawn <explorer|worker> <prompt>",
     "                                            Manage background agent tasks",
     "  mcp list|resources|read-resource           Inspect configured MCP servers",
@@ -3122,6 +3154,55 @@ function readAgentRole(value: string | undefined): AgentRole {
     return value;
   }
   throw new MagiUsageError("agent role must be explorer or worker");
+}
+
+function formatInstallBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readNumericFlag(args: string[], name: string): number | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  if (!value || !/^[0-9]+$/.test(value)) {
+    throw new MagiUsageError(`${name} requires a positive integer`);
+  }
+  return Number(value);
+}
+
+function makeGitHubFetchJson(env: NodeJS.ProcessEnv): (url: string) => Promise<unknown> {
+  const token = env.GITHUB_TOKEN || env.GH_TOKEN;
+  return async (url: string): Promise<unknown> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const headers: Record<string, string> = {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "magi-next-skill-install",
+        "X-GitHub-Api-Version": "2022-11-28"
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const response = await fetch(url, { headers, signal: controller.signal });
+      if (response.status === 404) {
+        throw new MagiUsageError(`GitHub resource not found: ${url}`);
+      }
+      if (response.status === 403 || response.status === 429) {
+        throw new MagiUsageError(
+          "GitHub API rate limit hit. Set GITHUB_TOKEN to raise the limit and retry."
+        );
+      }
+      if (!response.ok) {
+        throw new MagiUsageError(`GitHub API request failed (${response.status}) for ${url}`);
+      }
+      return (await response.json()) as unknown;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 }
 
 function requireArg(value: string | undefined, label: string): string {

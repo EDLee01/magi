@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -7,6 +7,11 @@ import { getMagiPaths } from "../src/paths.js";
 import { listLocalPlugins, validatePluginManifest } from "../src/plugins/manifest.js";
 import { discoverLocalMarketplaceSources, loadMarketplace } from "../src/plugins/marketplace.js";
 import { findSkill, listSkills } from "../src/skills/loader.js";
+import {
+  installSkillFromGitHub,
+  parseSkillSource,
+  SkillInstallError
+} from "../src/skills/install.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let temp: TempRoot | undefined;
@@ -179,5 +184,156 @@ describe("plugins, marketplace, and skills", () => {
     );
 
     expect(listSkills(paths)).toMatchObject([{ name: "bare-helper", summary: "Bare Helper" }]);
+  });
+
+  it("parses skill sources in shorthand, URL, and subdir forms", () => {
+    expect(parseSkillSource("owner/repo")).toEqual({ owner: "owner", repo: "repo" });
+    expect(parseSkillSource("owner/repo/skills/ppt")).toEqual({
+      owner: "owner",
+      repo: "repo",
+      subdir: "skills/ppt"
+    });
+    expect(parseSkillSource("https://github.com/owner/repo")).toEqual({
+      owner: "owner",
+      repo: "repo"
+    });
+    expect(parseSkillSource("https://github.com/owner/repo/tree/main/skills/ppt")).toEqual({
+      owner: "owner",
+      repo: "repo",
+      ref: "main",
+      subdir: "skills/ppt"
+    });
+    expect(parseSkillSource("git@github.com:owner/repo.git")).toEqual({
+      owner: "owner",
+      repo: "repo"
+    });
+    expect(() => parseSkillSource("not-a-repo")).toThrow(SkillInstallError);
+    expect(() => parseSkillSource("owner/../escape")).toThrow(SkillInstallError);
+    expect(() => parseSkillSource("https://gitlab.com/owner/repo")).toThrow(/github\.com/);
+  });
+
+  it("installs a skill from a stubbed GitHub repo without cloning", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+
+    const skillMd = ["---", "name: stub-skill", "description: A stubbed skill.", "---", "", "# Stub"].join(
+      "\n"
+    );
+    const blobs: Record<string, string> = {
+      "sha-skill": Buffer.from(skillMd, "utf8").toString("base64"),
+      "sha-ref": Buffer.from("reference body", "utf8").toString("base64")
+    };
+    const fetchJson = async (url: string): Promise<unknown> => {
+      if (url === "https://api.github.com/repos/acme/pack") {
+        return { default_branch: "main" };
+      }
+      if (url.startsWith("https://api.github.com/repos/acme/pack/git/trees/main")) {
+        return {
+          truncated: false,
+          tree: [
+            { path: "skills", type: "tree", sha: "sha-dir" },
+            { path: "skills/stub-skill", type: "tree", sha: "sha-skilldir" },
+            { path: "skills/stub-skill/SKILL.md", type: "blob", sha: "sha-skill", size: skillMd.length },
+            {
+              path: "skills/stub-skill/references/notes.md",
+              type: "blob",
+              sha: "sha-ref",
+              size: 13
+            },
+            { path: "README.md", type: "blob", sha: "sha-readme", size: 4 }
+          ]
+        };
+      }
+      const blobMatch = /\/git\/blobs\/(.+)$/.exec(url);
+      if (blobMatch && blobs[blobMatch[1]]) {
+        return { encoding: "base64", content: blobs[blobMatch[1]] };
+      }
+      throw new Error(`unexpected url: ${url}`);
+    };
+
+    const result = await installSkillFromGitHub({
+      source: "acme/pack/skills/stub-skill",
+      skillsRoot: paths.skillsRoot,
+      deps: { fetchJson }
+    });
+
+    expect(result.name).toBe("stub-skill");
+    expect(result.resolvedRef).toBe("main");
+    expect(result.files).toEqual(["SKILL.md", "references/notes.md"]);
+
+    const installed = findSkill(paths, "stub-skill");
+    expect(installed?.summary).toBe("A stubbed skill.");
+    expect(
+      readFileSync(path.join(paths.skillsRoot, "stub-skill", "references", "notes.md"), "utf8")
+    ).toBe("reference body");
+
+    await expect(
+      installSkillFromGitHub({
+        source: "acme/pack/skills/stub-skill",
+        skillsRoot: paths.skillsRoot,
+        deps: { fetchJson }
+      })
+    ).rejects.toThrow(/already exists/);
+  });
+
+  it("auto-detects a single skill at the repo root", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+
+    const skillMd = ["---", "name: root-skill", "description: Root level skill.", "---"].join("\n");
+    const fetchJson = async (url: string): Promise<unknown> => {
+      if (url === "https://api.github.com/repos/acme/single") {
+        return { default_branch: "trunk" };
+      }
+      if (url.startsWith("https://api.github.com/repos/acme/single/git/trees/trunk")) {
+        return {
+          truncated: false,
+          tree: [{ path: "SKILL.md", type: "blob", sha: "sha-root", size: skillMd.length }]
+        };
+      }
+      if (url.endsWith("/git/blobs/sha-root")) {
+        return { encoding: "base64", content: Buffer.from(skillMd, "utf8").toString("base64") };
+      }
+      throw new Error(`unexpected url: ${url}`);
+    };
+
+    const result = await installSkillFromGitHub({
+      source: "acme/single",
+      skillsRoot: paths.skillsRoot,
+      deps: { fetchJson }
+    });
+
+    expect(result.name).toBe("single");
+    expect(result.skillDir).toBe("");
+    expect(findSkill(paths, "single")?.summary).toBe("Root level skill.");
+  });
+
+  it("rejects ambiguous repos with multiple skills", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+
+    const fetchJson = async (url: string): Promise<unknown> => {
+      if (url === "https://api.github.com/repos/acme/many") {
+        return { default_branch: "main" };
+      }
+      if (url.startsWith("https://api.github.com/repos/acme/many/git/trees/main")) {
+        return {
+          truncated: false,
+          tree: [
+            { path: "skills/a/SKILL.md", type: "blob", sha: "a" },
+            { path: "skills/b/SKILL.md", type: "blob", sha: "b" }
+          ]
+        };
+      }
+      throw new Error(`unexpected url: ${url}`);
+    };
+
+    await expect(
+      installSkillFromGitHub({
+        source: "acme/many",
+        skillsRoot: paths.skillsRoot,
+        deps: { fetchJson }
+      })
+    ).rejects.toThrow(/Multiple skills/);
   });
 });
