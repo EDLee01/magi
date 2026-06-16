@@ -131,4 +131,51 @@ describe("plugins, marketplace, and skills", () => {
     // Full body, including the tail that the old 900-char cap would have cut.
     expect(output).toContain("FINAL_STEP_MARKER");
   });
+
+  it("uses the YAML frontmatter description as the skill summary", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "fm-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    // Folded (`>`) multi-line description, like real marketplace/Claude Code skills.
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "name: fm-skill",
+        "description: >",
+        "  Make a slide deck from a document. Use when the user says",
+        '  "做PPT" or "create presentation".',
+        "---",
+        "",
+        "# FM Skill",
+        "",
+        "Body goes here.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const [skill] = listSkills(paths);
+    // Old behavior put "---" here, which made the skill invisible to keyword recall.
+    expect(skill.summary).not.toBe("---");
+    expect(skill.summary).toContain("Make a slide deck");
+    expect(skill.summary).toContain("做PPT");
+    // Folded block is collapsed to a single line.
+    expect(skill.summary).not.toContain("\n");
+  });
+
+  it("falls back to the first heading when a skill has no frontmatter", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "plain-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      "# Plain Skill\n\nDoes a plain thing.\n",
+      "utf8"
+    );
+    const [skill] = listSkills(paths);
+    expect(skill.summary).toBe("Plain Skill");
+  });
 });

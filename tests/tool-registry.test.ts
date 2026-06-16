@@ -105,7 +105,9 @@ describe("tool registry", () => {
         "ToolSearch",
         "WorkspaceDiagnostics",
         "EnterPlanMode",
-        "ExitPlanMode"
+        "ExitPlanMode",
+        "Skill",
+        "DiscoverSkills"
       ])
     );
     expect(deferred).toEqual(
@@ -125,7 +127,47 @@ describe("tool registry", () => {
     expect(core).not.toContain("Browser");
     expect(core).not.toContain("Config");
     expect(core).not.toContain("GitBranchCreate");
+    expect(deferred).not.toContain("Skill");
+    expect(deferred).not.toContain("DiscoverSkills");
     expect(new Set([...core, ...deferred]).size).toBe(getBuiltinToolDefinitions().length);
+  });
+
+  it("discovers installed skills with executable Skill tool guidance", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+    const skillRoot = path.join(paths.skillsRoot, "frontmatter-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "description: Use frontmatter summaries for skill discovery.",
+        "---",
+        "",
+        "# Frontmatter Skill",
+        "",
+        "Follow the frontmatter workflow."
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      toolUse: {
+        type: "tool-use",
+        id: "discover-skills",
+        name: "DiscoverSkills",
+        input: {}
+      }
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("/frontmatter-skill");
+    expect(result.content).toContain("Use frontmatter summaries for skill discovery.");
+    expect(result.content).toContain('Skill({skill: "..."})');
+    expect(result.content).not.toContain("Skill({name");
   });
 
   it("searches prior sessions with SessionSearch", async () => {

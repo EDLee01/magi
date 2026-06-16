@@ -2808,7 +2808,10 @@ describe("agent query loop", () => {
       expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
       expect(seen[0]).not.toContain("[Hot Memory]");
       expect(seen[0]).not.toContain("Release verification");
-      expect(seen[0]).not.toContain("Li Li Research Sense");
+      // The always-present [Available Skills] index lists installed skills by
+      // name; what must stay out of an unrelated task is the full skill body.
+      expect(seen[0]).toContain("[Available Skills]");
+      expect(seen[0]).not.toContain("Use for hydrology manuscript writing");
       expect(seen[0]).not.toContain("GeoMind Next");
 
       const decision = store
@@ -2964,7 +2967,10 @@ describe("agent query loop", () => {
       expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
       expect(seen[0]).toContain("[Hot Memory]");
       expect(seen[0]).toContain("route-clean commentary");
-      expect(seen[0]).not.toContain("Route Clean Helper");
+      // Index lists the skill name; the full body must not be injected for an
+      // unrelated task.
+      expect(seen[0]).toContain("[Available Skills]");
+      expect(seen[0]).not.toContain("Use for route cleanliness checks");
 
       const audits = store.listJobAuditEvents("job-model-route-clean-no-recall", 50);
       const decision = audits.find((event) => event.action === "agent.recall.decision");
@@ -3107,7 +3113,10 @@ describe("agent query loop", () => {
       expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
       expect(seen[0]).toContain("[Hot Memory]");
       expect(seen[0]).toContain("fallback route-clean commentary");
-      expect(seen[0]).not.toContain("Route Clean Fallback Helper");
+      // Index lists the skill name; the full body must not be injected for an
+      // unrelated task.
+      expect(seen[0]).toContain("[Available Skills]");
+      expect(seen[0]).not.toContain("Use for route cleanliness checks");
 
       const decision = store
         .listJobAuditEvents("job-fallback-route-clean-no-recall", 50)

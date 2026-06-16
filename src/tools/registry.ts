@@ -888,7 +888,13 @@ const CORE_TOOL_NAMES = [
   "ToolSearch",
   "WorkspaceDiagnostics",
   "EnterPlanMode",
-  "ExitPlanMode"
+  "ExitPlanMode",
+  // Skills are surfaced to the model via an always-present index ([Available
+  // Skills]); these two must be core so the model can actually discover and load
+  // a skill's full procedure on demand. Left deferred, text-protocol providers
+  // emit the calls but they never execute. SkillManage (authoring) stays deferred.
+  "Skill",
+  "DiscoverSkills"
 ] as const;
 
 const BUILTIN_TOOLS: RegisteredTool[] = [
@@ -3027,7 +3033,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       }
       lines.push("");
       lines.push(
-        'To run a skill: reply with its name as a slash command, or call Skill({name: "..."}).'
+        'To run a skill: reply with its name as a slash command, or call Skill({skill: "..."}).'
       );
       return lines.join("\n");
     },
