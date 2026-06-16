@@ -3309,6 +3309,57 @@ describe("agent query loop", () => {
     }
   });
 
+  it("matches hyphenated skill names when the user types natural spaced words", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const skillRoot = path.join(paths.skillsRoot, "blackbox-verify");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        path.join(skillRoot, "SKILL.md"),
+        [
+          "# Blackbox Verify",
+          "",
+          "Run isolated provider validation before broad checks.",
+          "",
+          "## Steps",
+          "",
+          "1. Start a mock provider.",
+          "2. Run focused black-box CLI flow."
+        ].join("\n"),
+        "utf8"
+      );
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "spaced hyphen skill", cwd: workspace }),
+        jobId: "job-spaced-hyphen-skill",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "Use the blackbox verify skill for isolated provider validation."
+      });
+
+      expect(seen[0]).toContain("[Relevant Skills]");
+      expect(seen[0]).toContain("## blackbox-verify");
+      expect(seen[0]).toContain("Run isolated provider validation before broad checks.");
+      expect(store.listJobAuditEvents("job-spaced-hyphen-skill", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.skills.recalled",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            skills: expect.arrayContaining(["blackbox-verify"])
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("loads model-selected skills from summaries without requiring explicit skill wording", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });

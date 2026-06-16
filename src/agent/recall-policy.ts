@@ -429,8 +429,8 @@ export function scoreSkillForRecall(
 }
 
 /**
- * True only when the prompt contains the skill's full name as a standalone
- * token (e.g. "verify ..." or "用 stuck 帮我" for a skill named "verify"/"stuck").
+ * True only when the prompt contains the skill's full name as standalone
+ * token(s) (e.g. "verify ...", "blackbox verify skill", or "用 stuck 帮我").
  * This is stricter than scoreSkillForRecall's substring scoring on purpose: it
  * is used to *force* skill recall past a zero keyword-budget, so it must not
  * fire on incidental substrings like a "route-clean.txt" filename matching a
@@ -440,7 +440,17 @@ export function scoreSkillForRecall(
 export function promptNamesSkillExactly(skillName: string, prompt: string): boolean {
   const name = normalizeText(skillName);
   if (!name) return false;
-  return tokenizeRecallText(prompt).some((term) => term === name);
+  const promptTerms = tokenizeRecallText(prompt);
+  if (promptTerms.some((term) => term === name)) return true;
+
+  const nameParts = name.split(/[-_]+/).filter(Boolean);
+  if (nameParts.length <= 1) return false;
+  for (let index = 0; index <= promptTerms.length - nameParts.length; index += 1) {
+    if (nameParts.every((part, offset) => promptTerms[index + offset] === part)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function selectHotMemoryNodes(input: {
