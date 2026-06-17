@@ -11,6 +11,13 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { atomicWrite } from "../fs-utils.js";
+import { classifySkillFiles, SKILL_AUTHOR_MANIFEST } from "./classify.js";
+import {
+  buildSkillManifest,
+  SkillFileEntry,
+  SkillManifestSource,
+  writeSkillManifest
+} from "./manifest.js";
 
 const SKILL_NAME_RE = /^[a-z0-9][a-z0-9._-]{1,63}$/;
 const DEFAULT_MAX_FILES = 400;
@@ -37,6 +44,8 @@ export interface SkillInstallOptions {
   force?: boolean;
   maxFiles?: number;
   maxTotalBytes?: number;
+  /** Materialize every file at install time instead of deferring resources. */
+  full?: boolean;
 }
 
 export interface SkillInstallResult {
@@ -47,6 +56,12 @@ export interface SkillInstallResult {
   files: string[];
   totalBytes: number;
   installPath: string;
+  /** Number of files materialized immediately. */
+  coreFiles: number;
+  /** Number of files left as on-demand pointers in the manifest. */
+  deferredFiles: number;
+  /** Whether the author's manifest.yaml drove classification. */
+  usedAuthorManifest: boolean;
 }
 
 export class SkillInstallError extends Error {
@@ -181,20 +196,47 @@ export async function installSkillFromGitHub(
     throw new SkillInstallError(`No files found at ${skillDir || "<repo root>"}`);
   }
 
-  let totalBytes = 0;
-  for (const blob of blobs) {
-    totalBytes += blob.size ?? 0;
-  }
-  if (blobs.length > maxFiles) {
-    throw new SkillInstallError(
-      `Skill has ${blobs.length} files, exceeding the limit of ${maxFiles}. ` +
-        `Pass a more specific subdirectory or raise the limit.`
+  // Re-key blobs to skill-relative paths so classification, the manifest, and
+  // the on-disk layout all speak the same coordinate system.
+  const relBlobs: SkillFileEntry[] = blobs.map((blob) => ({
+    path: prefix === "" ? blob.path : blob.path.slice(prefix.length),
+    sha: blob.sha,
+    size: blob.size ?? 0
+  }));
+
+  // Author declaration first: if the skill ships manifest.yaml, fetch it before
+  // classifying so its load contract can drive core/deferred.
+  const authorManifestBlob = relBlobs.find((blob) => blob.path === SKILL_AUTHOR_MANIFEST);
+  let authorManifestText: string | undefined;
+  if (authorManifestBlob) {
+    authorManifestText = (await fetchBlob(ref, authorManifestBlob.sha, options.deps)).toString(
+      "utf8"
     );
   }
-  if (totalBytes > maxTotalBytes) {
+
+  const { core, deferred, usedAuthorManifest } = classifySkillFiles({
+    blobs: relBlobs,
+    authorManifestText,
+    full: options.full
+  });
+
+  const coreBytes = core.reduce((sum, blob) => sum + blob.size, 0);
+  // maxFiles / maxTotalBytes now constrain only what we materialize (core).
+  // Deferred resources are pointers in the manifest, so they don't count.
+  if (core.length > maxFiles) {
     throw new SkillInstallError(
-      `Skill is ${formatBytes(totalBytes)}, exceeding the limit of ${formatBytes(maxTotalBytes)}. ` +
-        `Pass a more specific subdirectory or raise the limit.`
+      `Skill core has ${core.length} files, exceeding the limit of ${maxFiles}. ` +
+        `This skill's non-resource files alone are unusually large. ` +
+        `Pass a more specific subdirectory, raise --max-files, use --full to ` +
+        `materialize everything, or ask the author to ship a manifest.yaml ` +
+        `declaring on-demand resources.`
+    );
+  }
+  if (coreBytes > maxTotalBytes) {
+    throw new SkillInstallError(
+      `Skill core is ${formatBytes(coreBytes)}, exceeding the limit of ${formatBytes(
+        maxTotalBytes
+      )}. Pass a more specific subdirectory, raise --max-bytes, or use --full.`
     );
   }
 
@@ -214,15 +256,27 @@ export async function installSkillFromGitHub(
     rmSync(installPath, { recursive: true, force: true });
   }
 
+  // Materialize core only. Deferred files become pointers in the manifest and
+  // are fetched on demand later (lazy read or `skills materialize`).
   const written: string[] = [];
-  for (const blob of blobs) {
-    const relPath = prefix === "" ? blob.path : blob.path.slice(prefix.length);
-    const dest = safeJoin(installPath, relPath);
+  for (const blob of core) {
+    const dest = safeJoin(installPath, blob.path);
     const content = await fetchBlob(ref, blob.sha, options.deps);
     mkdirSync(path.dirname(dest), { recursive: true });
     atomicWrite(dest, content);
-    written.push(relPath);
+    written.push(blob.path);
   }
+
+  const manifestSource: SkillManifestSource = {
+    owner: ref.owner,
+    repo: ref.repo,
+    ref: ref.ref,
+    resolvedRef,
+    subdir: skillDir
+  };
+  const manifest = buildSkillManifest({ source: manifestSource, core, deferred });
+  mkdirSync(installPath, { recursive: true });
+  writeSkillManifest(installPath, manifest);
 
   return {
     name,
@@ -230,8 +284,11 @@ export async function installSkillFromGitHub(
     resolvedRef,
     skillDir,
     files: written.sort(),
-    totalBytes,
-    installPath
+    totalBytes: coreBytes,
+    installPath,
+    coreFiles: core.length,
+    deferredFiles: deferred.length,
+    usedAuthorManifest
   };
 }
 

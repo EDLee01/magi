@@ -1227,6 +1227,7 @@ async function runCliUnsafeWithParsed(
     if (subcommand === "install" || subcommand === "add") {
       const source = requireArg(parsed.rest[1], "skill source (owner/repo or GitHub URL)");
       const force = parsed.rest.includes("--force");
+      const full = parsed.rest.includes("--full");
       const maxFiles = readNumericFlag(parsed.rest, "--max-files");
       const maxTotalBytes = readNumericFlag(parsed.rest, "--max-bytes");
       const { installSkillFromGitHub, SkillInstallError } = await import("./skills/install.js");
@@ -1235,20 +1236,65 @@ async function runCliUnsafeWithParsed(
           source,
           skillsRoot: paths.skillsRoot,
           force,
+          full,
           maxFiles,
           maxTotalBytes,
           deps: { fetchJson: makeGitHubFetchJson(env) }
         });
         const lines = [
           `Installed skill "${result.name}" from ${result.ref.owner}/${result.ref.repo}@${result.resolvedRef}`,
-          `Files: ${result.files.length} (${formatInstallBytes(result.totalBytes)})`,
+          `Core:  ${result.coreFiles} files (${formatInstallBytes(result.totalBytes)}) materialized`,
+          ...(result.deferredFiles > 0
+            ? [
+                `Deferred: ${result.deferredFiles} on-demand file(s) recorded in .magi-skill.json`,
+                `          fetch them with: magi skills materialize ${result.name} [glob]`
+              ]
+            : []),
+          ...(result.usedAuthorManifest ? ["Classified using the skill's manifest.yaml."] : []),
           `Path:  ${result.installPath}`,
           "",
-          "Run /skills to see it. If the skill ships scripts or requirements, install those separately."
+          "Run /skills to see it."
         ];
         return { exitCode: 0, stdout: `${lines.join("\n")}\n`, stderr: "" };
       } catch (error) {
         if (error instanceof SkillInstallError) {
+          return { exitCode: 2, stdout: "", stderr: `${error.message}\n` };
+        }
+        throw error;
+      }
+    }
+    if (subcommand === "materialize") {
+      const name = requireArg(parsed.rest[1], "skill name");
+      const skill = findSkill(paths, name);
+      if (!skill) {
+        throw new MagiUsageError(`Skill not found: ${name}`);
+      }
+      const pattern =
+        parsed.rest[2] && !parsed.rest[2].startsWith("--") ? parsed.rest[2] : undefined;
+      const force = parsed.rest.includes("--force");
+      const { materializeSkillFiles, SkillMaterializeError } =
+        await import("./skills/materialize.js");
+      try {
+        const result = await materializeSkillFiles({
+          skillDir: skill.root,
+          pattern,
+          force,
+          deps: { fetchJson: makeGitHubFetchJson(env) }
+        });
+        const lines = [
+          `Materialized ${result.materialized.length} file(s) (${formatInstallBytes(
+            result.totalBytes
+          )}) for "${name}"`,
+          ...(result.skipped.length > 0
+            ? [`Skipped ${result.skipped.length} already-present file(s) (use --force to refetch).`]
+            : []),
+          ...(result.materialized.length === 0 && result.skipped.length === 0
+            ? [pattern ? `No deferred files match "${pattern}".` : "No deferred files to fetch."]
+            : [])
+        ];
+        return { exitCode: 0, stdout: `${lines.join("\n")}\n`, stderr: "" };
+      } catch (error) {
+        if (error instanceof SkillMaterializeError) {
           return { exitCode: 2, stdout: "", stderr: `${error.message}\n` };
         }
         throw error;
