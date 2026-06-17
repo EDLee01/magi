@@ -16,6 +16,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { atomicWrite } from "../fs-utils.js";
+import { makeMatcher } from "./glob.js";
 import { SkillFileEntry, SkillManifest, readSkillManifest } from "./manifest.js";
 
 export interface MaterializeDeps {
@@ -144,41 +145,4 @@ function safeJoin(root: string, relPath: string): string {
     throw new SkillMaterializeError(`Refusing to write outside the skill directory: ${relPath}`);
   }
   return dest;
-}
-
-/**
- * Build a matcher from a simple glob: `*` matches within a path segment,
- * `**` matches across segments. Everything else is literal.
- */
-function makeMatcher(pattern: string): (candidate: string) => boolean {
-  const normalized = path.posix.normalize(pattern.trim());
-  const regex = globToRegExp(normalized);
-  return (candidate) => regex.test(candidate);
-}
-
-function globToRegExp(glob: string): RegExp {
-  let out = "^";
-  for (let i = 0; i < glob.length; i++) {
-    const ch = glob[i];
-    if (ch === "*") {
-      if (glob[i + 1] === "*") {
-        // ** — match across separators
-        out += ".*";
-        i++;
-        // swallow a trailing slash after ** so `a/**/b` and `a/**` behave
-        if (glob[i + 1] === "/") {
-          i++;
-        }
-      } else {
-        // * — match within a segment (no slash)
-        out += "[^/]*";
-      }
-    } else if (/[.+?^${}()|[\]\\]/.test(ch)) {
-      out += `\\${ch}`;
-    } else {
-      out += ch;
-    }
-  }
-  out += "$";
-  return new RegExp(out);
 }

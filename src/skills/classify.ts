@@ -22,6 +22,7 @@ import path from "node:path";
 
 import YAML from "yaml";
 
+import { globToRegExp } from "./glob.js";
 import type { SkillFileEntry } from "./manifest.js";
 
 export const SKILL_AUTHOR_MANIFEST = "manifest.yaml";
@@ -92,6 +93,14 @@ export interface ClassifyInput {
   full?: boolean;
   /** Override the single-file deferral size threshold (bytes). */
   deferredSingleFileBytes?: number;
+  /**
+   * Installer-provided defer globs (the `--defer` flag). The highest-priority
+   * classification signal after SKILL.md itself: when the author shipped no
+   * manifest and magi's heuristics can't tell (e.g. ppt-master's thousands of
+   * text SVGs), the person installing declares which paths are on-demand
+   * resources. Supports `*` (within a segment) and `**` (across segments).
+   */
+  deferGlobs?: string[];
 }
 
 export interface ClassifyResult {
@@ -99,6 +108,8 @@ export interface ClassifyResult {
   deferred: SkillFileEntry[];
   /** True when an author manifest was parsed and used to drive classification. */
   usedAuthorManifest: boolean;
+  /** True when installer-provided defer globs matched at least one file. */
+  usedDeferGlobs: boolean;
 }
 
 interface AuthorDeclaration {
@@ -110,19 +121,35 @@ export function classifySkillFiles(input: ClassifyInput): ClassifyResult {
   const single = input.deferredSingleFileBytes ?? DEFAULT_DEFERRED_SINGLE_FILE_BYTES;
 
   if (input.full) {
-    return { core: [...input.blobs], deferred: [], usedAuthorManifest: false };
+    return {
+      core: [...input.blobs],
+      deferred: [],
+      usedAuthorManifest: false,
+      usedDeferGlobs: false
+    };
   }
 
   const declaration = input.authorManifestText
     ? parseAuthorDeclaration(input.authorManifestText)
     : undefined;
 
+  const deferMatchers = (input.deferGlobs ?? [])
+    .map((glob) => path.posix.normalize(glob.trim()))
+    .filter((glob) => glob && !glob.startsWith("..") && !path.posix.isAbsolute(glob))
+    .map((glob) => globToRegExp(glob));
+
   const core: SkillFileEntry[] = [];
   const deferred: SkillFileEntry[] = [];
+  let usedDeferGlobs = false;
 
   for (const blob of input.blobs) {
     if (isAlwaysCore(blob.path)) {
       core.push(blob);
+      continue;
+    }
+    if (deferMatchers.some((regex) => regex.test(blob.path))) {
+      deferred.push(blob);
+      usedDeferGlobs = true;
       continue;
     }
     if (declaration?.deferred.has(blob.path)) {
@@ -140,7 +167,7 @@ export function classifySkillFiles(input: ClassifyInput): ClassifyResult {
     core.push(blob);
   }
 
-  return { core, deferred, usedAuthorManifest: declaration !== undefined };
+  return { core, deferred, usedAuthorManifest: declaration !== undefined, usedDeferGlobs };
 }
 
 function isAlwaysCore(relPath: string): boolean {

@@ -46,6 +46,13 @@ export interface SkillInstallOptions {
   maxTotalBytes?: number;
   /** Materialize every file at install time instead of deferring resources. */
   full?: boolean;
+  /**
+   * Installer-declared defer globs (`--defer`). Paths matching these are
+   * recorded as on-demand pointers instead of materialized. Lets a person
+   * install resource-heavy skills (e.g. ppt-master) that ship no manifest and
+   * whose resources are text files the heuristics can't detect.
+   */
+  deferGlobs?: string[];
 }
 
 export interface SkillInstallResult {
@@ -62,6 +69,8 @@ export interface SkillInstallResult {
   deferredFiles: number;
   /** Whether the author's manifest.yaml drove classification. */
   usedAuthorManifest: boolean;
+  /** Whether installer-provided `--defer` globs matched at least one file. */
+  usedDeferGlobs: boolean;
 }
 
 export class SkillInstallError extends Error {
@@ -214,10 +223,11 @@ export async function installSkillFromGitHub(
     );
   }
 
-  const { core, deferred, usedAuthorManifest } = classifySkillFiles({
+  const { core, deferred, usedAuthorManifest, usedDeferGlobs } = classifySkillFiles({
     blobs: relBlobs,
     authorManifestText,
-    full: options.full
+    full: options.full,
+    deferGlobs: options.deferGlobs
   });
 
   const coreBytes = core.reduce((sum, blob) => sum + blob.size, 0);
@@ -288,7 +298,8 @@ export async function installSkillFromGitHub(
     installPath,
     coreFiles: core.length,
     deferredFiles: deferred.length,
-    usedAuthorManifest
+    usedAuthorManifest,
+    usedDeferGlobs
   };
 }
 

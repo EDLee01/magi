@@ -1230,6 +1230,7 @@ async function runCliUnsafeWithParsed(
       const full = parsed.rest.includes("--full");
       const maxFiles = readNumericFlag(parsed.rest, "--max-files");
       const maxTotalBytes = readNumericFlag(parsed.rest, "--max-bytes");
+      const deferGlobs = readListFlag(parsed.rest, "--defer");
       const { installSkillFromGitHub, SkillInstallError } = await import("./skills/install.js");
       try {
         const result = await installSkillFromGitHub({
@@ -1239,6 +1240,7 @@ async function runCliUnsafeWithParsed(
           full,
           maxFiles,
           maxTotalBytes,
+          deferGlobs,
           deps: { fetchJson: makeGitHubFetchJson(env) }
         });
         const lines = [
@@ -1251,6 +1253,7 @@ async function runCliUnsafeWithParsed(
               ]
             : []),
           ...(result.usedAuthorManifest ? ["Classified using the skill's manifest.yaml."] : []),
+          ...(result.usedDeferGlobs ? ["Classified using your --defer globs."] : []),
           `Path:  ${result.installPath}`,
           "",
           "Run /skills to see it."
@@ -2535,8 +2538,11 @@ function helpText(): string {
     "                                            Add reviewable memory",
     "  learning list|propose|draft                Manage learning drafts and skills",
     "  skills list|show <name>                    List or inspect installed skills",
-    "  skills install <owner/repo|url> [--force] [--max-files N] [--max-bytes N]",
+    "  skills install <owner/repo|url> [--force] [--full] [--defer <glob,...>]",
+    "                                  [--max-files N] [--max-bytes N]",
     "                                            Install a skill from GitHub",
+    "  skills materialize <name> [glob] [--force]",
+    "                                            Fetch a skill's deferred files",
     "  agents list|spawn <explorer|worker> <prompt>",
     "                                            Manage background agent tasks",
     "  mcp list|resources|read-resource           Inspect configured MCP servers",
@@ -3216,6 +3222,26 @@ function readNumericFlag(args: string[], name: string): number | undefined {
     throw new MagiUsageError(`${name} requires a positive integer`);
   }
   return Number(value);
+}
+
+/**
+ * Read a repeatable / comma-separated flag into a string list, e.g.
+ * `--defer 'templates/**,references/**'` or `--defer a --defer b`.
+ */
+function readListFlag(args: string[], name: string): string[] | undefined {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] !== name) continue;
+    const value = args[i + 1];
+    if (!value || value.startsWith("--")) {
+      throw new MagiUsageError(`${name} requires a value`);
+    }
+    for (const part of value.split(",")) {
+      const trimmed = part.trim();
+      if (trimmed) values.push(trimmed);
+    }
+  }
+  return values.length > 0 ? values : undefined;
 }
 
 function makeGitHubFetchJson(env: NodeJS.ProcessEnv): (url: string) => Promise<unknown> {
