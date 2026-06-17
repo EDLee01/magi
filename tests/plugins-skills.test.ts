@@ -167,7 +167,8 @@ describe("plugins, marketplace, and skills", () => {
     expect(listSkills(paths)).toMatchObject([
       {
         name: "ppt-helper",
-        summary: "AI-driven SVG content system. Converts source documents into PPTX through multi-role collaboration."
+        summary:
+          "AI-driven SVG content system. Converts source documents into PPTX through multi-role collaboration."
       }
     ]);
   });
@@ -216,9 +217,14 @@ describe("plugins, marketplace, and skills", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
 
-    const skillMd = ["---", "name: stub-skill", "description: A stubbed skill.", "---", "", "# Stub"].join(
-      "\n"
-    );
+    const skillMd = [
+      "---",
+      "name: stub-skill",
+      "description: A stubbed skill.",
+      "---",
+      "",
+      "# Stub"
+    ].join("\n");
     const blobs: Record<string, string> = {
       "sha-skill": Buffer.from(skillMd, "utf8").toString("base64"),
       "sha-ref": Buffer.from("reference body", "utf8").toString("base64")
@@ -233,7 +239,12 @@ describe("plugins, marketplace, and skills", () => {
           tree: [
             { path: "skills", type: "tree", sha: "sha-dir" },
             { path: "skills/stub-skill", type: "tree", sha: "sha-skilldir" },
-            { path: "skills/stub-skill/SKILL.md", type: "blob", sha: "sha-skill", size: skillMd.length },
+            {
+              path: "skills/stub-skill/SKILL.md",
+              type: "blob",
+              sha: "sha-skill",
+              size: skillMd.length
+            },
             {
               path: "skills/stub-skill/references/notes.md",
               type: "blob",

@@ -312,9 +312,7 @@ function resolveSkillDir(tree: TreeEntry[], subdir: string | undefined): string 
     return dirs[0]!;
   }
   throw new SkillInstallError(
-    `Multiple skills found. Pass one explicitly:\n${dirs
-      .map((dir) => `  - ${dir}`)
-      .join("\n")}`
+    `Multiple skills found. Pass one explicitly:\n${dirs.map((dir) => `  - ${dir}`).join("\n")}`
   );
 }
 
