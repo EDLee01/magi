@@ -72,6 +72,11 @@ export interface ContextConfig {
   compactionModel?: string;
 }
 
+export interface MemoryDreamConfig {
+  enabled: boolean;
+  intervalMs: number;
+}
+
 export interface MemoryConfig {
   enabled: boolean;
   root?: string;
@@ -80,6 +85,7 @@ export interface MemoryConfig {
   scopes: Array<"user" | "project" | "session">;
   selectionModel?: string;
   writeDecisionModel?: string;
+  dream: MemoryDreamConfig;
 }
 
 export interface WebSearchConfig {
@@ -694,7 +700,30 @@ function readMemoryConfig(value: Record<string, unknown>, configFile: string): M
       value.writeDecisionModel,
       "memory.writeDecisionModel",
       configFile
-    )
+    ),
+    dream: readMemoryDreamConfig(value.dream, "memory.dream", configFile)
+  };
+}
+
+const MEMORY_DREAM_DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function readMemoryDreamConfig(
+  value: unknown,
+  field: string,
+  configFile: string
+): MemoryDreamConfig {
+  const record = optionalRecord(value, field, configFile);
+  const intervalMs =
+    readOptionalPositiveInteger(record.intervalMs, `${field}.intervalMs`, configFile) ??
+    MEMORY_DREAM_DEFAULT_INTERVAL_MS;
+  if (intervalMs < 1000) {
+    throw new MagiConfigError(
+      `Invalid Magi config at ${configFile}: ${field}.intervalMs must be >= 1000`
+    );
+  }
+  return {
+    enabled: readOptionalBoolean(record.enabled, `${field}.enabled`, configFile) ?? false,
+    intervalMs
   };
 }
 

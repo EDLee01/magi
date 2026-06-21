@@ -155,7 +155,13 @@ describe("ModelRouter", () => {
         mcp: { servers: {} },
         hooks: [],
         context: { recentMessages: 6 },
-        memory: { enabled: false, autoWrite: "off", maxResults: 5, scopes: [] },
+        memory: {
+          enabled: false,
+          autoWrite: "off",
+          maxResults: 5,
+          scopes: [],
+          dream: { enabled: false, intervalMs: 86400000 }
+        },
         webSearch: {
           locale: "en",
           market: "us",
@@ -276,7 +282,13 @@ describe("ModelRouter", () => {
         mcp: { servers: {} },
         hooks: [],
         context: { recentMessages: 6 },
-        memory: { enabled: false, autoWrite: "off", maxResults: 5, scopes: [] },
+        memory: {
+          enabled: false,
+          autoWrite: "off",
+          maxResults: 5,
+          scopes: [],
+          dream: { enabled: false, intervalMs: 86400000 }
+        },
         webSearch: {
           locale: "en",
           market: "us",

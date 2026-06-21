@@ -251,6 +251,10 @@ memory:
   scopes:
     - user
     - project
+  # Passive memory consolidation while the daemon is idle (reviewable drafts only).
+  dream:
+    enabled: false
+    intervalMs: 86400000
 hooks: []
 `;
 }

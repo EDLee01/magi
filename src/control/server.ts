@@ -27,6 +27,7 @@ import { listSkills } from "../skills/loader.js";
 import { openApiDocument, renderPanelClient, renderWebPanel } from "../web/panel.js";
 import { triggerHooks } from "../hooks/events.js";
 import { cronStorePathFromRoot, takeDueCronJobs } from "../tools/cron.js";
+import { listDreams, runDream } from "../memory-dream.js";
 import { MagiEventView, toEventView } from "../events.js";
 import { StoredAuditRecord } from "../session-store.js";
 import { ToolPermissionMode } from "../agent/tools.js";
@@ -98,6 +99,11 @@ export async function startControlServer(input: {
   });
   const address = server.address() as AddressInfo;
   const cronRunner = startCronRunner(input);
+  const dreamRunner = startDreamRunner({
+    ...input,
+    isIdle: () =>
+      runningJobs.size === 0 && interactions.listInteractions({ status: "pending" }).length === 0
+  });
 
   // Advertise this daemon via mDNS so phones and other Magi instances can discover it.
   let mdnsHandle: MdnsAdvertiseHandle | undefined;
@@ -136,6 +142,7 @@ export async function startControlServer(input: {
     close: async () => {
       mdnsHandle?.stop();
       cronRunner.close();
+      dreamRunner.close();
       for (const running of runningJobs.values()) {
         running.controller.abort("control server closing");
       }
@@ -232,15 +239,103 @@ function startCronRunner(input: {
 }
 
 function parseCronIntervalMs(raw: string | undefined): number {
+  return parsePositiveIntervalMs(raw, "MAGI_CRON_POLL_MS", 60_000);
+}
+
+function startDreamRunner(input: {
+  paths: MagiPaths;
+  config: MagiConfig;
+  store: SessionStore;
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  isIdle: () => boolean;
+}): { close: () => void } {
+  // Precedence: env overrides config; config provides the persistent default.
+  // Disabled unless either the config flag or MAGI_DREAM_ENABLED=1 opts in.
+  const envEnabled = input.env?.MAGI_DREAM_ENABLED;
+  const enabled =
+    envEnabled === "1" ? true : envEnabled === "0" ? false : input.config.memory.dream.enabled;
+  if (!enabled) {
+    return { close: () => {} };
+  }
+  const intervalMs = parsePositiveIntervalMs(
+    input.env?.MAGI_DREAM_INTERVAL_MS,
+    "MAGI_DREAM_INTERVAL_MS",
+    input.config.memory.dream.intervalMs
+  );
+  const rootInput = { appRoot: input.paths.root, root: input.config.memory.root };
+  let running = false;
+  const lastDreamAt = (): number => {
+    try {
+      const dreams = listDreams(rootInput);
+      let latest = 0;
+      for (const dream of dreams) {
+        const at = Date.parse(dream.createdAt);
+        if (Number.isFinite(at) && at > latest) latest = at;
+      }
+      return latest;
+    } catch {
+      return 0;
+    }
+  };
+  const tick = async () => {
+    if (running) return;
+    // Only dream while idle — no running jobs and no pending interactions.
+    if (!input.isIdle()) return;
+    // Skip if a dream already ran within the interval window.
+    if (Date.now() - lastDreamAt() < intervalMs) return;
+    running = true;
+    try {
+      const dream = runDream({ ...rootInput, paths: input.paths });
+      input.store.recordAudit({
+        sessionId: input.store.createSession({
+          title: "memory dream",
+          cwd: input.cwd,
+          metadata: { source: "dream-runner" }
+        }),
+        action: "memory.dream.scheduled",
+        target: dream.id,
+        metadata: {
+          operationCount: dream.operations.length,
+          draftCount: dream.draftIds.length
+        }
+      });
+    } catch (error) {
+      input.store.recordAudit({
+        sessionId: input.store.createSession({
+          title: "dream runner error",
+          cwd: input.cwd,
+          metadata: { source: "dream-runner" }
+        }),
+        action: "memory.dream.failed",
+        metadata: { error: error instanceof Error ? error.message : String(error) }
+      });
+    } finally {
+      running = false;
+    }
+  };
+  // Poll on a short cadence so we can catch idle windows; the interval gate
+  // above ensures dreams themselves stay at most once per intervalMs.
+  const pollMs = Math.min(intervalMs, 5 * 60 * 1000);
+  const timer = setInterval(() => {
+    void tick();
+  }, pollMs);
+  timer.unref?.();
+  return {
+    close: () => clearInterval(timer)
+  };
+}
+
+function parsePositiveIntervalMs(raw: string | undefined, name: string, fallback: number): number {
   if (!raw) {
-    return 60_000;
+    return fallback;
   }
   if (!/^\d+$/.test(raw)) {
-    throw new Error(`MAGI_CRON_POLL_MS must be an integer >= 1000, got ${JSON.stringify(raw)}`);
+    throw new Error(`${name} must be an integer >= 1000, got ${JSON.stringify(raw)}`);
   }
   const interval = Number(raw);
   if (!Number.isInteger(interval) || interval < 1000) {
-    throw new Error(`MAGI_CRON_POLL_MS must be an integer >= 1000, got ${JSON.stringify(raw)}`);
+    throw new Error(`${name} must be an integer >= 1000, got ${JSON.stringify(raw)}`);
   }
   return interval;
 }

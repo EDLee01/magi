@@ -230,7 +230,8 @@ describe("configuration", () => {
       maxResults: 3,
       selectionModel: "fast",
       writeDecisionModel: "review",
-      scopes: ["project", "session"]
+      scopes: ["project", "session"],
+      dream: { enabled: false, intervalMs: 24 * 60 * 60 * 1000 }
     });
   });
 

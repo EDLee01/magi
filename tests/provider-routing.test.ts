@@ -593,7 +593,8 @@ function configWithAliases() {
       enabled: true,
       autoWrite: "explicit" as const,
       maxResults: 8,
-      scopes: ["user" as const, "project" as const, "session" as const]
+      scopes: ["user" as const, "project" as const, "session" as const],
+      dream: { enabled: false, intervalMs: 86400000 }
     },
     webSearch: {
       locale: "zh-CN",
