@@ -63,7 +63,8 @@ export function createJsonLogger(options: LoggerOptions): Logger {
 
   function open(): number {
     if (fd !== undefined) return fd;
-    fd = openSync(filePath, "a", 0o644);
+    // Logs may capture prompts and tool context — owner-only.
+    fd = openSync(filePath, "a", 0o600);
     return fd;
   }
 

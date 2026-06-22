@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -70,11 +70,27 @@ export function ensureMagiHome(paths: MagiPaths): void {
     paths.skillsRoot,
     paths.devicesRoot
   ]) {
-    mkdirSync(dir, { recursive: true });
+    // 0o700: the Magi home holds sessions, tokens and permission rules — keep
+    // it owner-only. recursive mkdir only applies the mode to created dirs.
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+
+  // recursive mkdir leaves pre-existing dirs at their old (possibly world-
+  // readable) mode, so tighten the secret-bearing roots in place.
+  for (const dir of [paths.root, paths.stateRoot, paths.sessionsRoot, paths.devicesRoot]) {
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // best-effort: a shared/mounted dir we can't chmod shouldn't crash startup
+    }
   }
 
   if (!existsSync(paths.configFile)) {
-    writeFileSync(paths.configFile, defaultConfigYaml(), { encoding: "utf8", flag: "wx" });
+    writeFileSync(paths.configFile, defaultConfigYaml(), {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
   }
 }
 

@@ -125,7 +125,7 @@ describe("isolation", () => {
     const result = await executeRegisteredTool({
       cwd: temp.path,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "cron-isolation",
@@ -151,7 +151,7 @@ describe("isolation", () => {
       cwd: temp.path,
       stateRoot: paths.stateRoot,
       sessionId: "todo-isolation-session",
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "todo-isolation",
@@ -209,7 +209,7 @@ describe("isolation", () => {
     const config = await executeRegisteredTool({
       cwd: temp.path,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "config-isolation",
@@ -271,7 +271,7 @@ describe("isolation", () => {
     const branch = await executeRegisteredTool({
       cwd: temp.path,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-branch-isolation",
@@ -282,7 +282,7 @@ describe("isolation", () => {
     const stage = await executeRegisteredTool({
       cwd: temp.path,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-stage-isolation",

@@ -1,6 +1,6 @@
 {
   "name": "@edwardlee5423/magi",
-  "version": "0.1.8",
+  "version": "0.1.11",
   "description": "Magi Next clean-room CLI bootstrap.",
   "type": "module",
   "license": "MIT",
@@ -9,10 +9,12 @@
   },
   "files": [
     "dist",
+    "capability-manifest.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
+    "preflight": "node scripts/preflight.mjs",
     "build": "tsc -p tsconfig.build.json",
     "build:runner": "cargo build --manifest-path runner/Cargo.toml",
     "type": "tsc --noEmit",
@@ -26,15 +28,18 @@
     "test:tool-discovery-eval": "npm run build && node scripts/tool-discovery-eval.mjs",
     "test:control-api-eval": "npm run build && node scripts/control-api-eval.mjs",
     "test:blackbox": "npm run build && node scripts/blackbox-e2e.mjs",
+    "test:tui-boundary": "npm run build && node scripts/tui-boundary-stress.mjs",
     "test:complex-harness": "npm run build && node scripts/complex-task-harness.mjs",
     "test:model-tasks": "npm run build && node scripts/model-task-benchmark.mjs",
     "test:live-smoke": "npm run build && node scripts/live-model-smoke.mjs",
+    "test:ssh-localhost": "npm run build && node scripts/ssh-localhost-smoke.mjs",
+    "test:upgrade-rollback": "node scripts/upgrade-rollback-smoke.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "scan:licenses": "node scripts/scan-licenses.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
     "report:capability": "npm run build && node scripts/capability-report.mjs",
     "report:capability:nightly": "npm run build && node scripts/capability-report.mjs --profile nightly",
-    "verify": "npm run lint && npm run test && npm run test:memory-eval && npm run test:patch-eval && npm run test:goal-plan-eval && npm run test:tool-discovery-eval && npm run test:control-api-eval && npm run test:blackbox && npm run test:complex-harness && npm run test:model-tasks && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom && npm run report:capability"
+    "verify": "npm run preflight && npm run lint && npm run test && npm run test:memory-eval && npm run test:patch-eval && npm run test:goal-plan-eval && npm run test:tool-discovery-eval && npm run test:control-api-eval && npm run test:blackbox && npm run test:complex-harness && npm run test:model-tasks && npm run build:runner && npm run scan:secrets && npm run scan:licenses && npm run sbom && npm run report:capability"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
@@ -50,9 +55,9 @@
     "playwright": "^1.60.0",
     "prettier": "^3.8.3",
     "tsx": "^4.19.3",
-    "vitest": "^3.0.8"
+    "vitest": "3.2.6"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   }
 }

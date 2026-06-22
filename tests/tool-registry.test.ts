@@ -15,7 +15,8 @@ import {
   getBuiltinToolRegistry,
   getCoreToolDefinitions,
   getDeferredToolDefinitions,
-  checkToolPermission
+  checkToolPermission,
+  classifyToolRisk
 } from "../src/tools/registry.js";
 import { cronStorePathFromRoot } from "../src/tools/cron.js";
 import { loadTodoStore, todoStorePathFromRoot } from "../src/tools/todo.js";
@@ -104,7 +105,9 @@ describe("tool registry", () => {
         "ToolSearch",
         "WorkspaceDiagnostics",
         "EnterPlanMode",
-        "ExitPlanMode"
+        "ExitPlanMode",
+        "Skill",
+        "DiscoverSkills"
       ])
     );
     expect(deferred).toEqual(
@@ -124,7 +127,47 @@ describe("tool registry", () => {
     expect(core).not.toContain("Browser");
     expect(core).not.toContain("Config");
     expect(core).not.toContain("GitBranchCreate");
+    expect(deferred).not.toContain("Skill");
+    expect(deferred).not.toContain("DiscoverSkills");
     expect(new Set([...core, ...deferred]).size).toBe(getBuiltinToolDefinitions().length);
+  });
+
+  it("discovers installed skills with executable Skill tool guidance", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: workspace });
+    ensureMagiHome(paths);
+    const skillRoot = path.join(paths.skillsRoot, "frontmatter-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "description: Use frontmatter summaries for skill discovery.",
+        "---",
+        "",
+        "# Frontmatter Skill",
+        "",
+        "Follow the frontmatter workflow."
+      ].join("\n"),
+      "utf8"
+    );
+
+    const result = await executeRegisteredTool({
+      cwd: workspace,
+      stateRoot: paths.stateRoot,
+      toolUse: {
+        type: "tool-use",
+        id: "discover-skills",
+        name: "DiscoverSkills",
+        input: {}
+      }
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("/frontmatter-skill");
+    expect(result.content).toContain("Use frontmatter summaries for skill discovery.");
+    expect(result.content).toContain('Skill({skill: "..."})');
+    expect(result.content).not.toContain("Skill({name");
   });
 
   it("searches prior sessions with SessionSearch", async () => {
@@ -190,7 +233,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot: paths.stateRoot,
       sessionId: "session-1",
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "learning-propose",
@@ -228,7 +271,7 @@ describe("tool registry", () => {
     const applied = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "learning-apply",
@@ -248,7 +291,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot: paths.stateRoot,
       sessionId: "session-1",
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "learning-skill-propose",
@@ -268,7 +311,7 @@ describe("tool registry", () => {
     const skillApplied = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "learning-skill-apply",
@@ -285,7 +328,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot: paths.stateRoot,
       sessionId: "session-1",
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "learning-skill-patch-propose",
@@ -314,7 +357,7 @@ describe("tool registry", () => {
     const skillPatchApplied = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "learning-skill-patch-apply",
@@ -340,7 +383,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot: paths.stateRoot,
       sessionId: "session-1",
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "memorize",
@@ -392,7 +435,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot: paths.stateRoot,
       sessionId: "session-1",
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "correct-memory",
@@ -433,7 +476,7 @@ describe("tool registry", () => {
     const created = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "skill-create",
@@ -452,7 +495,7 @@ describe("tool registry", () => {
     const patched = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "skill-patch",
@@ -471,7 +514,7 @@ describe("tool registry", () => {
     const escape = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "skill-escape",
@@ -500,7 +543,7 @@ describe("tool registry", () => {
         name: "FileEdit",
         input: { file_path: "note.txt", old_string: "two", new_string: "three" }
       },
-      permissionMode: "acceptEdits"
+      permissionMode: "bypassPermissions"
     });
 
     expect(result.isError).toBeUndefined();
@@ -527,7 +570,7 @@ describe("tool registry", () => {
           patch: ["@@", " one", "-two", "+TWO", " three"].join("\n")
         }
       },
-      permissionMode: "acceptEdits"
+      permissionMode: "bypassPermissions"
     });
 
     expect(result.isError).toBeUndefined();
@@ -547,7 +590,7 @@ describe("tool registry", () => {
           patch: ["@@", " missing", "-value", "+new"].join("\n")
         }
       },
-      permissionMode: "acceptEdits"
+      permissionMode: "bypassPermissions"
     });
     expect(failed.isError).toBe(true);
     expect(failed.content).toContain("Patch context did not match file");
@@ -667,7 +710,7 @@ describe("tool registry", () => {
       });
       expect(checkToolPermission({ toolUse: patchCall, mode: "acceptEdits" })).toMatchObject({
         decision: "allow",
-        reason: "acceptEdits mode"
+        reason: "acceptEdits workspace edit"
       });
       expect(
         checkToolPermission({
@@ -778,7 +821,8 @@ describe("tool registry", () => {
       decision: "ask"
     });
     expect(checkToolPermission({ toolUse: testBashCall, mode: "acceptEdits" })).toMatchObject({
-      decision: "allow"
+      decision: "ask",
+      reason: "Bash requires approval in acceptEdits mode (command)"
     });
     expect(checkToolPermission({ toolUse: dangerousBashCall, mode: "acceptEdits" })).toMatchObject({
       decision: "deny",
@@ -802,6 +846,73 @@ describe("tool registry", () => {
     ).toMatchObject({
       decision: "allow",
       reason: "bypassPermissions mode"
+    });
+  });
+
+  it("classifies acceptEdits risks and only auto-allows workspace edits", () => {
+    const calls = {
+      read: {
+        type: "tool-use" as const,
+        id: "read",
+        name: "FileRead",
+        input: { file_path: "README.md" }
+      },
+      edit: {
+        type: "tool-use" as const,
+        id: "edit",
+        name: "FileWrite",
+        input: { file_path: "x.txt", content: "x" }
+      },
+      destructive: {
+        type: "tool-use" as const,
+        id: "destructive",
+        name: "FileDelete",
+        input: { path: "x.txt" }
+      },
+      network: {
+        type: "tool-use" as const,
+        id: "network",
+        name: "HttpRequest",
+        input: { url: "https://example.com", method: "GET" }
+      },
+      remote: {
+        type: "tool-use" as const,
+        id: "remote",
+        name: "SshFileWrite",
+        input: { host: "example", path: "/tmp/x", content: "x" }
+      },
+      state: {
+        type: "tool-use" as const,
+        id: "state",
+        name: "Memorize",
+        input: { scope: "user", text: "remember this" }
+      }
+    };
+
+    expect(classifyToolRisk(calls.read)).toBe("read");
+    expect(classifyToolRisk(calls.edit)).toBe("workspace-edit");
+    expect(classifyToolRisk(calls.destructive)).toBe("destructive");
+    expect(classifyToolRisk(calls.network)).toBe("network");
+    expect(classifyToolRisk(calls.remote)).toBe("remote");
+    expect(classifyToolRisk(calls.state)).toBe("state-change");
+
+    expect(checkToolPermission({ toolUse: calls.read, mode: "acceptEdits" })).toMatchObject({
+      decision: "allow"
+    });
+    expect(checkToolPermission({ toolUse: calls.edit, mode: "acceptEdits" })).toMatchObject({
+      decision: "allow"
+    });
+    expect(checkToolPermission({ toolUse: calls.destructive, mode: "acceptEdits" })).toMatchObject({
+      decision: "ask"
+    });
+    expect(checkToolPermission({ toolUse: calls.network, mode: "acceptEdits" })).toMatchObject({
+      decision: "ask"
+    });
+    expect(checkToolPermission({ toolUse: calls.remote, mode: "acceptEdits" })).toMatchObject({
+      decision: "ask"
+    });
+    expect(checkToolPermission({ toolUse: calls.state, mode: "acceptEdits" })).toMatchObject({
+      decision: "ask"
     });
   });
 
@@ -904,7 +1015,7 @@ describe("tool registry", () => {
 
     const created = await executeRegisteredTool({
       cwd: workspace,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-branch-create",
@@ -929,7 +1040,7 @@ describe("tool registry", () => {
 
     const checkout = await executeRegisteredTool({
       cwd: workspace,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-checkout",
@@ -947,7 +1058,7 @@ describe("tool registry", () => {
     writeFileSync(path.join(workspace, "new.txt"), "new\n", "utf8");
     const staged = await executeRegisteredTool({
       cwd: workspace,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-stage",
@@ -962,7 +1073,7 @@ describe("tool registry", () => {
 
     const unstaged = await executeRegisteredTool({
       cwd: workspace,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-unstage",
@@ -1055,7 +1166,7 @@ describe("tool registry", () => {
 
     const badBranch = await executeRegisteredTool({
       cwd: workspace,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-branch-bad",
@@ -1068,7 +1179,7 @@ describe("tool registry", () => {
 
     const stageOutside = await executeRegisteredTool({
       cwd: workspace,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "git-stage-outside",
@@ -1569,7 +1680,7 @@ describe("tool registry", () => {
     const created = await executeRegisteredTool({
       cwd: workspace,
       stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "cron-create",
@@ -1597,7 +1708,7 @@ describe("tool registry", () => {
     const updated = await executeRegisteredTool({
       cwd: workspace,
       stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "cron-update",
@@ -1611,7 +1722,7 @@ describe("tool registry", () => {
     const deleted = await executeRegisteredTool({
       cwd: workspace,
       stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "cron-delete",
@@ -1638,7 +1749,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot,
       sessionId,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "todo-first",
@@ -1672,7 +1783,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot,
       sessionId,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "todo-second",
@@ -1702,7 +1813,7 @@ describe("tool registry", () => {
       cwd: workspace,
       stateRoot: path.join(workspace, ".magi-next", "state"),
       sessionId: "todo-session",
-      permissionMode: "acceptEdits" as const
+      permissionMode: "bypassPermissions" as const
     };
 
     const missingTodos = await executeRegisteredTool({
@@ -2079,7 +2190,7 @@ describe("tool registry", () => {
     const updated = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "config-update",
@@ -2105,7 +2216,7 @@ describe("tool registry", () => {
     const invalid = await executeRegisteredTool({
       cwd: workspace,
       stateRoot: paths.stateRoot,
-      permissionMode: "acceptEdits",
+      permissionMode: "bypassPermissions",
       toolUse: {
         type: "tool-use",
         id: "config-invalid",
@@ -2352,7 +2463,7 @@ describe("tool registry", () => {
     });
     expect(outside).toMatchObject({ isError: true });
     expect(outside.content).toContain("outside allowed directories");
-  });
+  }, 10_000);
 });
 
 async function listen(server: http.Server): Promise<string> {

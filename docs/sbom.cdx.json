@@ -3,11 +3,11 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-05-29T06:35:30.331Z",
+    "timestamp": "2026-06-09T09:01:52.683Z",
     "component": {
       "type": "application",
       "name": "@edwardlee5423/magi",
-      "version": "0.1.0-alpha.2"
+      "version": "0.1.9"
     }
   },
   "components": [
@@ -362,44 +362,44 @@
     {
       "type": "library",
       "name": "@vitest/expect",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Fexpect@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Fexpect@3.2.6"
     },
     {
       "type": "library",
       "name": "@vitest/mocker",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Fmocker@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Fmocker@3.2.6"
     },
     {
       "type": "library",
       "name": "@vitest/pretty-format",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Fpretty-format@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Fpretty-format@3.2.6"
     },
     {
       "type": "library",
       "name": "@vitest/runner",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Frunner@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Frunner@3.2.6"
     },
     {
       "type": "library",
       "name": "@vitest/snapshot",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Fsnapshot@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Fsnapshot@3.2.6"
     },
     {
       "type": "library",
       "name": "@vitest/spy",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Fspy@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Fspy@3.2.6"
     },
     {
       "type": "library",
       "name": "@vitest/utils",
-      "version": "3.2.4",
-      "purl": "pkg:npm/%40vitest%2Futils@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/%40vitest%2Futils@3.2.6"
     },
     {
       "type": "library",
@@ -667,6 +667,24 @@
     },
     {
       "type": "library",
+      "name": "playwright",
+      "version": "1.60.0",
+      "purl": "pkg:npm/playwright@1.60.0"
+    },
+    {
+      "type": "library",
+      "name": "playwright-core",
+      "version": "1.60.0",
+      "purl": "pkg:npm/playwright-core@1.60.0"
+    },
+    {
+      "type": "library",
+      "name": "playwright/node_modules/fsevents",
+      "version": "2.3.2",
+      "purl": "pkg:npm/playwright%2Fnode_modules%2Ffsevents@2.3.2"
+    },
+    {
+      "type": "library",
       "name": "postcss",
       "version": "8.5.14",
       "purl": "pkg:npm/postcss@8.5.14"
@@ -688,6 +706,12 @@
       "name": "pump",
       "version": "3.0.4",
       "purl": "pkg:npm/pump@3.0.4"
+    },
+    {
+      "type": "library",
+      "name": "qrcode-terminal",
+      "version": "0.12.0",
+      "purl": "pkg:npm/qrcode-terminal@0.12.0"
     },
     {
       "type": "library",
@@ -1034,8 +1058,8 @@
     {
       "type": "library",
       "name": "vitest",
-      "version": "3.2.4",
-      "purl": "pkg:npm/vitest@3.2.4"
+      "version": "3.2.6",
+      "purl": "pkg:npm/vitest@3.2.6"
     },
     {
       "type": "library",

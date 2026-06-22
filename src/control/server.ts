@@ -1,6 +1,8 @@
 import http, { IncomingMessage, ServerResponse } from "node:http";
 import { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
+import { realpathSync, statSync } from "node:fs";
+import path from "node:path";
 
 import { MagiConfig } from "../config.js";
 import { runHeadlessPrompt } from "../headless.js";
@@ -44,6 +46,8 @@ export interface ControlServerHandle {
   close: () => Promise<void>;
   interactions: ActiveInteractionRegistry;
 }
+
+class ControlRequestError extends Error {}
 
 interface RunningControlJob {
   jobId: string;
@@ -437,7 +441,7 @@ async function handleRequest(input: {
       const sessionId = input.store.createSession({
         id: readOptionalString(body.id),
         title: readOptionalString(body.title),
-        cwd: readOptionalString(body.cwd) ?? input.cwd,
+        cwd: resolveControlCwd(readOptionalString(body.cwd), input.cwd),
         metadata: readOptionalRecord(body.metadata)
       });
       return sendJson(input.response, 200, { session: input.store.getSession(sessionId) });
@@ -694,7 +698,7 @@ async function handleRequest(input: {
       const writeFiles = Array.isArray(body.writeFiles)
         ? body.writeFiles.filter((item): item is string => typeof item === "string")
         : [];
-      const cwd = typeof body.cwd === "string" ? body.cwd : input.cwd;
+      const cwd = resolveControlCwd(readOptionalString(body.cwd), input.cwd);
       const sessionId = input.store.createSession({
         title: `control agent task ${body.role}`,
         cwd
@@ -934,6 +938,9 @@ async function handleRequest(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!input.response.headersSent) {
+      if (error instanceof ControlRequestError) {
+        return sendJson(input.response, 400, { error: message });
+      }
       return sendJson(input.response, 500, { error: message });
     }
     input.response.end();
@@ -1031,9 +1038,10 @@ async function runControlJob(
   options: { sessionId?: string; cwd?: string } = {}
 ) {
   try {
+    const cwd = resolveControlCwd(options.cwd ?? readOptionalString(body.cwd), input.cwd);
     return await runHeadlessPrompt({
       prompt: String(body.prompt),
-      cwd: readOptionalString(body.cwd) ?? options.cwd ?? input.cwd,
+      cwd,
       store: input.store,
       config: input.config,
       env: input.env,
@@ -1074,7 +1082,7 @@ function startBackgroundControlJob(
   body: Record<string, unknown>,
   options: { sessionId?: string; cwd?: string } = {}
 ) {
-  const cwd = readOptionalString(body.cwd) ?? options.cwd ?? input.cwd;
+  const cwd = resolveControlCwd(options.cwd ?? readOptionalString(body.cwd), input.cwd);
   const prompt = String(body.prompt);
   const sessionId =
     options.sessionId ??
@@ -1207,6 +1215,31 @@ function readOptionalRecord(value: unknown): Record<string, unknown> | undefined
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function resolveControlCwd(requestedCwd: string | undefined, workspaceRoot: string): string {
+  let root: string;
+  let candidate: string;
+  let isDirectory: boolean;
+  try {
+    root = realpathSync(workspaceRoot);
+    candidate = realpathSync(requestedCwd ? path.resolve(root, requestedCwd) : root);
+    isDirectory = statSync(candidate).isDirectory();
+  } catch {
+    throw new ControlRequestError(
+      "cwd must be an existing directory inside the authorized workspace"
+    );
+  }
+  if (!isDirectory) {
+    throw new ControlRequestError(
+      "cwd must be an existing directory inside the authorized workspace"
+    );
+  }
+  const relative = path.relative(root, candidate);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new ControlRequestError(`cwd is outside the authorized workspace: ${workspaceRoot}`);
+  }
+  return candidate;
 }
 
 function readApprovalDecision(body: Record<string, unknown>): boolean | undefined {

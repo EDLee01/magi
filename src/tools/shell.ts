@@ -69,15 +69,51 @@ function isBackgroundOperator(command: string, index: number): boolean {
 export function isDangerousShellCommand(command: string): boolean {
   const normalized = command.toLowerCase();
   return [
-    /\brm\s+(-[a-z]*[rf][a-z]*|-r\s+-f|-f\s+-r)\b/,
+    // rm with recursive/force, in short (-rf, -r -f), long (--recursive,
+    // --force) or grouped/separated forms.
+    /\brm\b[^|;&\n]*\s-[a-z]*[rf][a-z]*\b/,
+    /\brm\b[^|;&\n]*--(recursive|force)\b/,
+    // find used to delete or exec arbitrary commands over a tree.
+    /\bfind\b[^|;&\n]*-delete\b/,
+    /\bfind\b[^|;&\n]*-exec\b/,
     /\bsudo\b/,
     /\bmkfs\b/,
     /\bdd\s+.*\bof=/,
-    /\bchmod\s+777\b/,
+    // chmod world-writable in any form: numeric mode (3-4 octal digits) whose
+    // final digit has the world-write bit set (2,3,6,7) — covers 777, 0777,
+    // 666, with or without -R/--recursive — and symbolic o+w / a+w.
+    /\bchmod\b[^|;&\n]*\b[0-7]?[0-7][0-7][2367]\b/,
+    /\bchmod\b[^|;&\n]*[ugoa]*\+w/,
+    /\bchown\b[^|;&\n]*--?r(ecursive)?\b/,
     />\s*\/etc\//,
-    /\bcurl\b.*\|\s*(sh|bash)\b/,
-    /\bwget\b.*\|\s*(sh|bash)\b/
+    // piping a download straight into a shell, incl. sh/bash/zsh/python.
+    /\b(curl|wget|fetch)\b[^|;&\n]*\|\s*(sudo\s+)?(sh|bash|zsh|ksh|python[0-9.]*|perl|ruby|node)\b/,
+    // overwrite a block device or core system path.
+    />\s*\/dev\/(sd|nvme|hd|vd)/,
+    // fork bomb
+    /:\(\)\s*\{.*:\|:.*\}/
   ].some((pattern) => pattern.test(normalized));
+}
+
+// Operators that start a *new* command or a command substitution. A simple
+// "prefix:*" allow rule (e.g. Bash(git:*)) must not authorize a command line
+// containing any of these, otherwise `git log && rm -rf /` slips through the
+// prefix check. Quoted occurrences are also rejected — that only causes an
+// extra confirmation prompt (the safe direction), never an unwanted allow.
+const COMMAND_CHAINING = /(\|\||&&|[;|&]|\$\(|`|\$\{|<\(|>\(|\n)/;
+
+/**
+ * True only if `command` is a single simple invocation that begins with the
+ * allowed `prefix` and chains no further commands. Used by the permission
+ * allow-rule matcher so prefix allow-listing cannot be bypassed with `&&`,
+ * `;`, `|`, `$(...)`, backticks, etc.
+ */
+export function commandAllowedByPrefix(command: string, prefix: string): boolean {
+  const trimmed = command.trim();
+  if (trimmed !== prefix && !trimmed.startsWith(`${prefix} `)) {
+    return false;
+  }
+  return !COMMAND_CHAINING.test(trimmed);
 }
 
 export function isReadOnlyShellCommand(command: string): boolean {

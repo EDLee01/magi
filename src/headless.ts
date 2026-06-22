@@ -7,9 +7,9 @@ import { ToolPermissionMode } from "./agent/tools.js";
 import { MagiConfig } from "./config.js";
 import { MagiPaths } from "./paths.js";
 import { buildProviderRegistry } from "./providers/registry.js";
-import { ProviderUsage, textMessage } from "./providers/ir.js";
+import { ProviderUsage } from "./providers/ir.js";
 import { ActiveInteractionRegistry } from "./interactions.js";
-import { hasProviderRoute, routeProviderRequest } from "./routing/router.js";
+import { hasProviderRoute } from "./routing/router.js";
 import { resolveFallbackChain, resolveModelAlias } from "./routing/model-alias.js";
 import { routeAuto, routeAutoDetailed, RouteContext } from "./routing/model-router.js";
 import { SessionStore } from "./session-store.js";
@@ -81,80 +81,46 @@ async function runHeadlessPromptAsync(input: {
   stream?: boolean;
 }): Promise<HeadlessResult> {
   const shouldPersist = input.persistSession ?? true;
-  const sessionId = shouldPersist
-    ? (input.sessionId ??
-      input.store.createSession({
-        title: input.sessionName ?? input.prompt.slice(0, 80),
-        cwd: input.cwd,
-        metadata: { mode: "headless" }
-      }))
-    : randomUUID();
 
   if (!shouldPersist) {
-    return runEphemeralHeadless(input, sessionId, randomUUID());
+    // Ephemeral mode previously took a bare provider call with no agent loop
+    // and no tools, so `--no-session-persistence` silently disabled every
+    // tool (the model could only answer as plain text). Instead, run the full
+    // persisted agent path against an in-memory SQLite store: tools, hooks and
+    // the tool-use execution loop all work, and nothing is written to disk.
+    const memoryStore = SessionStore.memory();
+    try {
+      // The agent loop calls appendMessage(sessionId, ...), which has a FK to
+      // the sessions table — so the session row must exist in the in-memory
+      // store first (a bare UUID would trip "FOREIGN KEY constraint failed").
+      const sessionId =
+        input.sessionId ??
+        memoryStore.createSession({
+          title: input.sessionName ?? input.prompt.slice(0, 80),
+          cwd: input.cwd,
+          metadata: { mode: "headless-ephemeral" }
+        });
+      return await runPersistedHeadless(
+        { ...input, store: memoryStore },
+        sessionId,
+        input.jobId ?? randomUUID()
+      );
+    } finally {
+      memoryStore.close();
+    }
   }
+
+  const sessionId =
+    input.sessionId ??
+    input.store.createSession({
+      title: input.sessionName ?? input.prompt.slice(0, 80),
+      cwd: input.cwd,
+      metadata: { mode: "headless" }
+    });
 
   const jobId = input.jobId ?? randomUUID();
 
   return runPersistedHeadless(input, sessionId, jobId);
-}
-
-async function runEphemeralHeadless(
-  input: {
-    prompt: string;
-    cwd: string;
-    store: SessionStore;
-    config: MagiConfig;
-    env?: NodeJS.ProcessEnv;
-    paths?: MagiPaths;
-    stateRoot?: string;
-    modelAlias?: string;
-    jobId?: string;
-    collectEvents?: boolean;
-    permissionMode?: ToolPermissionMode;
-    toolRules?: ToolPermissionRules;
-    userQuestionResolver?: UserQuestionResolver;
-    userMessageSink?: UserMessageSink;
-    activeInteractions?: ActiveInteractionRegistry;
-    interactionTimeoutMs?: number;
-    signal?: AbortSignal;
-    onStreamEvent?: (event: AgentQueryEvent) => void;
-    stream?: boolean;
-  },
-  sessionId: string,
-  jobId: string
-): Promise<HeadlessResult> {
-  const routeCtx = buildRouteContext(input);
-  const resolvedAlias = resolveAutoAlias(input.modelAlias, input.config, input.prompt, routeCtx);
-  if (resolvedAlias && hasProviderRoute(input.config, resolvedAlias)) {
-    const registry = buildProviderRegistry({ config: input.config, env: input.env });
-    const routed = await routeProviderRequest({
-      config: input.config,
-      registry,
-      alias: resolvedAlias,
-      messages: [textMessage("user", input.prompt)],
-      signal: input.signal
-    });
-    return {
-      sessionId,
-      jobId,
-      status: "completed",
-      message: routed.response.text,
-      provider: routed.providerName,
-      model: routed.model,
-      usage: routed.response.usage
-    };
-  }
-  return {
-    sessionId,
-    jobId,
-    status: "completed",
-    message:
-      "No provider is configured. Run 'magi init' to set up a provider + API key, then try again.",
-    provider: "none",
-    model: "none",
-    usage: { inputTokens: 0, outputTokens: 0 }
-  };
 }
 
 async function runPersistedHeadless(

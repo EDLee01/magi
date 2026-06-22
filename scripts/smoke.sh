@@ -41,7 +41,7 @@ FILE_CONTENT=$(python3 -c "from pathlib import Path; p=Path('hello.txt'); print(
 [[ "$FILE_CONTENT" == "world" ]] && pass "write+read 文件内容: $FILE_CONTENT" || fail "工具调用失败: response=$RESULT file=$FILE_CONTENT"
 
 header "4. Bash 工具 — 运行命令"
-RESULT=$(node "$CLI" -p "run shell echo hello-smoke" --permission-mode acceptEdits --output-format json 2>/dev/null | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('message','').replace('\n',' ')[:120])" 2>/dev/null)
+RESULT=$(node "$CLI" -p "run shell echo hello-smoke" --permission-mode acceptEdits --allowed-tools 'Bash(echo:*)' --output-format json 2>/dev/null | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); print(d.get('message','').replace('\n',' ')[:120])" 2>/dev/null)
 [[ "$RESULT" == *"hello-smoke"* ]] && pass "bash 返回: hello-smoke" || fail "bash 失败: $RESULT"
 
 header "5. 缓存命中 — 第二次请求 vs 第一次"

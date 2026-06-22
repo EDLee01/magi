@@ -1288,7 +1288,8 @@ describe("agent query loop", () => {
         cwd: workspace,
         stateRoot,
         sessionId: "todo-session",
-        permissionMode: "acceptEdits"
+        permissionMode: "acceptEdits",
+        toolRules: { allow: ["TodoWrite(*)"], ask: [], deny: [] }
       })
     );
 
@@ -2203,6 +2204,7 @@ describe("agent query loop", () => {
         cwd: workspace,
         stateRoot,
         permissionMode: "acceptEdits",
+        toolRules: { allow: ["TodoWrite(*)"], ask: [], deny: [] },
         routes: [{ providerName: "todo-engine", model: "explicit", adapter }]
       });
 
@@ -2281,6 +2283,7 @@ describe("agent query loop", () => {
         cwd: workspace,
         stateRoot: paths.stateRoot,
         permissionMode: "acceptEdits",
+        toolRules: { allow: ["Config(*)", "Skill(*)"], ask: [], deny: [] },
         routes: [{ providerName: "audit-tools", model: "explicit", adapter }]
       });
 
@@ -2805,7 +2808,10 @@ describe("agent query loop", () => {
       expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
       expect(seen[0]).not.toContain("[Hot Memory]");
       expect(seen[0]).not.toContain("Release verification");
-      expect(seen[0]).not.toContain("Li Li Research Sense");
+      // The always-present [Available Skills] index lists installed skills by
+      // name; what must stay out of an unrelated task is the full skill body.
+      expect(seen[0]).toContain("[Available Skills]");
+      expect(seen[0]).not.toContain("Use for hydrology manuscript writing");
       expect(seen[0]).not.toContain("GeoMind Next");
 
       const decision = store
@@ -2961,7 +2967,10 @@ describe("agent query loop", () => {
       expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
       expect(seen[0]).toContain("[Hot Memory]");
       expect(seen[0]).toContain("route-clean commentary");
-      expect(seen[0]).not.toContain("Route Clean Helper");
+      // Index lists the skill name; the full body must not be injected for an
+      // unrelated task.
+      expect(seen[0]).toContain("[Available Skills]");
+      expect(seen[0]).not.toContain("Use for route cleanliness checks");
 
       const audits = store.listJobAuditEvents("job-model-route-clean-no-recall", 50);
       const decision = audits.find((event) => event.action === "agent.recall.decision");
@@ -3104,7 +3113,10 @@ describe("agent query loop", () => {
       expect(seen[0]).not.toContain("[Relevant Prior Sessions]");
       expect(seen[0]).toContain("[Hot Memory]");
       expect(seen[0]).toContain("fallback route-clean commentary");
-      expect(seen[0]).not.toContain("Route Clean Fallback Helper");
+      // Index lists the skill name; the full body must not be injected for an
+      // unrelated task.
+      expect(seen[0]).toContain("[Available Skills]");
+      expect(seen[0]).not.toContain("Use for route cleanliness checks");
 
       const decision = store
         .listJobAuditEvents("job-fallback-route-clean-no-recall", 50)
@@ -3298,6 +3310,57 @@ describe("agent query loop", () => {
           metadata: expect.objectContaining({
             decision: "injected",
             skills: ["verify-release"]
+          })
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("matches hyphenated skill names when the user types natural spaced words", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const paths = getMagiPaths({ MAGI_CONFIG_DIR: path.join(workspace, ".magi-next") });
+    ensureMagiHome(paths);
+    const store = SessionStore.open(paths);
+    const seen: string[] = [];
+    try {
+      const skillRoot = path.join(paths.skillsRoot, "blackbox-verify");
+      mkdirSync(skillRoot, { recursive: true });
+      writeFileSync(
+        path.join(skillRoot, "SKILL.md"),
+        [
+          "# Blackbox Verify",
+          "",
+          "Run isolated provider validation before broad checks.",
+          "",
+          "## Steps",
+          "",
+          "1. Start a mock provider.",
+          "2. Run focused black-box CLI flow."
+        ].join("\n"),
+        "utf8"
+      );
+
+      await submitWithCapturedContext({
+        store,
+        sessionId: store.createSession({ title: "spaced hyphen skill", cwd: workspace }),
+        jobId: "job-spaced-hyphen-skill",
+        cwd: workspace,
+        paths,
+        seen,
+        prompt: "Use the blackbox verify skill for isolated provider validation."
+      });
+
+      expect(seen[0]).toContain("[Relevant Skills]");
+      expect(seen[0]).toContain("## blackbox-verify");
+      expect(seen[0]).toContain("Run isolated provider validation before broad checks.");
+      expect(store.listJobAuditEvents("job-spaced-hyphen-skill", 30)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.skills.recalled",
+          metadata: expect.objectContaining({
+            decision: "injected",
+            skills: expect.arrayContaining(["blackbox-verify"])
           })
         })
       );

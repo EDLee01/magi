@@ -12,6 +12,7 @@ import {
   parseSkillSource,
   SkillInstallError
 } from "../src/skills/install.js";
+import { executeSkillTool, parseSkillToolInput } from "../src/tools/skill-tool.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let temp: TempRoot | undefined;
@@ -112,6 +113,30 @@ describe("plugins, marketplace, and skills", () => {
     expect(traversal.stderr).toContain("Skill not found");
   });
 
+  it("invokes a skill with an imperative directive and the full body", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "long-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    // Body well over the old 900-char recall cap, with a marker near the end so
+    // we can prove the full procedure (not a truncated prefix) reaches the model.
+    const body = `# Long Skill\n\n${"step line filler. ".repeat(120)}\nFINAL_STEP_MARKER: produce the verdict.\n`;
+    expect(body.length).toBeGreaterThan(900);
+    writeFileSync(path.join(skillRoot, "SKILL.md"), body, "utf8");
+
+    const output = executeSkillTool({
+      request: parseSkillToolInput({ skill: "long-skill" }),
+      skillsRoot: paths.skillsRoot
+    });
+
+    // Imperative framing so the model executes the skill rather than treating
+    // it as passive context (the old behavior the user reported as "weak").
+    expect(output).toContain('You are now running the "long-skill" skill');
+    expect(output).toContain("Follow the procedure below step by step");
+    // Full body, including the tail that the old 900-char cap would have cut.
+    expect(output).toContain("FINAL_STEP_MARKER");
+  });
+
   it("uses frontmatter description as the skill summary", async () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
@@ -173,6 +198,39 @@ describe("plugins, marketplace, and skills", () => {
     ]);
   });
 
+  it("uses the YAML frontmatter description as the skill summary", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "fm-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    // Folded (`>`) multi-line description, like real marketplace/Claude Code skills.
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      [
+        "---",
+        "name: fm-skill",
+        "description: >",
+        "  Make a slide deck from a document. Use when the user says",
+        '  "做PPT" or "create presentation".',
+        "---",
+        "",
+        "# FM Skill",
+        "",
+        "Body goes here.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const [skill] = listSkills(paths);
+    // Old behavior put "---" here, which made the skill invisible to keyword recall.
+    expect(skill.summary).not.toBe("---");
+    expect(skill.summary).toContain("Make a slide deck");
+    expect(skill.summary).toContain("做PPT");
+    // Folded block is collapsed to a single line.
+    expect(skill.summary).not.toContain("\n");
+  });
+
   it("falls back to the first body line when frontmatter lacks a description", () => {
     temp = makeTempRoot();
     const paths = getMagiPaths(temp.env);
@@ -185,6 +243,20 @@ describe("plugins, marketplace, and skills", () => {
     );
 
     expect(listSkills(paths)).toMatchObject([{ name: "bare-helper", summary: "Bare Helper" }]);
+  });
+
+  it("falls back to the first heading when a skill has no frontmatter", () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const skillRoot = path.join(paths.skillsRoot, "plain-skill");
+    mkdirSync(skillRoot, { recursive: true });
+    writeFileSync(
+      path.join(skillRoot, "SKILL.md"),
+      "# Plain Skill\n\nDoes a plain thing.\n",
+      "utf8"
+    );
+    const [skill] = listSkills(paths);
+    expect(skill.summary).toBe("Plain Skill");
   });
 
   it("parses skill sources in shorthand, URL, and subdir forms", () => {

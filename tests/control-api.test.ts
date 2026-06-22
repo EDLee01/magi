@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import http, { IncomingMessage } from "node:http";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
@@ -138,6 +138,59 @@ describe("Control API", () => {
       sessionId: created.session.id,
       status: "recorded"
     });
+  });
+
+  it("inherits the daemon workspace and rejects cwd paths outside its real boundary", async () => {
+    await startTestServer();
+    const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {
+      deviceId: string;
+      token: string;
+    };
+    const headers = authHeaders(pairing);
+
+    const inherited = (await postJson(
+      `${handle!.url}/sessions`,
+      { title: "inherited workspace" },
+      headers
+    )) as { session: { cwd: string } };
+    expect(inherited.session.cwd).toBe(temp!.path);
+
+    const nested = path.join(temp!.path, "nested");
+    mkdirSync(nested);
+    const nestedSession = (await postJson(
+      `${handle!.url}/sessions`,
+      { title: "nested workspace", cwd: nested },
+      headers
+    )) as { session: { cwd: string } };
+    expect(nestedSession.session.cwd).toBe(nested);
+
+    const dotted = path.join(temp!.path, "..cache");
+    mkdirSync(dotted);
+    const dottedSession = (await postJson(
+      `${handle!.url}/sessions`,
+      { title: "dotted workspace", cwd: dotted },
+      headers
+    )) as { session: { cwd: string } };
+    expect(dottedSession.session.cwd).toBe(dotted);
+
+    const outside = await fetch(`${handle!.url}/sessions`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ title: "outside workspace", cwd: "/" })
+    });
+    expect(outside.status).toBe(400);
+    expect(await outside.text()).toContain("outside the authorized workspace");
+
+    if (process.platform !== "win32") {
+      const escape = path.join(temp!.path, "escape");
+      symlinkSync("/", escape);
+      const symlinkEscape = await fetch(`${handle!.url}/sessions`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({ title: "symlink escape", cwd: escape })
+      });
+      expect(symlinkEscape.status).toBe(400);
+    }
   });
 
   it("accepts mobile panel content/modelAlias payloads when resuming sessions", async () => {
@@ -1040,6 +1093,7 @@ describe("Control API", () => {
     expect(panelHtml).toContain("client.resolveApproval");
     expect(panelHtml).toContain("cancelActiveJob");
     expect(panelHtml).toContain("client.cancelJob");
+    expect(panelHtml).not.toContain('cwd: "/"');
 
     const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {
       deviceId: string;

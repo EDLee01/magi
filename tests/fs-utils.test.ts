@@ -98,4 +98,15 @@ describe("atomicWrite", () => {
     // Mask the mode to permission bits only
     expect(stats.mode & 0o777).toBe(0o600);
   });
+
+  it("preserves the mode of an existing file unless explicitly overridden", () => {
+    const dir = makeDir();
+    const target = path.join(dir, "script.sh");
+    writeFileSync(target, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+
+    atomicWrite(target, "#!/bin/sh\nprintf ok\n");
+
+    const stats = require("node:fs").statSync(target);
+    expect(stats.mode & 0o777).toBe(0o755);
+  });
 });

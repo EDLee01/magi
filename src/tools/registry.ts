@@ -39,7 +39,12 @@ import {
 } from "./git.js";
 import { executeLspRequest, LSP_SCHEMA, parseLspRequest } from "./lsp.js";
 import { formatSearchMatches, globWorkspace, searchWorkspace } from "./search.js";
-import { isDangerousShellCommand, isReadOnlyShellCommand, runShellCommand } from "./shell.js";
+import {
+  commandAllowedByPrefix,
+  isDangerousShellCommand,
+  isReadOnlyShellCommand,
+  runShellCommand
+} from "./shell.js";
 import {
   formatMonitorResult,
   getMonitorData,
@@ -351,6 +356,14 @@ export type ToolPermissionMode =
   | "bypassPermissions"
   | "plan";
 export type ToolPermissionDecision = "allow" | "ask" | "deny";
+export type ToolRiskClass =
+  | "read"
+  | "workspace-edit"
+  | "command"
+  | "network"
+  | "remote"
+  | "state-change"
+  | "destructive";
 
 export interface ToolPermissionRules {
   allow: string[];
@@ -771,8 +784,20 @@ export function checkToolPermission(input: {
   if (input.mode === "dontAsk" && !tool.isReadOnly(input.toolUse.input)) {
     return { decision: "deny", reason: `${input.toolUse.name} is not allowed in dontAsk mode` };
   }
-  if (input.mode === "bypassPermissions" || input.mode === "acceptEdits") {
-    return { decision: "allow", reason: `${input.mode} mode` };
+  if (input.mode === "bypassPermissions") {
+    return { decision: "allow", reason: "bypassPermissions mode" };
+  }
+  if (input.mode === "acceptEdits") {
+    const risk = classifyToolRisk(input.toolUse, tool);
+    if (risk === "workspace-edit") {
+      return { decision: "allow", reason: "acceptEdits workspace edit" };
+    }
+    if (risk !== "read") {
+      return {
+        decision: "ask",
+        reason: `${input.toolUse.name} requires approval in acceptEdits mode (${risk})`
+      };
+    }
   }
   if (input.mode === "plan" && !tool.isReadOnly(input.toolUse.input)) {
     return { decision: "deny", reason: `${input.toolUse.name} is not allowed in plan mode` };
@@ -788,6 +813,39 @@ export function checkToolPermission(input: {
     return { decision: "ask", reason: `${input.toolUse.name} requires approval` };
   }
   return { decision: "allow", reason: "read-only tool" };
+}
+
+const WORKSPACE_EDIT_TOOL_NAMES = new Set(["FileWrite", "FileEdit", "FilePatch"]);
+
+const NETWORK_TOOL_NAMES = new Set(["NetworkCheck"]);
+
+export function classifyToolRisk(
+  toolUse: MagiToolUsePart,
+  tool: RegisteredTool = getBuiltinToolRegistry().get(toolUse.name)!
+): ToolRiskClass {
+  if (toolUse.name === "Bash" || tool.category === "shell") {
+    return "command";
+  }
+  if (tool.category === "ssh") {
+    return "remote";
+  }
+  if (
+    tool.category === "web" ||
+    tool.category === "github" ||
+    NETWORK_TOOL_NAMES.has(toolUse.name)
+  ) {
+    return "network";
+  }
+  if (WORKSPACE_EDIT_TOOL_NAMES.has(toolUse.name)) {
+    return "workspace-edit";
+  }
+  if (tool.isDestructive(toolUse.input)) {
+    return "destructive";
+  }
+  if (tool.isReadOnly(toolUse.input)) {
+    return "read";
+  }
+  return "state-change";
 }
 
 export function formatToolResult(input: {
@@ -830,7 +888,13 @@ const CORE_TOOL_NAMES = [
   "ToolSearch",
   "WorkspaceDiagnostics",
   "EnterPlanMode",
-  "ExitPlanMode"
+  "ExitPlanMode",
+  // Skills are surfaced to the model via an always-present index ([Available
+  // Skills]); these two must be core so the model can actually discover and load
+  // a skill's full procedure on demand. Left deferred, text-protocol providers
+  // emit the calls but they never execute. SkillManage (authoring) stays deferred.
+  "Skill",
+  "DiscoverSkills"
 ] as const;
 
 const BUILTIN_TOOLS: RegisteredTool[] = [
@@ -1325,10 +1389,23 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       if (!context.promptModel) {
         throw new Error("WebFetch requires an active model route");
       }
+      const fetchAllowlist = readWebFetchAllowlist(context.env);
       const result = await webFetch({
         url: readString(input, "url"),
         prompt: readString(input, "prompt"),
         maxBytes: readOptionalNumber(input, "max_bytes"),
+        allowHost: (hostname) => {
+          const literal = hostname.includes(":") ? `[${hostname}]` : hostname;
+          try {
+            return webFetchHostAllowed(`http://${literal}`, fetchAllowlist);
+          } catch {
+            return false;
+          }
+        },
+        // No human approves the initial URL under bypassPermissions, so guard
+        // it against internal addresses; otherwise the ask/allowlist gate
+        // already reflects user consent for the initial host.
+        guardInitialHost: context.permissionMode === "bypassPermissions",
         promptModel: context.promptModel
       });
       return [
@@ -2956,7 +3033,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
       }
       lines.push("");
       lines.push(
-        'To run a skill: reply with its name as a slash command, or call Skill({name: "..."}).'
+        'To run a skill: reply with its name as a slash command, or call Skill({skill: "..."}).'
       );
       return lines.join("\n");
     },
@@ -3209,6 +3286,10 @@ function ruleMatches(rule: string, toolUse: MagiToolUsePart): boolean {
       toolUse.input.url ??
       ""
   );
+  if (toolUse.name === "Bash" && selector.endsWith(":*")) {
+    const command = selector.slice(0, -2);
+    return commandAllowedByPrefix(haystack, command);
+  }
   return globPattern(selector, haystack);
 }
 

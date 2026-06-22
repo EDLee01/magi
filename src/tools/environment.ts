@@ -25,8 +25,26 @@ export function parseEnvironmentInput(input: Record<string, unknown>): {
   };
 }
 
+// Any variable whose name looks secret-bearing is redacted before its value
+// ever reaches the model context. Matches KEY / TOKEN / SECRET / PASSWORD /
+// PASSWD / CREDENTIAL / AUTH / SESSION / COOKIE / PRIVATE, case-insensitive.
+const SECRET_KEY_PATTERN =
+  /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH|SESSION|COOKIE|PRIVATE)/i;
+
+export function redactEnvValue(key: string, value: string): string {
+  if (!value) return value;
+  if (!SECRET_KEY_PATTERN.test(key)) return value;
+  // Keep a short prefix so the value is still recognizable for debugging,
+  // but never expose enough to be usable.
+  const visible = value.length > 8 ? value.slice(0, 3) : "";
+  return `${visible}***redacted*** (${value.length} chars)`;
+}
+
 export function executeEnvironment(input: { prefix?: string; filter?: string }): EnvironmentResult {
-  let entries = Object.entries(process.env).map(([key, value]) => ({ key, value: value ?? "" }));
+  let entries = Object.entries(process.env).map(([key, value]) => ({
+    key,
+    value: redactEnvValue(key, value ?? "")
+  }));
   if (input.prefix) {
     const p = input.prefix.toUpperCase();
     entries = entries.filter(({ key }) => key.startsWith(p));

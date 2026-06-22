@@ -405,6 +405,11 @@ describe("hooks", () => {
         cwd: workspace,
         stateRoot: paths.stateRoot,
         permissionMode: "acceptEdits",
+        toolRules: {
+          allow: ["Config(*)"],
+          ask: [],
+          deny: []
+        },
         routes: [{ providerName: "config-hook", model: "explicit", adapter }],
         hooks: [
           {
@@ -811,6 +816,7 @@ it("triggers elicitation hooks for user questions", async () => {
 });
 
 it("triggers worktree hooks for git operations", async () => {
+  workspace = mkdtempSync(path.join(os.tmpdir(), "magi-worktree-hook-"));
   const { createWorktree, removeWorktree } = await import("../src/tools/git.js");
   const hooks: HookDefinition[] = [
     {

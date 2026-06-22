@@ -1,4 +1,6 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
+
+import { ToolError } from "./errors.js";
 
 export interface WhichResult {
   name: string;
@@ -14,20 +16,34 @@ export const WhichInputSchema = {
 
 export function parseWhichInput(input: Record<string, unknown>): { name: string } {
   const name = typeof input.name === "string" ? input.name : "";
-  if (!name) throw new Error("name is required");
+  if (!name) throw new ToolError("name is required", "bad-input");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(name)) {
+    throw new ToolError(
+      "name must be an executable name without paths or shell syntax",
+      "bad-input"
+    );
+  }
   return { name };
 }
 
 export function executeWhich(input: { name: string }): WhichResult {
-  try {
-    const path = execSync(`which "${input.name.replace(/"/g, '\\"')}"`, {
-      encoding: "utf8",
-      timeout: 5000
-    }).trim();
-    return { name: input.name, path: path || null, exists: path.length > 0 };
-  } catch {
+  const command = process.platform === "win32" ? "where.exe" : "which";
+  const result = spawnSync(command, [input.name], {
+    encoding: "utf8",
+    timeout: 5000
+  });
+  if (result.error || result.status !== 0) {
     return { name: input.name, path: null, exists: false };
   }
+  const resolvedPath = result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  return {
+    name: input.name,
+    path: resolvedPath ?? null,
+    exists: resolvedPath !== undefined
+  };
 }
 
 export function formatWhichResult(result: WhichResult): string {

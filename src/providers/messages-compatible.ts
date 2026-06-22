@@ -13,6 +13,15 @@ import {
 } from "./ir.js";
 import { readSseEvents } from "./sse.js";
 
+// Providers fall back to tiny output caps when max_tokens is omitted (SiliconFlow
+// defaults to 512; the previous hard-coded Anthropic fallback was 1024), which
+// silently truncates agent turns. Resolve a generous default, tunable via env.
+export function resolveDefaultMaxOutputTokens(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.MAGI_DEFAULT_MAX_OUTPUT_TOKENS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 16000;
+}
+
 export class MessagesCompatibleAdapter implements ProviderAdapter {
   readonly name: string;
   private readonly config: ProviderConfig;
@@ -61,7 +70,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
           }
         })),
         temperature: request.temperature,
-        max_tokens: request.maxOutputTokens
+        max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(this.env)
       })
     });
 
@@ -103,7 +112,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
           }
         })),
         temperature: request.temperature,
-        max_tokens: request.maxOutputTokens,
+        max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(this.env),
         stream: true,
         stream_options: { include_usage: true }
       })
@@ -358,19 +367,22 @@ function toAnthropicMessagesBody(request: ProviderRequest): Record<string, unkno
   // System prompt as a content array. If there are NO tools, put the cache
   // marker on the system block instead so the system prompt itself gets
   // cached. We never add two markers — only the largest static prefix.
-  const systemBlocks = systemText
-    ? [
-        {
-          type: "text" as const,
-          text: systemText,
-          ...(hasTools ? {} : { cache_control: { type: "ephemeral" } })
-        }
-      ]
-    : undefined;
+  // Always emit a non-empty system block. Some messages-compatible relays
+  // (e.g. hotaitool.net) inject their own "generate a title" system prompt
+  // when the request omits `system`, which hijacks the response into
+  // `{"title": "..."}`. Sending any system text suppresses that injection.
+  const effectiveSystemText = systemText || "You are Magi, a helpful AI assistant.";
+  const systemBlocks = [
+    {
+      type: "text" as const,
+      text: effectiveSystemText,
+      ...(hasTools ? {} : { cache_control: { type: "ephemeral" } })
+    }
+  ];
 
   return {
     model: request.model,
-    max_tokens: request.maxOutputTokens ?? 1024,
+    max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(),
     temperature: request.temperature,
     system: systemBlocks,
     messages,

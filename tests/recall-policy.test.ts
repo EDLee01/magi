@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   filterMemoryHitsByRecallEvidence,
   planRecall,
+  scoreSkillForRecall,
   selectHotMemoryNodes
 } from "../src/agent/recall-policy.js";
 import type { MemoryNode } from "../src/memory-node-store.js";
@@ -219,6 +220,27 @@ describe("recall policy", () => {
     );
 
     expect(hits.map((hit) => hit.title)).toEqual(["Nature公众号推文工作流"]);
+  });
+
+  it("scores a direct skill-name mention as a strong match even without skill keywords", () => {
+    const verify = {
+      name: "verify",
+      summary: "Verify implementation",
+      root: "/skills/verify",
+      body: "# Verify\n"
+    };
+    // This prompt names the skill but trips neither SKILL_TERMS nor a clean
+    // coding classification (it reads as memory_dependent), so planRecall gives
+    // skill budget 0. The score must still be strong (>=12, a direct name match)
+    // so buildSkillRecallContext can inject it despite the zero classifier budget
+    // — the fix for the "sometimes injected, sometimes not" flakiness.
+    const prompt = "verify 我对这个仓库的改动是否可用,按 verify 流程给结论";
+    const hit = scoreSkillForRecall(verify, prompt);
+    expect(hit?.score).toBeGreaterThanOrEqual(12);
+    expect(hit?.matchedTerms).toContain("verify");
+
+    // Guard against over-injection: an unrelated prompt scores nothing.
+    expect(scoreSkillForRecall(verify, "今天天气怎么样")).toBeUndefined();
   });
 });
 

@@ -5,16 +5,17 @@
 
 import { spawn } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   unlinkSync,
-  writeFileSync,
   openSync,
   closeSync
 } from "node:fs";
 import path from "node:path";
 
+import { atomicWrite } from "../fs-utils.js";
 import { MagiPaths } from "../paths.js";
 
 export interface DaemonStatus {
@@ -27,6 +28,12 @@ export interface DaemonStatus {
   logFile: string;
 }
 
+export interface DaemonControlCredentials {
+  deviceId: string;
+  token: string;
+  expiresAt: string;
+}
+
 function daemonDir(paths: MagiPaths): string {
   return path.join(paths.stateRoot, "daemon");
 }
@@ -37,6 +44,10 @@ function pidFile(paths: MagiPaths): string {
 
 function logFile(paths: MagiPaths): string {
   return path.join(paths.logsRoot, "magi-daemon.log");
+}
+
+export function daemonControlCredentialsFile(paths: MagiPaths): string {
+  return path.join(daemonDir(paths), "control-credentials.json");
 }
 
 export function getDaemonStatus(paths: MagiPaths): DaemonStatus {
@@ -91,10 +102,9 @@ export function writeDaemonPidFile(
   paths: MagiPaths,
   info: { pid: number; port: number; bind: string }
 ): void {
-  const dir = daemonDir(paths);
-  mkdirSync(dir, { recursive: true });
+  const dir = ensureDaemonDir(paths);
   mkdirSync(paths.logsRoot, { recursive: true });
-  writeFileSync(
+  atomicWrite(
     pidFile(paths),
     [
       String(info.pid),
@@ -102,8 +112,48 @@ export function writeDaemonPidFile(
       `bind=${info.bind}`,
       `startedAt=${new Date().toISOString()}`
     ].join("\n") + "\n",
-    "utf8"
+    { mode: 0o600 }
   );
+}
+
+export function writeDaemonControlCredentials(
+  paths: MagiPaths,
+  credentials: DaemonControlCredentials
+): void {
+  ensureDaemonDir(paths);
+  atomicWrite(daemonControlCredentialsFile(paths), `${JSON.stringify(credentials, null, 2)}\n`, {
+    mode: 0o600
+  });
+}
+
+export function readDaemonControlCredentials(
+  paths: MagiPaths
+): DaemonControlCredentials | undefined {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(daemonControlCredentialsFile(paths), "utf8")
+    ) as Partial<DaemonControlCredentials>;
+    if (
+      typeof parsed.deviceId !== "string" ||
+      typeof parsed.token !== "string" ||
+      typeof parsed.expiresAt !== "string"
+    ) {
+      return undefined;
+    }
+    return {
+      deviceId: parsed.deviceId,
+      token: parsed.token,
+      expiresAt: parsed.expiresAt
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export function clearDaemonControlCredentials(paths: MagiPaths): void {
+  try {
+    unlinkSync(daemonControlCredentialsFile(paths));
+  } catch {}
 }
 
 export function clearDaemonPidFile(paths: MagiPaths): void {
@@ -131,8 +181,7 @@ export function startDaemon(
   if (status.running) {
     throw new Error(`Magi daemon is already running (pid ${status.pid})`);
   }
-  const dir = daemonDir(paths);
-  mkdirSync(dir, { recursive: true });
+  const dir = ensureDaemonDir(paths);
   mkdirSync(paths.logsRoot, { recursive: true });
   const log = logFile(paths);
   const out = openSync(log, "a");
@@ -148,11 +197,11 @@ export function startDaemon(
     }
     // Note: PID file is written by the child after server actually binds (in serve command).
     // For now, write a tentative one with just the PID so status can find it.
-    writeFileSync(
+    atomicWrite(
       pidFile(paths),
       [String(child.pid), "port=0", "bind=", `startedAt=${new Date().toISOString()}`].join("\n") +
         "\n",
-      "utf8"
+      { mode: 0o600 }
     );
     return { pid: child.pid, logFile: log, pidFile: pidFile(paths) };
   } finally {
@@ -171,8 +220,16 @@ export function stopDaemon(
   try {
     process.kill(status.pid, signal);
     clearDaemonPidFile(paths);
+    clearDaemonControlCredentials(paths);
     return { stopped: true, pid: status.pid };
   } catch {
     return { stopped: false, pid: status.pid };
   }
+}
+
+function ensureDaemonDir(paths: MagiPaths): string {
+  const dir = daemonDir(paths);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  chmodSync(dir, 0o700);
+  return dir;
 }

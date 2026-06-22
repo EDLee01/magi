@@ -139,7 +139,9 @@ export function loadCronStore(filePath: string): CronStoreData {
 export function saveCronStore(filePath: string, store: CronStoreData): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
   const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  writeFileSync(tmp, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  // Cron prompts are model-authored instructions that later run headlessly —
+  // keep the store owner-only so it can't be read or tampered with by others.
+  writeFileSync(tmp, `${JSON.stringify(store, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   renameSync(tmp, filePath);
 }
 

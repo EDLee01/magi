@@ -1,14 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,13 +90,7 @@ function renderLiveConfig({ modelRef, apiKeyEnv, baseUrl, providerType, endpoint
   if (providerType === "messages-compatible") {
     lines.push("    defaultModel: " + model);
   }
-  lines.push(
-    "models:",
-    "  aliases:",
-    "    live: " + resolvedModelRef,
-    "  fallbacks: {}",
-    ""
-  );
+  lines.push("models:", "  aliases:", "    live: " + resolvedModelRef, "  fallbacks: {}", "");
   return lines.join("\n");
 }
 
@@ -282,6 +269,8 @@ async function main() {
         "--no-color",
         "--permission-mode",
         "acceptEdits",
+        "--allowed-tools",
+        "FileRead,FileWrite,FileEdit,FilePatch,Glob,Grep,ToolSearch,WorkspaceDiagnostics,Bash(node*)",
         "--model",
         modelAlias,
         "--output-format",

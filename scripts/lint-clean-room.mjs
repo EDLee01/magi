@@ -36,7 +36,18 @@ for (const file of productionRoots.flatMap(filesUnder)) {
   const text = readFileSync(file, "utf8");
   for (const needle of forbiddenRuntimeNeedles) {
     if (text.includes(needle)) {
-      throw new Error(`Forbidden clean-room runtime reference ${JSON.stringify(needle)} in ${file}`);
+      throw new Error(
+        `Forbidden clean-room runtime reference ${JSON.stringify(needle)} in ${file}`
+      );
     }
+  }
+  if (/\bexecSync\s*\(\s*`/.test(text)) {
+    throw new Error(`Dynamic or template-string execSync is forbidden in ${file}; use argv APIs`);
+  }
+  if (/\bexecSync\s*\(\s*[A-Za-z_$][A-Za-z0-9_$]*\s*[,)]/.test(text)) {
+    throw new Error(`Variable-driven execSync is forbidden in ${file}; use argv APIs`);
+  }
+  if (/\bshell\s*:\s*true\b/.test(text)) {
+    throw new Error(`shell: true is forbidden in ${file}; use an explicit reviewed shell boundary`);
   }
 }

@@ -1,5 +1,5 @@
 import http from "node:http";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -7,7 +7,11 @@ import { runCli } from "../src/cli.js";
 import { getMagiPaths } from "../src/paths.js";
 import { MemoryNodeStore } from "../src/memory-node-store.js";
 import { SessionStore } from "../src/session-store.js";
-import { writeDaemonPidFile } from "../src/control/daemon.js";
+import {
+  daemonControlCredentialsFile,
+  readDaemonControlCredentials,
+  writeDaemonPidFile
+} from "../src/control/daemon.js";
 import { makeTempRoot, TempRoot } from "./helpers.js";
 
 let temp: TempRoot | undefined;
@@ -26,7 +30,7 @@ describe("CLI entrypoint", () => {
   it("runs magi --version", async () => {
     const result = await runCli(["--version"], {}, process.cwd());
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("magi 0.1.8\n");
+    expect(result.stdout).toBe("magi 0.1.11\n");
   });
 
   it("runs magi doctor and displays the isolation root", async () => {
@@ -79,6 +83,44 @@ describe("CLI entrypoint", () => {
     expect(result.stdout).toContain("Scan this QR code");
     expect(result.stdout).toMatch(/[▄▀█]/);
     expect(result.stdout).not.toContain("token NOT in URL");
+  });
+
+  it("authenticates magi kill with a loopback-paired daemon token stored as 0600", async () => {
+    temp = makeTempRoot();
+    const paths = getMagiPaths(temp.env);
+    const requests: string[] = [];
+    server = http.createServer(async (request, response) => {
+      requests.push(request.url ?? "");
+      if (request.url === "/pairing") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            deviceId: "local-cli-device",
+            token: "magi_local_cli_token",
+            expiresAt: "2099-01-01T00:00:00.000Z"
+          })
+        );
+        return;
+      }
+      expect(request.url).toBe("/jobs/job-1/cancel");
+      expect(request.headers["x-magi-device-id"]).toBe("local-cli-device");
+      expect(request.headers.authorization).toBe("Bearer magi_local_cli_token");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end('{"ok":true}\n');
+    });
+    const baseUrl = await listen(server);
+    const port = Number(new URL(baseUrl).port);
+    writeDaemonPidFile(paths, { pid: process.pid, port, bind: "127.0.0.1" });
+
+    const result = await runCli(["kill", "job-1"], temp.env, process.cwd());
+
+    expect(result).toMatchObject({ exitCode: 0, stdout: "Cancelled job job-1\n", stderr: "" });
+    expect(requests).toEqual(["/pairing", "/jobs/job-1/cancel"]);
+    expect(readDaemonControlCredentials(paths)).toMatchObject({
+      deviceId: "local-cli-device",
+      token: "magi_local_cli_token"
+    });
+    expect(statSync(daemonControlCredentialsFile(paths)).mode & 0o777).toBe(0o600);
   });
 
   it("runs magi -p through the headless path", async () => {
@@ -428,7 +470,11 @@ describe("CLI entrypoint", () => {
       model: string;
     };
     expect(body.sessionId).toBeTruthy();
-    expect(body.status).toBe("completed");
+    // --no-session-persistence now runs the full agent path against an
+    // in-memory store (so tools work in ephemeral mode); with no provider
+    // configured it reports the shared "recorded" no-provider result rather
+    // than the old bare-provider-call "completed" stub.
+    expect(body.status).toBe("recorded");
     expect(body.message).toContain("No provider is configured");
     expect(body.provider).toBe("none");
     expect(body.model).toBe("none");

@@ -48,11 +48,17 @@ export function executeSkillTool(input: { request: SkillToolRequest; skillsRoot:
 }
 
 function formatSkillSelection(skill: SkillRecord, args: string | undefined): string {
+  // Explicit invocation is the strong signal: the model (or user) chose this
+  // skill deliberately, so frame the body as an imperative procedure to run
+  // now — not the passive "here is a skill" listing that produced weak,
+  // partial execution.
   return [
+    `You are now running the "${skill.name}" skill. Follow the procedure below step by step, in order, and produce output in the format it specifies. Do not skip steps or summarize the procedure away.`,
+    args ? `Args: ${args}` : undefined,
+    "",
     `Skill: ${skill.name}`,
     `Root: ${skill.root}`,
     `Summary: ${skill.summary}`,
-    args ? `Args: ${args}` : undefined,
     "",
     skill.body ?? ""
   ]

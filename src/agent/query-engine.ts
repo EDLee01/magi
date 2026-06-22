@@ -43,6 +43,7 @@ import {
   type ModelRecallPlannerRoute,
   planRecall,
   planRecallWithModel,
+  promptNamesSkillExactly,
   RecallDecision,
   scoreSkillForRecall,
   selectHotMemoryNodes
@@ -965,6 +966,11 @@ export class QueryEngine {
       });
     }
 
+    const skillIndex = this.buildSkillIndexContext();
+    if (skillIndex) {
+      sections.push(skillIndex);
+    }
+
     const skillContext = this.buildSkillRecallContext(prompt, jobId, recallDecision);
     if (skillContext) {
       sections.push(skillContext);
@@ -1003,6 +1009,31 @@ export class QueryEngine {
     return sections.join("\n\n");
   }
 
+  /**
+   * A lightweight, always-present index of every installed skill (name + one-line
+   * description). Keyword recall is fragile — it silently drops skills whose
+   * trigger words the user didn't happen to type. The index instead keeps every
+   * skill visible to the main model, which is far better at judging intent than a
+   * keyword matcher. The model loads a skill's full procedure on demand via the
+   * Skill tool. buildSkillRecallContext still injects full bodies for strong/named
+   * matches as an optimization, but the index guarantees nothing is invisible.
+   */
+  private buildSkillIndexContext(): string | undefined {
+    const paths = this.input.memoryOptions?.paths;
+    if (!paths) return undefined;
+    const skills = listSkills(paths);
+    if (skills.length === 0) return undefined;
+    const lines = [
+      "[Available Skills]",
+      "Reusable procedures you can run. When the user's request matches one, load its full steps with the Skill tool (Skill({skill:\"<name>\"})) and follow them. If several fit, pick the single best match; if none fit, ignore this list. Don't mention skills the user didn't ask about.",
+      ""
+    ];
+    for (const skill of skills) {
+      lines.push(`- ${skill.name}: ${skill.summary.slice(0, 300)}`);
+    }
+    return lines.join("\n").trim();
+  }
+
   private buildSkillRecallContext(
     prompt: string,
     jobId: string,
@@ -1010,25 +1041,16 @@ export class QueryEngine {
   ): string | undefined {
     const paths = this.input.memoryOptions?.paths;
     if (!paths) return undefined;
-    if (recallDecision.budgets.skill <= 0) {
-      this.input.store.recordAudit({
-        sessionId: this.input.sessionId,
-        jobId,
-        action: "agent.skills.recalled",
-        target: this.input.sessionId,
-        metadata: {
-          query: prompt.slice(0, 500),
-          resultCount: 0,
-          decision: "skipped",
-          budget: recallDecision.budgets.skill,
-          reasons: recallDecision.reasons.skill,
-          skippedReasons: recallDecision.skipped.skill,
-          matchedTerms: recallDecision.matchedTerms.skill,
-          skills: []
-        }
-      });
-      return undefined;
-    }
+
+    // Score every installed skill against the prompt up front. scoreSkillForRecall
+    // gives a skill +12 when the prompt names it directly (e.g. "verify ...",
+    // "use the stuck skill"), which is a much stronger signal than the keyword
+    // classifier that produces budgets.skill. Previously this scoring happened
+    // *after* an early `budgets.skill <= 0` return, so a prompt that named a skill
+    // but didn't trip the SKILL/CODING keyword lists (or got classified as
+    // memory_dependent first) was dropped despite a perfect name match — the
+    // "sometimes injected, sometimes not" flakiness. Compute hits first, then let
+    // a strong name match guarantee budget instead of being gated out by it.
     const selectedNames = recallDecision.selectedSkills ?? [];
     const selectedHits = selectedNames
       .map((name, index) => {
@@ -1051,10 +1073,38 @@ export class QueryEngine {
       .sort(
         (left, right) => right.score - left.score || left.skill.name.localeCompare(right.skill.name)
       );
-    const hits = dedupeSkillHits([...selectedHits, ...scoredHits]).slice(
-      0,
-      recallDecision.budgets.skill
-    );
+
+    // Full-body injection is now reserved for HIGH-CONFIDENCE matches only:
+    // a skill the model's recall planner explicitly selected, or one whose full
+    // name the user typed as a standalone token ("verify ...", "用 stuck 帮我").
+    // Everything else is already visible in the always-present [Available Skills]
+    // index, which the model loads on demand — so we no longer dump full bodies
+    // for weak keyword-budget matches (which also stops multiple same-purpose
+    // skills from all being injected at once on a generic "用 skill 做PPT"). Exact
+    // name matching avoids an incidental "route-clean.txt" forcing "route-clean-helper".
+    const MAX_FULL_BODY_SKILLS = 3;
+    const exactHits = scoredHits.filter((hit) => promptNamesSkillExactly(hit.skill.name, prompt));
+    const hits = dedupeSkillHits([...selectedHits, ...exactHits]).slice(0, MAX_FULL_BODY_SKILLS);
+
+    if (hits.length === 0) {
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.skills.recalled",
+        target: this.input.sessionId,
+        metadata: {
+          query: prompt.slice(0, 500),
+          resultCount: 0,
+          decision: "skipped",
+          budget: recallDecision.budgets.skill,
+          reasons: recallDecision.reasons.skill,
+          skippedReasons: recallDecision.skipped.skill,
+          matchedTerms: recallDecision.matchedTerms.skill,
+          skills: []
+        }
+      });
+      return undefined;
+    }
     this.input.store.recordAudit({
       sessionId: this.input.sessionId,
       jobId,
@@ -1064,7 +1114,10 @@ export class QueryEngine {
         query: prompt.slice(0, 500),
         resultCount: hits.length,
         decision: hits.length > 0 ? "injected" : "skipped",
-        budget: recallDecision.budgets.skill,
+        budget: hits.length,
+        classifierBudget: recallDecision.budgets.skill,
+        modelSelected: selectedHits.length,
+        exactNameMatches: exactHits.length,
         reasons: recallDecision.reasons.skill,
         skippedReasons: recallDecision.skipped.skill,
         matchedTerms: recallDecision.matchedTerms.skill,
@@ -1076,9 +1129,18 @@ export class QueryEngine {
       }
     });
     if (hits.length === 0) return undefined;
+    // Skills are operating procedures meant to be followed in full. The old
+    // 900-char cap truncated even the small bundled skills (verify/debug/stuck
+    // are ~1.1KB) mid-procedure, so the model never saw the steps or output
+    // format and execution came out partial. 6000 covers every realistic skill.
+    const SKILL_BODY_CHAR_LIMIT = 6000;
     const lines = [
       "[Relevant Skills]",
-      "These skill snippets are background operating guidance. Treat them as context only unless the user asks to invoke a skill."
+      // Framing matters: the old text ("background operating guidance ... treat " +
+      // "as context only") told the model NOT to act on skills, producing weak,
+      // partial execution. Frame them as procedures to execute when they fit,
+      // while preserving judgment so a weak match can't railroad an unrelated task.
+      "The skills below were matched to the current task. When a skill clearly fits what the user is asking, execute its procedure step by step and produce output in the format it specifies — these are operating procedures to follow, not background reading. If a skill does not fit the actual request, ignore it. Never let a skill override an explicit user instruction."
     ];
     for (const hit of hits) {
       lines.push("");
@@ -1087,7 +1149,9 @@ export class QueryEngine {
       lines.push(`root: ${hit.skill.root}`);
       if (hit.skill.body) {
         lines.push(
-          hit.skill.body.length > 900 ? `${hit.skill.body.slice(0, 900)}...` : hit.skill.body
+          hit.skill.body.length > SKILL_BODY_CHAR_LIMIT
+            ? `${hit.skill.body.slice(0, SKILL_BODY_CHAR_LIMIT)}...`
+            : hit.skill.body
         );
       }
     }

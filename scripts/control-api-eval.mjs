@@ -477,7 +477,6 @@ async function exercisePanelResumeFlow({ serve, headers, state }) {
     `${serve.url}/sessions`,
     {
       title: "panel resume eval",
-      cwd: "/",
       metadata: { source: "panel-eval" }
     },
     headers
@@ -632,7 +631,6 @@ async function exerciseWebPanelContract({ serve, headers, state }) {
   const api = client(serve.url, headers);
   const created = await api.createSession({
     title: "panel contract eval",
-    cwd: "/",
     metadata: { source: "panel-contract-eval" }
   });
   assert(created.id, "panel client did not unwrap createSession response");

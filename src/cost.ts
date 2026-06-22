@@ -13,6 +13,7 @@ export interface ModelPricing {
 
 const PRICING: Record<string, ModelPricing> = {
   // Anthropic Claude family
+  "claude-fable-5": { inputPerMillion: 10, outputPerMillion: 50 },
   "claude-haiku-4-5-20251001": { inputPerMillion: 1, outputPerMillion: 5 },
   "claude-haiku-4-5": { inputPerMillion: 1, outputPerMillion: 5 },
   "claude-sonnet-4-6": { inputPerMillion: 3, outputPerMillion: 15 },
