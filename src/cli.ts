@@ -3397,7 +3397,7 @@ function resolveGoalSessionForCommand(input: {
     }
     return session;
   }
-  const session = input.store.getMostRecentSession(input.cwd) ?? input.store.getMostRecentSession();
+  const session = input.store.getMostRecentSession(input.cwd);
   if (session) return session;
   if (input.create) {
     const id = input.store.createSession({
