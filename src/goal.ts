@@ -34,6 +34,8 @@ export interface ThreadGoal {
   blockedAt?: string;
   cancelledAt?: string;
   note?: string;
+  checkCommand?: string;
+  maxChecks?: number;
 }
 
 interface GoalStoreData {
@@ -60,7 +62,7 @@ export function listGoals(paths: MagiPaths, sessionId?: string): ThreadGoal[] {
 
 export function createGoal(
   paths: MagiPaths,
-  input: { sessionId: string; objective: string }
+  input: { sessionId: string; objective: string; checkCommand?: string; maxChecks?: number }
 ): ThreadGoal {
   const objective = input.objective.trim();
   if (!objective) {
@@ -82,7 +84,12 @@ export function createGoal(
     objective,
     status: "active",
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    checkCommand: input.checkCommand?.trim() || undefined,
+    maxChecks:
+      typeof input.maxChecks === "number" && input.maxChecks > 0
+        ? Math.floor(input.maxChecks)
+        : undefined
   };
   data.goals.push(goal);
   writeGoalStore(paths, data);
@@ -212,7 +219,12 @@ function normalizeGoal(value: unknown): ThreadGoal | undefined {
     completedAt: typeof record.completedAt === "string" ? record.completedAt : undefined,
     blockedAt: typeof record.blockedAt === "string" ? record.blockedAt : undefined,
     cancelledAt: typeof record.cancelledAt === "string" ? record.cancelledAt : undefined,
-    note: typeof record.note === "string" ? record.note : undefined
+    note: typeof record.note === "string" ? record.note : undefined,
+    checkCommand: typeof record.checkCommand === "string" ? record.checkCommand : undefined,
+    maxChecks:
+      typeof record.maxChecks === "number" && record.maxChecks > 0
+        ? Math.floor(record.maxChecks)
+        : undefined
   };
 }
 

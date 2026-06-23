@@ -129,6 +129,7 @@ import {
   listGoals,
   updateGoalStatus
 } from "./goal.js";
+import { buildGoalLoopDeps, DEFAULT_MAX_CHECKS, runGoalLoop } from "./goal-loop.js";
 import { parsePermissionMode } from "./commands/permissions.js";
 import { ToolPermissionMode } from "./tools/registry.js";
 
@@ -583,8 +584,73 @@ async function runCliUnsafeWithParsed(
           stderr: ""
         };
       }
-      const goal = createGoal(paths, { sessionId: session.id, objective: parsed.rest.join(" ") });
-      return { exitCode: 0, stdout: `Goal started: ${goal.objective}\n`, stderr: "" };
+      if (sub === "run") {
+        const goal = getGoal(paths, session.id);
+        if (!goal) {
+          return { exitCode: 2, stdout: "No active goal to run.\n", stderr: "" };
+        }
+        const config = loadConfig(paths, env);
+        const maxChecks = readNumericFlag(parsed.rest, "--max-checks") ?? goal.maxChecks;
+        const deps = buildGoalLoopDeps({
+          goal,
+          cwd,
+          store,
+          config,
+          paths,
+          env,
+          modelAlias: parsed.modelAlias ?? "main",
+          permissionMode: parsed.permissionMode
+        });
+        const lines: string[] = [];
+        const result = await runGoalLoop({
+          goal,
+          paths,
+          deps,
+          maxChecks: maxChecks ?? DEFAULT_MAX_CHECKS,
+          onEvent: (event) => {
+            if (event.type === "check-proposed") {
+              lines.push(`Proposed check: ${event.checkCommand}`);
+            } else if (event.type === "attempt-start") {
+              lines.push(`Attempt ${event.attempt}/${event.maxChecks} ...`);
+            } else if (event.type === "check-result") {
+              lines.push(`  check exit ${event.exitCode}`);
+            } else if (event.type === "stuck") {
+              lines.push("  stuck: identical check failure twice, stopping early");
+            }
+          }
+        });
+        lines.push(
+          result.status === "completed"
+            ? `Goal completed in ${result.attempts} attempt(s): ${goal.objective}`
+            : `Goal blocked after ${result.attempts} attempt(s) (${result.reason}): ${goal.objective}`
+        );
+        return {
+          exitCode: result.status === "completed" ? 0 : 1,
+          stdout: `${lines.join("\n")}\n`,
+          stderr: ""
+        };
+      }
+      const checkCommand = readNamedArg(parsed.rest, "--check");
+      const maxChecks = readNumericFlag(parsed.rest, "--max-checks");
+      const objective = parsed.rest
+        .filter((arg, index, all) => {
+          if (arg === "--check" || arg === "--max-checks") return false;
+          const prev = all[index - 1];
+          if (prev === "--check" || prev === "--max-checks") return false;
+          return true;
+        })
+        .join(" ");
+      const goal = createGoal(paths, {
+        sessionId: session.id,
+        objective,
+        checkCommand,
+        maxChecks
+      });
+      return {
+        exitCode: 0,
+        stdout: `Goal started: ${goal.objective}${goal.checkCommand ? `\nCheck: ${goal.checkCommand}` : ""}\n`,
+        stderr: ""
+      };
     } finally {
       store.close();
     }
