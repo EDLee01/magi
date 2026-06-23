@@ -38,15 +38,25 @@ export interface GoalLoopResult {
   status: GoalLoopStatus;
   attempts: number;
   checkCommand: string;
-  reason?: "max_checks" | "stuck";
+  reason?: "max_checks" | "stuck" | "setup_failed";
   lastCheck?: CheckResult;
+  setupCommand?: string;
 }
 
 export interface GoalLoopEvent {
-  type: "check-proposed" | "attempt-start" | "check-result" | "stuck" | "done";
+  type:
+    | "setup-proposed"
+    | "setup-start"
+    | "setup-result"
+    | "check-proposed"
+    | "attempt-start"
+    | "check-result"
+    | "stuck"
+    | "done";
   attempt?: number;
   maxChecks?: number;
   checkCommand?: string;
+  setupCommand?: string;
   exitCode?: number;
   status?: GoalLoopStatus;
 }
@@ -58,6 +68,8 @@ export interface GoalLoopDeps {
   runCheck: (command: string) => Promise<CheckResult>;
   /** Propose a check command when the goal has none. Returns undefined on failure. */
   proposeCheck?: (objective: string) => Promise<string | undefined>;
+  /** Run the one-time setup command (e.g. create venv, install deps). */
+  runSetup?: (command: string) => Promise<CheckResult>;
 }
 
 /** Run a shell command via the reviewed shell boundary; exit code is the verdict. */
@@ -140,6 +152,30 @@ export async function runGoalLoop(input: {
 }): Promise<GoalLoopResult> {
   const { goal, paths, deps, onEvent } = input;
   const maxChecks = input.maxChecks ?? goal.maxChecks ?? DEFAULT_MAX_CHECKS;
+
+  if (goal.setupCommand) {
+    onEvent?.({ type: "setup-start", setupCommand: goal.setupCommand });
+    const setup = deps.runSetup
+      ? await deps.runSetup(goal.setupCommand)
+      : await deps.runCheck(goal.setupCommand);
+    onEvent?.({ type: "setup-result", setupCommand: goal.setupCommand, exitCode: setup.exitCode });
+    if (setup.exitCode !== 0) {
+      updateGoalStatus(paths, {
+        sessionId: goal.sessionId,
+        status: "blocked",
+        note: `Setup command failed (exit ${setup.exitCode}). Command: ${goal.setupCommand}`
+      });
+      onEvent?.({ type: "done", status: "blocked" });
+      return {
+        status: "blocked",
+        attempts: 0,
+        checkCommand: goal.checkCommand ?? "",
+        reason: "setup_failed",
+        lastCheck: setup,
+        setupCommand: goal.setupCommand
+      };
+    }
+  }
 
   let checkCommand = goal.checkCommand;
   if (!checkCommand) {
@@ -240,6 +276,7 @@ export function buildGoalLoopDeps(input: {
       return { message: result.message };
     },
     runCheck: (command) => runShellCheck(command, input.cwd, input.env),
+    runSetup: (command) => runShellCheck(command, input.cwd, input.env),
     proposeCheck: async (objective) => {
       try {
         const registry = buildProviderRegistry({ config: input.config, env: input.env });

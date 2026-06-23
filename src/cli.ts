@@ -610,6 +610,10 @@ async function runCliUnsafeWithParsed(
           onEvent: (event) => {
             if (event.type === "check-proposed") {
               lines.push(`Proposed check: ${event.checkCommand}`);
+            } else if (event.type === "setup-start") {
+              lines.push(`Setup: ${event.setupCommand}`);
+            } else if (event.type === "setup-result") {
+              lines.push(`  setup exit ${event.exitCode}`);
             } else if (event.type === "attempt-start") {
               lines.push(`Attempt ${event.attempt}/${event.maxChecks} ...`);
             } else if (event.type === "check-result") {
@@ -631,24 +635,26 @@ async function runCliUnsafeWithParsed(
         };
       }
       const checkCommand = readNamedArg(parsed.rest, "--check");
+      const setupCommand = readNamedArg(parsed.rest, "--setup");
       const maxChecks = readNumericFlag(parsed.rest, "--max-checks");
       const objective = parsed.rest
         .filter((arg, index, all) => {
-          if (arg === "--check" || arg === "--max-checks") return false;
+          if (arg === "--check" || arg === "--max-checks" || arg === "--setup") return false;
           const prev = all[index - 1];
-          if (prev === "--check" || prev === "--max-checks") return false;
+          if (prev === "--check" || prev === "--max-checks" || prev === "--setup") return false;
           return true;
         })
         .join(" ");
       const goal = createGoal(paths, {
         sessionId: session.id,
         objective,
+        setupCommand,
         checkCommand,
         maxChecks
       });
       return {
         exitCode: 0,
-        stdout: `Goal started: ${goal.objective}${goal.checkCommand ? `\nCheck: ${goal.checkCommand}` : ""}\n`,
+        stdout: `Goal started: ${goal.objective}${goal.setupCommand ? `\nSetup: ${goal.setupCommand}` : ""}${goal.checkCommand ? `\nCheck: ${goal.checkCommand}` : ""}\n`,
         stderr: ""
       };
     } finally {

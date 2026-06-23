@@ -173,4 +173,89 @@ describe("goal execution loop", () => {
       temp.cleanup();
     }
   });
+
+  it("runs setup before the loop and blocks when setup fails", async () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const goal = createGoal(paths, {
+        sessionId: "s1",
+        objective: "needs deps",
+        setupCommand: "python3 -m venv .venv && .venv/bin/pip install pytest",
+        checkCommand: "pytest"
+      });
+
+      let ranPrompt = false;
+      const deps: GoalLoopDeps = {
+        runPrompt: async () => {
+          ranPrompt = true;
+          return { message: "should not run" };
+        },
+        runCheck: async () => check(0),
+        runSetup: async () => check(1, "", "ERROR: could not create venv")
+      };
+
+      const events: string[] = [];
+      const result = await runGoalLoop({
+        goal,
+        paths,
+        deps,
+        onEvent: (event) => {
+          if (event.type === "setup-start" || event.type === "setup-result") {
+            events.push(event.type);
+          }
+        }
+      });
+
+      expect(result.status).toBe("blocked");
+      expect(result.reason).toBe("setup_failed");
+      expect(result.attempts).toBe(0);
+      expect(ranPrompt).toBe(false);
+      expect(events).toEqual(["setup-start", "setup-result"]);
+      const stored = listGoals(paths, "s1")[0];
+      expect(stored.status).toBe("blocked");
+      expect(stored.note).toContain("Setup command failed");
+    } finally {
+      temp.cleanup();
+    }
+  });
+
+  it("runs setup successfully then enters the do-check-fix loop", async () => {
+    const temp = makeTempRoot();
+    try {
+      const paths = getMagiPaths(temp.env);
+      const goal = createGoal(paths, {
+        sessionId: "s1",
+        objective: "build with deps",
+        setupCommand: "python3 -m venv .venv",
+        checkCommand: "pytest"
+      });
+
+      const order: string[] = [];
+      const deps: GoalLoopDeps = {
+        runPrompt: async () => {
+          order.push("prompt");
+          return { message: "worked" };
+        },
+        runCheck: async () => {
+          order.push("check");
+          return check(0, "1 passed");
+        },
+        runSetup: async () => {
+          order.push("setup");
+          return check(0, "venv created");
+        }
+      };
+
+      const result = await runGoalLoop({ goal, paths, deps });
+
+      expect(result.status).toBe("completed");
+      expect(order[0]).toBe("setup");
+      expect(order).toContain("prompt");
+      expect(order).toContain("check");
+      expect(listGoals(paths, "s1")[0]).toMatchObject({ status: "completed" });
+    } finally {
+      temp.cleanup();
+    }
+  });
 });
