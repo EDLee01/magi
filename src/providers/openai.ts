@@ -1,6 +1,12 @@
 import { ProviderConfig } from "../config.js";
 import { ProviderError, providerErrorFromResponse } from "./errors.js";
-import { FetchLike, fetchProvider, getApiKey, normalizeBaseUrl } from "./http.js";
+import {
+  FetchLike,
+  fetchProvider,
+  getApiKey,
+  normalizeBaseUrl,
+  resolveProviderTimeoutMs
+} from "./http.js";
 import {
   MagiMessage,
   MagiToolUsePart,
@@ -11,6 +17,7 @@ import {
   messageText
 } from "./ir.js";
 import { readSseEvents } from "./sse.js";
+import { applyEmbeddedToolCallFallback } from "./tool-call-fallback.js";
 
 export class OpenAiAdapter implements ProviderAdapter {
   readonly name: string;
@@ -48,7 +55,8 @@ export class OpenAiAdapter implements ProviderAdapter {
         body: JSON.stringify(
           endpoint === "responses" ? toResponsesBody(request) : toChatBody(request)
         )
-      }
+      },
+      { timeoutMs: resolveProviderTimeoutMs(this.config, this.env) }
     );
 
     if (!response.ok) {
@@ -83,7 +91,8 @@ export class OpenAiAdapter implements ProviderAdapter {
             ? toStreamingResponsesBody(request)
             : toStreamingChatBody(request)
         )
-      }
+      },
+      { timeoutMs: resolveProviderTimeoutMs(this.config, this.env) }
     );
 
     if (!response.ok) {
@@ -100,7 +109,7 @@ export class OpenAiAdapter implements ProviderAdapter {
     for await (const event of readSseEvents(response.body)) {
       if (event.data === "[DONE]") {
         yield { type: "done" };
-        return { text, toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
+        return finalizeOpenAiStream(text, toolCalls, usage);
       }
       // Skip empty data lines (keep-alives) so a stray `data: \n` doesn't
       // crash the stream.
@@ -128,7 +137,7 @@ export class OpenAiAdapter implements ProviderAdapter {
     }
 
     yield { type: "done" };
-    return { text, toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
+    return finalizeOpenAiStream(text, toolCalls, usage);
   }
 }
 
@@ -286,9 +295,10 @@ function parseChatResult(data: unknown): ProviderResponse {
     isRecord(choice) && isRecord(choice.message)
       ? readOpenAiToolUses(choice.message.tool_calls)
       : [];
+  const fallback = applyEmbeddedToolCallFallback({ text, toolUses });
   return {
-    text,
-    toolUses,
+    text: fallback.text,
+    toolUses: fallback.toolUses,
     usage: readUsage(data),
     raw: data
   };
@@ -456,6 +466,18 @@ function toolUsesFromOpenAiStream(
         }
       ];
     });
+}
+
+function finalizeOpenAiStream(
+  text: string,
+  toolCalls: Map<number, { id?: string; name?: string; arguments: string }>,
+  usage: ProviderResponse["usage"]
+): ProviderResponse {
+  const fallback = applyEmbeddedToolCallFallback({
+    text,
+    toolUses: toolUsesFromOpenAiStream(toolCalls)
+  });
+  return { text: fallback.text, toolUses: fallback.toolUses, usage };
 }
 
 function parseToolInput(value: unknown): Record<string, unknown> {

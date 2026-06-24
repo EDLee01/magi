@@ -1,7 +1,13 @@
 import { ProviderConfig } from "../config.js";
 import { MagiConfigError } from "../errors.js";
 import { providerErrorFromResponse } from "./errors.js";
-import { FetchLike, fetchProvider, getApiKey, normalizeBaseUrl } from "./http.js";
+import {
+  FetchLike,
+  fetchProvider,
+  getApiKey,
+  normalizeBaseUrl,
+  resolveProviderTimeoutMs
+} from "./http.js";
 import {
   MagiMessage,
   MagiToolUsePart,
@@ -12,6 +18,7 @@ import {
   messageText
 } from "./ir.js";
 import { readSseEvents } from "./sse.js";
+import { applyEmbeddedToolCallFallback } from "./tool-call-fallback.js";
 
 // Providers fall back to tiny output caps when max_tokens is omitted (SiliconFlow
 // defaults to 512; the previous hard-coded Anthropic fallback was 1024), which
@@ -51,28 +58,34 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: request.signal,
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json"
+    const response = await fetchProvider(
+      this.name,
+      this.fetchImpl,
+      `${baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: request.model,
+          messages: request.messages.map(toMessage),
+          tools: request.tools?.map((tool) => ({
+            type: "function",
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.inputSchema
+            }
+          })),
+          temperature: request.temperature,
+          max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(this.env)
+        })
       },
-      body: JSON.stringify({
-        model: request.model,
-        messages: request.messages.map(toMessage),
-        tools: request.tools?.map((tool) => ({
-          type: "function",
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.inputSchema
-          }
-        })),
-        temperature: request.temperature,
-        max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(this.env)
-      })
-    });
+      { timeoutMs: resolveProviderTimeoutMs(this.config, this.env) }
+    );
 
     if (!response.ok) {
       throw providerErrorFromResponse(this.name, response);
@@ -93,30 +106,36 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: request.signal,
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json"
+    const response = await fetchProvider(
+      this.name,
+      this.fetchImpl,
+      `${baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: request.model,
+          messages: request.messages.map(toMessage),
+          tools: request.tools?.map((tool) => ({
+            type: "function",
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.inputSchema
+            }
+          })),
+          temperature: request.temperature,
+          max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(this.env),
+          stream: true,
+          stream_options: { include_usage: true }
+        })
       },
-      body: JSON.stringify({
-        model: request.model,
-        messages: request.messages.map(toMessage),
-        tools: request.tools?.map((tool) => ({
-          type: "function",
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.inputSchema
-          }
-        })),
-        temperature: request.temperature,
-        max_tokens: request.maxOutputTokens ?? resolveDefaultMaxOutputTokens(this.env),
-        stream: true,
-        stream_options: { include_usage: true }
-      })
-    });
+      { timeoutMs: resolveProviderTimeoutMs(this.config, this.env) }
+    );
 
     if (!response.ok) {
       throw providerErrorFromResponse(this.name, response);
@@ -132,7 +151,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
     for await (const event of readSseEvents(response.body)) {
       if (event.data === "[DONE]") {
         yield { type: "done" };
-        return { text: textParts.join(""), toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
+        return finalizeOpenAiCompatibleStream(textParts.join(""), toolCalls, usage);
       }
       const parsed = JSON.parse(event.data) as unknown;
       const delta = readOpenAiStreamText(parsed);
@@ -149,7 +168,7 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
     }
 
     yield { type: "done" };
-    return { text: textParts.join(""), toolUses: toolUsesFromOpenAiStream(toolCalls), usage };
+    return finalizeOpenAiCompatibleStream(textParts.join(""), toolCalls, usage);
   }
 
   private async completeAnthropicMessages(request: ProviderRequest): Promise<ProviderResponse> {
@@ -159,17 +178,23 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/v1/messages`, {
-      method: "POST",
-      signal: request.signal,
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "prompt-caching-2024-07-31",
-        "content-type": "application/json"
+    const response = await fetchProvider(
+      this.name,
+      this.fetchImpl,
+      `${baseUrl}/v1/messages`,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "prompt-caching-2024-07-31",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(toAnthropicMessagesBody(request))
       },
-      body: JSON.stringify(toAnthropicMessagesBody(request))
-    });
+      { timeoutMs: resolveProviderTimeoutMs(this.config, this.env) }
+    );
 
     if (!response.ok) {
       throw providerErrorFromResponse(this.name, response);
@@ -188,17 +213,23 @@ export class MessagesCompatibleAdapter implements ProviderAdapter {
 
     const apiKey = getApiKey(this.name, this.config, this.env);
     const baseUrl = normalizeBaseUrl(this.config.baseUrl);
-    const response = await fetchProvider(this.name, this.fetchImpl, `${baseUrl}/v1/messages`, {
-      method: "POST",
-      signal: request.signal,
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "prompt-caching-2024-07-31",
-        "content-type": "application/json"
+    const response = await fetchProvider(
+      this.name,
+      this.fetchImpl,
+      `${baseUrl}/v1/messages`,
+      {
+        method: "POST",
+        signal: request.signal,
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "prompt-caching-2024-07-31",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ ...toAnthropicMessagesBody(request), stream: true })
       },
-      body: JSON.stringify({ ...toAnthropicMessagesBody(request), stream: true })
-    });
+      { timeoutMs: resolveProviderTimeoutMs(this.config, this.env) }
+    );
 
     if (!response.ok) {
       throw providerErrorFromResponse(this.name, response);
@@ -334,7 +365,8 @@ function parseCompatibleResult(data: unknown): ProviderResponse {
           outputTokens: data.usage.completion_tokens
         }
       : undefined;
-  return { text, toolUses, usage, raw: data };
+  const fallback = applyEmbeddedToolCallFallback({ text, toolUses });
+  return { text: fallback.text, toolUses: fallback.toolUses, usage, raw: data };
 }
 
 function toAnthropicMessagesBody(request: ProviderRequest): Record<string, unknown> {
@@ -594,6 +626,18 @@ function toolUsesFromOpenAiStream(
         }
       ];
     });
+}
+
+function finalizeOpenAiCompatibleStream(
+  text: string,
+  toolCalls: Map<number, { id?: string; name?: string; arguments: string }>,
+  usage: ProviderResponse["usage"]
+): ProviderResponse {
+  const fallback = applyEmbeddedToolCallFallback({
+    text,
+    toolUses: toolUsesFromOpenAiStream(toolCalls)
+  });
+  return { text: fallback.text, toolUses: fallback.toolUses, usage };
 }
 
 function readAnthropicStreamText(data: unknown): string | undefined {
