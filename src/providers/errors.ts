@@ -123,6 +123,21 @@ function isLikelyNetworkError(error: unknown): boolean {
   );
 }
 
+/**
+ * True for network failures that will NOT recover by retrying the same
+ * endpoint: connection refused (closed port), host/DNS not found, or an
+ * invalid URL. These should fail fast instead of burning the full retry
+ * budget. Transient failures (timeouts, resets, cold-start TTFB) are NOT
+ * fast-fail and should be retried generously.
+ */
+export function isFastFailNetworkError(error: unknown): boolean {
+  const text =
+    error instanceof Error ? `${error.message} ${errorDetail(error)}` : errorDetail(error);
+  return /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ERR_INVALID_URL|bad port|invalid url|certificate/i.test(
+    text
+  );
+}
+
 function errorDetail(error: unknown): string {
   const seen = new Set<unknown>();
   const parts: string[] = [];

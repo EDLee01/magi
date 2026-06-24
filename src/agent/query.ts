@@ -9,7 +9,11 @@ import {
   messageText,
   textMessage
 } from "../providers/ir.js";
-import { ProviderError, providerErrorFromException } from "../providers/errors.js";
+import {
+  ProviderError,
+  providerErrorFromException,
+  isFastFailNetworkError
+} from "../providers/errors.js";
 import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
 import {
@@ -660,9 +664,16 @@ function retryPolicyFor(
   error: unknown,
   hasFallback: boolean
 ): { fastRetries: number; totalRetries: number } {
-  if (error instanceof ProviderError && error.kind === "network") {
-    return { fastRetries: hasFallback ? 2 : 2, totalRetries: hasFallback ? 2 : 3 };
+  // Connection refused / DNS not found / bad URL won't recover by retrying the
+  // same endpoint — fail fast (allow only a fallback switch, no same-route
+  // retries) instead of burning the budget on a dead port.
+  if (isFastFailNetworkError(error)) {
+    return { fastRetries: 0, totalRetries: 0 };
   }
+  // Other network errors (timeouts, dropped connections, cold-start TTFB) are
+  // the most worth retrying, not the least — a flaky link or slow-waking proxy
+  // recovers on its own given time. Give them at least the general budget so a
+  // 1-2s blip doesn't kill an entire long task.
   const fastRetries = hasFallback ? 3 : 5;
   return { fastRetries, totalRetries: 8 };
 }
@@ -674,7 +685,10 @@ function retryDelayMs(
   fastRetries = 0
 ): number {
   if (error instanceof ProviderError && error.kind === "network") {
-    return Math.min(250 * Math.pow(2, sameRouteRetries - 1), 1000);
+    // Network backoff used to cap at 1s, which barely outlasts a transient
+    // blip and never gives a cold-starting endpoint time to wake. Widen the
+    // ceiling so retries actually straddle a slow recovery.
+    return Math.min(500 * Math.pow(2, sameRouteRetries - 1), 10_000);
   }
   if (phase === "fast") {
     return Math.min(1000 * Math.pow(2, sameRouteRetries - 1), 8000);

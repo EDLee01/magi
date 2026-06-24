@@ -906,6 +906,64 @@ describe("agent query loop", () => {
     );
   });
 
+  it("fails fast on connection-refused without burning the retry budget", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    let callCount = 0;
+    const dead: ProviderAdapter = {
+      name: "dead-endpoint",
+      complete: async () => {
+        callCount++;
+        throw new TypeError("fetch failed", { cause: new Error("ECONNREFUSED") });
+      }
+    };
+
+    const generator = runAgentQuery({
+      routes: [{ providerName: "dead-endpoint", model: "m", adapter: dead }],
+      messages: [textMessage("user", "ping")],
+      cwd: workspace
+    });
+
+    await expect(
+      (async () => {
+        for await (const _event of generator) {
+          void _event;
+        }
+      })()
+    ).rejects.toThrow();
+
+    // A refused connection won't recover by retrying the same dead port, so the
+    // adapter must be hit exactly once (no same-route retries burned).
+    expect(callCount).toBe(1);
+  });
+
+  it("retries transient network errors generously across multiple attempts", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    let callCount = 0;
+    const flaky: ProviderAdapter = {
+      name: "flaky-endpoint",
+      complete: async () => {
+        callCount++;
+        // Three transient timeouts in a row, then success — exceeds the old
+        // network budget of 2-3 that used to kill the task.
+        if (callCount <= 3) {
+          throw new TypeError("fetch failed", { cause: new Error("ETIMEDOUT") });
+        }
+        return { text: "recovered after blips", usage: { inputTokens: 1, outputTokens: 1 } };
+      }
+    };
+
+    const result = await collectResult(
+      runAgentQuery({
+        routes: [{ providerName: "flaky-endpoint", model: "m", adapter: flaky }],
+        messages: [textMessage("user", "ping")],
+        cwd: workspace
+      })
+    );
+
+    expect(callCount).toBe(4);
+    expect(result.final.text).toBe("recovered after blips");
+  });
+
   it("does not emit retry diagnostics for non-retryable auth errors", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const events: AgentQueryEvent[] = [];
