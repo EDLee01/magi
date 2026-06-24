@@ -14,6 +14,7 @@ import {
   isDangerousShellCommand,
   isLongRunningCommand,
   isReadOnlyShellCommand,
+  resolveDefaultShellTimeoutMs,
   runShellCommand
 } from "../src/tools/shell.js";
 import { ToolError } from "../src/tools/errors.js";
@@ -151,6 +152,14 @@ describe("local tools", () => {
     expect(isReadOnlyShellCommand("tail -f app.log")).toBe(false);
     expect(isReadOnlyShellCommand("sed -n -i '1,20p' src/tools/shell.ts")).toBe(false);
     expect(isReadOnlyShellCommand("git diff --output=patch.txt")).toBe(false);
+  });
+
+  it("resolves the default shell timeout from env with a 2-minute fallback", () => {
+    expect(resolveDefaultShellTimeoutMs({})).toBe(120_000);
+    expect(resolveDefaultShellTimeoutMs({ MAGI_BASH_TIMEOUT_MS: "300000" })).toBe(300_000);
+    // Invalid / non-positive values fall back to the default.
+    expect(resolveDefaultShellTimeoutMs({ MAGI_BASH_TIMEOUT_MS: "0" })).toBe(120_000);
+    expect(resolveDefaultShellTimeoutMs({ MAGI_BASH_TIMEOUT_MS: "abc" })).toBe(120_000);
   });
 
   it("runs safe shell commands", async () => {

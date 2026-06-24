@@ -15,6 +15,19 @@ export interface ShellResult {
   timedOut: boolean;
 }
 
+/**
+ * Default foreground shell timeout. 30s was too short for common real commands
+ * (npm install, builds, test suites), which then got killed mid-run. Default
+ * to 2 minutes, overridable per call via timeout_ms or globally via
+ * MAGI_BASH_TIMEOUT_MS. Long-running servers are auto-backgrounded separately
+ * and never hit this.
+ */
+export function resolveDefaultShellTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.MAGI_BASH_TIMEOUT_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 120_000;
+}
+
 const LONG_RUNNING_PATTERNS = [
   /\bnpm\s+run\s+dev\b/,
   /\bnpm\s+run\s+start\b/,
@@ -266,6 +279,8 @@ export async function runShellCommand(input: {
     };
   }
 
+  const effectiveTimeoutMs = input.timeoutMs ?? resolveDefaultShellTimeoutMs();
+
   return new Promise((resolve, reject) => {
     const shell = createShellInvocation(input.command);
     const child = spawn(shell.executable, shell.args, {
@@ -306,7 +321,7 @@ export async function runShellCommand(input: {
       killTree("SIGTERM");
       // If still alive after 2s, escalate to SIGKILL
       killTimer = setTimeout(() => killTree("SIGKILL"), 2000);
-    }, input.timeoutMs ?? 30_000);
+    }, effectiveTimeoutMs);
 
     // Honor abort signal (e.g. user pressed Ctrl+C)
     const onAbort = () => {
@@ -348,7 +363,7 @@ export async function runShellCommand(input: {
       if (timedOut) {
         reject(
           new ToolError(
-            `Command timed out after ${input.timeoutMs ?? 30_000}ms: ${input.command}`,
+            `Command timed out after ${effectiveTimeoutMs}ms: ${input.command}`,
             "timeout"
           )
         );
