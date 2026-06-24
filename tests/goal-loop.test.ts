@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { createGoal, getGoal, listGoals } from "../src/goal.js";
-import { CheckResult, GoalLoopDeps, runGoalLoop, runShellCheck } from "../src/goal-loop.js";
+import {
+  CheckResult,
+  GoalLoopDeps,
+  resolveGoalTurnTimeoutMs,
+  runGoalLoop,
+  runShellCheck
+} from "../src/goal-loop.js";
 import { getMagiPaths } from "../src/paths.js";
 import { makeTempRoot } from "./helpers.js";
 
@@ -157,6 +163,15 @@ describe("goal execution loop", () => {
     } finally {
       temp.cleanup();
     }
+  });
+
+  it("resolves the goal turn timeout from env with a 30-minute default", () => {
+    expect(resolveGoalTurnTimeoutMs({})).toBe(30 * 60_000);
+    expect(resolveGoalTurnTimeoutMs({ MAGI_GOAL_TURN_TIMEOUT_MS: "21600000" })).toBe(21_600_000);
+    // Invalid / non-positive values fall back to the default.
+    expect(resolveGoalTurnTimeoutMs({ MAGI_GOAL_TURN_TIMEOUT_MS: "abc" })).toBe(30 * 60_000);
+    expect(resolveGoalTurnTimeoutMs({ MAGI_GOAL_TURN_TIMEOUT_MS: "0" })).toBe(30 * 60_000);
+    expect(resolveGoalTurnTimeoutMs({ MAGI_GOAL_TURN_TIMEOUT_MS: "-5" })).toBe(30 * 60_000);
   });
 
   it("runShellCheck captures exit code and output from a real command", async () => {

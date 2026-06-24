@@ -26,6 +26,19 @@ import { runShellCommand } from "./tools/shell.js";
 export const DEFAULT_MAX_CHECKS = 3;
 const CHECK_OUTPUT_LIMIT = 8000;
 
+/**
+ * Default timeout for the goal's setup and check commands. Complex goals run
+ * full dependency installs, builds, and test suites that the previous 10-minute
+ * cap could kill mid-run. Default to 30 minutes, overridable globally via
+ * MAGI_GOAL_TURN_TIMEOUT_MS. A bounded cap is still enforced so a hung command
+ * cannot spin forever.
+ */
+export function resolveGoalTurnTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.MAGI_GOAL_TURN_TIMEOUT_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30 * 60_000;
+}
+
 export interface CheckResult {
   exitCode: number;
   stdout: string;
@@ -77,9 +90,8 @@ export async function runShellCheck(
   command: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
-  timeoutMs = 600_000
+  timeoutMs = resolveGoalTurnTimeoutMs(env)
 ): Promise<CheckResult> {
-  void env;
   try {
     const result = await runShellCommand({
       cwd,
