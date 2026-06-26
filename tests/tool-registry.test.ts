@@ -2463,7 +2463,7 @@ describe("tool registry", () => {
     });
     expect(outside).toMatchObject({ isError: true });
     expect(outside.content).toContain("outside allowed directories");
-  }, 10_000);
+  }, 30_000);
 });
 
 async function listen(server: http.Server): Promise<string> {

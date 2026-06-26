@@ -198,6 +198,7 @@ async function runCommandHook(
     const child = spawn(shell.executable, shell.args, {
       cwd: context.cwd,
       env: {
+        ...process.env,
         ...env,
         ARGUMENTS: JSON.stringify(context)
       },
