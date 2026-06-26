@@ -6,3 +6,5 @@ runner/target/
 *.log
 .DS_Store
 .claude/
+feishu-bridge/config.local.toml
+feishu-bridge/.venv/

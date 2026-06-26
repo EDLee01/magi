@@ -1,0 +1,37 @@
+# Copy to config.local.toml and fill in secrets (never commit config.local.toml).
+
+[feishu]
+app_id = "cli_xxxxxxxx"
+app_secret = "YOUR_APP_SECRET"
+
+[router]
+# Router Magi on the Mac mini (magi serve)
+base_url = "http://127.0.0.1:8765"
+# From `magi pair feishu-bridge` on the router host:
+device_id = ""
+token = ""
+
+[security]
+# Feishu open_id values allowed to control the cluster (empty = reject all).
+allowed_user_ids = []
+# Chat IDs (group) optionally allowed; leave empty to only allow DMs from allowed users.
+allowed_chat_ids = []
+
+[magi]
+default_model = "main"
+job_timeout_seconds = 600
+
+[[peers.manual]]
+name = "research"
+url = "http://127.0.0.1:8766"
+role = "research"
+
+[[peers.manual]]
+name = "agent"
+url = "http://127.0.0.1:8767"
+role = "agent"
+
+[[peers.manual]]
+name = "skill"
+url = "http://127.0.0.1:8768"
+role = "skill"
