@@ -53,7 +53,32 @@ def _request(
         payload = err.read().decode("utf-8", errors="replace")
         return err.code, payload
     except URLError as err:
-        return 0, str(err.reason)
+        reason = str(err.reason)
+        if "Connection refused" in reason or "connection refused" in reason.lower():
+            return 0, f"无法连接 Magi router（{endpoint.base_url} 未运行）。请在 Mac 上启动: MAGI_CONFIG_DIR=~/.magi-router magi daemon start"
+        return 0, reason
+
+
+def refresh_pairing(endpoint: MagiEndpoint, name: str = "feishu-bridge") -> MagiEndpoint | None:
+    """Mint a new pair token from loopback /pairing (10 min TTL). Returns updated endpoint."""
+    status, body = _request(
+        MagiEndpoint(base_url=endpoint.base_url),
+        "POST",
+        "/pairing",
+        {"name": name},
+        timeout=15,
+    )
+    if status != 200:
+        return None
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    device_id = str(data.get("deviceId") or "")
+    token = str(data.get("token") or "")
+    if not device_id or not token:
+        return None
+    return MagiEndpoint(base_url=endpoint.base_url, device_id=device_id, token=token)
 
 
 def fetch_health(endpoint: MagiEndpoint) -> dict[str, Any]:
@@ -102,6 +127,21 @@ def dispatch_prompt(
         {"prompt": prompt, "model": model, "modelAlias": model},
         timeout=60,
     )
+    if status == 401:
+        refreshed = refresh_pairing(endpoint)
+        if refreshed:
+            endpoint = refreshed
+            status, body = _request(
+                endpoint,
+                "POST",
+                "/jobs",
+                {"prompt": prompt, "model": model, "modelAlias": model},
+                timeout=60,
+            )
+        if status == 401:
+            return DispatchResult("", "", "", error="Magi 鉴权失败：pair token 已过期。请在本机运行 magi pair feishu-bridge 并更新 config.local.toml")
+    if status == 0:
+        return DispatchResult("", "", "", error=f"无法连接 Magi router: {body[:400]}")
     if status == 401:
         return DispatchResult("", "", "", error="Magi 鉴权失败：请在 config.local.toml 填写 magi pair 生成的 device_id/token")
     if status != 200:

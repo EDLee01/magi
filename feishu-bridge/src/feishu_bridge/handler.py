@@ -85,6 +85,7 @@ class MessageHandler:
             chat_id=incoming.chat_id or None,
             allowed_user_ids=self.config.allowed_user_ids,
             allowed_chat_ids=self.config.allowed_chat_ids,
+            dev_allow_all=self.config.dev_allow_all,
         ):
             logger.warning(
                 "Rejected sender open_id=%s chat_id=%s (not in whitelist)",

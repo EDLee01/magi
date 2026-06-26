@@ -26,10 +26,12 @@ def main() -> None:
     handler = MessageHandler(config)
     event_handler = build_event_handler(handler)
 
-    if not config.allowed_user_ids:
+    if not config.allowed_user_ids and not config.dev_allow_all:
         logging.warning(
             "security.allowed_user_ids is empty — all senders will be rejected until you add your open_id."
         )
+    elif config.dev_allow_all:
+        logging.warning("security.dev_allow_all=true — local testing only, disable before production.")
 
     logging.info(
         "Starting Feishu bridge (router=%s, peers=%d)",

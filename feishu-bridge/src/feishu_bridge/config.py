@@ -27,6 +27,7 @@ class BridgeConfig:
     router_token: str
     allowed_user_ids: list[str]
     allowed_chat_ids: list[str]
+    dev_allow_all: bool
     default_model: str
     job_timeout_seconds: int
     manual_peers: list[PeerNode] = field(default_factory=list)
@@ -78,6 +79,7 @@ def load_config(config_path: Path | None = None) -> BridgeConfig:
         router_token=str(router.get("token", "")).strip(),
         allowed_user_ids=[str(v).strip() for v in security.get("allowed_user_ids", []) if str(v).strip()],
         allowed_chat_ids=[str(v).strip() for v in security.get("allowed_chat_ids", []) if str(v).strip()],
+        dev_allow_all=bool(security.get("dev_allow_all", False)),
         default_model=str(magi.get("default_model", "main")).strip() or "main",
         job_timeout_seconds=int(magi.get("job_timeout_seconds", 600)),
         manual_peers=manual_peers,

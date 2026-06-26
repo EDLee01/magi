@@ -23,7 +23,10 @@ def is_sender_allowed(
     chat_id: str | None,
     allowed_user_ids: list[str],
     allowed_chat_ids: list[str],
+    dev_allow_all: bool = False,
 ) -> bool:
+    if dev_allow_all:
+        return True
     if not allowed_user_ids and not allowed_chat_ids:
         return False
     if sender_open_id and allowed_user_ids and sender_open_id in allowed_user_ids:
