@@ -29,6 +29,7 @@ import {
   type MemoryWriteDecision
 } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
+import { buildCapabilityQuestionNudge, isCapabilityQuestion } from "./capability-nudge.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import type { ToolPermissionRules } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
@@ -1809,6 +1810,9 @@ function buildSessionMessages(input: {
     messages.push({ role: "user", content: parts });
   } else {
     messages.push(textMessage("user", input.prompt));
+  }
+  if (isCapabilityQuestion(input.prompt)) {
+    messages.push(textMessage("system", buildCapabilityQuestionNudge()));
   }
   return messages;
 }

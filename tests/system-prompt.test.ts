@@ -19,5 +19,8 @@ describe("system prompt", () => {
     expect(prompt).toContain("Never deny a capability before ToolSearch");
     expect(prompt).toContain('query "capabilities"');
     expect(prompt).toContain("more via ToolSearch");
+    expect(prompt).toContain("core_tools:");
+    expect(prompt).toContain("WebSearch");
+    expect(prompt).toContain("not a chat-only assistant");
   });
 });
