@@ -18,18 +18,22 @@ import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
 import {
   AgentToolResult,
-  CORE_AGENT_TOOLS,
   executeBuiltinAgentTools,
   ToolPermissionMode
 } from "./tools.js";
 import {
   getBuiltinToolDefinitionByName,
-  getDeferredToolDefinitions,
-  isCoreToolName,
+  getBuiltinToolDefinitions,
   ToolPermissionRules,
   SubAgentRequest,
   SubAgentResult
 } from "../tools/registry.js";
+import {
+  parseToolSearchReveal,
+  resolveInitialExposedToolNames,
+  resolveToolLoadProfile,
+  type ToolLoadProfile
+} from "../tool-loading.js";
 import {
   checkToolPolicy,
   filterNamedToolRecordsByRules,
@@ -61,6 +65,7 @@ export type AgentQueryEvent =
       schemaChars: number;
       estimatedSchemaTokens: number;
       toolNames: string[];
+      toolLoadProfile?: ToolLoadProfile;
     }
   | { type: "text_delta"; text: string }
   | { type: "tool_use"; toolUse: MagiToolUsePart }
@@ -228,14 +233,14 @@ async function* runAgentQueryInner(
     : undefined;
 
   try {
-    const toolCatalog = await createAgentToolCatalog(mcpTools, input.toolRules);
+    const toolCatalog = await createAgentToolCatalog(mcpTools, input.toolRules, input.env);
     yield { type: "request_start" };
 
     for (let turn = 0; turn < maxTurns; turn++) {
       throwIfCancelled(input.signal);
       const toolDefinitions = toolCatalog.definitions();
       if (input.env?.MAGI_DEBUG_TOOLS === "1") {
-        yield formatToolContextEvent(toolDefinitions, toolCatalog.deferredCount());
+        yield formatToolContextEvent(toolDefinitions, toolCatalog.deferredCount(), toolCatalog.profile);
       }
       let response: ProviderResponse;
       let streamedTextThisTurn = "";
@@ -940,47 +945,47 @@ function applyToolPolicyGuard(input: AgentQueryInput, prepared: PreparedToolUses
 interface AgentToolCatalog {
   definitions(): MagiToolDefinition[];
   deferredCount(): number;
+  profile: ToolLoadProfile;
   revealFromResults(results: AgentToolResult[]): void;
 }
 
 async function createAgentToolCatalog(
   mcpTools: McpToolRegistry | undefined,
-  rules: ToolPermissionRules | undefined
+  rules: ToolPermissionRules | undefined,
+  env: NodeJS.ProcessEnv = process.env
 ): Promise<AgentToolCatalog> {
+  const profile = resolveToolLoadProfile(env);
   const dynamic = filterToolDefinitionsByRules(
     mcpTools ? await mcpTools.getToolDefinitions() : [],
     rules
   );
   const dynamicNames = new Set(dynamic.map((tool) => tool.name));
-  const coreBuiltIns = filterToolDefinitionsByRules(CORE_AGENT_TOOLS, rules);
-  const deferredBuiltIns = filterToolDefinitionsByRules(getDeferredToolDefinitions(), rules);
-  const exposedBuiltIns = new Set(coreBuiltIns.map((tool) => tool.name));
-  const allDeferredBuiltIns = new Set(deferredBuiltIns.map((tool) => tool.name));
+  const allBuiltInNames = getBuiltinToolDefinitions().map((tool) => tool.name);
+  const exposedBuiltIns = new Set(resolveInitialExposedToolNames(profile));
 
   return {
     definitions() {
-      const builtIns = coreBuiltIns.slice();
-      for (const name of exposedBuiltIns) {
-        if (isCoreToolName(name)) continue;
-        const definition = getBuiltinToolDefinitionByName(name);
-        if (definition) builtIns.push(definition);
-      }
+      const builtIns = [...exposedBuiltIns]
+        .map((name) => getBuiltinToolDefinitionByName(name))
+        .filter((tool): tool is MagiToolDefinition => tool !== undefined);
       return [...builtIns, ...dynamic.filter((tool) => !exposedBuiltIns.has(tool.name))];
     },
     deferredCount() {
-      return [...allDeferredBuiltIns].filter((name) => !exposedBuiltIns.has(name)).length;
+      return allBuiltInNames.filter((name) => !exposedBuiltIns.has(name)).length;
     },
+    profile,
     revealFromResults(results) {
       for (const result of results) {
-        const selected = readSelectedToolName(result);
-        if (!selected || dynamicNames.has(selected)) {
-          continue;
-        }
-        if (filterNamedToolRecordsByRules([{ name: selected }], rules).length === 0) {
-          continue;
-        }
-        if (getBuiltinToolDefinitionByName(selected)) {
-          exposedBuiltIns.add(selected);
+        for (const name of readToolSearchReveal(result)) {
+          if (dynamicNames.has(name)) {
+            continue;
+          }
+          if (filterNamedToolRecordsByRules([{ name }], rules).length === 0) {
+            continue;
+          }
+          if (getBuiltinToolDefinitionByName(name)) {
+            exposedBuiltIns.add(name);
+          }
         }
       }
     }
@@ -989,7 +994,8 @@ async function createAgentToolCatalog(
 
 function formatToolContextEvent(
   toolDefinitions: MagiToolDefinition[],
-  deferredToolCount: number
+  deferredToolCount: number,
+  toolLoadProfile: ToolLoadProfile
 ): Extract<AgentQueryEvent, { type: "tool_context" }> {
   const schemaChars = JSON.stringify(toolDefinitions).length;
   return {
@@ -998,16 +1004,16 @@ function formatToolContextEvent(
     deferredToolCount,
     schemaChars,
     estimatedSchemaTokens: Math.ceil(schemaChars / 4),
-    toolNames: toolDefinitions.map((tool) => tool.name)
+    toolNames: toolDefinitions.map((tool) => tool.name),
+    toolLoadProfile
   };
 }
 
-function readSelectedToolName(result: AgentToolResult): string | undefined {
+function readToolSearchReveal(result: AgentToolResult): string[] {
   if (result.toolName !== "ToolSearch" || result.isError) {
-    return undefined;
+    return [];
   }
-  const match = /^Tool:\s*([A-Za-z0-9_]+)\s*$/m.exec(result.content);
-  return match?.[1];
+  return parseToolSearchReveal(result.content);
 }
 
 export async function collectAgentQuery(input: AgentQueryInput): Promise<AgentQueryResult> {

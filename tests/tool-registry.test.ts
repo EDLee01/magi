@@ -103,6 +103,7 @@ describe("tool registry", () => {
         "Grep",
         "Bash",
         "WebSearch",
+        "WebFetch",
         "ToolSearch",
         "WorkspaceDiagnostics",
         "EnterPlanMode",
@@ -1926,7 +1927,7 @@ describe("tool registry", () => {
     expect(catalog.isError).toBeUndefined();
     expect(catalog.content).toContain("Deferred tools discoverable via ToolSearch");
     expect(catalog.content).toContain("Browser");
-    expect(catalog.content).toContain("WebFetch");
+    expect(catalog.content).not.toContain("WebFetch");
     expect(catalog.content).not.toMatch(/\bFileRead\b/);
   });
 

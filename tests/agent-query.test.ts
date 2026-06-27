@@ -223,6 +223,7 @@ describe("agent query loop", () => {
         model: "explicit-test-model",
         messages: [textMessage("user", "try to write with read-only tools")],
         cwd: workspace,
+        env: { MAGI_TOOL_LOAD: "minimal" },
         permissionMode: "acceptEdits",
         toolRules: {
           allow: ["FileRead(*)", "Glob(*)", "Grep(*)", "ToolSearch(*)", "WorkspaceDiagnostics(*)"],

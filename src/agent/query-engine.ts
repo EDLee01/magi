@@ -36,10 +36,7 @@ import {
 } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
 import {
-  buildCapabilityQuestionNudge,
-  buildWebResearchNudge,
-  isCapabilityQuestion,
-  isWebResearchTask
+  augmentPromptWithNudges
 } from "./capability-nudge.js";
 import { buildFeishuLocaleNudge, isFeishuLocalePrompt } from "./feishu-locale-nudge.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
@@ -1865,17 +1862,13 @@ function buildSessionMessages(input: {
   }
   // Parse the current prompt for any encoded image attachments.
   // If there are images, send a multi-part user message; otherwise plain text.
-  const parts = parsePromptIntoParts(input.prompt);
+  const effectivePrompt = augmentPromptWithNudges(input.prompt);
+  const parts = parsePromptIntoParts(effectivePrompt);
   const hasImage = parts.some((p) => p.type === "image");
   if (hasImage) {
     messages.push({ role: "user", content: parts });
   } else {
-    messages.push(textMessage("user", input.prompt));
-  }
-  if (isCapabilityQuestion(input.prompt)) {
-    messages.push(textMessage("system", buildCapabilityQuestionNudge()));
-  } else if (isWebResearchTask(input.prompt)) {
-    messages.push(textMessage("system", buildWebResearchNudge()));
+    messages.push(textMessage("user", effectivePrompt));
   }
   if (isFeishuLocalePrompt(input.prompt)) {
     messages.push(textMessage("system", buildFeishuLocaleNudge()));

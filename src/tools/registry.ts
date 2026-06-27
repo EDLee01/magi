@@ -347,6 +347,7 @@ import {
 } from "./workspace-diagnostics.js";
 import { resolveWorkspacePath } from "./workspace.js";
 import { WebSearchConfig } from "../config.js";
+import { FULL_TOOL_NAMES, resolveLoadedToolNamesForSearch } from "../tool-loading.js";
 import { shellDisplayName } from "../platform/shell.js";
 
 export type ToolPermissionMode =
@@ -867,36 +868,7 @@ export function formatToolResult(input: {
   return `${input.content.slice(0, input.previewChars ?? 2_000)}\n...[truncated]...\n\nFull output saved to: ${file}`;
 }
 
-const CORE_TOOL_NAMES = [
-  "FileRead",
-  "WebSearch",
-  "ToolSearch",
-  "FileWrite",
-  "FileEdit",
-  "FilePatch",
-  "Glob",
-  "Grep",
-  "Bash",
-  "GitSummary",
-  "GitStatus",
-  "GitDiff",
-  "GitLog",
-  "GitShow",
-  "AskUserQuestion",
-  "SendUserMessage",
-  "Brief",
-  "Memorize",
-  "MemoryCorrect",
-  "WorkspaceDiagnostics",
-  "EnterPlanMode",
-  "ExitPlanMode",
-  // Skills are surfaced to the model via an always-present index ([Available
-  // Skills]); these two must be core so the model can actually discover and load
-  // a skill's full procedure on demand. Left deferred, text-protocol providers
-  // emit the calls but they never execute. SkillManage (authoring) stays deferred.
-  "Skill",
-  "DiscoverSkills"
-] as const;
+const CORE_TOOL_NAMES = FULL_TOOL_NAMES;
 
 const BUILTIN_TOOLS: RegisteredTool[] = [
   {
@@ -1752,7 +1724,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   {
     name: "ToolSearch",
     description:
-      "Discover built-in tools: search by keyword, list deferred tools (query 'capabilities'), or load one tool's full schema (query 'select:<tool_name>'). Use before answering capability questions when the needed tool is not in your current list.",
+      "Discover built-in tools: search by keyword, list deferred tools (query 'capabilities'), load one tool (query 'select:<tool_name>'), or load a pack (query 'pack:<workspace|edit|git|memory|plan>').",
     category: "tools",
     tags: ["tool", "search", "schema", "docs"],
     inputSchema: ToolSearchInputSchema,
@@ -1763,7 +1735,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         {
           usageStats: loadToolUsageStats(context.stateRoot),
           stateRoot: context.stateRoot,
-          coreToolNames: new Set(CORE_TOOL_NAMES)
+          coreToolNames: resolveLoadedToolNamesForSearch(context.env)
         }
       ),
     isReadOnly: () => true,
