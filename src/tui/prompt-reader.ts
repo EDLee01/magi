@@ -419,10 +419,30 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     }
   };
 
+  let renderScheduled = false;
+
+  function scheduleRender(final: boolean) {
+    if (final) {
+      renderScheduled = false;
+      render(true);
+      return;
+    }
+    if (renderScheduled) {
+      return;
+    }
+    renderScheduled = true;
+    setImmediate(() => {
+      renderScheduled = false;
+      if (!settled) {
+        render(false);
+      }
+    });
+  }
+
   function onData(buffer: Buffer) {
     pending += buffer.toString("utf8");
     processPending();
-    if (!settled) render(false);
+    if (!settled) scheduleRender(false);
   }
 
   function render(final: boolean) {
@@ -760,11 +780,23 @@ function wrapTextCells(
   const segments: Array<{ text: string; startCell: number; endCell: number }> = [];
   let startCell = 0;
   let width = firstWidth;
-  while (startCell < totalWidth) {
+  const maxSegments = segmentGraphemes(text).length + 2;
+  while (startCell < totalWidth && segments.length < maxSegments) {
     const segment = sliceCells(text, startCell, width);
-    const segmentWidth = visibleWidth(segment);
+    let segmentWidth = visibleWidth(segment);
     if (segmentWidth <= 0) {
-      break;
+      const forced = firstGraphemeAtCell(text, startCell);
+      if (!forced || forced.width <= 0) {
+        break;
+      }
+      segments.push({
+        text: forced.segment,
+        startCell,
+        endCell: startCell + forced.width
+      });
+      startCell += forced.width;
+      width = nextWidth;
+      continue;
     }
     const endCell = startCell + segmentWidth;
     segments.push({ text: segment, startCell, endCell });
@@ -952,14 +984,38 @@ function sliceCells(text: string, startCell: number, width: number): string {
   let result = "";
   let cell = 0;
   for (const grapheme of segmentGraphemes(text)) {
-    const next = cell + grapheme.width;
-    if (next > startCell && cell < startCell + width) {
+    const graphemeStart = cell;
+    const graphemeEnd = cell + grapheme.width;
+    if (graphemeEnd <= startCell) {
+      cell = graphemeEnd;
+      continue;
+    }
+    if (graphemeStart >= startCell + width) {
+      break;
+    }
+    if (graphemeStart >= startCell && graphemeEnd <= startCell + width) {
       result += grapheme.segment;
     }
-    cell = next;
-    if (cell >= startCell + width) break;
+    cell = graphemeEnd;
+    if (cell >= startCell + width) {
+      break;
+    }
   }
   return result;
+}
+
+function firstGraphemeAtCell(
+  text: string,
+  startCell: number
+): { segment: string; width: number } | undefined {
+  let cell = 0;
+  for (const grapheme of segmentGraphemes(text)) {
+    if (cell + grapheme.width > startCell) {
+      return { segment: grapheme.segment, width: grapheme.width };
+    }
+    cell += grapheme.width;
+  }
+  return undefined;
 }
 
 function firstGrapheme(text: string): Grapheme {
@@ -1084,20 +1140,22 @@ function clearPromptBlock(
   if (lineCount <= 0) {
     return;
   }
+  let sequence = "";
   const upToFirst = clampCursorEscapeCount(cursorLine);
   if (upToFirst > 0) {
-    output.write(`\x1b[${upToFirst}A`);
+    sequence += `\x1b[${upToFirst}A`;
   }
   for (let line = 0; line < lineCount; line += 1) {
-    output.write("\r\x1b[2K");
+    sequence += "\r\x1b[2K";
     if (line < lineCount - 1) {
-      output.write("\x1b[1B");
+      sequence += "\x1b[1B";
     }
   }
   const backToFirst = clampCursorEscapeCount(lineCount - 1);
   if (backToFirst > 0) {
-    output.write(`\x1b[${backToFirst}A`);
+    sequence += `\x1b[${backToFirst}A`;
   }
+  output.write(sequence);
 }
 
 function positionPromptCursor(
@@ -1108,9 +1166,11 @@ function positionPromptCursor(
   maxColumn: number
 ): void {
   const up = clampCursorEscapeCount(totalLines - 1 - cursorLine);
-  if (up > 0) {
-    output.write(`\x1b[${up}A`);
-  }
   const col = Math.max(0, Math.min(cursorColumn, maxColumn - 1));
-  output.write(`\x1b[${col + 1}G`);
+  let sequence = "";
+  if (up > 0) {
+    sequence += `\x1b[${up}A`;
+  }
+  sequence += `\x1b[${col + 1}G`;
+  output.write(sequence);
 }

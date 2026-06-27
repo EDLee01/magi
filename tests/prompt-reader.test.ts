@@ -154,6 +154,22 @@ describe("prompt reader display", () => {
     expect(display.cursorColumn).toBeLessThan(24);
   });
 
+  it("does not drop wide characters at soft-wrap boundaries", () => {
+    const prefix = "a".repeat(30);
+    const text = prefix + "不懂世界";
+    const display = buildPromptDisplayForTest({
+      prompt: "> ",
+      text,
+      cursor: text.length,
+      safeColumns: 36,
+      maxVisibleLines: 8
+    });
+    const joined = stripAnsi(display.lines.join(""));
+
+    expect(joined).toContain("不懂");
+    expect(joined.replace(/\s+/g, "")).toContain("不懂世界");
+  });
+
   it("keeps Enter in unfinished blocks and submits finished multiline text", () => {
     expect(shouldContinueOnEnterForTest("```ts\nconst x = 1")).toBe(true);
     expect(shouldContinueOnEnterForTest("```ts\nconst x = 1\n```")).toBe(false);
