@@ -15,6 +15,7 @@ import { routeAuto, routeAutoDetailed, RouteContext } from "./routing/model-rout
 import { SessionStore } from "./session-store.js";
 import { UserQuestionResolver } from "./tools/user-question.js";
 import { UserMessageSink } from "./tools/user-message.js";
+import { HeadlessInteractionMode } from "./headless-interactions.js";
 import { SubAgentRequest, SubAgentResult, ToolPermissionRules } from "./tools/registry.js";
 import { executeHooks } from "./hooks/runner.js";
 
@@ -44,6 +45,7 @@ export function runHeadlessPrompt(input: {
   persistSession?: boolean;
   collectEvents?: boolean;
   permissionMode?: ToolPermissionMode;
+  interactionMode?: HeadlessInteractionMode;
   toolRules?: ToolPermissionRules;
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
@@ -71,6 +73,7 @@ async function runHeadlessPromptAsync(input: {
   persistSession?: boolean;
   collectEvents?: boolean;
   permissionMode?: ToolPermissionMode;
+  interactionMode?: HeadlessInteractionMode;
   toolRules?: ToolPermissionRules;
   userQuestionResolver?: UserQuestionResolver;
   userMessageSink?: UserMessageSink;
@@ -136,6 +139,7 @@ async function runPersistedHeadless(
     jobId?: string;
     collectEvents?: boolean;
     permissionMode?: ToolPermissionMode;
+    interactionMode?: HeadlessInteractionMode;
     toolRules?: ToolPermissionRules;
     userQuestionResolver?: UserQuestionResolver;
     userMessageSink?: UserMessageSink;
@@ -239,6 +243,7 @@ async function runPersistedHeadless(
       stateRoot: input.stateRoot,
       webSearchConfig: input.config.webSearch,
       permissionMode: input.permissionMode,
+      interactionMode: input.interactionMode,
       toolRules: input.toolRules,
       hooks: input.config.hooks,
       userQuestionResolver: input.userQuestionResolver,
@@ -432,6 +437,7 @@ function buildSpawnSubAgent(input: {
   cwd: string;
   modelAlias?: string;
   permissionMode?: ToolPermissionMode;
+  interactionMode?: HeadlessInteractionMode;
   toolRules?: ToolPermissionRules;
 }): (request: SubAgentRequest) => Promise<SubAgentResult> {
   return async (request: SubAgentRequest): Promise<SubAgentResult> => {

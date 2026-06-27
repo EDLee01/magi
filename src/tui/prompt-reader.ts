@@ -441,10 +441,7 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     });
 
     if (renderedLines > 0) {
-      if (renderedCursorLine > 0) {
-        output.write(`\x1b[${renderedCursorLine}A`);
-      }
-      output.write("\r\x1b[J");
+      clearPromptBlock(output, renderedLines, renderedCursorLine);
     }
 
     output.write(display.lines.join("\n"));
@@ -454,10 +451,13 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
       return;
     }
 
-    const up = display.lines.length - 1 - display.cursorLine;
-    if (up > 0) output.write(`\x1b[${up}A`);
-    output.write("\r");
-    if (display.cursorColumn > 0) output.write(`\x1b[${display.cursorColumn}C`);
+    positionPromptCursor(
+      output,
+      display.lines.length,
+      display.cursorLine,
+      display.cursorColumn,
+      safeColumns
+    );
     renderedCursorLine = display.cursorLine;
   }
 
@@ -1067,4 +1067,50 @@ function isZeroWidth(codePoint: number): boolean {
 
 function safePromptColumns(terminalColumns: number): number {
   return Math.max(20, terminalColumns - 6);
+}
+
+function clampCursorEscapeCount(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.min(Math.floor(value), 9999);
+}
+
+function clearPromptBlock(
+  output: NodeJS.WriteStream,
+  lineCount: number,
+  cursorLine: number
+): void {
+  if (lineCount <= 0) {
+    return;
+  }
+  const upToFirst = clampCursorEscapeCount(cursorLine);
+  if (upToFirst > 0) {
+    output.write(`\x1b[${upToFirst}A`);
+  }
+  for (let line = 0; line < lineCount; line += 1) {
+    output.write("\r\x1b[2K");
+    if (line < lineCount - 1) {
+      output.write("\x1b[1B");
+    }
+  }
+  const backToFirst = clampCursorEscapeCount(lineCount - 1);
+  if (backToFirst > 0) {
+    output.write(`\x1b[${backToFirst}A`);
+  }
+}
+
+function positionPromptCursor(
+  output: NodeJS.WriteStream,
+  totalLines: number,
+  cursorLine: number,
+  cursorColumn: number,
+  maxColumn: number
+): void {
+  const up = clampCursorEscapeCount(totalLines - 1 - cursorLine);
+  if (up > 0) {
+    output.write(`\x1b[${up}A`);
+  }
+  const col = Math.max(0, Math.min(cursorColumn, maxColumn - 1));
+  output.write(`\x1b[${col + 1}G`);
 }

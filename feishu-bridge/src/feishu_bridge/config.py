@@ -30,7 +30,33 @@ class BridgeConfig:
     dev_allow_all: bool
     default_model: str
     job_timeout_seconds: int
+    permission_mode: str
+    interaction_mode: str
+    interaction_timeout_seconds: int
+    response_language: str
+    magi_cwd: str
+    persist_sessions: bool
+    session_ttl_seconds: int
     manual_peers: list[PeerNode] = field(default_factory=list)
+
+
+PERMISSION_MODE_ALIASES: dict[str, str] = {
+    "default": "default",
+    "acceptedits": "acceptEdits",
+    "accept": "acceptEdits",
+    "dontask": "dontAsk",
+    "bypass": "bypassPermissions",
+    "bypasspermissions": "bypassPermissions",
+    "fullaccess": "bypassPermissions",
+    "full": "bypassPermissions",
+    "yolo": "bypassPermissions",
+    "plan": "plan",
+}
+
+
+def normalize_permission_mode(value: str) -> str:
+    key = value.strip().lower().replace("_", "").replace("-", "")
+    return PERMISSION_MODE_ALIASES.get(key, value.strip())
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -82,5 +108,14 @@ def load_config(config_path: Path | None = None) -> BridgeConfig:
         dev_allow_all=bool(security.get("dev_allow_all", False)),
         default_model=str(magi.get("default_model", "main")).strip() or "main",
         job_timeout_seconds=int(magi.get("job_timeout_seconds", 600)),
+        permission_mode=normalize_permission_mode(
+            str(magi.get("permission_mode", "yolo")).strip() or "yolo"
+        ),
+        interaction_mode=str(magi.get("interaction_mode", "client")).strip().lower() or "client",
+        interaction_timeout_seconds=int(magi.get("interaction_timeout_seconds", 300)),
+        response_language=str(magi.get("response_language", "auto")).strip().lower() or "auto",
+        magi_cwd=str(magi.get("cwd", "")).strip(),
+        persist_sessions=bool(magi.get("persist_sessions", True)),
+        session_ttl_seconds=int(magi.get("session_ttl_seconds", 86_400)),
         manual_peers=manual_peers,
     )

@@ -2052,6 +2052,139 @@ describe("agent query loop", () => {
     }
   });
 
+  it("auto-resolves AskUserQuestion in bypassPermissions headless mode", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 50 });
+    try {
+      const sessionId = store.createSession({ title: "auto question", cwd: workspace });
+      const adapter: ProviderAdapter = {
+        name: "auto-question-provider",
+        complete: async (request) =>
+          request.messages.some((message) => message.role === "tool")
+            ? { text: "picked default option" }
+            : {
+                text: "",
+                toolUses: [
+                  {
+                    type: "tool-use",
+                    id: "ask-auto",
+                    name: "AskUserQuestion",
+                    input: {
+                      questions: [
+                        {
+                          question: "Which memory topic?",
+                          options: [
+                            { label: "RAG (Recommended)", description: "Retrieval" },
+                            { label: "Other", description: "Something else" }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+      };
+      const result = await new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-auto-question",
+        cwd: workspace,
+        routes: [{ providerName: "auto", model: "explicit", adapter }],
+        permissionMode: "bypassPermissions",
+        activeInteractions: interactions
+      }).submitMessage("research memory");
+
+      expect(result.text).toContain("picked default option");
+      expect(
+        interactions.listInteractions({ jobId: "job-auto-question", status: "pending" })
+      ).toHaveLength(0);
+      expect(store.listJobAuditEvents("job-auto-question", 40)).toContainEqual(
+        expect.objectContaining({
+          action: "agent.user_question.auto_resolved",
+          metadata: expect.objectContaining({
+            toolUseId: "ask-auto",
+            auto: true,
+            answer: expect.objectContaining({
+              answers: [
+                expect.objectContaining({
+                  selectedLabels: ["RAG (Recommended)"]
+                })
+              ]
+            })
+          })
+        })
+      );
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
+  it("waits for client interaction mode instead of auto-resolving AskUserQuestion", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
+    const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
+    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    try {
+      const sessionId = store.createSession({ title: "client question", cwd: workspace });
+      const adapter: ProviderAdapter = {
+        name: "client-question-provider",
+        complete: async (request) =>
+          request.messages.some((message) => message.role === "tool")
+            ? { text: "client picked option" }
+            : {
+                text: "",
+                toolUses: [
+                  {
+                    type: "tool-use",
+                    id: "ask-client",
+                    name: "AskUserQuestion",
+                    input: {
+                      questions: [
+                        {
+                          question: "Which route?",
+                          options: [
+                            { label: "fast", description: "Fast route" },
+                            { label: "safe", description: "Safe route" }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+      };
+      const running = new QueryEngine({
+        store,
+        sessionId,
+        jobId: "job-client-question",
+        cwd: workspace,
+        routes: [{ providerName: "client", model: "explicit", adapter }],
+        permissionMode: "bypassPermissions",
+        interactionMode: "client",
+        activeInteractions: interactions
+      }).submitMessage("ask user");
+      await waitFor(
+        () =>
+          interactions.getInteraction({ jobId: "job-client-question", toolUseId: "ask-client" })
+            ?.status === "pending"
+      );
+      interactions.resolveQuestion({
+        jobId: "job-client-question",
+        toolUseId: "ask-client",
+        answer: { answers: [{ question: "Which route?", selectedLabels: ["safe"] }] }
+      });
+      const result = await running;
+      expect(result.text).toContain("client picked option");
+      expect(store.listJobAuditEvents("job-client-question", 40)).not.toContainEqual(
+        expect.objectContaining({ action: "agent.user_question.auto_resolved" })
+      );
+    } finally {
+      interactions.close();
+      store.close();
+    }
+  });
+
   it("records timeout and cancel states for active interactions", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));

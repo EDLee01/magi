@@ -219,6 +219,31 @@ describe("prompt reader display", () => {
     expect(stripAnsi(display.lines.join("\n"))).not.toContain("commands");
   });
 
+  it("avoids screen-clear and forward-cursor escapes while redrawing", async () => {
+    const input = new PassThrough() as unknown as NodeJS.ReadStream;
+    input.isTTY = true;
+    input.setRawMode = () => input;
+    const chunks: string[] = [];
+    const output = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(String(chunk));
+        callback();
+      }
+    }) as NodeJS.WriteStream;
+    output.columns = 80;
+
+    const prompt = readTuiPrompt({ input, output, prompt: "> " });
+    input.write("abc");
+    input.write("\r");
+    await expect(prompt).resolves.toBe("abc");
+
+    const rendered = chunks.join("");
+    expect(rendered).not.toMatch(/\x1b\[0?J/);
+    expect(rendered).not.toMatch(/\x1b\[[0-9]+C/);
+    expect(rendered).toContain("\x1b[2K");
+    expect(rendered).toMatch(/\x1b\[[0-9]+G/);
+  });
+
   it("removes its temporary error listener after normal submit", async () => {
     const { input, output } = createPromptStreams();
 

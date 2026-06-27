@@ -195,6 +195,26 @@ export function normalizeAskUserQuestionAnswer(
   };
 }
 
+/** Pick default options for headless control jobs (Feishu/API) in bypassPermissions mode. */
+export function buildHeadlessAutoAskUserQuestionAnswer(
+  request: AskUserQuestionRequest
+): AskUserQuestionAnswer {
+  return normalizeAskUserQuestionAnswer(request, {
+    answers: request.questions.map((question) => {
+      const recommended = question.options.find((option) => /recommended/i.test(option.label));
+      const nonOther = question.options.find(
+        (option) => !/^other$/i.test(option.label.trim())
+      );
+      const picked = recommended ?? nonOther ?? question.options[0];
+      return {
+        question: question.question,
+        selectedLabels: [picked.label],
+        selectedOptions: [picked]
+      };
+    })
+  });
+}
+
 export function formatAskUserQuestionAnswer(answer: AskUserQuestionAnswer): string {
   const lines = ["User answered AskUserQuestion:"];
   answer.answers.forEach((selection, index) => {

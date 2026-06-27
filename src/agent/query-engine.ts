@@ -17,7 +17,13 @@ import { executeHooks, HookResult } from "../hooks/runner.js";
 import { compactSessionWithHooks } from "../context/compaction.js";
 import { computeSessionContextBudget } from "../context/token-budget.js";
 import { buildLayeredContext } from "../context/layers.js";
-import { AskUserQuestionAnswer, UserQuestionResolver } from "../tools/user-question.js";
+import {
+  AskUserQuestionAnswer,
+  buildHeadlessAutoAskUserQuestionAnswer,
+  UserQuestionResolver
+} from "../tools/user-question.js";
+import { shouldAutoResolveHeadlessInteractions } from "../headless-interactions.js";
+import type { HeadlessInteractionMode } from "../headless-interactions.js";
 import { UserMessageSink } from "../tools/user-message.js";
 import { ActiveInteractionRegistry, interactionErrorStatus } from "../interactions.js";
 import { appendMemory, MemoryScope } from "../memory.js";
@@ -29,7 +35,13 @@ import {
   type MemoryWriteDecision
 } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
-import { buildCapabilityQuestionNudge, isCapabilityQuestion } from "./capability-nudge.js";
+import {
+  buildCapabilityQuestionNudge,
+  buildWebResearchNudge,
+  isCapabilityQuestion,
+  isWebResearchTask
+} from "./capability-nudge.js";
+import { buildFeishuLocaleNudge, isFeishuLocalePrompt } from "./feishu-locale-nudge.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import type { ToolPermissionRules } from "../tools/registry.js";
 import { formatGoalContext, getGoal } from "../goal.js";
@@ -60,6 +72,7 @@ export interface QueryEngineInput {
   stateRoot?: string;
   webSearchConfig?: WebSearchConfig;
   permissionMode?: ToolPermissionMode;
+  interactionMode?: HeadlessInteractionMode;
   toolRules?: ToolPermissionRules;
   approvalResolver?: (request: {
     toolUse: import("../providers/ir.js").MagiToolUsePart;
@@ -292,6 +305,30 @@ export class QueryEngine {
     jobId: string,
     request: { toolUse: MagiToolUsePart; reason: string; diff?: string }
   ): Promise<boolean> {
+    if (
+      this.input.activeInteractions &&
+      shouldAutoResolveHeadlessInteractions({
+        permissionMode: this.input.permissionMode,
+        interactionMode: this.input.interactionMode
+      })
+    ) {
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.approval.auto_resolved",
+        target: request.toolUse.name,
+        metadata: {
+          status: "resolved",
+          interactionKind: "approval",
+          toolUseId: request.toolUse.id,
+          approved: true,
+          auto: true,
+          reason: request.reason
+        }
+      });
+      return true;
+    }
+
     if (!this.input.activeInteractions) {
       return this.input.approvalResolver?.(request) ?? false;
     }
@@ -385,6 +422,30 @@ export class QueryEngine {
         throw new Error("AskUserQuestion requires an interactive user question resolver");
       }
       return await this.input.userQuestionResolver(request);
+    }
+
+    if (
+      shouldAutoResolveHeadlessInteractions({
+        permissionMode: this.input.permissionMode,
+        interactionMode: this.input.interactionMode
+      })
+    ) {
+      const answer = buildHeadlessAutoAskUserQuestionAnswer(request.question);
+      this.input.store.recordAudit({
+        sessionId: this.input.sessionId,
+        jobId,
+        action: "agent.user_question.auto_resolved",
+        target: request.toolUse.name,
+        metadata: {
+          status: "resolved",
+          interactionKind: "question",
+          toolUseId: request.toolUse.id,
+          questionCount: request.question.questions.length,
+          answer,
+          auto: true
+        }
+      });
+      return answer;
     }
 
     const wait = this.input.activeInteractions.waitForQuestion({
@@ -1813,6 +1874,11 @@ function buildSessionMessages(input: {
   }
   if (isCapabilityQuestion(input.prompt)) {
     messages.push(textMessage("system", buildCapabilityQuestionNudge()));
+  } else if (isWebResearchTask(input.prompt)) {
+    messages.push(textMessage("system", buildWebResearchNudge()));
+  }
+  if (isFeishuLocalePrompt(input.prompt)) {
+    messages.push(textMessage("system", buildFeishuLocaleNudge()));
   }
   return messages;
 }

@@ -9,6 +9,15 @@
 import { browseMdns, DiscoveredPeer } from "./mdns.js";
 import { ToolPermissionMode } from "../agent/tools.js";
 
+/** Build a reachable base URL for a discovered peer (respect loopback bind). */
+export function peerBaseUrl(peer: DiscoveredPeer): string {
+  const bind = peer.txt.bind?.trim();
+  if (bind === "127.0.0.1" || bind === "::1" || bind === "localhost") {
+    return `http://127.0.0.1:${peer.port}`;
+  }
+  return `http://${peer.address}:${peer.port}`;
+}
+
 export interface PeerEndpoint {
   /** e.g. "http://192.168.31.57:8765" */
   baseUrl: string;
@@ -66,7 +75,7 @@ export async function resolvePeerByName(
       p.hostname.startsWith(name) ||
       p.hostname === `${name}.local.`
   );
-  return match ? `http://${match.address}:${match.port}` : undefined;
+  return match ? peerBaseUrl(match) : undefined;
 }
 
 /** List all discoverable peers. */
@@ -212,12 +221,13 @@ export async function dispatchToPeer(input: {
           events.push(evt);
           input.onEvent?.(evt);
           const action = evt.action ?? evt.eventName;
-          if (
-            action === "agent.text.delta" &&
-            evt.metadata &&
-            typeof (evt.metadata as Record<string, unknown>).preview === "string"
-          ) {
-            assistantText += (evt.metadata as Record<string, string>).preview;
+          const meta = (evt.metadata ?? {}) as Record<string, unknown>;
+          if (action === "agent.text.delta" && typeof meta.text === "string") {
+            if (meta.text.length >= assistantText.length) {
+              assistantText = meta.text;
+            }
+          } else if (action === "agent.assistant.message" && typeof meta.text === "string") {
+            assistantText = meta.text;
           }
         }
       }

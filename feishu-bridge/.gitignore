@@ -3,4 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 config.local.toml
+.chat-sessions.json
+.feishu-bridge.pid
+.feishu-bridge.lock
 *.log

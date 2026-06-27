@@ -20,6 +20,19 @@ allowed_chat_ids = []
 [magi]
 default_model = "main"
 job_timeout_seconds = 600
+# yolo / fullAccess = bypassPermissions (no approval UI; required for Feishu headless)
+# Router (~/.magi-router/config.yaml) should set:
+#   control.defaultCwd = your home dir, allowAnyCwd = true, denyDestructive = true
+# Feishu keeps permission_mode = yolo for read/write; deletes are denied by router.
+permission_mode = "yolo"
+# client = forward AskUserQuestion to Feishu; auto = pick defaults in yolo mode
+interaction_mode = "client"
+interaction_timeout_seconds = 300
+response_language = "auto"
+# Optional override of router control.defaultCwd (leave unset to use router default)
+# cwd = "/Users/edward/projects/magi"
+persist_sessions = true
+session_ttl_seconds = 86400
 
 [[peers.manual]]
 name = "research"

@@ -4,6 +4,7 @@
 set -euo pipefail
 
 ROOT="${MAGI_SIM_ROOT:-$HOME/.magi-sim}"
+ROUTER_PROVIDER_ENV="${MAGI_ROUTER_PROVIDER_ENV:-$HOME/.magi-router/provider.env}"
 MAGI_BIN="${MAGI_BIN:-magi}"
 BIND="${MAGI_SIM_BIND:-127.0.0.1}"
 PID_DIR="$ROOT/pids"
@@ -54,6 +55,7 @@ start_one() {
   local dir="$ROOT/$role"
   local pid_file="$PID_DIR/$role.pid"
   local log_file="$LOG_DIR/$role.log"
+  local provider_env="$dir/provider.env"
 
   if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
     echo "[$role] already running pid=$(cat "$pid_file") port=$port"
@@ -67,8 +69,30 @@ start_one() {
 
   ensure_instance "$role"
   echo "[$role] starting on $BIND:$port (MAGI_CONFIG_DIR=$dir)"
-  nohup env MAGI_CONFIG_DIR="$dir" MAGI_CONTROL_PORT="$port" \
-    "$MAGI_BIN" serve >"$log_file" 2>&1 &
+  if [[ -f "$provider_env" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$provider_env"
+    set +a
+  fi
+  if [[ "$role" != "router" ]] && [[ -f "$ROUTER_PROVIDER_ENV" ]]; then
+    cp "$ROUTER_PROVIDER_ENV" "$provider_env" 2>/dev/null || true
+    chmod 600 "$provider_env" 2>/dev/null || true
+    set -a
+    # shellcheck disable=SC1090
+    source "$provider_env"
+    set +a
+  fi
+  local daemon_status
+  daemon_status="$(MAGI_CONFIG_DIR="$dir" "$MAGI_BIN" daemon status 2>/dev/null || true)"
+  if echo "$daemon_status" | grep -q "is running"; then
+    echo "[$role] daemon already running"
+    return 0
+  fi
+  MAGI_CONFIG_DIR="$dir" MAGI_CONTROL_PORT="$port" "$MAGI_BIN" daemon start >"$log_file" 2>&1 || {
+    nohup env MAGI_CONFIG_DIR="$dir" MAGI_CONTROL_PORT="$port" \
+      "$MAGI_BIN" serve >>"$log_file" 2>&1 &
+  }
   sleep 1.5
   local listen_pid
   listen_pid="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
@@ -116,6 +140,11 @@ cmd_start() {
   done
   echo ""
   cmd_status
+  if [[ -x "$(dirname "$0")/magi-sim-peers-setup.sh" ]]; then
+    echo ""
+    echo "Registering peers on router (if online)..."
+    "$(dirname "$0")/magi-sim-peers-setup.sh" || true
+  fi
 }
 
 cmd_stop() {

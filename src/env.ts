@@ -14,14 +14,28 @@ export function loadMagiEnvFile(env: NodeJS.ProcessEnv = process.env): MagiEnvFi
   const paths = getMagiPaths(env);
   const envFile = path.join(paths.root, ".env");
   const merged: NodeJS.ProcessEnv = { ...env };
-  if (!existsSync(envFile)) {
-    return { env: merged, envFile, loadedKeys: [] };
-  }
-
-  const parsed = parseMagiEnv(readFileSync(envFile, "utf8"), envFile);
   const loadedKeys: string[] = [];
+
+  mergeEnvFile(merged, loadedKeys, envFile, { magiPrefixOnly: true });
+  mergeEnvFile(merged, loadedKeys, path.join(paths.root, "provider.env"), {
+    magiPrefixOnly: false
+  });
+
+  return { env: merged, envFile, loadedKeys };
+}
+
+function mergeEnvFile(
+  merged: NodeJS.ProcessEnv,
+  loadedKeys: string[],
+  envFile: string,
+  options: { magiPrefixOnly: boolean }
+): void {
+  if (!existsSync(envFile)) {
+    return;
+  }
+  const parsed = parseMagiEnv(readFileSync(envFile, "utf8"), envFile);
   for (const [key, value] of Object.entries(parsed)) {
-    if (!key.startsWith(MAGI_ENV_PREFIX)) {
+    if (options.magiPrefixOnly && !key.startsWith(MAGI_ENV_PREFIX)) {
       continue;
     }
     if (merged[key] === undefined) {
@@ -29,8 +43,6 @@ export function loadMagiEnvFile(env: NodeJS.ProcessEnv = process.env): MagiEnvFi
       loadedKeys.push(key);
     }
   }
-
-  return { env: merged, envFile, loadedKeys };
 }
 
 export function parseMagiEnv(raw: string, envFile = ".env"): Record<string, string> {

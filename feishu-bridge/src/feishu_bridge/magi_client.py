@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
+
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from .interactions import FeishuTarget, InteractionHub
 
 
 @dataclass
@@ -113,38 +116,214 @@ def format_cluster_status(router: MagiEndpoint, manual_peers: list[tuple[str, st
     return "\n".join(lines)
 
 
+def assemble_assistant_text_from_events(events: list[dict[str, Any]]) -> str:
+    """Rebuild final assistant text from Magi audit events (newest-first list)."""
+    chronological = list(reversed(events))
+    best = ""
+    for event in chronological:
+        if not isinstance(event, dict):
+            continue
+        action = str(event.get("action") or event.get("type") or "")
+        meta = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        message = str(event.get("message") or "")
+
+        if action == "agent.assistant.message" and isinstance(meta.get("text"), str):
+            if len(meta["text"]) >= len(best):
+                best = meta["text"]
+        elif action == "agent.text.delta" and isinstance(meta.get("text"), str):
+            # metadata.text is the full streamed buffer — never concatenate previews.
+            if len(meta["text"]) >= len(best):
+                best = meta["text"]
+        elif action == "agent.query.done" and isinstance(meta.get("text"), str):
+            best = meta["text"]
+        elif action == "agent.query.completed":
+            last = meta.get("lastAssistantMessage")
+            if isinstance(last, str) and len(last) >= len(best):
+                best = last
+            elif message and len(message) >= len(best):
+                best = message
+    return best.strip()
+
+
+def fetch_job_assistant_text(endpoint: MagiEndpoint, job_id: str, session_id: str = "") -> str:
+    """Load the best available assistant reply for a completed job."""
+    ev_status, ev_body = _request(endpoint, "GET", f"/jobs/{job_id}/events?limit=500", timeout=60)
+    if ev_status == 200:
+        try:
+            events = json.loads(ev_body).get("events", [])
+            text = assemble_assistant_text_from_events(events)
+            if text:
+                return text
+        except json.JSONDecodeError:
+            pass
+
+    if session_id:
+        ev_status, ev_body = _request(
+            endpoint, "GET", f"/sessions/{session_id}/events?limit=500", timeout=60
+        )
+        if ev_status == 200:
+            try:
+                events = json.loads(ev_body).get("events", [])
+                text = assemble_assistant_text_from_events(events)
+                if text:
+                    return text
+            except json.JSONDecodeError:
+                pass
+    return ""
+
+
+def fetch_job_interactions(endpoint: MagiEndpoint, job_id: str) -> list[dict[str, Any]]:
+    status, body = _request(endpoint, "GET", f"/jobs/{job_id}/interactions", timeout=30)
+    if status != 200:
+        return []
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return []
+    interactions = data.get("interactions")
+    return interactions if isinstance(interactions, list) else []
+
+
+def resolve_job_approval(
+    endpoint: MagiEndpoint, job_id: str, tool_use_id: str, *, approved: bool = True
+) -> bool:
+    status, _body = _request(
+        endpoint,
+        "POST",
+        f"/jobs/{job_id}/approvals/{tool_use_id}",
+        {"decision": "approve" if approved else "deny", "responder": "feishu-bridge"},
+        timeout=30,
+    )
+    return status == 200
+
+
+def resolve_job_question(
+    endpoint: MagiEndpoint,
+    job_id: str,
+    tool_use_id: str,
+    answer: dict[str, Any],
+) -> bool:
+    payload = dict(answer)
+    payload["responder"] = "feishu-bridge"
+    status, _body = _request(
+        endpoint,
+        "POST",
+        f"/jobs/{job_id}/questions/{tool_use_id}",
+        payload,
+        timeout=30,
+    )
+    return status == 200
+
+
+def _handle_pending_interactions(
+    endpoint: MagiEndpoint,
+    job_id: str,
+    *,
+    permission_mode: str,
+    interaction_hub: InteractionHub | None,
+    feishu_target: FeishuTarget | None,
+    interaction_timeout_seconds: float,
+    handled_questions: set[str],
+    send_question: Callable[[FeishuTarget, list[dict[str, Any]], str, str], None] | None,
+) -> None:
+    pending_items = fetch_job_interactions(endpoint, job_id)
+    for item in pending_items:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status") or "") != "pending":
+            continue
+        kind = str(item.get("kind") or "")
+        tool_use_id = str(item.get("toolUseId") or "")
+        if not tool_use_id:
+            continue
+
+        if kind == "approval":
+            if permission_mode == "bypassPermissions":
+                resolve_job_approval(endpoint, job_id, tool_use_id, approved=True)
+            continue
+
+        if kind != "question" or tool_use_id in handled_questions:
+            continue
+        if interaction_hub is None or feishu_target is None or send_question is None:
+            continue
+
+        question_payload = item.get("question")
+        if not isinstance(question_payload, dict):
+            continue
+        questions = question_payload.get("questions")
+        if not isinstance(questions, list) or not questions:
+            continue
+
+        handled_questions.add(tool_use_id)
+        answer = interaction_hub.wait_for_answer(
+            target=feishu_target,
+            job_id=job_id,
+            tool_use_id=tool_use_id,
+            endpoint_key=endpoint.base_url,
+            questions=questions,
+            send_prompt=send_question,
+            timeout_seconds=interaction_timeout_seconds,
+        )
+        if answer:
+            resolve_job_question(endpoint, job_id, tool_use_id, answer)
+
+
 def dispatch_prompt(
     endpoint: MagiEndpoint,
     prompt: str,
     *,
     model: str = "main",
     timeout_seconds: int = 600,
+    permission_mode: str = "bypassPermissions",
+    interaction_mode: str = "client",
+    feishu_target: FeishuTarget | None = None,
+    interaction_hub: InteractionHub | None = None,
+    interaction_timeout_seconds: float = 300.0,
+    send_question: Callable[[FeishuTarget, list[dict[str, Any]], str, str], None] | None = None,
+    session_id: str = "",
+    cwd: str = "",
 ) -> DispatchResult:
-    status, body = _request(
-        endpoint,
-        "POST",
-        "/jobs",
-        {"prompt": prompt, "model": model, "modelAlias": model},
-        timeout=60,
-    )
-    if status == 401:
-        refreshed = refresh_pairing(endpoint)
-        if refreshed:
-            endpoint = refreshed
-            status, body = _request(
-                endpoint,
-                "POST",
-                "/jobs",
-                {"prompt": prompt, "model": model, "modelAlias": model},
-                timeout=60,
-            )
+    wrapped_prompt = prompt
+    job_body_payload: dict[str, Any] = {
+        "prompt": wrapped_prompt,
+        "model": model,
+        "modelAlias": model,
+        "background": True,
+        "permissionMode": permission_mode,
+        "interactionMode": interaction_mode,
+    }
+    if session_id:
+        job_body_payload["sessionId"] = session_id
+    if cwd:
+        job_body_payload["cwd"] = cwd
+
+    def _create_job(payload: dict[str, Any]) -> tuple[int, str, MagiEndpoint]:
+        nonlocal endpoint
+        status, body = _request(endpoint, "POST", "/jobs", payload, timeout=30)
         if status == 401:
-            return DispatchResult("", "", "", error="Magi 鉴权失败：pair token 已过期。请在本机运行 magi pair feishu-bridge 并更新 config.local.toml")
+            refreshed = refresh_pairing(endpoint)
+            if refreshed:
+                endpoint = refreshed
+                status, body = _request(endpoint, "POST", "/jobs", payload, timeout=30)
+        return status, body, endpoint
+
+    status, body, endpoint = _create_job(job_body_payload)
+    if status == 404 and session_id and "session not found" in body.lower():
+        job_body_payload.pop("sessionId", None)
+        session_id = ""
+        status, body, endpoint = _create_job(job_body_payload)
+    if status == 401:
+        return DispatchResult(
+            "",
+            "",
+            "",
+            error="Magi 鉴权失败：pair token 已过期。请在本机运行 magi pair feishu-bridge 并更新 config.local.toml",
+        )
     if status == 0:
         return DispatchResult("", "", "", error=f"无法连接 Magi router: {body[:400]}")
     if status == 401:
         return DispatchResult("", "", "", error="Magi 鉴权失败：请在 config.local.toml 填写 magi pair 生成的 device_id/token")
-    if status != 200:
+    if status not in {200, 202}:
         return DispatchResult("", "", "", error=f"创建任务失败 HTTP {status}: {body[:400]}")
 
     try:
@@ -163,7 +342,19 @@ def dispatch_prompt(
 
     deadline = time.time() + timeout_seconds
     assistant_text = ""
+    handled_questions: set[str] = set()
     while time.time() < deadline:
+        _handle_pending_interactions(
+            endpoint,
+            job_id,
+            permission_mode=permission_mode,
+            interaction_hub=interaction_hub,
+            feishu_target=feishu_target,
+            interaction_timeout_seconds=interaction_timeout_seconds,
+            handled_questions=handled_questions,
+            send_question=send_question,
+        )
+
         job_status, job_body = _request(endpoint, "GET", f"/jobs/{job_id}", timeout=30)
         if job_status != 200:
             time.sleep(0.5)
@@ -182,29 +373,15 @@ def dispatch_prompt(
             if status_value == "failed":
                 err = meta.get("error") or assistant_text or job_body[:400]
                 return DispatchResult(session_id, job_id, assistant_text, error=str(err))
-            if assistant_text:
-                return DispatchResult(session_id, job_id, assistant_text)
-            # Fall back to events poll
+            full_text = assistant_text or fetch_job_assistant_text(endpoint, job_id, session_id)
+            if full_text:
+                return DispatchResult(session_id, job_id, full_text)
             break
         time.sleep(1)
 
-    # Events fallback
-    ev_status, ev_body = _request(endpoint, "GET", f"/jobs/{job_id}/events", timeout=30)
-    if ev_status == 200:
-        try:
-            events = json.loads(ev_body).get("events", [])
-            chunks: list[str] = []
-            for event in events:
-                if not isinstance(event, dict):
-                    continue
-                if event.get("type") == "assistant_delta" and isinstance(event.get("text"), str):
-                    chunks.append(event["text"])
-                if event.get("type") == "assistant_message" and isinstance(event.get("text"), str):
-                    chunks = [event["text"]]
-            if chunks:
-                return DispatchResult(session_id, job_id, "".join(chunks).strip())
-        except json.JSONDecodeError:
-            pass
+    full_text = fetch_job_assistant_text(endpoint, job_id, session_id)
+    if full_text:
+        return DispatchResult(session_id, job_id, full_text)
 
     return DispatchResult(
         session_id,

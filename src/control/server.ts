@@ -6,6 +6,9 @@ import path from "node:path";
 
 import { MagiConfig } from "../config.js";
 import { runHeadlessPrompt } from "../headless.js";
+import { readHeadlessInteractionMode } from "../headless-interactions.js";
+import { buildRemoteSafeToolRules } from "../tool-policy.js";
+import { ToolPermissionRules } from "../tools/registry.js";
 import { MagiPaths, RuntimeSettings } from "../paths.js";
 import { SessionStore } from "../session-store.js";
 import { createPairingToken, validateDeviceToken } from "./auth.js";
@@ -32,6 +35,7 @@ import { cronStorePathFromRoot, takeDueCronJobs } from "../tools/cron.js";
 import { listDreams, runDream } from "../memory-dream.js";
 import { MagiEventView, toEventView } from "../events.js";
 import { StoredAuditRecord } from "../session-store.js";
+import { parsePermissionMode } from "../commands/permissions.js";
 import { ToolPermissionMode } from "../agent/tools.js";
 import { VERSION } from "../version.js";
 import {
@@ -441,7 +445,7 @@ async function handleRequest(input: {
       const sessionId = input.store.createSession({
         id: readOptionalString(body.id),
         title: readOptionalString(body.title),
-        cwd: resolveControlCwd(readOptionalString(body.cwd), input.cwd),
+        cwd: resolveControlCwd(readOptionalString(body.cwd), input.cwd, input),
         metadata: readOptionalRecord(body.metadata)
       });
       return sendJson(input.response, 200, { session: input.store.getSession(sessionId) });
@@ -698,7 +702,7 @@ async function handleRequest(input: {
       const writeFiles = Array.isArray(body.writeFiles)
         ? body.writeFiles.filter((item): item is string => typeof item === "string")
         : [];
-      const cwd = resolveControlCwd(readOptionalString(body.cwd), input.cwd);
+      const cwd = resolveControlCwd(readOptionalString(body.cwd), input.cwd, input);
       const sessionId = input.store.createSession({
         title: `control agent task ${body.role}`,
         cwd
@@ -1038,7 +1042,7 @@ async function runControlJob(
   options: { sessionId?: string; cwd?: string } = {}
 ) {
   try {
-    const cwd = resolveControlCwd(options.cwd ?? readOptionalString(body.cwd), input.cwd);
+    const cwd = resolveControlCwd(options.cwd ?? readOptionalString(body.cwd), input.cwd, input);
     return await runHeadlessPrompt({
       prompt: String(body.prompt),
       cwd,
@@ -1053,6 +1057,8 @@ async function runControlJob(
       persistSession: typeof body.persistSession === "boolean" ? body.persistSession : undefined,
       collectEvents: body.collectEvents === true,
       permissionMode: readPermissionMode(body.permissionMode) ?? "default",
+      interactionMode: readHeadlessInteractionMode(body.interactionMode),
+      toolRules: resolveControlToolRules(body, input.config),
       activeInteractions: input.interactions
     });
   } catch (error) {
@@ -1069,6 +1075,20 @@ async function runControlJob(
   }
 }
 
+function resolveControlToolRules(
+  body: Record<string, unknown>,
+  config: MagiConfig
+): ToolPermissionRules | undefined {
+  const denyDestructive =
+    body.allowDestructive === true
+      ? false
+      : body.denyDestructive !== false && config.control.denyDestructive === true;
+  if (!denyDestructive) {
+    return undefined;
+  }
+  return buildRemoteSafeToolRules();
+}
+
 function startBackgroundControlJob(
   input: {
     paths: MagiPaths;
@@ -1082,7 +1102,7 @@ function startBackgroundControlJob(
   body: Record<string, unknown>,
   options: { sessionId?: string; cwd?: string } = {}
 ) {
-  const cwd = resolveControlCwd(options.cwd ?? readOptionalString(body.cwd), input.cwd);
+  const cwd = resolveControlCwd(options.cwd ?? readOptionalString(body.cwd), input.cwd, input);
   const prompt = String(body.prompt);
   const sessionId =
     options.sessionId ??
@@ -1108,6 +1128,8 @@ function startBackgroundControlJob(
     persistSession: true,
     collectEvents: body.collectEvents === true,
     permissionMode: readPermissionMode(body.permissionMode) ?? "default",
+    interactionMode: readHeadlessInteractionMode(body.interactionMode),
+    toolRules: resolveControlToolRules(body, input.config),
     activeInteractions: input.interactions,
     signal: controller.signal,
     stream: body.stream !== false
@@ -1217,27 +1239,82 @@ function readOptionalRecord(value: unknown): Record<string, unknown> | undefined
     : undefined;
 }
 
-function resolveControlCwd(requestedCwd: string | undefined, workspaceRoot: string): string {
-  let root: string;
-  let candidate: string;
-  let isDirectory: boolean;
+function controlAllowsAnyCwd(input: { config: MagiConfig; env?: NodeJS.ProcessEnv }): boolean {
+  return input.config.control.allowAnyCwd === true || input.env?.MAGI_CONTROL_ALLOW_ANY_CWD === "1";
+}
+
+function resolveConfiguredControlRoot(input: {
+  workspaceRoot: string;
+  config?: MagiConfig;
+}): string {
+  const configured = input.config?.control.defaultCwd?.trim();
+  if (configured) {
+    return realpathSync(path.resolve(configured));
+  }
+  return realpathSync(input.workspaceRoot);
+}
+
+function resolveControlCwd(
+  requestedCwd: string | undefined,
+  workspaceRoot: string,
+  input?: { config: MagiConfig; env?: NodeJS.ProcessEnv }
+): string {
+  let baseRoot: string;
   try {
-    root = realpathSync(workspaceRoot);
-    candidate = realpathSync(requestedCwd ? path.resolve(root, requestedCwd) : root);
-    isDirectory = statSync(candidate).isDirectory();
-  } catch {
+    baseRoot = resolveConfiguredControlRoot({ workspaceRoot, config: input?.config });
+    if (!statSync(baseRoot).isDirectory()) {
+      throw new ControlRequestError("control.defaultCwd must be an existing directory");
+    }
+  } catch (error) {
+    if (error instanceof ControlRequestError) {
+      throw error;
+    }
+    throw new ControlRequestError(
+      "control.defaultCwd must be an existing directory inside the authorized workspace"
+    );
+  }
+
+  if (!requestedCwd) {
+    return baseRoot;
+  }
+
+  if (input && controlAllowsAnyCwd(input)) {
+    const absolute = path.isAbsolute(requestedCwd)
+      ? requestedCwd
+      : path.resolve(baseRoot, requestedCwd);
+    try {
+      const candidate = realpathSync(absolute);
+      if (statSync(candidate).isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      throw new ControlRequestError("cwd must be an existing directory");
+    }
+    throw new ControlRequestError("cwd must be an existing directory");
+  }
+
+  let candidate: string;
+  try {
+    candidate = realpathSync(
+      path.isAbsolute(requestedCwd) ? requestedCwd : path.resolve(baseRoot, requestedCwd)
+    );
+    if (!statSync(candidate).isDirectory()) {
+      throw new ControlRequestError(
+        "cwd must be an existing directory inside the authorized workspace"
+      );
+    }
+  } catch (error) {
+    if (error instanceof ControlRequestError) {
+      throw error;
+    }
     throw new ControlRequestError(
       "cwd must be an existing directory inside the authorized workspace"
     );
   }
-  if (!isDirectory) {
-    throw new ControlRequestError(
-      "cwd must be an existing directory inside the authorized workspace"
-    );
-  }
-  const relative = path.relative(root, candidate);
+
+  const relative = path.relative(baseRoot, candidate);
   if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    throw new ControlRequestError(`cwd is outside the authorized workspace: ${workspaceRoot}`);
+    throw new ControlRequestError(`cwd is outside the authorized workspace: ${baseRoot}`);
   }
   return candidate;
 }
@@ -1266,13 +1343,10 @@ function readApprovalDecision(body: Record<string, unknown>): boolean | undefine
 }
 
 function readPermissionMode(value: unknown): ToolPermissionMode | undefined {
-  return value === "default" ||
-    value === "acceptEdits" ||
-    value === "dontAsk" ||
-    value === "bypassPermissions" ||
-    value === "plan"
-    ? value
-    : undefined;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return parsePermissionMode(value);
 }
 
 function normalizeControlQuestionAnswer(

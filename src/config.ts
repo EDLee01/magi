@@ -23,6 +23,12 @@ export interface MagiConfig {
   control: {
     bind: string;
     port: number;
+    /** When true, Control API jobs may use any existing directory as cwd. */
+    allowAnyCwd?: boolean;
+    /** Default cwd for remote Control API jobs when the client omits cwd. */
+    defaultCwd?: string;
+    /** Deny delete/destructive tools on Control API jobs (yolo still applies otherwise). */
+    denyDestructive?: boolean;
   };
   providers: Record<string, ProviderConfig>;
   models: {
@@ -207,7 +213,13 @@ export function validateConfig(
   const version = value.version === undefined ? "0.1" : String(value.version);
   const control = {
     bind: readString(controlValue.bind, "control.bind", configFile, runtime.controlBind),
-    port: readPort(controlValue.port, "control.port", configFile, runtime.controlPort)
+    port: readPort(controlValue.port, "control.port", configFile, runtime.controlPort),
+    allowAnyCwd:
+      readOptionalBoolean(controlValue.allowAnyCwd, "control.allowAnyCwd", configFile) ?? false,
+    defaultCwd: readOptionalString(controlValue.defaultCwd, "control.defaultCwd", configFile),
+    denyDestructive:
+      readOptionalBoolean(controlValue.denyDestructive, "control.denyDestructive", configFile) ??
+      false
   };
 
   const providers: Record<string, ProviderConfig> = {};

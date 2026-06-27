@@ -16,6 +16,24 @@ const TOOL_ALIASES: Record<string, string[]> = {
   Bash: ["Bash"]
 };
 
+/** Deny delete-style tools while keeping yolo/bypassPermissions for read/write. */
+export const REMOTE_SAFE_DENY_TOOLS = [
+  "FileDelete",
+  "GitBranchDelete",
+  "GitReset",
+  "CronDelete",
+  "KillProcess",
+  "Bash(rm*)",
+  "Bash(* rm *)",
+  "Bash(trash*)",
+  "Bash(*unlink*)",
+  "Bash(*rmdir*)"
+] as const;
+
+export function buildRemoteSafeToolRules(): ToolPermissionRules {
+  return buildToolPermissionRules({ disallowedTools: [...REMOTE_SAFE_DENY_TOOLS] })!;
+}
+
 export function buildToolPermissionRules(input: ToolPolicyInput): ToolPermissionRules | undefined {
   const allow = [
     ...expandToolPolicyEntries(input.tools ?? [], "allow"),
