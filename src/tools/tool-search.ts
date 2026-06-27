@@ -24,6 +24,7 @@ export interface ToolSearchInput {
 export interface ToolSearchOptions {
   usageStats?: ToolUsageStats;
   stateRoot?: string;
+  coreToolNames?: ReadonlySet<string>;
 }
 
 export const ToolSearchInputSchema = {
@@ -48,7 +49,8 @@ export function executeToolSearch(
   tools: ToolSearchableRecord[],
   options: ToolSearchOptions = {}
 ): string {
-  const select = /^select:(.+)$/i.exec(input.query.trim());
+  const query = input.query.trim();
+  const select = /^select:(.+)$/i.exec(query);
   if (select) {
     const requested = select[1].trim();
     const tool = tools.find((item) => item.name.toLowerCase() === requested.toLowerCase());
@@ -58,7 +60,11 @@ export function executeToolSearch(
     return formatSelectedTool(tool);
   }
 
-  const analysis = analyzeToolSearchQuery(input.query);
+  if (/^(capabilities|list:deferred|list:tools)$/i.test(query)) {
+    return formatDeferredToolCatalog(tools, options.coreToolNames);
+  }
+
+  const analysis = analyzeToolSearchQuery(query);
   const matches = searchTools(input.query, tools, analysis, options).slice(0, input.maxResults);
   if (matches.length === 0) {
     return `No tools match ${JSON.stringify(input.query)}`;
@@ -318,6 +324,37 @@ function formatSelectedTool(tool: ToolSearchableRecord): string {
   ].join("\n");
 }
 
+export function formatDeferredToolCatalog(
+  tools: ToolSearchableRecord[],
+  coreToolNames?: ReadonlySet<string>
+): string {
+  const deferred = tools.filter((tool) => !coreToolNames?.has(tool.name));
+  if (deferred.length === 0) {
+    return "No deferred tools are available.";
+  }
+  const byCategory = new Map<string, ToolSearchableRecord[]>();
+  for (const tool of deferred) {
+    const category = tool.category ?? "uncategorized";
+    const bucket = byCategory.get(category) ?? [];
+    bucket.push(tool);
+    byCategory.set(category, bucket);
+  }
+  const lines = [
+    `Deferred tools discoverable via ToolSearch (${deferred.length}):`,
+    ...[...byCategory.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([category, items]) => {
+        const names = items
+          .map((tool) => tool.name)
+          .sort((left, right) => left.localeCompare(right));
+        return `- ${category}: ${names.join(", ")}`;
+      }),
+    "",
+    "Use query select:<tool_name> for a tool's full schema, or search by topic keyword."
+  ];
+  return lines.join("\n");
+}
+
 function schemaSummary(schema: Record<string, unknown>): string {
   const properties = isRecord(schema.properties) ? Object.keys(schema.properties) : [];
   const required = Array.isArray(schema.required)
@@ -418,10 +455,43 @@ const TERM_ALIASES: Record<string, string[]> = {
   web: ["browser", "fetch", "search"],
   wrong: ["correct", "dispute", "supersede"],
   workflow: ["learning", "memory"],
-  zip: ["archive", "package"]
+  zip: ["archive", "package"],
+  capabilities: ["tool", "search", "list"],
+  ability: ["tool", "capability"],
+  internet: ["web", "search", "fetch"],
+  online: ["web", "search", "fetch"],
+  联网: ["web", "search"],
+  搜索: ["web", "search", "grep"]
 };
 
 const INTENT_PROFILES: ToolIntentProfile[] = [
+  {
+    name: "capability-inquiry",
+    triggers: ["capabilities", "capability", "abilities", "ability", "support", "available"],
+    phrases: [
+      "can you",
+      "do you have",
+      "what tools",
+      "what can you",
+      "are you able",
+      "能不能",
+      "有没有",
+      "可以联网",
+      "联网搜索"
+    ],
+    categories: ["tools", "web", "agent", "git", "github", "shell", "memory", "skills"],
+    tags: ["tool", "web", "browser", "agent", "git", "search"],
+    toolBoosts: {
+      WebSearch: 120,
+      WebFetch: 110,
+      WebBrowser: 105,
+      Browser: 100,
+      Agent: 95,
+      HttpRequest: 85,
+      LSP: 80,
+      CronCreate: 75
+    }
+  },
   {
     name: "file-edit",
     triggers: ["patch", "edit", "modify", "change", "refactor", "fix"],

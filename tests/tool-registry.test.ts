@@ -102,6 +102,7 @@ describe("tool registry", () => {
         "Glob",
         "Grep",
         "Bash",
+        "WebSearch",
         "ToolSearch",
         "WorkspaceDiagnostics",
         "EnterPlanMode",
@@ -1907,6 +1908,44 @@ describe("tool registry", () => {
     });
     expect(missing).toMatchObject({ isError: true });
     expect(missing.content).toContain("Tool not found: Nope");
+  });
+
+  it("lists deferred tools when ToolSearch query is capabilities", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+
+    const catalog = await executeRegisteredTool({
+      cwd: workspace,
+      toolUse: {
+        type: "tool-use",
+        id: "tool-capabilities",
+        name: "ToolSearch",
+        input: { query: "capabilities" }
+      }
+    });
+
+    expect(catalog.isError).toBeUndefined();
+    expect(catalog.content).toContain("Deferred tools discoverable via ToolSearch");
+    expect(catalog.content).toContain("Browser");
+    expect(catalog.content).toContain("WebFetch");
+    expect(catalog.content).not.toMatch(/\bFileRead\b/);
+  });
+
+  it("ranks capability questions toward web and browser tools", async () => {
+    workspace = mkdtempSync(path.join(os.tmpdir(), "magi-registry-"));
+
+    const result = await executeRegisteredTool({
+      cwd: workspace,
+      toolUse: {
+        type: "tool-use",
+        id: "tool-capability-search",
+        name: "ToolSearch",
+        input: { query: "can you search the web online", max_results: 3 }
+      }
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain("capability-inquiry");
+    expect(["WebSearch", "WebBrowser"]).toContain(firstToolSearchResult(result.content));
   });
 
   it("ranks ToolSearch results by task intent", async () => {

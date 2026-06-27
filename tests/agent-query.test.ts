@@ -1393,7 +1393,7 @@ describe("agent query loop", () => {
           seenToolResults.push(toolResult.content);
           return { text: "search result consumed" };
         }
-        expect(request.tools?.map((tool) => tool.name)).not.toContain("WebSearch");
+        expect(request.tools?.map((tool) => tool.name)).toContain("WebSearch");
         return {
           text: "",
           toolUses: [

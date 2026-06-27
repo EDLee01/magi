@@ -869,6 +869,8 @@ export function formatToolResult(input: {
 
 const CORE_TOOL_NAMES = [
   "FileRead",
+  "WebSearch",
+  "ToolSearch",
   "FileWrite",
   "FileEdit",
   "FilePatch",
@@ -885,7 +887,6 @@ const CORE_TOOL_NAMES = [
   "Brief",
   "Memorize",
   "MemoryCorrect",
-  "ToolSearch",
   "WorkspaceDiagnostics",
   "EnterPlanMode",
   "ExitPlanMode",
@@ -1433,7 +1434,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   },
   {
     name: "WebSearch",
-    description: "Search the web through the configured Magi Next HTTP JSON search provider.",
+    description:
+      "Search the web for current information. Uses the configured HTTP JSON search provider when available; otherwise falls back to HTML search automatically. No API key required for the fallback.",
     category: "web",
     tags: ["web", "search", "http", "sources"],
     inputSchema: WebSearchInputSchema,
@@ -1750,7 +1752,7 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
   {
     name: "ToolSearch",
     description:
-      "Search built-in tool documentation or select one tool by name for its full schema.",
+      "Discover built-in tools: search by keyword, list deferred tools (query 'capabilities'), or load one tool's full schema (query 'select:<tool_name>'). Use before answering capability questions when the needed tool is not in your current list.",
     category: "tools",
     tags: ["tool", "search", "schema", "docs"],
     inputSchema: ToolSearchInputSchema,
@@ -1760,7 +1762,8 @@ const BUILTIN_TOOLS: RegisteredTool[] = [
         filterNamedToolRecordsByRules(BUILTIN_TOOLS, context.rules),
         {
           usageStats: loadToolUsageStats(context.stateRoot),
-          stateRoot: context.stateRoot
+          stateRoot: context.stateRoot,
+          coreToolNames: new Set(CORE_TOOL_NAMES)
         }
       ),
     isReadOnly: () => true,
