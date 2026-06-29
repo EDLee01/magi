@@ -87,6 +87,8 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
   let resolvePrompt!: (value: string) => void;
   let rejectPrompt!: (error: Error) => void;
 
+  let renderTimer: ReturnType<typeof setTimeout> | undefined;
+
   const cleanup = () => {
     input.removeListener("data", onData);
     output.write("\x1b[?2004l");
@@ -101,8 +103,12 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
   const finish = (value: string) => {
     if (settled) return;
     settled = true;
-    render(true);
-    output.write("\n");
+    if (renderTimer) {
+      clearTimeout(renderTimer);
+      renderTimer = undefined;
+    }
+    // Leave the typed prompt on screen; erase any helper/slash UI below the cursor.
+    output.write("\x1b[J\x1b[?25h\n");
     cleanup();
     resolvePrompt(restorePastes(value, pasteStash));
   };
@@ -110,8 +116,11 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
   const abort = (reason: TuiPromptAbortReason) => {
     if (settled) return;
     settled = true;
-    render(true);
-    output.write("\n");
+    if (renderTimer) {
+      clearTimeout(renderTimer);
+      renderTimer = undefined;
+    }
+    output.write("\x1b[J\x1b[?25h\n");
     cleanup();
     rejectPrompt(new TuiPromptAbortError(reason));
   };
@@ -419,30 +428,22 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     }
   };
 
-  let renderScheduled = false;
-
-  function scheduleRender(final: boolean) {
-    if (final) {
-      renderScheduled = false;
-      render(true);
-      return;
+  function scheduleRender() {
+    if (renderTimer) {
+      clearTimeout(renderTimer);
     }
-    if (renderScheduled) {
-      return;
-    }
-    renderScheduled = true;
-    setImmediate(() => {
-      renderScheduled = false;
+    renderTimer = setTimeout(() => {
+      renderTimer = undefined;
       if (!settled) {
         render(false);
       }
-    });
+    }, 24);
   }
 
   function onData(buffer: Buffer) {
     pending += buffer.toString("utf8");
     processPending();
-    if (!settled) scheduleRender(false);
+    if (!settled) scheduleRender();
   }
 
   function render(final: boolean) {
@@ -460,24 +461,27 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
       slashSelection
     });
 
+    let sequence = "";
     if (renderedLines > 0) {
-      clearPromptBlock(output, renderedLines, renderedCursorLine);
+      sequence += clearPromptBlockSequence(renderedLines, renderedCursorLine);
     }
 
-    output.write(display.lines.join("\n"));
+    sequence += display.lines.join("\n");
     renderedLines = display.lines.length;
     if (final) {
       renderedCursorLine = renderedLines - 1;
+      sequence += "\x1b[?25h";
+      output.write(sequence);
       return;
     }
 
-    positionPromptCursor(
-      output,
+    sequence += positionPromptCursorSequence(
       display.lines.length,
       display.cursorLine,
       display.cursorColumn,
       safeColumns
     );
+    output.write(sequence);
     renderedCursorLine = display.cursorLine;
   }
 
@@ -568,6 +572,7 @@ function buildDisplay(input: {
   const helper = promptHelperText(
     input.text,
     input.cursor,
+    logical.length,
     rows.length,
     input.maxVisibleLines,
     input.final
@@ -809,7 +814,8 @@ function wrapTextCells(
 function promptHelperText(
   text: string,
   cursor: number,
-  lineCount: number,
+  logicalLineCount: number,
+  displayRowCount: number,
   maxVisibleLines: number,
   final: boolean
 ): string | undefined {
@@ -817,11 +823,11 @@ function promptHelperText(
   if (shouldContinueOnEnter(text, cursor)) {
     return "[open block: Enter adds a line, Ctrl+Enter submits]";
   }
-  if (lineCount > maxVisibleLines) {
-    return `[${lineCount} lines, Ctrl+J, Alt/Option+Enter, or backslash+Enter inserts a line]`;
+  if (displayRowCount > maxVisibleLines) {
+    return `[${displayRowCount} lines, Ctrl+J, Alt/Option+Enter, or backslash+Enter inserts a line]`;
   }
-  if (lineCount > 1) {
-    return `[${lineCount} lines, Enter submits, Ctrl+J or Alt/Option+Enter inserts a line]`;
+  if (logicalLineCount > 1) {
+    return `[${logicalLineCount} lines, Enter submits, Ctrl+J or Alt/Option+Enter inserts a line]`;
   }
   return undefined;
 }
@@ -1132,30 +1138,43 @@ function clampCursorEscapeCount(value: number): number {
   return Math.min(Math.floor(value), 9999);
 }
 
+function clearPromptBlockSequence(lineCount: number, cursorLine: number): string {
+  if (lineCount <= 0) {
+    return "";
+  }
+  let sequence = "\x1b[?25l";
+  const upToFirst = clampCursorEscapeCount(cursorLine);
+  if (upToFirst > 0) {
+    sequence += `\x1b[${upToFirst}A`;
+  }
+  // Erase the prior prompt block in one pass. Avoid per-line `\x1b[1B`, which
+  // can scroll Terminal.app at the bottom edge and crash during fast redraws.
+  sequence += "\r\x1b[2K\x1b[J";
+  return sequence;
+}
+
+function positionPromptCursorSequence(
+  totalLines: number,
+  cursorLine: number,
+  cursorColumn: number,
+  maxColumn: number
+): string {
+  const up = clampCursorEscapeCount(totalLines - 1 - cursorLine);
+  const col = Math.max(0, Math.min(Math.floor(cursorColumn) || 0, maxColumn - 1));
+  let sequence = "";
+  if (up > 0) {
+    sequence += `\x1b[${up}A`;
+  }
+  sequence += `\x1b[${col + 1}G\x1b[?25h`;
+  return sequence;
+}
+
 function clearPromptBlock(
   output: NodeJS.WriteStream,
   lineCount: number,
   cursorLine: number
 ): void {
-  if (lineCount <= 0) {
-    return;
-  }
-  let sequence = "";
-  const upToFirst = clampCursorEscapeCount(cursorLine);
-  if (upToFirst > 0) {
-    sequence += `\x1b[${upToFirst}A`;
-  }
-  for (let line = 0; line < lineCount; line += 1) {
-    sequence += "\r\x1b[2K";
-    if (line < lineCount - 1) {
-      sequence += "\x1b[1B";
-    }
-  }
-  const backToFirst = clampCursorEscapeCount(lineCount - 1);
-  if (backToFirst > 0) {
-    sequence += `\x1b[${backToFirst}A`;
-  }
-  output.write(sequence);
+  output.write(clearPromptBlockSequence(lineCount, cursorLine));
 }
 
 function positionPromptCursor(
@@ -1165,12 +1184,5 @@ function positionPromptCursor(
   cursorColumn: number,
   maxColumn: number
 ): void {
-  const up = clampCursorEscapeCount(totalLines - 1 - cursorLine);
-  const col = Math.max(0, Math.min(cursorColumn, maxColumn - 1));
-  let sequence = "";
-  if (up > 0) {
-    sequence += `\x1b[${up}A`;
-  }
-  sequence += `\x1b[${col + 1}G`;
-  output.write(sequence);
+  output.write(positionPromptCursorSequence(totalLines, cursorLine, cursorColumn, maxColumn));
 }

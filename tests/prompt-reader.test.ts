@@ -170,6 +170,21 @@ describe("prompt reader display", () => {
     expect(joined.replace(/\s+/g, "")).toContain("不懂世界");
   });
 
+  it("does not show multiline helper text for soft-wrapped single-line input", () => {
+    const text = "a".repeat(30) + "不懂世界";
+    const display = buildPromptDisplayForTest({
+      prompt: "> ",
+      text,
+      cursor: text.length,
+      safeColumns: 36,
+      maxVisibleLines: 6
+    });
+    const visible = stripAnsi(display.lines.join("\n"));
+
+    expect(display.lines.length).toBeGreaterThan(1);
+    expect(visible).not.toContain("lines, Enter submits");
+  });
+
   it("keeps Enter in unfinished blocks and submits finished multiline text", () => {
     expect(shouldContinueOnEnterForTest("```ts\nconst x = 1")).toBe(true);
     expect(shouldContinueOnEnterForTest("```ts\nconst x = 1\n```")).toBe(false);
@@ -235,7 +250,7 @@ describe("prompt reader display", () => {
     expect(stripAnsi(display.lines.join("\n"))).not.toContain("commands");
   });
 
-  it("avoids screen-clear and forward-cursor escapes while redrawing", async () => {
+  it("uses absolute column positioning and avoids forward-cursor escapes on submit", async () => {
     const input = new PassThrough() as unknown as NodeJS.ReadStream;
     input.isTTY = true;
     input.setRawMode = () => input;
@@ -254,10 +269,9 @@ describe("prompt reader display", () => {
     await expect(prompt).resolves.toBe("abc");
 
     const rendered = chunks.join("");
-    expect(rendered).not.toMatch(/\x1b\[0?J/);
     expect(rendered).not.toMatch(/\x1b\[[0-9]+C/);
-    expect(rendered).toContain("\x1b[2K");
     expect(rendered).toMatch(/\x1b\[[0-9]+G/);
+    expect(rendered).toContain("\x1b[J");
   });
 
   it("removes its temporary error listener after normal submit", async () => {
