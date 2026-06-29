@@ -1,0 +1,30 @@
+{
+  "name": "@edwardlee5423/magi-hotaitool",
+  "version": "0.1.0",
+  "description": "HotAITool distribution wrapper for Magi Next (separate from the main magi package).",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "magi-hotaitool": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "type": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@edwardlee5423/magi": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "3.2.6"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

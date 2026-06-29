@@ -73,6 +73,31 @@ describe("isolation", () => {
     expect(existsSync(paths.logsRoot)).toBe(true);
   });
 
+  it("does not ship partner edition code in the main src tree", () => {
+    const { readdirSync, readFileSync, statSync } = require("node:fs") as typeof import("node:fs");
+    const { join } = require("node:path") as typeof import("node:path");
+    const srcRoot = join(process.cwd(), "src");
+    const forbidden = ["edition/hotaitool", "MAGI_EDITION", "hotaitool-claude", "magi init hotaitool"];
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const item = join(dir, name);
+        if (statSync(item).isDirectory()) {
+          walk(item);
+        } else if (item.endsWith(".ts")) {
+          files.push(item);
+        }
+      }
+    };
+    walk(srcRoot);
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      for (const needle of forbidden) {
+        expect(text, `${file} must not reference ${needle}`).not.toContain(needle);
+      }
+    }
+  });
+
   it("uses MAGI_* as the primary configuration prefix", () => {
     expect(MAGI_ENV_PREFIX).toBe("MAGI_");
     const paths = getMagiPaths({ MAGI_CONFIG_DIR: "/tmp/magi-config-test" });

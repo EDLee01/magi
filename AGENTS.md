@@ -35,3 +35,11 @@ Magi Next must be isolated from the legacy Magi tool.
 Planning documents live under `planning/`.
 
 All schedules must use hour-granularity phases such as `H1-H4`.
+
+## Distribution Editions
+Partner or internal editions must stay out of the main `src/` tree.
+
+- Main package: `@edwardlee5423/magi`, binary `magi`, config root `~/.magi-next/`.
+- Editions live under `editions/<name>/` as separate packages with their own `package.json`, binary, and config root.
+- Do not add edition-specific presets, env auto-detection, or bootstrap hooks to main `src/`.
+- HotAITool edition: `editions/hotaitool/`, binary `magi-hotaitool`, config root `~/.magi-hotaitool/`.
