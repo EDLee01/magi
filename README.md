@@ -1,337 +1,197 @@
-# Magi Next
+# Magi
 
-A TypeScript-first AI coding agent for the terminal. Run a smart agent locally,
-control it from your phone over the LAN after pairing a device, and dispatch
-sub-agents to peer machines.
+[中文说明](README.zh-CN.md)
+
+**The coding agent that lives in your terminal — and stays on your machine.**
+
+Magi reads your repo, edits files, runs commands, searches the web, and picks up where you left off. One session can span your laptop, a machine on the LAN, and a phone browser for approvals. Your code stays local; you bring the model.
 
 ```
 $ magi
-  △   Magi · 90 tools
+  △   Magi · 91 tools
  /✦\  cwd: ~/code/my-project
-▔▔▔   model: openai:gpt-5.5
+▔▔▔   model: main · claude-sonnet-4-6
 
   /help for commands · Ctrl+C to interrupt · /exit to quit
 
 > refactor src/auth.ts to use the new session API
 ```
 
+---
+
+## Why Magi
+
+Most agents either live inside an IDE or disappear when you close a tab. Magi is built for developers who live in the shell and want an agent that behaves like infrastructure: persistent, scriptable, and under your control.
+
+| | |
+|---|---|
+| **Edits that stick** | `FilePatch` applies diffs with exact context matching — multi-line changes land where you expect, not as blind overwrites. |
+| **Memory that compounds** | Durable Memory, session recall, and reviewable LearningDrafts — Magi remembers conventions and past decisions instead of starting cold every time. |
+| **Plan, then ship** | Plan mode blocks risky edits until you approve. Good for refactors, migrations, and anything you would not trust to YOLO mode. |
+| **One fleet, one agent** | Discover Magi daemons on your LAN, dispatch sub-agents to peer machines, approve tool calls from your phone — same session model everywhere. |
+| **Your models, your keys** | Anthropic, OpenAI, DeepSeek, or any compatible endpoint. Route `fast` / `main` / `deep` aliases, or let `/model auto` pick by task. |
+
+---
+
+## What you can do
+
+**Day-to-day coding** — fix bugs, write tests, explain unfamiliar code, run the test suite, commit with a sensible message.
+
+**Real refactors** — rename across files, migrate an API, update types; Plan mode keeps the agent from editing until the approach is clear.
+
+**Research & debug** — web search, fetch URLs, grep the tree, inspect git history, spawn a background agent while you keep working.
+
+**Team & multi-machine** — compare two repos on different hosts, run checks on a build machine, get push notifications-style approvals on mobile via the LAN panel.
+
+**Extend it** — drop in MCP servers, install skills from GitHub, author your own `SKILL.md` workflows.
+
+---
+
 ## Quick start
 
 ```sh
-# Install from this repository
 git clone https://github.com/EDLee01/magi.git
 cd magi
-npm install
-npm run build
-npm link
+npm install && npm run build && npm link
 
-# Set one provider key
 export OPENAI_API_KEY="<your-key>"
 # or: export ANTHROPIC_AUTH_TOKEN="<your-key>"
 # or: export DEEPSEEK_API_KEY="<your-key>"
 
-# Configure (interactive)
-magi init
-
-# Use it
-magi                            # Interactive TUI
-magi -p "explain this repo"     # One-shot prompt
+magi init          # writes ~/.magi-next/config.yaml
+magi               # interactive TUI
+magi -p "explain this repo"   # one-shot
 ```
 
-If you don't set a key first, `magi init` will tell you which env var to set
-and bail out cleanly.
+No key yet? `magi init` tells you exactly which env var to set.
 
-## What it does well
+**First run:** `magi tutorial` — eight short sections covering models, files, memory, skills, and multi-machine setup.
 
-- **Real agent loop with parallel tool calls** — file ops, shell, git, web,
-  MCP servers, sub-agents.
-- **Context-safe file editing** — `FilePatch` applies unified-diff hunks with
-  exact context matching for multi-line edits.
-- **Smart routing** — `/model auto` picks the configured fast/main/deep
-  aliases by task kind.
-- **Plan mode** — `EnterPlanMode` for non-trivial work, ask for approval
-  before implementing.
-- **Cross-machine agents** — discover other Magi daemons via mDNS, dispatch
-  sub-agents with `target: 'peer-name'`.
-- **Mobile control** — start a LAN-bound daemon, run `magi pair`, open the
-  printed `/panel` URL on your phone, then enter the Device ID and Token.
-- **Persistent memory graph** — durable Memory is indexed into weighted nodes
-  and edges; recall reinforces useful paths, and `magi memory feedback` lets
-  users mark memories useful, irrelevant, stale, or wrong.
-- **Learning Loop v1** — recalls relevant prior sessions, memory, and skills
-  before work; creates reviewable LearningDrafts after reusable lessons.
-- **Skills** — bundled `verify` / `debug` / `stuck` / `commit-msg` /
-  `review-pr`. Add your own by dropping a `SKILL.md` file or applying an
-  approved skill LearningDraft.
+---
 
-## Five-minute tutorial
+## Under the hood (the parts that matter)
 
-```sh
-magi tutorial
-```
+**Agent loop** — parallel tool calls, streaming, provider fallback when a model is down or rate-limited.
 
-Walks through 8 sections (basics, models, files, sessions, skills, memory,
-multi-machine, sub-agents). Press `q` to quit early.
+**91 built-in tools** — files, shell, git, web, cron, sub-agents, and more. Heavy tools load on demand via `ToolSearch` so the first turn stays fast.
+
+**Skills** — bundled workflows (`verify`, `debug`, `stuck`, `commit-msg`, `review-pr`). Install others with `magi skill install`.
+
+**Sessions** — SQLite-backed history. `magi sessions`, `magi resume`, `/compact` when context gets long.
+
+**Control API** — `magi daemon start` + `magi pair` exposes a LAN web panel for mobile approval and background jobs.
+
+**Peers** — `magi peers` finds other Magi instances; the agent dispatches to them with `target: "peer-name"`.
+
+---
 
 ## Common commands
 
-| Command                    | What it does                              |
-|---------------------------|-------------------------------------------|
-| `magi`                    | Start interactive TUI                     |
-| `magi -p "<prompt>"`       | One-shot prompt, stream output            |
-| `magi init`               | Interactive provider setup                |
-| `magi doctor`             | Show config + paths                       |
-| `magi sessions`           | List recent sessions                      |
-| `magi resume <id>`        | Resume a session                          |
-| `magi plan [list|adopt|merge|resolve]` | Show, adopt, merge, or resolve plan reviews |
-| `magi memory search <q>`   | Search durable Memory                     |
-| `magi memory link --from <node> --to <node>` | Link Memory graph nodes       |
-| `magi memory feedback --target <node> --signal useful` | Reinforce or dispute Memory |
-| `magi memory feedback trends` | Show Memory nodes shaped by user feedback |
-| `magi memory eval --case-file <file>` | Run Memory recall quality cases |
-| `magi learning list`       | List reviewable LearningDrafts            |
-| `magi learning draft <show|apply|reject> <id>` | Review or resolve a LearningDraft |
-| `magi ps`                 | List recent jobs                          |
-| `magi logs <job-id>`      | Show events for a job                     |
-| `magi daemon start`       | Run control API in background             |
-| `magi pair <name>`        | Generate a token for phone access         |
-| `magi peers`              | Discover Magi daemons on the LAN          |
-| `magi tutorial`           | Walkthrough                               |
+| Command | What it does |
+|---------|--------------|
+| `magi` | Interactive TUI |
+| `magi -p "<prompt>"` | One-shot prompt |
+| `magi init` | Provider + model setup |
+| `magi doctor` | Config paths and health check |
+| `magi sessions` / `magi resume <id>` | Browse and continue past work |
+| `magi daemon start` | Background control API |
+| `magi pair <name>` | Pair a phone or remote client |
+| `magi peers` | Discover LAN daemons |
+| `magi memory search <q>` | Search durable Memory |
+| `magi learning list` | Review post-task LearningDrafts |
+| `magi tutorial` | Guided walkthrough |
 
-Inside the TUI, type `/help` to list slash commands. Type `/help <name>` for
-details on one.
+Inside the TUI: `/help`, `/model auto`, `/compact`, `/plan`.
 
-## Learning Loop
+---
 
-Magi now performs a local-first recall pass before provider calls. It retrieves
-relevant durable Memory, installed skills, and prior session snippets, then
-injects them as fenced background context. Recalled text is context, not a new
-user instruction.
+## Configuration sketch
 
-After explicit learning requests or sufficiently complex tasks, Magi can create
-a pending LearningDraft under `~/.magi-next/state/learning-drafts/`. Drafts can
-target Memory, new skills, skill patches, or `do_not_save`; they do not mutate
-Memory or skills until you apply them.
-
-```sh
-magi learning list
-magi learning draft show <id>
-magi learning draft apply <id>
-magi learning draft reject <id>
-```
-
-Agents can also discover the deferred `SessionSearch`, `LearningDraft`, and
-`SkillManage` tools through `ToolSearch`. `SkillManage` is path-limited to the
-configured skills root and requires normal write approval outside bypass modes.
-
-Memory recall quality can be checked with reusable case files:
-
-```sh
-magi memory eval --case-file tests/fixtures/memory-recall-business.json --min-score 1 --report .magi-reports/memory-recall-eval.json
-npm run test:memory-eval
-```
-
-`npm run test:memory-eval` seeds an isolated Memory root through the public CLI,
-then checks recall after restart, graph links, correction replacement, Dream
-reject/apply behavior, and maintenance weight decay.
-
-Patch Engine behavior can be checked with:
-
-```sh
-npm run test:patch-eval
-```
-
-That eval runs a real headless CLI session against a mock provider and verifies
-FilePatch ranking, failed-patch recovery, successful retry, exact FileEdit use,
-and that FileWrite is not used for existing-file edits.
-
-Goal/Plan lifecycle behavior can be checked with:
-
-```sh
-npm run test:goal-plan-eval
-```
-
-That eval runs a real headless CLI session against a mock provider and verifies
-active goal injection, completed-goal suppression, plan mode mutation denial,
-submitted plan persistence, and goal completion state.
-
-Tool Discovery behavior can be checked with:
-
-```sh
-npm run test:tool-discovery-eval
-```
-
-That eval runs a real headless CLI session against a mock provider and verifies
-core/deferred tool exposure, ToolSearch intent ranking, `select:<tool>` schema
-reveal, and persisted tool usage feedback affecting later ranking.
-
-Control API behavior can be checked with:
-
-```sh
-npm run test:control-api-eval
-```
-
-That eval starts `magi serve` from the built CLI, pairs a device, verifies SSE
-events, resolves a mobile approval for FileWrite, cancels a streaming background
-job, cancels an active approval, resumes a panel session, and checks durable
-audit evidence.
-
-Complex task harness behavior can be checked with:
-
-```sh
-npm run test:complex-harness
-```
-
-That harness runs isolated H1-H10 business fixtures through the built CLI and
-mock providers, then validates stream-json lifecycle, SQLite session/audit
-evidence, file diffs, forbidden paths, multi-agent write conflicts, Bash
-approval control, and provider retry/fallback routing.
-
-Live provider behavior can be checked with an opt-in smoke task:
-
-```sh
-MAGI_LIVE_SMOKE=1 MAGI_OPENAI_API_KEY=... npm run test:live-smoke
-```
-
-The live smoke creates an isolated fixture, asks the configured model to fix a
-failing test, reruns that test, and writes a short report. Without
-`MAGI_LIVE_SMOKE=1`, the script skips and writes a skipped report so normal CI
-does not depend on upstream model availability.
-
-After the eval scripts run, aggregate the current capability evidence with:
-
-```sh
-npm run report:capability
-npm run report:capability:nightly
-```
-
-`npm run verify` runs the aggregate report last and fails if blackbox, Memory,
-Patch Engine, Goal/Plan, Tool Discovery, Control API, model task, or complex
-harness gates miss their required thresholds. The default capability trend
-profile is strict for CI.
-`report:capability:nightly` uses the same evidence with a wider efficiency
-budget for scheduled longer benchmark runs, while still failing on score,
-regression, and excessive provider/tool call growth.
-
-## Configuration
-
-`~/.magi-next/config.yaml`:
+`~/.magi-next/config.yaml` — or run `magi init` and skip the yaml.
 
 ```yaml
 providers:
-  openai:
-    type: openai
-    apiKeyEnv: OPENAI_API_KEY
-    baseUrl: https://api.openai.com/v1
-    defaultModel: gpt-5.5
+  anthropic:
+    type: messages-compatible
+    format: anthropic-messages
+    apiKeyEnv: ANTHROPIC_AUTH_TOKEN
+    baseUrl: https://api.anthropic.com
+
 models:
   aliases:
-    fast:   openai:gpt-5.5
-    main:   openai:gpt-5.5
-    review: openai:gpt-5.5
-    deep:   openai:gpt-5.5
-  router:               # used when alias = "auto"
-    fast:   { family: gpt, role: haiku,  contextWindow: 200000, supportsVision: true }
-    main:   { family: gpt, role: sonnet, contextWindow: 200000, supportsVision: true }
-    deep:   { family: gpt, role: opus,   contextWindow: 200000, supportsVision: true }
-memory:
-  selectionModel: fast       # optional relevance selector for large memory sets
-  writeDecisionModel: fast   # optional judge for remember/correction requests
+    fast: anthropic:claude-haiku-4-5
+    main: anthropic:claude-sonnet-4-6
+    deep:  anthropic:claude-opus-4-7
+  router:   # used when alias = "auto"
+    fast:  { family: claude, role: haiku,  contextWindow: 200000 }
+    main:  { family: claude, role: sonnet, contextWindow: 200000 }
+    deep:  { family: claude, role: opus,   contextWindow: 200000 }
 ```
 
-Run `magi init` to generate a working config and skip the manual yaml.
-It supports OpenAI, Anthropic, and DeepSeek credentials.
+Supports OpenAI, Anthropic, and DeepSeek out of the box.
 
-## Cross-machine setup
+---
 
-```sh
-# On each machine you want to use:
-MAGI_CONTROL_BIND=0.0.0.0 magi daemon start
-
-# On your "main" machine, see who's around:
-magi peers
-
-# Pair another machine (run on the peer to get a token):
-magi pair from-peer
-# → outputs a Device ID + Token
-
-# On main, save the credentials:
-magi peers add peer-2 http://192.168.1.50:8765 <device-id> <token>
-
-# Now in the TUI, the agent can dispatch to peer-2:
-> compare the auth modules in this repo and the one on peer-2
-```
-
-The agent uses the `Agent` tool with `target: "peer-2"` to dispatch
-sub-agents. Multiple targets in the same response run in parallel.
-
-## Phone access
+## Phone & multi-machine (30 seconds)
 
 ```sh
-# The default daemon bind is 127.0.0.1, which a phone cannot reach.
-magi daemon stop
+# On each machine:
 MAGI_CONTROL_BIND=0.0.0.0 magi daemon start
 
+# Pair your phone:
 magi pair my-phone
-# → prints Device ID, Token, and one or more URLs like:
-#   http://192.168.1.10:8765/panel
+# → open the /panel URL on the same Wi‑Fi, enter Device ID + Token
+
+# See peers on the LAN:
+magi peers
 ```
 
-Open the printed `/panel` URL on a phone connected to the same LAN, then enter
-the printed Device ID and Token. Tokens are not placed in the URL. The current
-CLI prints URLs and credentials; it does not generate a QR code.
+Sub-agents on remote machines run through the same session and approval model as local tools.
 
-## Documentation
+---
 
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — common errors and fixes
-- [ARCHITECTURE.md](ARCHITECTURE.md) — concepts and component map
-- [docs/magi-next-learning-loop-v1.html](docs/magi-next-learning-loop-v1.html)
-  — Learning Loop v1 design and shipped scope
-- `magi tutorial` — interactive walkthrough
-
-## State and isolation
-
-Everything lives at `~/.magi-next/` by default:
+## Where things live
 
 ```
 ~/.magi-next/
-  config.yaml          # provider + model setup
-  state/sessions.sqlite  # persisted sessions, jobs, audit, usage
-  state/learning-drafts/ # reviewable post-task learning proposals
-  memory/              # formal review-applied Memory files
-  memdir/              # typed long-term memory (user/feedback/project/reference)
-  skills/<name>/SKILL.md
-  logs/                # daemon logs
-  cache/
-  plugins/
-  devices/
+  config.yaml              # providers + models
+  state/sessions.sqlite    # sessions, jobs, audit trail
+  memory/                  # durable Memory files
+  skills/                  # installed skills
+  state/learning-drafts/  # reviewable lessons (apply to persist)
 ```
 
-Override the root with `MAGI_CONFIG_DIR=/path` for testing or sandboxing.
+Override with `MAGI_CONFIG_DIR` for sandboxes or CI.
 
-## Building from source
+---
+
+## Docs & deeper dives
+
+| Doc | Contents |
+|-----|----------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Components, sessions, tools, routing |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common errors |
+| [docs/magi-next-learning-loop-v1.html](docs/magi-next-learning-loop-v1.html) | Memory + Learning Loop design |
+| `magi tutorial` | Interactive onboarding |
+
+**Developers:** `npm test`, `npm run verify`, and capability eval scripts (`test:memory-eval`, `test:patch-eval`, `report:capability`, …) live in `package.json` for regression gates.
+
+---
+
+## Build requirements
+
+Node **≥ 22**. Rust optional (runner sidecar for sandbox/PTY).
 
 ```sh
-git clone <this-repo>
-cd magi-next
-npm install
-npm run build
-npm test
-npm run test:memory-eval
-npm run test:patch-eval
-npm run test:goal-plan-eval
-npm run test:tool-discovery-eval
-npm run test:control-api-eval
-npm run test:live-smoke
-npm run report:capability
+npm install && npm run build && npm test
 ```
 
-Requires Node ≥ 22.
+---
 
 ## Status
 
-Active development. The core agent loop, routing, MCP, daemon, multi-machine
-dispatch, and mobile web panel are implemented and covered by tests. Beta
-quality; APIs and UX may still change.
+**v0.1.13** — active development. Core agent loop, routing, MCP, daemon, multi-machine dispatch, and mobile panel are implemented and tested. Beta quality; CLI and config may still change.
 
-Filing bugs: open a GitHub issue with output of `magi doctor` and `magi --version`.
+Bug reports: include `magi doctor` and `magi --version` output.
+
+MIT License.
