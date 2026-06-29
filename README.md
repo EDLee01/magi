@@ -1,6 +1,6 @@
 # Magi
 
-[中文说明](README.zh-CN.md)
+[中文](README.zh-CN.md)
 
 **The coding agent that lives in your terminal — and stays on your machine.**
 
