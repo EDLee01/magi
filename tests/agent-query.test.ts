@@ -2173,7 +2173,15 @@ describe("agent query loop", () => {
       interactions.resolveQuestion({
         jobId: "job-client-question",
         toolUseId: "ask-client",
-        answer: { answers: [{ question: "Which route?", selectedLabels: ["safe"] }] }
+        answer: {
+          answers: [
+            {
+              question: "Which route?",
+              selectedLabels: ["safe"],
+              selectedOptions: [{ label: "safe", description: "Safe route" }]
+            }
+          ]
+        }
       });
       const result = await running;
       expect(result.text).toContain("client picked option");

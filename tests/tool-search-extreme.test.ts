@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveInitialExposedToolNames } from "../src/tool-loading.js";
-import { getBuiltinToolDefinitions } from "../src/tools/registry.js";
+import { getBuiltinToolRegistry } from "../src/tools/registry.js";
 import { executeToolSearch } from "../src/tools/tool-search.js";
 
 function searchableTools() {
-  return getBuiltinToolDefinitions().map((tool) => ({
+  return [...getBuiltinToolRegistry().values()].map((tool) => ({
     name: tool.name,
     description: tool.description,
     category: tool.category,
