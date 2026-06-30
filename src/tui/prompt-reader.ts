@@ -1169,11 +1169,7 @@ function positionPromptCursorSequence(
   return sequence;
 }
 
-function clearPromptBlock(
-  output: NodeJS.WriteStream,
-  lineCount: number,
-  cursorLine: number
-): void {
+function clearPromptBlock(output: NodeJS.WriteStream, lineCount: number, cursorLine: number): void {
   output.write(clearPromptBlockSequence(lineCount, cursorLine));
 }
 

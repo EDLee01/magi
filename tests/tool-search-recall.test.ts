@@ -29,17 +29,13 @@ function topToolSearchResults(output: string, count = 5): string[] {
   if (output.startsWith("No tools match")) {
     return [];
   }
-  return [...output.matchAll(/^\d+\. (\S+)/gm)]
-    .slice(0, count)
-    .map((match) => match[1]!);
+  return [...output.matchAll(/^\d+\. (\S+)/gm)].slice(0, count).map((match) => match[1]!);
 }
 
 function search(query: string, profile: "medium" | "full" = "medium"): string {
-  return executeToolSearch(
-    { query, maxResults: 5 },
-    searchableTools(),
-    { coreToolNames: new Set(resolveInitialExposedToolNames(profile)) }
-  );
+  return executeToolSearch({ query, maxResults: 5 }, searchableTools(), {
+    coreToolNames: new Set(resolveInitialExposedToolNames(profile))
+  });
 }
 
 function expectTop(query: string, expected: string | string[]): void {

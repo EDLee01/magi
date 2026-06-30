@@ -97,7 +97,10 @@ export function parseToolSearchReveal(content: string): string[] {
   return [];
 }
 
-export function estimateToolSchemaTokens(toolNames: string[], lookup: (name: string) => unknown): number {
+export function estimateToolSchemaTokens(
+  toolNames: string[],
+  lookup: (name: string) => unknown
+): number {
   const tools = toolNames.map((name) => lookup(name)).filter(Boolean);
   return Math.ceil(JSON.stringify(tools).length / 4);
 }

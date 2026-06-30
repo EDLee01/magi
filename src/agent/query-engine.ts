@@ -35,9 +35,7 @@ import {
   type MemoryWriteDecision
 } from "../memory-write-decision.js";
 import { buildSystemInstructions } from "./system-prompt.js";
-import {
-  augmentPromptWithNudges
-} from "./capability-nudge.js";
+import { augmentPromptWithNudges } from "./capability-nudge.js";
 import { buildFeishuLocaleNudge, isFeishuLocalePrompt } from "./feishu-locale-nudge.js";
 import { getBuiltinToolDefinitions, SubAgentRequest, SubAgentResult } from "../tools/registry.js";
 import type { ToolPermissionRules } from "../tools/registry.js";

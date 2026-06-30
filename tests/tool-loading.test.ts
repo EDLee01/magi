@@ -57,11 +57,9 @@ describe("tool loading profiles", () => {
       isDestructive: () => false,
       isConcurrencySafe: () => true
     }));
-    const result = executeToolSearch(
-      { query: "pack:edit", maxResults: 5 },
-      tools,
-      { coreToolNames: new Set(resolveInitialExposedToolNames("medium")) }
-    );
+    const result = executeToolSearch({ query: "pack:edit", maxResults: 5 }, tools, {
+      coreToolNames: new Set(resolveInitialExposedToolNames("medium"))
+    });
     expect(result).toContain("Pack: edit");
     expect(result).toContain("FileWrite");
     expect(parseToolSearchReveal(result)).toEqual(["FileWrite", "FileEdit", "FilePatch"]);

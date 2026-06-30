@@ -792,7 +792,15 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "file-write",
     triggers: ["write", "overwrite", "覆盖", "写入"],
-    phrases: ["覆盖写入", "写入文件", "写文件", "新建文件", "新建一个文件", "write file", "overwrite"],
+    phrases: [
+      "覆盖写入",
+      "写入文件",
+      "写文件",
+      "新建文件",
+      "新建一个文件",
+      "write file",
+      "overwrite"
+    ],
     categories: ["files"],
     tags: ["write", "file"],
     toolBoosts: { FileWrite: 260, FileEdit: 70, FilePatch: 40, NotebookEdit: 40 }
@@ -816,7 +824,19 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "workspace-search",
     triggers: ["search", "grep", "glob", "find", "locate", "查找", "搜索", "匹配"],
-    phrases: ["搜索文件", "查找文件", "找文件", "列出文件", "匹配文件", "文件匹配", "查找匹配", "搜索代码", "代码搜索", "不要改文件", "先搜索"],
+    phrases: [
+      "搜索文件",
+      "查找文件",
+      "找文件",
+      "列出文件",
+      "匹配文件",
+      "文件匹配",
+      "查找匹配",
+      "搜索代码",
+      "代码搜索",
+      "不要改文件",
+      "先搜索"
+    ],
     categories: ["search", "workspace"],
     tags: ["grep", "glob", "find", "workspace"],
     toolBoosts: { Grep: 160, Glob: 120, FileFind: 90, WorkspaceDiagnostics: 55 }
@@ -831,7 +851,15 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "browser-automation",
     triggers: ["browser", "playwright", "automation", "automate", "ui", "page"],
-    phrases: ["click button", "fill form", "take screenshot", "截个图", "截图", "用playwright", "playwright打开"],
+    phrases: [
+      "click button",
+      "fill form",
+      "take screenshot",
+      "截个图",
+      "截图",
+      "用playwright",
+      "playwright打开"
+    ],
     categories: ["web"],
     tags: ["browser", "automation", "playwright", "screenshot"],
     toolBoosts: { Browser: 190, WebBrowser: 60, Snip: 120 }
@@ -962,7 +990,14 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "memory-correction",
     triggers: ["correct", "wrong", "outdated", "replace", "dispute", "supersede", "incorrect"],
-    phrases: ["memory is wrong", "not true anymore", "replace memory", "纠正记忆", "记忆不对", "纠正之前的记忆"],
+    phrases: [
+      "memory is wrong",
+      "not true anymore",
+      "replace memory",
+      "纠正记忆",
+      "记忆不对",
+      "纠正之前的记忆"
+    ],
     categories: ["memory"],
     tags: ["memory", "correct", "dispute", "supersede", "graph"],
     toolBoosts: { MemoryCorrect: 300, Memorize: 95, SessionSearch: 70 }
@@ -986,7 +1021,14 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "verification",
     triggers: ["verify", "verification", "test", "tests", "build", "benchmark", "e2e"],
-    phrases: ["run test", "run tests", "verification tests", "focused verification", "撸个测试", "跑个测试"],
+    phrases: [
+      "run test",
+      "run tests",
+      "verification tests",
+      "focused verification",
+      "撸个测试",
+      "跑个测试"
+    ],
     categories: ["verification", "shell"],
     tags: ["verify", "test", "build", "bash"],
     toolBoosts: { VerifyPlanExecution: 220, Bash: 80, WorkspaceDiagnostics: 80 }

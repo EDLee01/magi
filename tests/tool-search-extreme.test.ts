@@ -18,17 +18,13 @@ function searchableTools() {
 }
 
 function topResults(query: string, count = 5): string[] {
-  const output = executeToolSearch(
-    { query, maxResults: count },
-    searchableTools(),
-    { coreToolNames: new Set(resolveInitialExposedToolNames("medium")) }
-  );
+  const output = executeToolSearch({ query, maxResults: count }, searchableTools(), {
+    coreToolNames: new Set(resolveInitialExposedToolNames("medium"))
+  });
   if (output.startsWith("No tools match")) {
     return [];
   }
-  return [...output.matchAll(/^\d+\. (\S+)/gm)]
-    .slice(0, count)
-    .map((match) => match[1]!);
+  return [...output.matchAll(/^\d+\. (\S+)/gm)].slice(0, count).map((match) => match[1]!);
 }
 
 function expectTop1(query: string, expected: string | string[]): void {

@@ -202,9 +202,7 @@ export function buildHeadlessAutoAskUserQuestionAnswer(
   return normalizeAskUserQuestionAnswer(request, {
     answers: request.questions.map((question) => {
       const recommended = question.options.find((option) => /recommended/i.test(option.label));
-      const nonOther = question.options.find(
-        (option) => !/^other$/i.test(option.label.trim())
-      );
+      const nonOther = question.options.find((option) => !/^other$/i.test(option.label.trim()));
       const picked = recommended ?? nonOther ?? question.options[0];
       return {
         question: question.question,

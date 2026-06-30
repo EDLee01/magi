@@ -16,11 +16,7 @@ import {
 } from "../providers/errors.js";
 import { HookDefinition, McpServerConfig, WebSearchConfig } from "../config.js";
 import { executeHooks, HookResult } from "../hooks/runner.js";
-import {
-  AgentToolResult,
-  executeBuiltinAgentTools,
-  ToolPermissionMode
-} from "./tools.js";
+import { AgentToolResult, executeBuiltinAgentTools, ToolPermissionMode } from "./tools.js";
 import {
   getBuiltinToolDefinitionByName,
   getBuiltinToolDefinitions,
@@ -240,7 +236,11 @@ async function* runAgentQueryInner(
       throwIfCancelled(input.signal);
       const toolDefinitions = toolCatalog.definitions();
       if (input.env?.MAGI_DEBUG_TOOLS === "1") {
-        yield formatToolContextEvent(toolDefinitions, toolCatalog.deferredCount(), toolCatalog.profile);
+        yield formatToolContextEvent(
+          toolDefinitions,
+          toolCatalog.deferredCount(),
+          toolCatalog.profile
+        );
       }
       let response: ProviderResponse;
       let streamedTextThisTurn = "";
