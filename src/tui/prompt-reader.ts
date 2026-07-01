@@ -268,6 +268,11 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
     const placeholder = formatPastePlaceholder(pasteCounter, normalized.length, lineCount);
     pasteStash.set(placeholder, normalized);
     insert(placeholder);
+    if (renderTimer) {
+      clearTimeout(renderTimer);
+      renderTimer = undefined;
+    }
+    render(false);
   };
 
   const processText = (chunk: string) => {

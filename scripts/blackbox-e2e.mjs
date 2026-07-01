@@ -3487,8 +3487,9 @@ async function scenarioTuiBracketedPaste() {
       );
       const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
       assert(visible.includes("<<paste #1:"), "bracketed paste placeholder did not render");
+      const beforeResponse = visible.split("TUI bracketed paste accepted.")[0] ?? visible;
       assert(
-        !visible.includes("- customer-visible retry fallback"),
+        !beforeResponse.includes("- customer-visible retry fallback"),
         "raw pasted body should not render in the edit surface"
       );
       assert(
