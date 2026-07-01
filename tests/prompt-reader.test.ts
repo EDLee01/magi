@@ -193,6 +193,12 @@ describe("prompt reader display", () => {
     expect(shouldContinueOnEnterForTest("first\nsecond")).toBe(false);
   });
 
+  it("submits on Enter when the line ends with a paste placeholder", () => {
+    expect(shouldContinueOnEnterForTest("Start audit: <<paste #1: 80 chars, 4 lines>>")).toBe(
+      false
+    );
+  });
+
   it("shows slash command suggestions below slash input", () => {
     const commands = [
       { name: "model", usage: "/model [alias]", description: "Switch model alias" },

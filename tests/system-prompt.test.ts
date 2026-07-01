@@ -15,7 +15,7 @@ describe("system prompt", () => {
     expect(prompt).toContain("use FilePatch for multi-line edits");
     expect(prompt).toContain("use FileEdit only for one exact string replacement");
     expect(prompt).toContain("If FilePatch fails, use its recovery feedback");
-    expect(prompt).toContain("WebSearch is always available");
+    expect(prompt).toContain("WebSearch and WebFetch are always available");
     expect(prompt).toContain("Never deny a capability before ToolSearch");
     expect(prompt).toContain('query "capabilities"');
     expect(prompt).toContain("more via ToolSearch");

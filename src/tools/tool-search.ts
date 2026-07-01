@@ -210,6 +210,14 @@ function scoreTool(
       addReason(reasons, reason);
     }
   }
+  if (
+    options.coreToolNames?.has(tool.name) &&
+    analysis.intents.includes("web-research") &&
+    (tool.name === "WebSearch" || tool.name === "WebFetch")
+  ) {
+    score += 100;
+    addReason(reasons, "core web tool");
+  }
   return { score, reasons };
 }
 
@@ -253,9 +261,12 @@ function analyzeToolSearchQuery(query: string): ToolSearchAnalysis {
   const expandedTerms = Array.from(
     new Set([...expandTerms(terms), ...expandChineseQueryTerms(query)])
   );
-  const intents = INTENT_PROFILES.filter((profile) =>
+  let intents = INTENT_PROFILES.filter((profile) =>
     matchesIntent(profile, query, normalizedQuery, terms)
   ).map((profile) => profile.name);
+  if (intents.includes("cron-management") && intents.includes("planning-state")) {
+    intents = intents.filter((intent) => intent !== "planning-state");
+  }
   return { terms, expandedTerms, normalizedQuery, intents };
 }
 
@@ -703,6 +714,7 @@ const CHINESE_PHRASE_ALIASES: ReadonlyArray<readonly [string, readonly string[]]
   ["kill进程", ["kill", "process"]],
   ["kill 掉", ["kill", "process"]],
   ["列出cron", ["cron", "list", "schedule"]],
+  ["列出 cron", ["cron", "list", "schedule"]],
   ["cron任务", ["cron", "list", "schedule"]],
   ["notebook单元格", ["notebook", "read", "edit"]],
   ["读notebook", ["notebook", "read"]],
@@ -844,9 +856,10 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "web-research",
     triggers: ["web", "browser", "browse", "fetch", "http", "research", "page"],
+    phrases: ["search the web", "can you search the web", "serch the web", "look up online"],
     categories: ["web"],
     tags: ["web", "browser", "fetch", "search", "http"],
-    toolBoosts: { WebSearch: 160, WebFetch: 135, WebBrowser: 115, Browser: 85, HttpRequest: 70 }
+    toolBoosts: { WebSearch: 200, WebFetch: 135, WebBrowser: 90, Browser: 85, HttpRequest: 70 }
   },
   {
     name: "browser-automation",
@@ -951,10 +964,10 @@ const INTENT_PROFILES: ToolIntentProfile[] = [
   {
     name: "cron-management",
     triggers: ["cron", "定时"],
-    phrases: ["列出 cron", "cron 任务", "cron任务", "定时任务列表"],
-    categories: ["state"],
+    phrases: ["列出 cron", "cron 任务", "cron任务", "定时任务列表", "列出 cron 任务"],
+    categories: ["schedule"],
     tags: ["cron", "schedule"],
-    toolBoosts: { CronList: 230, CronCreate: 80, CronUpdate: 70, CronDelete: 60 }
+    toolBoosts: { CronList: 280, CronCreate: 80, CronUpdate: 70, CronDelete: 60 }
   },
   {
     name: "peer-network",

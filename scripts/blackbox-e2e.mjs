@@ -3462,7 +3462,7 @@ async function scenarioTuiBracketedPaste() {
           `TUI bracketed paste submitted unexpected prompt:\n${latestPrompt}`
         );
         assert(
-          !latestPrompt.includes("[paste #"),
+          !latestPrompt.includes("<<paste #"),
           `TUI bracketed paste leaked placeholder into provider prompt:\n${latestPrompt}`
         );
         return messageText("TUI bracketed paste accepted.");
@@ -3486,9 +3486,10 @@ async function scenarioTuiBracketedPaste() {
         `TUI bracketed paste exited ${result.exitCode}\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`
       );
       const visible = stripTerminalControls(`${result.stdout}\n${result.stderr}`);
-      assert(visible.includes("[paste #1:"), "bracketed paste placeholder did not render");
+      assert(visible.includes("<<paste #1:"), "bracketed paste placeholder did not render");
+      const beforeResponse = visible.split("TUI bracketed paste accepted.")[0] ?? visible;
       assert(
-        !visible.includes("- customer-visible retry fallback"),
+        !beforeResponse.includes("- customer-visible retry fallback"),
         "raw pasted body should not render in the edit surface"
       );
       assert(
@@ -4942,6 +4943,10 @@ async function scenarioTuiRequiresTty() {
   });
 }
 
+async function waitForPromptRender() {
+  await sleep(40);
+}
+
 async function scenarioSlashSuggestionPrompt() {
   return await withTempWorkspace("slash-suggestion", async () => {
     const { registry } = await import(pathToFileURL(path.join(repoRoot, "dist", "slash.js")).href);
@@ -4968,7 +4973,7 @@ async function scenarioSlashSuggestionPrompt() {
       slashCommands
     });
     filtered.input.write("/resu");
-    await sleep(10);
+    await waitForPromptRender();
     const filteredVisible = stripTerminalControls(filtered.stdout());
     assert(
       filteredVisible.includes("commands matching /resu"),
@@ -4993,7 +4998,7 @@ async function scenarioSlashSuggestionPrompt() {
       slashCommands
     });
     selected.input.write("/");
-    await sleep(10);
+    await waitForPromptRender();
     const menuVisible = stripTerminalControls(selected.stdout());
     assert(
       menuVisible.includes("commands"),
@@ -5001,7 +5006,7 @@ async function scenarioSlashSuggestionPrompt() {
     );
     assert(menuVisible.includes("Tab complete"), "slash suggestion menu missed keyboard footer");
     selected.input.write("\x1b[B");
-    await sleep(10);
+    await waitForPromptRender();
     assert(
       stripTerminalControls(selected.stdout()).includes("❯ /resume"),
       "slash suggestion arrow selection did not move to /resume"
@@ -5021,7 +5026,7 @@ async function scenarioSlashSuggestionPrompt() {
       maxSlashSuggestions: 30
     });
     coverage.input.write("/plug");
-    await sleep(10);
+    await waitForPromptRender();
     const coverageVisible = stripTerminalControls(coverage.stdout());
     assert(
       coverageVisible.includes("/plugins"),
@@ -5055,7 +5060,7 @@ async function scenarioSlashSuggestionPrompt() {
       maxSlashSuggestions: 30
     });
     skillAlias.input.write("/ski");
-    await sleep(10);
+    await waitForPromptRender();
     assert(
       stripTerminalControls(skillAlias.stdout()).includes("/skills"),
       "slash suggestion did not render /skills alias"

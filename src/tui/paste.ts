@@ -41,6 +41,11 @@ export interface PasteHandle {
 
 const PASTE_START = Buffer.from("\x1b[200~");
 const PASTE_END = Buffer.from("\x1b[201~");
+const PASTE_PLACEHOLDER_PREFIX = "<<paste #";
+
+function formatPastePlaceholder(counter: number, charCount: number, lineCount: number): string {
+  return `${PASTE_PLACEHOLDER_PREFIX}${counter}: ${charCount} chars, ${lineCount} lines>>`;
+}
 
 export function installPasteHandler(input: {
   rl: ReadlinePromisesInterface;
@@ -94,7 +99,7 @@ export function installPasteHandler(input: {
           } else {
             // Multi-line or long paste — show placeholder, stash real content.
             pasteCounter += 1;
-            const placeholder = `[paste #${pasteCounter}: ${completed.length} chars, ${lineCount} lines]`;
+            const placeholder = formatPastePlaceholder(pasteCounter, completed.length, lineCount);
             pasteStash.set(placeholder, completed);
             if (kInsertString && (rl as any)[kInsertString]) {
               (rl as any)[kInsertString](placeholder);
@@ -131,10 +136,10 @@ export function installPasteHandler(input: {
 
   return {
     restorePastes(line: string): string {
-      if (pasteStash.size === 0 || !line.includes("[paste #")) return line;
+      if (pasteStash.size === 0 || !line.includes(PASTE_PLACEHOLDER_PREFIX)) return line;
       let result = line;
       for (const [placeholder, content] of pasteStash) {
-        if (placeholder.startsWith("[paste #")) {
+        if (placeholder.startsWith(PASTE_PLACEHOLDER_PREFIX)) {
           result = result.split(placeholder).join(content);
         }
       }
