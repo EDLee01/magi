@@ -51,6 +51,7 @@ interface SlashSuggestionState {
 
 const PASTE_START = "\x1b[200~";
 const PASTE_END = "\x1b[201~";
+const PASTE_PLACEHOLDER_PREFIX = "<<paste #";
 const DIM = "\x1b[90m";
 const RESET = "\x1b[0m";
 let graphemeSegmenter: Intl.Segmenter | undefined;
@@ -264,7 +265,7 @@ export async function readTuiPrompt(options: TuiPromptOptions): Promise<string> 
       return;
     }
     pasteCounter += 1;
-    const placeholder = `[paste #${pasteCounter}: ${normalized.length} chars, ${lineCount} lines]`;
+    const placeholder = formatPastePlaceholder(pasteCounter, normalized.length, lineCount);
     pasteStash.set(placeholder, normalized);
     insert(placeholder);
   };
@@ -514,6 +515,10 @@ function restorePastes(value: string, pasteStash: Map<string, string>): string {
     result = result.split(placeholder).join(content);
   }
   return result;
+}
+
+function formatPastePlaceholder(counter: number, charCount: number, lineCount: number): string {
+  return `${PASTE_PLACEHOLDER_PREFIX}${counter}: ${charCount} chars, ${lineCount} lines>>`;
 }
 
 export function buildPromptDisplayForTest(input: {
@@ -836,7 +841,8 @@ function shouldContinueOnEnter(text: string, cursor: number): boolean {
   if (cursor !== text.length || text.length === 0) {
     return false;
   }
-  const before = text.slice(0, cursor);
+  const withoutPastePlaceholders = text.replace(/<<paste #\d+: [^>]+>>/g, "");
+  const before = withoutPastePlaceholders.slice(0, cursor);
   return hasUnclosedMarkdownFence(before) || hasUnclosedBracket(before);
 }
 
