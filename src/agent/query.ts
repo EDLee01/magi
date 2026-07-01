@@ -965,9 +965,12 @@ async function createAgentToolCatalog(
 
   return {
     definitions() {
-      const builtIns = [...exposedBuiltIns]
-        .map((name) => getBuiltinToolDefinitionByName(name))
-        .filter((tool): tool is MagiToolDefinition => tool !== undefined);
+      const builtIns = filterToolDefinitionsByRules(
+        [...exposedBuiltIns]
+          .map((name) => getBuiltinToolDefinitionByName(name))
+          .filter((tool): tool is MagiToolDefinition => tool !== undefined),
+        rules
+      );
       return [...builtIns, ...dynamic.filter((tool) => !exposedBuiltIns.has(tool.name))];
     },
     deferredCount() {
