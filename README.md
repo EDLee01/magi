@@ -2,11 +2,13 @@
 
 [中文](README.zh-CN.md)
 
-**The coding agent that lives in your terminal — and stays on your machine.**
+**Building the most flexible and extensible open-source AI agent.**
 
-Magi reads your repo, edits files, runs commands, searches the web, and picks up where you left off. One session can span your laptop, a machine on the LAN, and a phone browser for approvals. Your code stays local; you bring the model.
+Magi is an open-source coding agent that runs in your terminal, and a deeply customizable agent runtime.
 
-```
+Unlike closed coding agents whose capabilities and execution model are largely fixed by the product, Magi lets developers compose their own models, tools, Skills, Harnesses, and Memory. Persistent sessions and multi-machine execution allow the same task to continue across a local computer, other machines on the LAN, and a phone browser used for approvals.
+
+```text
 $ magi
   △   Magi · 91 tools
  /✦\  cwd: ~/code/my-project
@@ -17,97 +19,481 @@ $ magi
 > refactor src/auth.ts to use the new session API
 ```
 
----
-
 ## Why Magi
 
-Most agents either live inside an IDE or disappear when you close a tab. Magi is built for developers who live in the shell and want an agent that behaves like infrastructure: persistent, scriptable, and under your control.
+Codex, Claude Code, and other coding agents can already understand repositories, edit files, run commands, and debug software.
 
-| | |
-|---|---|
-| **Edits that stick** | `FilePatch` applies diffs with exact context matching — multi-line changes land where you expect, not as blind overwrites. |
-| **Memory that compounds** | Durable Memory, session recall, and reviewable LearningDrafts — Magi remembers conventions and past decisions instead of starting cold every time. |
-| **Plan, then ship** | Plan mode blocks risky edits until you approve. Good for refactors, migrations, and anything you would not trust to YOLO mode. |
-| **One fleet, one agent** | Discover Magi daemons on your LAN, dispatch sub-agents to peer machines, approve tool calls from your phone — same session model everywhere. |
-| **Your models, your keys** | Anthropic, OpenAI, DeepSeek, or any compatible endpoint. Route `fast` / `main` / `deep` aliases, or let `/model auto` pick by task. |
+For developers building on top of an agent, however, the important questions are often different:
 
----
+- Can the model be replaced or routed by task?
+- Can the toolset be reorganized?
+- Can domain workflows be installed and reused?
+- Can permissions and execution constraints be defined?
+- Can knowledge persist across sessions?
+- Can tasks be dispatched across machines?
+- Can the same runtime support agents outside software development?
 
-## What you can do
+In closed coding-agent products, the underlying execution model, capability structure, and extension boundaries are primarily defined by the product itself.
 
-**Day-to-day coding** — fix bugs, write tests, explain unfamiliar code, run the test suite, commit with a sensible message.
+Magi opens these layers so developers can do more than use an agent: they can recompose one.
 
-**Real refactors** — rename across files, migrate an API, update types; Plan mode keeps the agent from editing until the approach is clear.
+## Positioning
 
-**Research & debug** — web search, fetch URLs, grep the tree, inspect git history, spawn a background agent while you keep working.
+Magi works out of the box as a terminal coding agent.
 
-**Team & multi-machine** — compare two repos on different hosts, run checks on a build machine, get push notifications-style approvals on mobile via the LAN panel.
+It is also a runtime for building, operating, and delivering other agents.
 
-**Extend it** — drop in MCP servers, install skills from GitHub, author your own `SKILL.md` workflows.
+A research agent, teaching agent, data-analysis agent, or operations agent usually differs from a coding agent in more than its model. It may require different:
 
----
+- Tools
+- Workflows
+- Permissions
+- Completion criteria
+- Long-term knowledge
+- Model-routing policies
+- Execution environments
 
-## Quick start
+Magi separates these concerns into components that can be replaced and combined without rebuilding session management, tool execution, memory, approvals, and task orchestration from scratch.
 
-```sh
-git clone https://github.com/EDLee01/magi.git
-cd magi
-npm install && npm run build && npm link
+## A Composable Agent Runtime
 
-export OPENAI_API_KEY="<your-key>"
-# or: export ANTHROPIC_AUTH_TOKEN="<your-key>"
-# or: export DEEPSEEK_API_KEY="<your-key>"
+### Model
 
-magi init          # writes ~/.magi-next/config.yaml
-magi               # interactive TUI
-magi -p "explain this repo"   # one-shot
+Magi is not tied to a single model provider.
+
+It supports:
+
+- OpenAI
+- Anthropic
+- DeepSeek
+- OpenAI-compatible endpoints
+- Anthropic-compatible endpoints
+- Custom endpoints
+
+Models can be assigned to aliases such as:
+
+- `fast`
+- `main`
+- `deep`
+
+Inside the TUI, use:
+
+```text
+/model auto
 ```
 
-No key yet? `magi init` tells you exactly which env var to set.
+to let the runtime route a task to an appropriate model.
 
-**First run:** `magi tutorial` — eight short sections covering models, files, memory, skills, and multi-machine setup.
+Provider fallback can switch models when an endpoint is unavailable, rate-limited, or fails.
 
----
+### Tool
 
-## Under the hood (the parts that matter)
+Tools give an agent access to its environment.
 
-**Agent loop** — parallel tool calls, streaming, provider fallback when a model is down or rate-limited.
+Magi includes 91 built-in tools covering:
 
-**91 built-in tools** — files, shell, git, web, cron, sub-agents, and more. Heavy tools load on demand via `ToolSearch` so the first turn stays fast.
+- Files
+- Shell
+- Git
+- Web search
+- URL fetching
+- Scheduled tasks
+- Session management
+- Memory retrieval
+- Sub-agents
+- Multi-machine dispatch
 
-**Skills** — bundled workflows (`verify`, `debug`, `stuck`, `commit-msg`, `review-pr`). Install others with `magi skill install`.
+The entire toolset is not loaded into every turn.
 
-**Sessions** — SQLite-backed history. `magi sessions`, `magi resume`, `/compact` when context gets long.
+`ToolSearch` discovers and loads tools on demand, reducing context usage and avoiding a fixed, monolithic tool surface.
 
-**Control API** — `magi daemon start` + `magi pair` exposes a LAN web panel for mobile approval and background jobs.
+Developers can also add custom tools or connect MCP servers.
 
-**Peers** — `magi peers` finds other Magi instances; the agent dispatches to them with `target: "peer-name"`.
+### Skill
 
----
+A Skill packages a reusable workflow or domain procedure.
 
-## Common commands
+Unlike an individual tool, a Skill can define:
 
-| Command | What it does |
-|---------|--------------|
-| `magi` | Interactive TUI |
-| `magi -p "<prompt>"` | One-shot prompt |
-| `magi init` | Provider + model setup |
-| `magi doctor` | Config paths and health check |
-| `magi sessions` / `magi resume <id>` | Browse and continue past work |
-| `magi daemon start` | Background control API |
+- The steps required to complete a task
+- Which tools should be used
+- How results should be verified
+- How failures should be handled
+- What conditions define completion
+
+Bundled Skills include:
+
+- `verify`
+- `debug`
+- `stuck`
+- `commit-msg`
+- `review-pr`
+
+Install another Skill with:
+
+```bash
+magi skill install <github-repository>
+```
+
+Developers can author their own workflows in `SKILL.md`.
+
+Skills can be installed, combined, and distributed independently of Magi Core.
+
+### Harness
+
+A Harness defines how an agent behaves and what it is allowed to do.
+
+It can control:
+
+- System instructions
+- Tool permissions
+- Approval rules
+- Execution constraints
+- Completion criteria
+- Failure handling
+- Capabilities available at each stage
+
+The same runtime can load different Harnesses and behave as different agents.
+
+A coding agent, research agent, and teaching agent can share the same runtime while using different tools, Skills, permissions, and operating rules.
+
+### Memory
+
+Magi Memory preserves information beyond the current context window.
+
+The memory system includes:
+
+- Durable Memory
+- Session history
+- Context recall
+- LearningDrafts
+- Human-reviewed persistence
+
+After a task, Magi can generate a LearningDraft containing:
+
+- Project conventions
+- Previous decisions
+- Failure causes
+- Debugging lessons
+- Reusable procedures
+
+LearningDrafts do not automatically modify long-term memory. They can be reviewed before being applied.
+
+```bash
+magi memory search "<query>"
+magi learning list
+```
+
+### Planning
+
+Magi can separate planning from execution.
+
+In Plan Mode, the agent can:
+
+1. Analyze the task
+2. Inspect relevant files
+3. Define the scope of changes
+4. Produce an implementation plan
+5. Wait for approval
+6. Begin execution
+
+Risky edits and commands can remain blocked until the plan is approved.
+
+Plan Mode is useful for:
+
+- Large refactors
+- API migrations
+- Database migrations
+- Cross-module changes
+- Production-related operations
+
+Inside the TUI:
+
+```text
+/plan
+```
+
+### Runtime
+
+The runtime coordinates all of these components.
+
+It handles:
+
+- The agent loop
+- Session state
+- Streaming output
+- Parallel tool calls
+- Model routing
+- Provider fallback
+- Tool approvals
+- Sub-agent orchestration
+- Multi-machine dispatch
+- State persistence
+
+A new agent can reuse the runtime while replacing its Model, Tools, Skills, Harness, and Memory configuration.
+
+## Default Form: A Terminal Coding Agent
+
+Magi can be used directly for day-to-day development.
+
+### Code Understanding and Editing
+
+Magi can:
+
+- Read and search a repository
+- Modify one or many files
+- Perform cross-file refactors
+- Update types
+- Fix bugs
+- Write tests
+- Explain unfamiliar code
+- Generate commit messages
+
+File changes are applied through `FilePatch`.
+
+Patches use exact context matching instead of blindly overwriting whole files.
+
+### Command Execution
+
+Magi can run:
+
+- Shell commands
+- Git commands
+- Tests
+- Build commands
+- Project scripts
+- Custom tools
+
+Sensitive operations can be restricted by approval policies.
+
+### Research and Debugging
+
+Magi can:
+
+- Search the web
+- Read webpages
+- Fetch URLs
+- Search the repository tree
+- Inspect Git history
+- Spawn sub-agents for parallel investigation
+
+### Sessions
+
+Magi stores session history in SQLite.
+
+```bash
+magi sessions
+magi resume <id>
+```
+
+When the context becomes long, use:
+
+```text
+/compact
+```
+
+to compress the active context while preserving important task state.
+
+## Multi-Machine Execution
+
+Magi can discover other Magi instances on the LAN and dispatch tasks to them.
+
+```bash
+magi peers
+```
+
+An agent can target a remote node:
+
+```json
+{
+  "target": "peer-name"
+}
+```
+
+A single task can therefore continue across devices:
+
+- Analyze code on a local machine
+- Run tests on a build server
+- Execute long-running work on another host
+- Approve sensitive operations from a phone browser
+
+Remote execution uses the same:
+
+- Session model
+- Permission model
+- Approval mechanism
+- Audit trail
+
+## Mobile Approval and Control API
+
+Start the background control service:
+
+```bash
+magi daemon start
+```
+
+Pair a phone or remote client:
+
+```bash
+magi pair <name>
+```
+
+The Control API can be used to:
+
+- Approve tool calls from a phone
+- Inspect task status
+- Manage background jobs
+- Access the active session
+- Connect remote clients
+
+Start a Magi daemon on each machine:
+
+```bash
+MAGI_CONTROL_BIND=0.0.0.0 magi daemon start
+```
+
+Pair a phone:
+
+```bash
+magi pair my-phone
+```
+
+Then:
+
+1. Connect the phone and Magi host to the same LAN
+2. Open the `/panel` URL shown in the terminal
+3. Enter the Device ID and Token
+4. Complete pairing
+
+## What Can Be Built with Magi
+
+The default distribution is a coding agent, but the runtime is not limited to software development.
+
+By replacing and combining Tools, Skills, Harnesses, and Memory, developers can build:
+
+- Research agents
+- Teaching agents
+- Data-analysis agents
+- Operations agents
+- Software-testing agents
+- Internal automation systems
+- Domain-specific workflow products
+
+These agents can share the same underlying capabilities:
+
+- Session management
+- Tool execution
+- Planning
+- Permission approvals
+- Long-term memory
+- Model routing
+- Multi-machine orchestration
+
+The main differences live in the upper-layer composition rather than in a newly implemented runtime.
+
+## Quick Start
+
+### 1. Install
+
+```bash
+git clone https://github.com/EDLee01/magi.git
+cd magi
+
+npm install
+npm run build
+npm link
+```
+
+### 2. Configure an API Key
+
+OpenAI:
+
+```bash
+export OPENAI_API_KEY="<your-key>"
+```
+
+Anthropic:
+
+```bash
+export ANTHROPIC_AUTH_TOKEN="<your-key>"
+```
+
+DeepSeek:
+
+```bash
+export DEEPSEEK_API_KEY="<your-key>"
+```
+
+### 3. Initialize
+
+```bash
+magi init
+```
+
+This creates:
+
+```text
+~/.magi-next/config.yaml
+```
+
+When an API key is missing, `magi init` identifies the environment variable required by the selected provider.
+
+### 4. Run
+
+```bash
+magi
+```
+
+Run a one-shot task:
+
+```bash
+magi -p "explain this repo"
+```
+
+Start the interactive tutorial:
+
+```bash
+magi tutorial
+```
+
+The tutorial contains eight short sections covering models, files, memory, Skills, and multi-machine setup.
+
+## Common Commands
+
+| Command | Description |
+|---|---|
+| `magi` | Start the interactive TUI |
+| `magi -p "<prompt>"` | Run a one-shot task |
+| `magi init` | Configure providers and models |
+| `magi doctor` | Inspect configuration and runtime health |
+| `magi sessions` | Browse previous sessions |
+| `magi resume <id>` | Resume a session |
+| `magi daemon start` | Start the Control API |
 | `magi pair <name>` | Pair a phone or remote client |
-| `magi peers` | Discover LAN daemons |
-| `magi memory search <q>` | Search durable Memory |
-| `magi learning list` | Review post-task LearningDrafts |
-| `magi tutorial` | Guided walkthrough |
+| `magi peers` | Discover Magi instances on the LAN |
+| `magi memory search <query>` | Search Durable Memory |
+| `magi learning list` | Review LearningDrafts |
+| `magi skill install` | Install a Skill |
+| `magi tutorial` | Start the guided tutorial |
 
-Inside the TUI: `/help`, `/model auto`, `/compact`, `/plan`.
+Common TUI commands:
 
----
+```text
+/help
+/model auto
+/compact
+/plan
+```
 
-## Configuration sketch
+## Configuration Example
 
-`~/.magi-next/config.yaml` — or run `magi init` and skip the yaml.
+The default configuration file is:
+
+```text
+~/.magi-next/config.yaml
+```
+
+Example:
 
 ```yaml
 providers:
@@ -121,77 +507,224 @@ models:
   aliases:
     fast: anthropic:claude-haiku-4-5
     main: anthropic:claude-sonnet-4-6
-    deep:  anthropic:claude-opus-4-7
-  router:   # used when alias = "auto"
-    fast:  { family: claude, role: haiku,  contextWindow: 200000 }
-    main:  { family: claude, role: sonnet, contextWindow: 200000 }
-    deep:  { family: claude, role: opus,   contextWindow: 200000 }
+    deep: anthropic:claude-opus-4-7
+
+  router:
+    fast:
+      family: claude
+      role: haiku
+      contextWindow: 200000
+
+    main:
+      family: claude
+      role: sonnet
+      contextWindow: 200000
+
+    deep:
+      family: claude
+      role: opus
+      contextWindow: 200000
 ```
 
-Supports OpenAI, Anthropic, and DeepSeek out of the box.
+You can also run:
 
----
-
-## Phone & multi-machine (30 seconds)
-
-```sh
-# On each machine:
-MAGI_CONTROL_BIND=0.0.0.0 magi daemon start
-
-# Pair your phone:
-magi pair my-phone
-# → open the /panel URL on the same Wi‑Fi, enter Device ID + Token
-
-# See peers on the LAN:
-magi peers
+```bash
+magi init
 ```
 
-Sub-agents on remote machines run through the same session and approval model as local tools.
+and use the setup wizard.
 
----
+## Data Locations
 
-## Where things live
-
-```
+```text
 ~/.magi-next/
-  config.yaml              # providers + models
-  state/sessions.sqlite    # sessions, jobs, audit trail
-  memory/                  # durable Memory files
-  skills/                  # installed skills
-  state/learning-drafts/  # reviewable lessons (apply to persist)
+  config.yaml
+  state/
+    sessions.sqlite
+    learning-drafts/
+  memory/
+  skills/
 ```
 
-Override with `MAGI_CONFIG_DIR` for sandboxes or CI.
+`~/.magi-next/config.yaml`
 
----
+Stores provider and model configuration.
 
-## Docs & deeper dives
+`~/.magi-next/state/sessions.sqlite`
 
-| Doc | Contents |
-|-----|----------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Components, sessions, tools, routing |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common errors |
-| [docs/magi-next-learning-loop-v1.html](docs/magi-next-learning-loop-v1.html) | Memory + Learning Loop design |
+Stores sessions, tasks, background jobs, and audit records.
+
+`~/.magi-next/memory/`
+
+Stores Durable Memory.
+
+`~/.magi-next/skills/`
+
+Stores installed Skills.
+
+`~/.magi-next/state/learning-drafts/`
+
+Stores LearningDrafts awaiting review.
+
+Override the configuration directory with:
+
+```bash
+export MAGI_CONFIG_DIR=/path/to/custom-directory
+```
+
+This is useful for sandboxes, tests, CI, and multi-instance deployments.
+
+## Architecture Overview
+
+```text
+User
+  │
+  ▼
+TUI / CLI / Control API
+  │
+  ▼
+Agent Runtime
+  ├── Model Router
+  ├── Agent Loop
+  ├── Plan Mode
+  ├── Session Manager
+  ├── Memory
+  ├── ToolSearch
+  ├── Skill Loader
+  ├── Harness
+  ├── Approval System
+  └── Peer Dispatcher
+        │
+        ├── Local Tools
+        ├── MCP Servers
+        ├── Sub-agents
+        └── Remote Magi Peers
+```
+
+The agent loop supports:
+
+- Streaming output
+- Parallel tool calls
+- Provider fallback
+- Sub-agent orchestration
+- Tool-call approval
+- Persistent session state
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| `ARCHITECTURE.md` | Components, sessions, tools, and model routing |
+| `TROUBLESHOOTING.md` | Common errors and diagnostics |
+| `docs/magi-next-learning-loop-v1.html` | Memory and Learning Loop design |
 | `magi tutorial` | Interactive onboarding |
 
-**Developers:** `npm test`, `npm run verify`, and capability eval scripts (`test:memory-eval`, `test:patch-eval`, `report:capability`, …) live in `package.json` for regression gates.
+## Development and Testing
 
----
+Install dependencies:
 
-## Build requirements
-
-Node **≥ 22**. Rust optional (runner sidecar for sandbox/PTY).
-
-```sh
-npm install && npm run build && npm test
+```bash
+npm install
 ```
 
----
+Build:
+
+```bash
+npm run build
+```
+
+Run tests:
+
+```bash
+npm test
+```
+
+Run the full verification suite:
+
+```bash
+npm run verify
+```
+
+Capability and regression scripts are defined in `package.json`, including:
+
+```text
+test:memory-eval
+test:patch-eval
+report:capability
+```
+
+These scripts cover:
+
+- Memory
+- FilePatch
+- Agent Runtime
+- Tool execution
+- Capability regression
+
+## Build Requirements
+
+- Node.js ≥ 22
+- Rust: optional
+
+Rust is used by the runner sidecar for sandbox and PTY capabilities.
+
+```bash
+npm install
+npm run build
+npm test
+```
 
 ## Status
 
-**v0.1.13** — active development. Core agent loop, routing, MCP, daemon, multi-machine dispatch, and mobile panel are implemented and tested. Beta quality; CLI and config may still change.
+Current version:
 
-Bug reports: include `magi doctor` and `magi --version` output.
+```text
+v0.1.13
+```
 
-MIT License.
+Magi is under active development.
+
+Implemented and tested capabilities include:
+
+- Agent loop
+- Multi-model routing
+- Provider fallback
+- MCP
+- ToolSearch
+- Skills
+- Memory
+- Learning Loop
+- Plan Mode
+- Daemon
+- Multi-machine dispatch
+- Mobile control panel
+
+The project is currently beta quality. CLI behavior, configuration formats, and some interfaces may change.
+
+When reporting a bug, include the output of:
+
+```bash
+magi doctor
+magi --version
+```
+
+## Open Source and Extension
+
+Magi Core is released under the MIT License.
+
+Developers can use Magi to:
+
+- Implement new Tools
+- Author new Skills
+- Configure new Harnesses
+- Connect new models
+- Connect MCP servers
+- Build domain-specific agents
+- Build internal automation systems
+- Develop independent products and services
+
+Magi does not prescribe one fixed form of agent. It provides a runtime that can be recomposed.
+
+## License
+
+MIT License
