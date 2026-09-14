@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import { AddressInfo } from "node:net";
@@ -2306,7 +2306,7 @@ describe("agent query loop", () => {
   it("cancels active approval waits when the request is aborted", async () => {
     workspace = mkdtempSync(path.join(os.tmpdir(), "magi-query-"));
     const store = new SessionStore(path.join(workspace, ".magi-next", "state", "sessions.sqlite"));
-    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const interactions = new ActiveInteractionRegistry();
     const controller = new AbortController();
     try {
       const sessionId = store.createSession({ title: "approval abort", cwd: workspace });
@@ -2342,6 +2342,7 @@ describe("agent query loop", () => {
           })?.status === "pending"
       );
 
+      expect(existsSync(path.join(workspace, "abort.txt"))).toBe(false);
       controller.abort();
 
       await expect(running).rejects.toMatchObject({
@@ -2354,6 +2355,7 @@ describe("agent query loop", () => {
         })
       );
       expect(store.getJob("job-approval-abort")?.status).toBe("cancelled");
+      expect(existsSync(path.join(workspace, "abort.txt"))).toBe(false);
     } finally {
       interactions.close();
       store.close();

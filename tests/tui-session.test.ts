@@ -781,7 +781,7 @@ describe("TUI, slash commands, and session resume", () => {
   it("resolves pending approvals through the live TUI interaction path", async () => {
     temp = makeTempRoot();
     const store = SessionStore.open(getMagiPaths(temp.env));
-    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const interactions = new ActiveInteractionRegistry();
     const output: string[] = [];
     const prompts: string[] = [];
     try {
@@ -933,7 +933,7 @@ describe("TUI, slash commands, and session resume", () => {
     temp = makeTempRoot();
     clearPermissionRules();
     const store = SessionStore.open(getMagiPaths(temp.env));
-    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const interactions = new ActiveInteractionRegistry();
     const output: string[] = [];
     const stdin = createTtyInput();
     try {
@@ -1006,7 +1006,7 @@ describe("TUI, slash commands, and session resume", () => {
     temp = makeTempRoot();
     clearPermissionRules();
     const store = SessionStore.open(getMagiPaths(temp.env));
-    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const interactions = new ActiveInteractionRegistry();
     const stdin = createTtyInput();
     try {
       const sessionId = store.createSession({
@@ -1195,7 +1195,7 @@ describe("TUI, slash commands, and session resume", () => {
   it("resolves pending questions through the live TUI interaction path", async () => {
     temp = makeTempRoot();
     const store = SessionStore.open(getMagiPaths(temp.env));
-    const interactions = new ActiveInteractionRegistry({ timeoutMs: 5_000 });
+    const interactions = new ActiveInteractionRegistry();
     const output: string[] = [];
     const prompts: string[] = [];
     try {

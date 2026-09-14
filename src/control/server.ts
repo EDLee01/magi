@@ -354,13 +354,13 @@ function parseInteractionTimeoutMs(raw: string | undefined): number | undefined 
   }
   if (!/^\d+$/.test(raw)) {
     throw new Error(
-      `MAGI_INTERACTION_TIMEOUT_MS must be an integer >= 1, got ${JSON.stringify(raw)}`
+      `MAGI_INTERACTION_TIMEOUT_MS must be an integer from 0 to 2147483647, got ${JSON.stringify(raw)}`
     );
   }
   const timeout = Number(raw);
-  if (!Number.isInteger(timeout) || timeout < 1) {
+  if (!Number.isInteger(timeout) || timeout < 0 || timeout > 2_147_483_647) {
     throw new Error(
-      `MAGI_INTERACTION_TIMEOUT_MS must be an integer >= 1, got ${JSON.stringify(raw)}`
+      `MAGI_INTERACTION_TIMEOUT_MS must be an integer from 0 to 2147483647, got ${JSON.stringify(raw)}`
     );
   }
   return timeout;

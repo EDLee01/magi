@@ -39,6 +39,15 @@ afterEach(async () => {
 });
 
 describe("Control API", () => {
+  it.each(["-1", "1.5", "invalid", "2147483648"])(
+    "rejects invalid interaction timeout %s",
+    async (timeout) => {
+      await expect(
+        startTestServer({ env: { MAGI_INTERACTION_TIMEOUT_MS: timeout } })
+      ).rejects.toThrow("MAGI_INTERACTION_TIMEOUT_MS must be an integer from 0 to 2147483647");
+    }
+  );
+
   it("serves health on the configured bind and port", async () => {
     await startTestServer();
     const response = await fetch(`${handle!.url}/health`);
@@ -643,7 +652,7 @@ describe("Control API", () => {
     });
     const baseUrl = await listen(modelServer);
     await startTestServer({
-      env: { MAGI_OPENAI_API_KEY: "test-key", MAGI_INTERACTION_TIMEOUT_MS: "5000" },
+      env: { MAGI_OPENAI_API_KEY: "test-key", MAGI_INTERACTION_TIMEOUT_MS: "0" },
       configLines: providerControlConfig(baseUrl)
     });
     const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {
@@ -771,7 +780,7 @@ describe("Control API", () => {
     });
     const baseUrl = await listen(modelServer);
     await startTestServer({
-      env: { MAGI_OPENAI_API_KEY: "test-key", MAGI_INTERACTION_TIMEOUT_MS: "5000" },
+      env: { MAGI_OPENAI_API_KEY: "test-key" },
       configLines: providerControlConfig(baseUrl)
     });
     const pairing = (await postJson(`${handle!.url}/pairing`, { name: "phone" })) as {

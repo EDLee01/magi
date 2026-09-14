@@ -679,10 +679,21 @@ npm test
 Current version:
 
 ```text
-v0.1.13
+v0.1.14
 ```
 
 Magi is under active development.
+
+### Approval and question waiting
+
+In v0.1.14, pending approvals and user questions remain available until you answer or cancel while the task process is running. The operation awaiting approval stays paused; elapsed time never grants approval. Cancelling the task or closing the process ends the pending interaction. Pending interactions are held in memory and must be requested again after a restart.
+
+`MAGI_INTERACTION_TIMEOUT_MS` controls this wait for both the TUI and control server:
+
+- Unset or `0`: wait until answered or cancelled (default).
+- A positive integer up to `2147483647`: expire after that many milliseconds.
+
+For example, `MAGI_INTERACTION_TIMEOUT_MS=86400000 magi` sets a 24-hour wait. This setting is independent of model request and shell command timeouts.
 
 Implemented and tested capabilities include:
 

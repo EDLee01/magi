@@ -383,5 +383,5 @@ export function parseTuiInteractionTimeoutMs(raw: string | undefined): number | 
     return undefined;
   }
   const value = Number(raw);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
+  return Number.isInteger(value) && value >= 0 && value <= 2_147_483_647 ? value : undefined;
 }

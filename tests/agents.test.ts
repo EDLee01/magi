@@ -191,5 +191,6 @@ describe("multi-agent task queue", () => {
     await expect(readFile(path.join(workspace, "stop-cli.json"), "utf8")).resolves.toContain(
       "agent_task_cancelled"
     );
-  }, 15_000);
+    // This integration case starts multiple CLI commands and shell hooks in sequence.
+  }, 60_000);
 });

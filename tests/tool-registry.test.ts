@@ -5,7 +5,8 @@ import { AddressInfo } from "node:net";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as webBrowser from "../src/tools/web-browser.js";
 
 import {
   executeRegisteredTool,
@@ -1414,19 +1415,32 @@ describe("tool registry", () => {
       "allowed_domains.0 must be a domain or wildcard domain"
     );
 
-    // When no config is provided, WebSearch silently falls back to WebBrowser (DuckDuckGo HTML).
-    // The fallback may succeed or fail depending on network availability — we don't assert
-    // on its outcome here, just that it returns a result (no thrown exception).
-    const missingConfig = await executeRegisteredTool({
-      cwd: process.cwd(),
-      toolUse: {
-        type: "tool-use",
-        id: "web-search-missing-config",
-        name: "WebSearch",
-        input: { query: "magi next" }
-      }
+    // Verify fallback routing without depending on a public search engine.
+    const fallback = vi.spyOn(webBrowser, "executeWebBrowser").mockResolvedValue({
+      action: "search",
+      query: "magi next",
+      results: [{ title: "Fallback result", url: "https://example.com", snippet: "Test result" }]
     });
-    expect(missingConfig).toMatchObject({ toolName: "WebSearch" });
+    try {
+      const missingConfig = await executeRegisteredTool({
+        cwd: process.cwd(),
+        toolUse: {
+          type: "tool-use",
+          id: "web-search-missing-config",
+          name: "WebSearch",
+          input: { query: "magi next" }
+        }
+      });
+      expect(fallback).toHaveBeenCalledOnce();
+      expect(fallback).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "search", query: "magi next" })
+      );
+      expect(missingConfig).toMatchObject({ toolName: "WebSearch" });
+      expect(missingConfig.isError).toBeUndefined();
+      expect(missingConfig.content).toContain("Fallback result");
+    } finally {
+      fallback.mockRestore();
+    }
   });
 
   it("asks structured user questions through a resolver", async () => {

@@ -80,7 +80,8 @@ export class ActiveInteractionRegistry {
   private readonly interactions = new Map<string, PendingInteraction>();
 
   constructor(input: { timeoutMs?: number } = {}) {
-    this.defaultTimeoutMs = input.timeoutMs ?? 300_000;
+    // Interactive work waits for an explicit answer or cancellation by default.
+    this.defaultTimeoutMs = input.timeoutMs ?? 0;
   }
 
   registerJob(input: { sessionId: string; jobId: string }): void {
@@ -168,7 +169,7 @@ export class ActiveInteractionRegistry {
         toolName: input.toolUse.name,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        timeoutAt: new Date(now.getTime() + timeoutMs).toISOString(),
+        timeoutAt: timeoutMs > 0 ? new Date(now.getTime() + timeoutMs).toISOString() : undefined,
         reason: input.reason,
         toolUse: input.toolUse,
         resolve,
@@ -205,7 +206,7 @@ export class ActiveInteractionRegistry {
         toolName: input.toolUse.name,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        timeoutAt: new Date(now.getTime() + timeoutMs).toISOString(),
+        timeoutAt: timeoutMs > 0 ? new Date(now.getTime() + timeoutMs).toISOString() : undefined,
         toolUse: input.toolUse,
         question: input.question,
         resolve,
